@@ -1,6 +1,4 @@
-# ignore any real config
+# ignore local env
+.env
+# ignore any generated config file you don’t want in git
 config.js
-
-# system
-.DS_Store
-node_modules/
