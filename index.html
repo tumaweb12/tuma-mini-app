@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tuma – Pick Your Dashboard</title>
+  <style>
+    /* minimal reset & styling */
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #000;
+      color: #fff;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .picker {
+      text-align: center;
+    }
+    h1 { margin-bottom: 1rem; }
+    .picker a {
+      display: inline-block;
+      margin: 0.5rem;
+      padding: 0.75rem 1.25rem;
+      background: #0066ff;
+      color: #fff;
+      text-decoration: none;
+      border-radius: 8px;
+      transition: background 0.2s;
+    }
+    .picker a:hover {
+      background: #0052cc;
+    }
+  </style>
+</head>
+<body>
+  <div class="picker">
+    <h1>Welcome to Tuma</h1>
+    <p>Select your dashboard:</p>
+    <a href="vendor.html">Vendor</a>
+    <a href="agent.html">Agent</a>
+    <a href="rider.html">Rider</a>
+    <a href="route.html">Route Planner</a>
+  </div>
+</body>
+</html>

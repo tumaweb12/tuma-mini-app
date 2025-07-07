@@ -1,0 +1,6 @@
+# ignore any real config
+config.js
+
+# system
+.DS_Store
+node_modules/

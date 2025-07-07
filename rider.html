@@ -1,0 +1,1021 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="telegram-web-app" content="true">
+    <title>Tuma - Rider Dashboard</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        :root {
+            --primary: #0066FF;
+            --primary-dark: #0052CC;
+            --surface: #0A0A0B;
+            --surface-elevated: #141416;
+            --surface-high: #1C1C1F;
+            --text-primary: #FFFFFF;
+            --text-secondary: #8E8E93;
+            --text-tertiary: #48484A;
+            --border: #2C2C2E;
+            --success: #34C759;
+            --warning: #FF9F0A;
+            --danger: #FF3B30;
+            --express: #FF9800;
+            --smart: #2196F3;
+            --eco: #4CAF50;
+            --safe-area-top: env(safe-area-inset-top);
+            --safe-area-bottom: env(safe-area-inset-bottom);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+            background: #000000;
+            color: var(--text-primary);
+            overflow: hidden;
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        .app {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            background: var(--surface);
+            overflow: hidden;
+        }
+
+        /* Main Content */
+        .main-content {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            scroll-behavior: smooth;
+        }
+
+        /* Header */
+        .header {
+            position: sticky;
+            top: 0;
+            background: rgba(10, 10, 11, 0.95);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border-bottom: 0.5px solid var(--border);
+            z-index: 100;
+            padding: 16px 20px;
+            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+
+        .header.scrolled {
+            padding: 12px 20px;
+            background: rgba(10, 10, 11, 0.98);
+        }
+
+        .header-content {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .logo-section {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo {
+            width: 40px;
+            height: 40px;
+            position: relative;
+        }
+
+        .logo svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        .app-name {
+            font-size: 24px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        .app-subtitle {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 2px;
+        }
+
+        .menu-button {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: var(--surface-elevated);
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .menu-button:active {
+            scale: 0.95;
+            background: var(--surface-high);
+        }
+
+        /* Form Container */
+        .form-container {
+            padding: 20px;
+            padding-bottom: calc(20px + var(--safe-area-bottom));
+        }
+
+        /* Hero Section */
+        .hero-section {
+            background: linear-gradient(135deg, #1a1a1a 0%, #0f0f0f 100%);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 24px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero-section::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, var(--primary) 0%, transparent 70%);
+            opacity: 0.1;
+            animation: pulse 4s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        .hero-title {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            position: relative;
+        }
+
+        .hero-subtitle {
+            font-size: 16px;
+            color: var(--text-secondary);
+            position: relative;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--success);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            margin-top: 16px;
+            position: relative;
+        }
+
+        .status-badge.offline {
+            background: var(--surface-high);
+            color: var(--text-secondary);
+        }
+
+        /* Form Sections */
+        .form-section {
+            margin-bottom: 24px;
+            animation: slideUp 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+            opacity: 0;
+            transform: translateY(20px);
+        }
+
+        .form-section:nth-child(1) { animation-delay: 0.1s; }
+        .form-section:nth-child(2) { animation-delay: 0.15s; }
+        .form-section:nth-child(3) { animation-delay: 0.2s; }
+        .form-section:nth-child(4) { animation-delay: 0.25s; }
+        .form-section:nth-child(5) { animation-delay: 0.3s; }
+
+        @keyframes slideUp {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .section-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Earnings Cards */
+        .earnings-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        .earnings-card {
+            background: var(--surface-elevated);
+            border-radius: 14px;
+            padding: 16px;
+            text-align: center;
+            border: 1px solid var(--border);
+            transition: all 0.3s;
+        }
+
+        .earnings-card.highlight {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            border-color: var(--primary);
+        }
+
+        .earnings-value {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 4px;
+        }
+
+        .earnings-card.highlight .earnings-value {
+            color: white;
+        }
+
+        .earnings-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .earnings-card.highlight .earnings-label {
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        /* Stats Overview */
+        .stats-row {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .stat-item {
+            flex: 1;
+            background: var(--surface-elevated);
+            border-radius: 14px;
+            padding: 16px;
+            text-align: center;
+            border: 1px solid var(--border);
+        }
+
+        .stat-icon {
+            width: 40px;
+            height: 40px;
+            background: var(--surface-high);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 8px;
+            font-size: 18px;
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        /* Available Routes */
+        .route-tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+            background: var(--surface-elevated);
+            padding: 4px;
+            border-radius: 10px;
+        }
+
+        .route-tab {
+            flex: 1;
+            padding: 8px;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+
+        .route-tab.active {
+            background: var(--primary);
+            color: white;
+        }
+
+        /* Route Cards */
+        .route-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .route-card {
+            background: var(--surface-elevated);
+            border-radius: 14px;
+            padding: 16px;
+            border: 1px solid var(--border);
+            cursor: pointer;
+            transition: all 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .route-card:hover {
+            transform: translateY(-2px);
+            border-color: var(--primary);
+            box-shadow: 0 4px 20px rgba(0, 102, 255, 0.2);
+        }
+
+        .route-card.claimed {
+            border-color: var(--success);
+            background: var(--surface-high);
+        }
+
+        .route-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .route-cluster {
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .route-type {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .route-type.express {
+            background: var(--express);
+            color: white;
+        }
+
+        .route-type.smart {
+            background: var(--smart);
+            color: white;
+        }
+
+        .route-type.eco {
+            background: var(--eco);
+            color: white;
+        }
+
+        .route-details {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .route-detail {
+            text-align: center;
+        }
+
+        .route-detail-value {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .route-detail-label {
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin-top: 2px;
+        }
+
+        .claim-button {
+            width: 100%;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            padding: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .claim-button:active {
+            scale: 0.98;
+            background: var(--primary-dark);
+        }
+
+        .claim-button:disabled {
+            background: var(--surface-high);
+            color: var(--text-tertiary);
+            cursor: not-allowed;
+        }
+
+        /* Code Verification */
+        .code-input-container {
+            background: var(--surface-elevated);
+            border-radius: 14px;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .code-input-label {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 16px;
+        }
+
+        .code-input {
+            width: 100%;
+            background: var(--surface-high);
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+            font-size: 24px;
+            font-weight: 700;
+            text-align: center;
+            color: var(--text-primary);
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            outline: none;
+            transition: all 0.3s;
+        }
+
+        .code-input:focus {
+            border-color: var(--primary);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(0, 102, 255, 0.2);
+        }
+
+        .code-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-top: 16px;
+        }
+
+        .code-button {
+            padding: 14px;
+            border-radius: 10px;
+            border: none;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .code-button.pickup {
+            background: var(--warning);
+            color: black;
+        }
+
+        .code-button.delivery {
+            background: var(--success);
+            color: white;
+        }
+
+        .code-button:active {
+            scale: 0.95;
+        }
+
+        /* Active Delivery Card */
+        .active-delivery {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            border-radius: 14px;
+            padding: 20px;
+            color: white;
+            margin-bottom: 20px;
+        }
+
+        .delivery-status {
+            font-size: 14px;
+            opacity: 0.9;
+            margin-bottom: 8px;
+        }
+
+        .delivery-address {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 16px;
+        }
+
+        .delivery-info {
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+        }
+
+        /* Empty State */
+        .empty-state {
+            padding: 48px 24px;
+            text-align: center;
+        }
+
+        .empty-icon {
+            width: 64px;
+            height: 64px;
+            background: var(--surface-high);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 16px;
+            font-size: 24px;
+        }
+
+        .empty-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .empty-message {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        /* Responsive */
+        @media (min-width: 428px) {
+            .app {
+                max-width: 428px;
+                margin: 0 auto;
+                box-shadow: 0 0 60px rgba(0, 0, 0, 0.5);
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            * {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <!-- Main Content -->
+        <div class="main-content" id="mainContent">
+            <!-- Header -->
+            <div class="header" id="header">
+                <div class="header-content">
+                    <div class="logo-section">
+                        <div class="logo">
+                            <svg viewBox="0 0 40 40" fill="none">
+                                <circle cx="20" cy="20" r="18" stroke="#0066FF" stroke-width="2"/>
+                                <path d="M20 8 L20 22 M14 8 L26 8" stroke="#0066FF" stroke-width="3" stroke-linecap="round"/>
+                                <circle cx="20" cy="28" r="3" fill="#0066FF"/>
+                                <path d="M8 20 Q12 16 16 18" stroke="#0066FF" stroke-width="1" opacity="0.5"/>
+                                <path d="M24 18 Q28 16 32 20" stroke="#0066FF" stroke-width="1" opacity="0.5"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <h1 class="app-name">Tuma</h1>
+                            <p class="app-subtitle">Rider Dashboard</p>
+                        </div>
+                    </div>
+                    <button class="menu-button" onclick="navigateToRoute()" aria-label="Route View">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
+                            <path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Form Container -->
+            <form class="form-container">
+                <!-- Hero Section -->
+                <div class="hero-section">
+                    <h2 class="hero-title">Welcome, Rider</h2>
+                    <p class="hero-subtitle">Your earnings and deliveries</p>
+                    <span class="status-badge" id="statusBadge">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                            <circle cx="12" cy="12" r="4"/>
+                        </svg>
+                        <span>Online</span>
+                    </span>
+                </div>
+
+                <!-- Earnings Overview -->
+                <div class="form-section">
+                    <h2 class="section-title">Earnings Overview</h2>
+                    <div class="earnings-grid">
+                        <div class="earnings-card">
+                            <div class="earnings-value">KES <span id="dailyEarnings">0</span></div>
+                            <div class="earnings-label">Today</div>
+                        </div>
+                        <div class="earnings-card highlight">
+                            <div class="earnings-value">KES <span id="weeklyEarnings">0</span></div>
+                            <div class="earnings-label">This Week</div>
+                        </div>
+                        <div class="earnings-card">
+                            <div class="earnings-value">KES <span id="monthlyEarnings">0</span></div>
+                            <div class="earnings-label">This Month</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Performance Stats -->
+                <div class="form-section">
+                    <h2 class="section-title">Performance Stats</h2>
+                    <div class="stats-row">
+                        <div class="stat-item">
+                            <div class="stat-icon">📦</div>
+                            <div class="stat-value" id="totalDeliveries">0</div>
+                            <div class="stat-label">Deliveries</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-icon">🏍️</div>
+                            <div class="stat-value"><span id="totalDistance">0</span> km</div>
+                            <div class="stat-label">Distance</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-icon">⭐</div>
+                            <div class="stat-value">4.8</div>
+                            <div class="stat-label">Rating</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Active Delivery -->
+                <div class="form-section" id="activeDeliverySection" style="display: none;">
+                    <h2 class="section-title">Current Delivery</h2>
+                    <div class="active-delivery">
+                        <div class="delivery-status">En route to pickup</div>
+                        <div class="delivery-address" id="currentAddress">Loading...</div>
+                        <div class="delivery-info">
+                            <span>Parcel: <strong id="currentParcel">-</strong></span>
+                            <span>ETA: <strong id="currentETA">-</strong></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Code Verification -->
+                <div class="form-section">
+                    <h2 class="section-title">Code Verification</h2>
+                    <div class="code-input-container">
+                        <div class="code-input-label">Enter Pickup or Delivery Code</div>
+                        <input type="text" class="code-input" id="codeInput" placeholder="XXX-00XX" maxlength="8">
+                        <div class="code-actions">
+                            <button type="button" class="code-button pickup" onclick="verifyCode('pickup')">
+                                Verify Pickup
+                            </button>
+                            <button type="button" class="code-button delivery" onclick="verifyCode('delivery')">
+                                Verify Delivery
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Available Routes -->
+                <div class="form-section">
+                    <h2 class="section-title">Available Clustered Routes</h2>
+                    <div class="route-tabs">
+                        <button type="button" class="route-tab active" onclick="filterRoutes('all')">All Routes</button>
+                        <button type="button" class="route-tab" onclick="filterRoutes('express')">Express</button>
+                        <button type="button" class="route-tab" onclick="filterRoutes('smart')">Smart</button>
+                        <button type="button" class="route-tab" onclick="filterRoutes('eco')">Eco</button>
+                    </div>
+                    
+                    <div class="route-list" id="routeList">
+                        <!-- Routes will be populated here -->
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // Sample data
+        let riderData = {
+            name: 'John Rider',
+            status: 'online',
+            earnings: {
+                daily: 2850,
+                weekly: 14250,
+                monthly: 57000
+            },
+            stats: {
+                deliveries: 127,
+                distance: 342
+            },
+            activeDelivery: null,
+            claimedRoutes: []
+        };
+
+        // Sample clustered routes
+        const availableRoutes = [
+            {
+                id: 1,
+                cluster: 'Westlands Cluster',
+                type: 'smart',
+                deliveries: 8,
+                distance: 12.5,
+                earnings: 1020,
+                stops: ['Sarit Centre', 'Westgate', 'The Mall', 'Parklands'],
+                available: true
+            },
+            {
+                id: 2,
+                cluster: 'CBD Express',
+                type: 'express',
+                deliveries: 5,
+                distance: 8.3,
+                earnings: 1150,
+                stops: ['KICC', 'Nation Centre', 'Hilton', 'Archives'],
+                available: true
+            },
+            {
+                id: 3,
+                cluster: 'Kilimani Eco',
+                type: 'eco',
+                deliveries: 12,
+                distance: 15.7,
+                earnings: 960,
+                stops: ['Yaya', 'Junction', 'Prestige', 'Adams'],
+                available: true
+            }
+        ];
+
+        let currentFilter = 'all';
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            updateEarnings();
+            updateStats();
+            displayRoutes();
+        });
+
+        // Update earnings display
+        function updateEarnings() {
+            document.getElementById('dailyEarnings').textContent = riderData.earnings.daily.toLocaleString();
+            document.getElementById('weeklyEarnings').textContent = riderData.earnings.weekly.toLocaleString();
+            document.getElementById('monthlyEarnings').textContent = riderData.earnings.monthly.toLocaleString();
+        }
+
+        // Update stats
+        function updateStats() {
+            document.getElementById('totalDeliveries').textContent = riderData.stats.deliveries;
+            document.getElementById('totalDistance').textContent = riderData.stats.distance;
+        }
+
+        // Display routes
+        function displayRoutes() {
+            const routeList = document.getElementById('routeList');
+            const filteredRoutes = currentFilter === 'all' 
+                ? availableRoutes 
+                : availableRoutes.filter(r => r.type === currentFilter);
+            
+            if (filteredRoutes.length === 0) {
+                routeList.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-icon">🗺️</div>
+                        <h3 class="empty-title">No Routes Available</h3>
+                        <p class="empty-message">Check back soon for new clustered routes</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            routeList.innerHTML = filteredRoutes.map(route => `
+                <div class="route-card ${route.available ? '' : 'claimed'}" onclick="${route.available ? `claimRoute(${route.id})` : ''}">
+                    <div class="route-header">
+                        <div class="route-cluster">${route.cluster}</div>
+                        <div class="route-type ${route.type}">${route.type.toUpperCase()}</div>
+                    </div>
+                    <div class="route-details">
+                        <div class="route-detail">
+                            <div class="route-detail-value">${route.deliveries}</div>
+                            <div class="route-detail-label">Deliveries</div>
+                        </div>
+                        <div class="route-detail">
+                            <div class="route-detail-value">${route.distance} km</div>
+                            <div class="route-detail-label">Distance</div>
+                        </div>
+                        <div class="route-detail">
+                            <div class="route-detail-value">KES ${route.earnings}</div>
+                            <div class="route-detail-label">Earnings</div>
+                        </div>
+                    </div>
+                    <button class="claim-button" ${route.available ? '' : 'disabled'}>
+                        ${route.available ? 'Claim Route' : 'Already Claimed'}
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        // Filter routes
+        function filterRoutes(type) {
+            currentFilter = type;
+            
+            // Update tabs
+            document.querySelectorAll('.route-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            displayRoutes();
+        }
+
+        // Claim route
+        function claimRoute(routeId) {
+            const route = availableRoutes.find(r => r.id === routeId);
+            if (route && route.available) {
+// Mark route as claimed
+               route.available = false;
+               riderData.claimedRoutes.push(route);
+               
+               // Show active delivery
+               riderData.activeDelivery = {
+                   routeId: routeId,
+                   currentStop: 0,
+                   parcelCode: 'PRC-' + Math.random().toString(36).substr(2, 6).toUpperCase()
+               };
+               
+               document.getElementById('activeDeliverySection').style.display = 'block';
+               document.getElementById('currentAddress').textContent = route.stops[0];
+               document.getElementById('currentParcel').textContent = riderData.activeDelivery.parcelCode;
+               document.getElementById('currentETA').textContent = '15 min';
+               
+               // Update display
+               displayRoutes();
+               
+               // Show success
+               alert(`Route claimed! Navigate to ${route.stops[0]} for your first pickup.`);
+               
+               // In production, this would update Airtable and notify the system
+           }
+       }
+
+       // Verify code
+       function verifyCode(type) {
+           const code = document.getElementById('codeInput').value.toUpperCase();
+           
+           if (!code || code.length < 6) {
+               alert('Please enter a valid code');
+               return;
+           }
+           
+           // In production, this would verify against Airtable
+           // For demo, simulate verification
+           if (type === 'pickup' && code.startsWith('VPK')) {
+               alert('✅ Pickup verified! Package collected successfully.');
+               document.getElementById('codeInput').value = '';
+               
+               // Update delivery status
+               if (riderData.activeDelivery) {
+                   document.querySelector('.delivery-status').textContent = 'En route to delivery';
+                   document.getElementById('currentAddress').textContent = 'Customer location';
+               }
+           } else if (type === 'delivery' && code.startsWith('DLV')) {
+               alert('✅ Delivery confirmed! Payment processed.');
+               document.getElementById('codeInput').value = '';
+               
+               // Update stats
+               riderData.stats.deliveries++;
+               riderData.earnings.daily += 170; // Average earning per delivery
+               updateStats();
+               updateEarnings();
+               
+               // Move to next delivery or complete route
+               if (riderData.activeDelivery) {
+                   const route = riderData.claimedRoutes.find(r => r.id === riderData.activeDelivery.routeId);
+                   if (route) {
+                       riderData.activeDelivery.currentStop++;
+                       if (riderData.activeDelivery.currentStop < route.deliveries) {
+                           document.getElementById('currentAddress').textContent = route.stops[riderData.activeDelivery.currentStop] || 'Next location';
+                           document.querySelector('.delivery-status').textContent = 'En route to pickup';
+                       } else {
+                           // Route completed
+                           document.getElementById('activeDeliverySection').style.display = 'none';
+                           riderData.activeDelivery = null;
+                           alert('🎉 Route completed! Great work!');
+                       }
+                   }
+               }
+           } else {
+               alert('❌ Invalid code. Please check and try again.');
+           }
+       }
+
+       // Format code input
+       document.getElementById('codeInput').addEventListener('input', (e) => {
+           let value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+           
+           // Add hyphen after 3 characters
+           if (value.length > 3) {
+               value = value.slice(0, 3) + '-' + value.slice(3);
+           }
+           
+           e.target.value = value;
+       });
+
+       // Navigate to route view
+       function navigateToRoute() {
+           // In production, this would navigate to route.html
+           // For now, show alert
+           if (riderData.activeDelivery) {
+               window.location.href = 'route.html?active=true';
+           } else {
+               alert('Claim a route first to see navigation');
+           }
+       }
+
+       // Toggle online/offline status
+       function toggleStatus() {
+           riderData.status = riderData.status === 'online' ? 'offline' : 'online';
+           const badge = document.getElementById('statusBadge');
+           
+           if (riderData.status === 'online') {
+               badge.classList.remove('offline');
+               badge.innerHTML = `
+                   <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                       <circle cx="12" cy="12" r="4"/>
+                   </svg>
+                   <span>Online</span>
+               `;
+           } else {
+               badge.classList.add('offline');
+               badge.innerHTML = `
+                   <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                       <circle cx="12" cy="12" r="4"/>
+                   </svg>
+                   <span>Offline</span>
+               `;
+           }
+       }
+
+       // Scroll effects
+       document.getElementById('mainContent').addEventListener('scroll', (e) => {
+           const header = document.getElementById('header');
+           if (e.target.scrollTop > 50) {
+               header.classList.add('scrolled');
+           } else {
+               header.classList.remove('scrolled');
+           }
+       });
+
+       // Initialize Telegram Web App
+       if (window.Telegram && window.Telegram.WebApp) {
+           const telegramWebApp = window.Telegram.WebApp;
+           telegramWebApp.ready();
+           telegramWebApp.expand();
+           
+           // Get rider data from Telegram if available
+           const user = telegramWebApp.initDataUnsafe.user;
+           if (user) {
+               riderData.name = user.first_name + (user.last_name ? ' ' + user.last_name : '');
+           }
+       }
+
+       // Add click handler to status badge
+       document.getElementById('statusBadge').addEventListener('click', toggleStatus);
+   </script>
+</body>
+</html>

@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="telegram-web-app" content="true">
+    <title>Tuma - Agent Dashboard</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        :root {
+            --primary: #0066FF;
+            --primary-dark: #0052CC;
+            --surface: #0A0A0B;
+            --surface-elevated: #141416;
+            --surface-high: #1C1C1F;
+            --text-primary: #FFFFFF;
+            --text-secondary: #8E8E93;
+            --text-tertiary: #48484A;
+            --border: #2C2C2E;
+            --success: #34C759;
+            --warning: #FF9F0A;
+            --danger: #FF3B30;
+            --express: #FF9800;
+            --smart: #2196F3;
+            --eco: #4CAF50;
+            --safe-area-top: env(safe-area-inset-top);
+            --safe-area-bottom: env(safe-area-inset-bottom);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+            background: #000000;
+            color: var(--text-primary);
+            overflow: hidden;
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        .app {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            background: var(--surface);
+            overflow: hidden;
+        }
+
+        /* Main Content */
+        .main-content {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            scroll-behavior: smooth;
+        }
+
+        /* Header */
+        .header {
+            position: sticky;
+            top: 0;
+            background: rgba(10, 10, 11, 0.95);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border-bottom: 0.5px solid var(--border);
+            z-index: 100;
+            padding: 16px 20px;
+            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+
+        .header.scrolled {
+            padding: 12px 20px;
+            background: rgba(10, 10, 11, 0.98);
+        }
+
+        .header-content {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .logo-section {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo {
+            width: 40px;
+            height: 40px;
+            position: relative;
+        }
+
+        .logo svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        .app-name {
+            font-size: 24px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        .app-subtitle {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 2px;
+        }
+
+        .menu-button {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: var(--surface-elevated);
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .menu-button:active {
+            scale: 0.95;
+            background: var(--surface-high);
+        }
+
+        /* Form Container */
+        .form-container {
+            padding: 20px;
+            padding-bottom: calc(20px + var(--safe-area-bottom));
+        }
+
+        /* Hero Section */
+        .hero-section {
+            background: linear-gradient(135deg, #1a1a1a 0%, #0f0f0f 100%);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 24px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero-section::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, var(--primary) 0%, transparent 70%);
+            opacity: 0.1;
+            animation: pulse 4s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        .hero-title {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            position: relative;
+        }
+
+        .hero-subtitle {
+            font-size: 16px;
+            color: var(--text-secondary);
+            position: relative;
+        }
+
+        .agent-code {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--primary);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            margin-top: 16px;
+            position: relative;
+        }
+
+        /* Form Sections */
+        .form-section {
+            margin-bottom: 24px;
+            animation: slideUp 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+            opacity: 0;
+            transform: translateY(20px);
+        }
+
+        .form-section:nth-child(1) { animation-delay: 0.1s; }
+        .form-section:nth-child(2) { animation-delay: 0.15s; }
+        .form-section:nth-child(3) { animation-delay: 0.2s; }
+        .form-section:nth-child(4) { animation-delay: 0.25s; }
+        .form-section:nth-child(5) { animation-delay: 0.3s; }
+
+        @keyframes slideUp {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .section-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Stats Cards */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        .stat-card {
+            background: var(--surface-elevated);
+            border-radius: 14px;
+            padding: 20px;
+            text-align: center;
+            border: 1px solid var(--border);
+            transition: all 0.3s;
+        }
+
+        .stat-card.highlight {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            border-color: var(--primary);
+        }
+
+        .stat-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 4px;
+        }
+
+        .stat-card.highlight .stat-value {
+            color: white;
+        }
+
+        .stat-label {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .stat-card.highlight .stat-label {
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        /* Time Period Selector */
+        .time-selector {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+            background: var(--surface-elevated);
+            padding: 4px;
+            border-radius: 10px;
+        }
+
+        .time-option {
+            flex: 1;
+            padding: 8px;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+
+        .time-option.active {
+            background: var(--primary);
+            color: white;
+        }
+
+        /* Vendor List */
+        .vendor-list {
+            background: var(--surface-elevated);
+            border-radius: 14px;
+            overflow: hidden;
+        }
+
+        .vendor-item {
+            padding: 16px;
+            border-bottom: 1px solid var(--border);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .vendor-item:last-child {
+            border-bottom: none;
+        }
+
+        .vendor-item:hover {
+            background: var(--surface-high);
+        }
+
+        .vendor-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .vendor-name {
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .vendor-parcels {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--surface-high);
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 14px;
+        }
+
+        .vendor-details {
+            display: flex;
+            gap: 16px;
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .vendor-phone {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .vendor-commission {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            color: var(--success);
+        }
+
+        /* Add Vendor Button */
+        .add-vendor-btn {
+            width: 100%;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 14px;
+            padding: 18px;
+            font-size: 17px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .add-vendor-btn:active {
+            scale: 0.98;
+            background: var(--primary-dark);
+        }
+
+        /* Modal */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.8);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+            padding: 20px;
+        }
+
+        .modal {
+            background: var(--surface-elevated);
+            border-radius: 20px;
+            padding: 24px;
+            max-width: 400px;
+            width: 100%;
+            animation: modalBounce 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        }
+
+        @keyframes modalBounce {
+            0% { transform: scale(0.5) translateY(50px); opacity: 0; }
+            100% { transform: scale(1) translateY(0); opacity: 1; }
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .modal-title {
+            font-size: 20px;
+            font-weight: 700;
+        }
+
+        .close-modal {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--surface-high);
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            color: var(--text-primary);
+        }
+
+        /* Input Fields */
+        .input-field {
+            width: 100%;
+            background: var(--surface-high);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+            font-size: 16px;
+            color: var(--text-primary);
+            margin-bottom: 12px;
+            transition: all 0.3s;
+            outline: none;
+        }
+
+        .input-field:focus {
+            border-color: var(--primary);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(0, 102, 255, 0.2);
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 20px;
+        }
+
+        .modal-btn {
+            flex: 1;
+            padding: 14px;
+            border-radius: 12px;
+            border: none;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .modal-btn.primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .modal-btn.secondary {
+            background: var(--surface-high);
+            color: var(--text-primary);
+        }
+
+        /* Empty State */
+        .empty-state {
+            padding: 48px 24px;
+            text-align: center;
+        }
+
+        .empty-icon {
+            width: 64px;
+            height: 64px;
+            background: var(--surface-high);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 16px;
+            font-size: 24px;
+        }
+
+        .empty-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .empty-message {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        /* Skeleton Loading */
+        .skeleton {
+            background: linear-gradient(90deg, var(--surface-elevated) 25%, var(--surface-high) 50%, var(--surface-elevated) 75%);
+            background-size: 200% 100%;
+            animation: loading 1.5s infinite;
+            border-radius: 14px;
+            height: 100%;
+            width: 100%;
+        }
+
+        @keyframes loading {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+
+        /* Responsive */
+        @media (min-width: 428px) {
+            .app {
+                max-width: 428px;
+                margin: 0 auto;
+                box-shadow: 0 0 60px rgba(0, 0, 0, 0.5);
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            * {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <!-- Main Content -->
+        <div class="main-content" id="mainContent">
+            <!-- Header -->
+            <div class="header" id="header">
+                <div class="header-content">
+                    <div class="logo-section">
+                        <div class="logo">
+                            <svg viewBox="0 0 40 40" fill="none">
+                                <circle cx="20" cy="20" r="18" stroke="#0066FF" stroke-width="2"/>
+                                <path d="M20 8 L20 22 M14 8 L26 8" stroke="#0066FF" stroke-width="3" stroke-linecap="round"/>
+                                <circle cx="20" cy="28" r="3" fill="#0066FF"/>
+                                <path d="M8 20 Q12 16 16 18" stroke="#0066FF" stroke-width="1" opacity="0.5"/>
+                                <path d="M24 18 Q28 16 32 20" stroke="#0066FF" stroke-width="1" opacity="0.5"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <h1 class="app-name">Tuma</h1>
+                            <p class="app-subtitle">Agent Dashboard</p>
+                        </div>
+                    </div>
+                    <button class="menu-button" aria-label="Menu">
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="white">
+                            <circle cx="4" cy="10" r="1.5"/>
+                            <circle cx="10" cy="10" r="1.5"/>
+                            <circle cx="16" cy="10" r="1.5"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Form Container -->
+            <form class="form-container">
+                <!-- Hero Section -->
+                <div class="hero-section">
+                    <h2 class="hero-title">Welcome, Agent</h2>
+                    <p class="hero-subtitle">Manage your vendors and track commissions</p>
+                    <span class="agent-code">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/>
+                        </svg>
+                        <span id="agentCode">AGT-001</span>
+                    </span>
+                </div>
+
+                <!-- Commission Overview -->
+                <div class="form-section">
+                    <h2 class="section-title">Commission Overview</h2>
+                    <div class="stats-grid">
+                        <div class="stat-card highlight">
+                            <div class="stat-value">KES <span id="totalCommission">0</span></div>
+                            <div class="stat-label">Total Commission</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="totalParcels">0</div>
+                            <div class="stat-label">Total Parcels</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="activeVendors">0</div>
+                            <div class="stat-label">Active Vendors</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value">20%</div>
+                            <div class="stat-label">Commission Rate</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Time Period Selector -->
+                <div class="form-section">
+                    <h2 class="section-title">Parcel History</h2>
+                    <div class="time-selector">
+                        <button type="button" class="time-option active" onclick="selectTimePeriod('today')">Today</button>
+                        <button type="button" class="time-option" onclick="selectTimePeriod('week')">This Week</button>
+                        <button type="button" class="time-option" onclick="selectTimePeriod('month')">This Month</button>
+                        <button type="button" class="time-option" onclick="selectTimePeriod('all')">All Time</button>
+                    </div>
+                </div>
+
+                <!-- Managed Vendors List -->
+                <div class="form-section">
+                    <h2 class="section-title">My Managed Vendors</h2>
+                    <div class="vendor-list" id="vendorList">
+                        <!-- Vendor items will be populated here -->
+                        <div class="empty-state">
+                            <div class="empty-icon">👥</div>
+                            <h3 class="empty-title">No Vendors Yet</h3>
+                            <p class="empty-message">Add your first vendor to start earning commissions</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Add Vendor Button -->
+                <div class="form-section">
+                    <button type="button" class="add-vendor-btn" onclick="showAddVendorModal()">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+                        </svg>
+                        <span>Onboard New Vendor</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Add Vendor Modal -->
+        <div class="modal-overlay" id="addVendorModal">
+            <div class="modal">
+                <div class="modal-header">
+                    <h3 class="modal-title">Add New Vendor</h3>
+                    <button class="close-modal" onclick="hideAddVendorModal()">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                        </svg>
+                    </button>
+                </div>
+                <form id="addVendorForm">
+                    <input type="text" class="input-field" placeholder="Vendor Name" id="vendorName" required>
+                    <input type="tel" class="input-field" placeholder="Phone Number (07XXXXXXXX)" id="vendorPhone" pattern="0[0-9]{9}" required>
+                    <input type="text" class="input-field" placeholder="Business Name (Optional)" id="businessName">
+                    <input type="text" class="input-field" placeholder="Business Location" id="businessLocation" required>
+                    
+                    <div class="modal-actions">
+                        <button type="button" class="modal-btn secondary" onclick="hideAddVendorModal()">Cancel</button>
+                        <button type="submit" class="modal-btn primary">Add Vendor</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Sample data structure
+        let vendors = [];
+        let currentTimePeriod = 'today';
+        let agentData = {
+            code: 'AGT-001',
+            name: 'John Agent',
+            totalCommission: 0,
+            vendors: []
+        };
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            loadAgentData();
+            updateStats();
+        });
+
+        // Load agent data (simulated)
+        function loadAgentData() {
+            // In production, this would fetch from Airtable
+            // For demo, using sample data
+            vendors = [
+                {
+                    id: 1,
+                    name: 'Alice Vendor',
+                    phone: '0712345678',
+                    businessName: 'Alice Shop',
+                    location: 'Westlands',
+                    parcels: {
+                        today: 5,
+                        week: 28,
+                        month: 112,
+                        all: 450
+                    },
+                    commission: {
+                        today: 850,
+                        week: 4760,
+                        month: 19040,
+                        all: 76500
+                    }
+                },
+                {
+                    id: 2,
+                    name: 'Bob Trader',
+                    phone: '0723456789',
+                    businessName: 'Bob Electronics',
+                    location: 'CBD',
+                    parcels: {
+                        today: 3,
+                        week: 19,
+                        month: 87,
+                        all: 312
+                    },
+                    commission: {
+                        today: 510,
+                        week: 3230,
+                        month: 14790,
+                        all: 53040
+                    }
+                }
+            ];
+            
+            displayVendors();
+        }
+
+        // Update stats based on time period
+        function updateStats() {
+            let totalParcels = 0;
+            let totalCommission = 0;
+            
+            vendors.forEach(vendor => {
+                totalParcels += vendor.parcels[currentTimePeriod];
+                totalCommission += vendor.commission[currentTimePeriod];
+            });
+            
+            document.getElementById('totalParcels').textContent = totalParcels;
+            document.getElementById('totalCommission').textContent = totalCommission.toLocaleString();
+            document.getElementById('activeVendors').textContent = vendors.length;
+        }
+
+        // Display vendors
+        function displayVendors() {
+            const vendorList = document.getElementById('vendorList');
+            
+            if (vendors.length === 0) {
+                vendorList.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-icon">👥</div>
+                        <h3 class="empty-title">No Vendors Yet</h3>
+                        <p class="empty-message">Add your first vendor to start earning commissions</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            vendorList.innerHTML = vendors.map(vendor => `
+                <div class="vendor-item" onclick="viewVendorDetails(${vendor.id})">
+                    <div class="vendor-header">
+                        <div class="vendor-name">${vendor.name}</div>
+                        <div class="vendor-parcels">
+                            <span>${vendor.parcels[currentTimePeriod]}</span>
+                            <span style="font-size: 12px;">parcels</span>
+                        </div>
+                    </div>
+                    <div class="vendor-details">
+                        <div class="vendor-phone">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/>
+                            </svg>
+                            <span>${vendor.phone}</span>
+                        </div>
+                        <div class="vendor-commission">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z"/>
+                            </svg>
+                            <span>KES ${vendor.commission[currentTimePeriod].toLocaleString()}</span>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Select time period
+        function selectTimePeriod(period) {
+            currentTimePeriod = period;
+            
+            // Update UI
+            document.querySelectorAll('.time-option').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            // Update data
+            updateStats();
+            displayVendors();
+        }
+
+        // Show/hide modal
+        function showAddVendorModal() {
+            document.getElementById('addVendorModal').style.display = 'flex';
+            document.getElementById('vendorName').focus();
+        }
+
+        function hideAddVendorModal() {
+            document.getElementById('addVendorModal').style.display = 'none';
+            document.getElementById('addVendorForm').reset();
+        }
+
+        // Handle vendor form submission
+        document.getElementById('addVendorForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            
+            const newVendor = {
+                id: Date.now(),
+                name: document.getElementById('vendorName').value,
+                phone: document.getElementById('vendorPhone').value,
+                businessName: document.getElementById('businessName').value || 'N/A',
+                location: document.getElementById('businessLocation').value,
+                parcels: {
+                    today: 0,
+                    week: 0,
+                    month: 0,
+                    all: 0
+                },
+                commission: {
+                    today: 0,
+                    week: 0,
+month: 0,
+                   all: 0
+               }
+           };
+           
+           // In production, this would save to Airtable
+           vendors.push(newVendor);
+           displayVendors();
+           updateStats();
+           hideAddVendorModal();
+           
+           // Show success message
+           alert(`Vendor ${newVendor.name} has been successfully onboarded!`);
+       });
+
+       // View vendor details (placeholder)
+       function viewVendorDetails(vendorId) {
+           const vendor = vendors.find(v => v.id === vendorId);
+           if (vendor) {
+               alert(`${vendor.name}\n${vendor.phone}\n${vendor.businessName}\n${vendor.location}\n\nTotal parcels: ${vendor.parcels.all}\nTotal commission earned: KES ${vendor.commission.all.toLocaleString()}`);
+           }
+       }
+
+       // Phone number validation
+       document.getElementById('vendorPhone').addEventListener('input', (e) => {
+           let value = e.target.value.replace(/\D/g, '');
+           
+           if (value.length > 0 && !value.startsWith('0')) {
+               value = '0' + value;
+           }
+           
+           e.target.value = value.substring(0, 10);
+       });
+
+       // Scroll effects
+       document.getElementById('mainContent').addEventListener('scroll', (e) => {
+           const header = document.getElementById('header');
+           if (e.target.scrollTop > 50) {
+               header.classList.add('scrolled');
+           } else {
+               header.classList.remove('scrolled');
+           }
+       });
+
+       // Initialize Telegram Web App
+       if (window.Telegram && window.Telegram.WebApp) {
+           const telegramWebApp = window.Telegram.WebApp;
+           telegramWebApp.ready();
+           telegramWebApp.expand();
+           
+           // Get agent data from Telegram if available
+           const user = telegramWebApp.initDataUnsafe.user;
+           if (user) {
+               agentData.name = user.first_name + (user.last_name ? ' ' + user.last_name : '');
+           }
+       }
+   </script>
+</body>
+</html>
