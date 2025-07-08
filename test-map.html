@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Map</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background: #000;
+            color: #fff;
+        }
+        #map {
+            height: 400px;
+            width: 100%;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+        .btn {
+            padding: 10px 20px;
+            background: #0066FF;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .btn:hover {
+            background: #0052CC;
+        }
+        #output {
+            background: #1a1a1a;
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 20px;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <h1>🗺️ Map & Routing Test</h1>
+    
+    <div id="map"></div>
+    
+    <div>
+        <button class="btn" onclick="testGeocoding()">Test Geocoding</button>
+        <button class="btn" onclick="testRouting()">Test Routing</button>
+        <button class="btn" onclick="testSupabase()">Test Supabase</button>
+        <button class="btn" onclick="addTestVendor()">Add Test Vendor</button>
+    </div>
+    
+    <div id="output">Output will appear here...</div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <script type="module">
+        // Import our modules
+        import { API_CONFIG } from './config.js';
+        import { initializeMap, addMarker, geocodeAddress, getRoute } from './mapUtils.js';
+        import { supabase } from './supabaseClient.js';
+
+        // Make functions global for button onclick
+        window.log = function(message) {
+            document.getElementById('output').textContent += message + '\n';
+        };
+
+        // Initialize map
+        window.log('Initializing map...');
+        const map = initializeMap('map');
+        window.log('✅ Map initialized!');
+
+        // Add a marker at Nairobi center
+        addMarker(map, -1.2921, 36.8219, {
+            title: 'Nairobi CBD',
+            popup: 'Welcome to Nairobi!'
+        });
+
+        // Test geocoding
+        window.testGeocoding = async function() {
+            window.log('\n🔍 Testing geocoding...');
+            try {
+                const result = await geocodeAddress('Westlands, Nairobi');
+                window.log('✅ Geocoding result:');
+                window.log(JSON.stringify(result, null, 2));
+                
+                // Add marker at the geocoded location
+                addMarker(map, result.lat, result.lng, {
+                    title: 'Westlands',
+                    popup: result.display_name
+                });
+                
+                // Center map on the location
+                map.setView([result.lat, result.lng], 15);
+            } catch (error) {
+                window.log('❌ Geocoding error: ' + error.message);
+            }
+        };
+
+        // Test routing
+        window.testRouting = async function() {
+            window.log('\n🚗 Testing routing...');
+            try {
+                const waypoints = [
+                    { lat: -1.2921, lng: 36.8219 }, // CBD
+                    { lat: -1.2635, lng: 36.8104 }  // Westlands
+                ];
+                
+                const route = await getRoute(waypoints);
+                window.log('✅ Route calculated:');
+                window.log(`Distance: ${route.distance.toFixed(2)} km`);
+                window.log(`Duration: ${route.duration.toFixed(0)} minutes`);
+                
+                // Draw route on map
+                if (route.geometry) {
+                    L.geoJSON(route.geometry, {
+                        style: {
+                            color: '#0066FF',
+                            weight: 5,
+                            opacity: 0.7
+                        }
+                    }).addTo(map);
+                }
+            } catch (error) {
+                window.log('❌ Routing error: ' + error.message);
+            }
+        };
+
+        // Test Supabase connection
+        window.testSupabase = async function() {
+            window.log('\n🔌 Testing Supabase connection...');
+            try {
+                // Test connection by fetching vendors
+                const { data, error } = await supabase
+                    .from('vendors')
+                    .select('*')
+                    .limit(5);
+                
+                if (error) throw error;
+                
+                window.log('✅ Supabase connected!');
+                window.log(`Found ${data.length} vendors`);
+                if (data.length > 0) {
+                    window.log('First vendor: ' + JSON.stringify(data[0], null, 2));
+                }
+            } catch (error) {
+                window.log('❌ Supabase error: ' + error.message);
+                window.log('Make sure you added your anon key to config.js!');
+            }
+        };
+
+        // Add test vendor
+        window.addTestVendor = async function() {
+            window.log('\n➕ Adding test vendor...');
+            try {
+                const testVendor = {
+                    vendor_name: 'Test Shop ' + Date.now(),
+                    phone: '0712345678',
+                    email: 'test@example.com',
+                    business_type: 'retail'
+                };
+                
+                const { data, error } = await supabase
+                    .from('vendors')
+                    .insert([testVendor])
+                    .select();
+                
+                if (error) throw error;
+                
+                window.log('✅ Vendor added successfully!');
+                window.log(JSON.stringify(data[0], null, 2));
+            } catch (error) {
+                window.log('❌ Error adding vendor: ' + error.message);
+            }
+        };
+
+        // Auto-test on load
+        window.log('Ready! Click the buttons to test different features.\n');
+    </script>
+</body>
+</html>
