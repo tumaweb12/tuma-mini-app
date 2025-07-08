@@ -14,7 +14,7 @@
 export const API_CONFIG = {
   // Supabase Configuration - UPDATE THESE WITH YOUR REAL VALUES!
   supabase: {
-    url: 'https://btxavqfoirdzwpffvezp.supabase.co', // From your screenshot
+    url: 'https://btxavqfoirdzwpfrvezp.supabase.co', // From your screenshot
     anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ0eGF2cWZvaXJkendwZnJ2ZXpwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE0ODcxMTcsImV4cCI6MjA2NzA2MzExN30.kQKpukFGx-cBl1zZRuXmex02ifkZ751WCUfQPogYutk', // Get this from Supabase Settings > API
   },
   
