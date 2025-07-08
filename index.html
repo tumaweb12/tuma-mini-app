@@ -1,48 +1,546 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Tuma – Pick Your Dashboard</title>
-  <style>
-    /* minimal reset & styling */
-    body {
-      margin: 0;
-      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-      background: #000;
-      color: #fff;
-      height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .picker {
-      text-align: center;
-    }
-    h1 { margin-bottom: 1rem; }
-    .picker a {
-      display: inline-block;
-      margin: 0.5rem;
-      padding: 0.75rem 1.25rem;
-      background: #0066ff;
-      color: #fff;
-      text-decoration: none;
-      border-radius: 8px;
-      transition: background 0.2s;
-    }
-    .picker a:hover {
-      background: #0052cc;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Tuma - Smart Delivery Platform</title>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        :root {
+            --primary: #0066FF;
+            --primary-dark: #0052CC;
+            --surface: #0A0A0B;
+            --surface-elevated: #141416;
+            --surface-high: #1C1C1F;
+            --text-primary: #FFFFFF;
+            --text-secondary: #8E8E93;
+            --text-tertiary: #48484A;
+            --border: #2C2C2E;
+            --success: #34C759;
+            --warning: #FF9F0A;
+            --danger: #FF3B30;
+            --vendor: #9C27B0;
+            --agent: #FF6B00;
+            --rider: #00BCD4;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+            background: #000000;
+            color: var(--text-primary);
+            overflow: hidden;
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* Animated Background */
+        .background {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            z-index: 0;
+        }
+
+        .background::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle at 20% 80%, rgba(0, 102, 255, 0.1) 0%, transparent 50%),
+                        radial-gradient(circle at 80% 20%, rgba(156, 39, 176, 0.1) 0%, transparent 50%),
+                        radial-gradient(circle at 40% 40%, rgba(0, 188, 212, 0.1) 0%, transparent 50%);
+            animation: gradientShift 20s ease infinite;
+        }
+
+        @keyframes gradientShift {
+            0%, 100% { transform: rotate(0deg) scale(1); }
+            33% { transform: rotate(120deg) scale(1.1); }
+            66% { transform: rotate(240deg) scale(0.9); }
+        }
+
+        /* Floating particles */
+        .particle {
+            position: absolute;
+            background: var(--primary);
+            border-radius: 50%;
+            opacity: 0.1;
+            animation: float 20s infinite;
+        }
+
+        .particle:nth-child(1) {
+            width: 80px;
+            height: 80px;
+            left: 10%;
+            animation-delay: 0s;
+        }
+
+        .particle:nth-child(2) {
+            width: 60px;
+            height: 60px;
+            left: 70%;
+            animation-delay: 2s;
+        }
+
+        .particle:nth-child(3) {
+            width: 100px;
+            height: 100px;
+            left: 40%;
+            animation-delay: 4s;
+        }
+
+        @keyframes float {
+            0%, 100% {
+                transform: translateY(100vh) rotate(0deg);
+                opacity: 0;
+            }
+            10% {
+                opacity: 0.1;
+            }
+            90% {
+                opacity: 0.1;
+            }
+            100% {
+                transform: translateY(-100vh) rotate(720deg);
+                opacity: 0;
+            }
+        }
+
+        /* Main Container */
+        .container {
+            position: relative;
+            z-index: 1;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            text-align: center;
+        }
+
+        /* Logo Animation */
+        .logo-container {
+            margin-bottom: 40px;
+            animation: logoEntry 1s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        @keyframes logoEntry {
+            0% {
+                transform: scale(0) rotate(-180deg);
+                opacity: 0;
+            }
+            100% {
+                transform: scale(1) rotate(0);
+                opacity: 1;
+            }
+        }
+
+        .logo {
+            width: 100px;
+            height: 100px;
+            position: relative;
+        }
+
+        .logo svg {
+            width: 100%;
+            height: 100%;
+            filter: drop-shadow(0 4px 20px rgba(0, 102, 255, 0.4));
+        }
+
+        /* Animated Logo */
+        .logo svg circle {
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                stroke-width: 2;
+                opacity: 1;
+            }
+            50% {
+                stroke-width: 3;
+                opacity: 0.8;
+            }
+        }
+
+        /* Title */
+        .title {
+            font-size: 48px;
+            font-weight: 800;
+            margin-bottom: 16px;
+            background: linear-gradient(135deg, #FFFFFF 0%, #8E8E93 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: titleSlide 0.8s ease-out 0.3s both;
+        }
+
+        @keyframes titleSlide {
+            0% {
+                transform: translateY(30px);
+                opacity: 0;
+            }
+            100% {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .subtitle {
+            font-size: 20px;
+            color: var(--text-secondary);
+            margin-bottom: 48px;
+            animation: titleSlide 0.8s ease-out 0.5s both;
+        }
+
+        /* Dashboard Cards */
+        .dashboards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 20px;
+            width: 100%;
+            max-width: 400px;
+            margin-bottom: 40px;
+        }
+
+        .dashboard-card {
+            background: var(--surface-elevated);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 24px;
+            text-decoration: none;
+            color: var(--text-primary);
+            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            position: relative;
+            overflow: hidden;
+            animation: cardEntry 0.6s ease-out both;
+        }
+
+        .dashboard-card:nth-child(1) { animation-delay: 0.6s; }
+        .dashboard-card:nth-child(2) { animation-delay: 0.7s; }
+        .dashboard-card:nth-child(3) { animation-delay: 0.8s; }
+        .dashboard-card:nth-child(4) { animation-delay: 0.9s; }
+
+        @keyframes cardEntry {
+            0% {
+                transform: translateY(50px) scale(0.9);
+                opacity: 0;
+            }
+            100% {
+                transform: translateY(0) scale(1);
+                opacity: 1;
+            }
+        }
+
+        .dashboard-card::before {
+            content: '';
+            position: absolute;
+            top: -2px;
+            left: -2px;
+            right: -2px;
+            bottom: -2px;
+            background: linear-gradient(45deg, var(--primary), transparent);
+            border-radius: 20px;
+            opacity: 0;
+            z-index: -1;
+            transition: opacity 0.3s;
+        }
+
+        .dashboard-card:hover {
+            transform: translateY(-4px) scale(1.02);
+            border-color: transparent;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+        }
+
+        .dashboard-card:hover::before {
+            opacity: 1;
+        }
+
+        .dashboard-card:active {
+            transform: translateY(-2px) scale(1.01);
+        }
+
+        /* Card specific colors */
+        .dashboard-card.vendor::before {
+            background: linear-gradient(135deg, var(--vendor), transparent);
+        }
+
+        .dashboard-card.agent::before {
+            background: linear-gradient(135deg, var(--agent), transparent);
+        }
+
+        .dashboard-card.rider::before {
+            background: linear-gradient(135deg, var(--rider), transparent);
+        }
+
+        .dashboard-card.route::before {
+            background: linear-gradient(135deg, var(--success), transparent);
+        }
+
+        .card-icon {
+            font-size: 40px;
+            margin-bottom: 12px;
+            display: block;
+            animation: iconBounce 2s ease-in-out infinite;
+        }
+
+        @keyframes iconBounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+
+        .card-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .card-desc {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        /* Features Section */
+        .features {
+            display: flex;
+            gap: 20px;
+            margin-top: 40px;
+            animation: featuresEntry 1s ease-out 1s both;
+        }
+
+        @keyframes featuresEntry {
+            0% {
+                transform: translateY(20px);
+                opacity: 0;
+            }
+            100% {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .feature {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .feature-icon {
+            width: 20px;
+            height: 20px;
+            background: var(--success);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+        }
+
+        /* Footer */
+        .footer {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 12px;
+            color: var(--text-tertiary);
+            animation: fadeIn 1s ease-out 1.2s both;
+        }
+
+        @keyframes fadeIn {
+            0% { opacity: 0; }
+            100% { opacity: 1; }
+        }
+
+        /* Mobile Optimization */
+        @media (max-width: 480px) {
+            .title {
+                font-size: 36px;
+            }
+            
+            .subtitle {
+                font-size: 18px;
+            }
+            
+            .dashboards {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        /* Loading Animation */
+        .loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            display: none;
+        }
+
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--surface-elevated);
+            border-top: 3px solid var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
 </head>
 <body>
-  <div class="picker">
-    <h1>Welcome to Tuma</h1>
-    <p>Select your dashboard:</p>
-    <a href="vendor.html">Vendor</a>
-    <a href="agent.html">Agent</a>
-    <a href="rider.html">Rider</a>
-    <a href="route.html">Route Planner</a>
-  </div>
+    <!-- Animated Background -->
+    <div class="background">
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+    </div>
+
+    <!-- Main Container -->
+    <div class="container">
+        <!-- Logo -->
+        <div class="logo-container">
+            <div class="logo">
+                <svg viewBox="0 0 40 40" fill="none">
+                    <circle cx="20" cy="20" r="18" stroke="#0066FF" stroke-width="2"/>
+                    <path d="M20 8 L20 22 M14 8 L26 8" stroke="#0066FF" stroke-width="3" stroke-linecap="round"/>
+                    <circle cx="20" cy="28" r="3" fill="#0066FF"/>
+                    <path d="M8 20 Q12 16 16 18" stroke="#0066FF" stroke-width="1" opacity="0.5"/>
+                    <path d="M24 18 Q28 16 32 20" stroke="#0066FF" stroke-width="1" opacity="0.5"/>
+                </svg>
+            </div>
+        </div>
+
+        <!-- Title -->
+        <h1 class="title">Tuma</h1>
+        <p class="subtitle">Smart Delivery Clustering</p>
+
+        <!-- Dashboard Cards -->
+        <div class="dashboards">
+            <a href="vendor.html" class="dashboard-card vendor">
+                <span class="card-icon">🏪</span>
+                <div class="card-title">Vendor</div>
+                <div class="card-desc">Book deliveries</div>
+            </a>
+
+            <a href="agent.html" class="dashboard-card agent">
+                <span class="card-icon">💼</span>
+                <div class="card-title">Agent</div>
+                <div class="card-desc">Manage vendors</div>
+            </a>
+
+            <a href="rider.html" class="dashboard-card rider">
+                <span class="card-icon">🏍️</span>
+                <div class="card-title">Rider</div>
+                <div class="card-desc">Deliver parcels</div>
+            </a>
+
+            <a href="route.html" class="dashboard-card route">
+                <span class="card-icon">🗺️</span>
+                <div class="card-title">Routes</div>
+                <div class="card-desc">View navigation</div>
+            </a>
+        </div>
+
+        <!-- Features -->
+        <div class="features">
+            <div class="feature">
+                <div class="feature-icon">✓</div>
+                <span>Save 40-60%</span>
+            </div>
+            <div class="feature">
+                <div class="feature-icon">✓</div>
+                <span>Real-time tracking</span>
+            </div>
+            <div class="feature">
+                <div class="feature-icon">✓</div>
+                <span>Smart clustering</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+        Powered by smart routing technology
+    </div>
+
+    <!-- Loading Spinner (hidden by default) -->
+    <div class="loading" id="loading">
+        <div class="loading-spinner"></div>
+    </div>
+
+    <script>
+        // Add haptic feedback
+        function haptic() {
+            if ('vibrate' in navigator) {
+                navigator.vibrate(10);
+            }
+        }
+
+        // Add click feedback to all cards
+        document.querySelectorAll('.dashboard-card').forEach(card => {
+            card.addEventListener('click', function(e) {
+                haptic();
+                
+                // Show loading spinner
+                document.getElementById('loading').style.display = 'block';
+                
+                // Add a small delay for better UX
+                setTimeout(() => {
+                    window.location.href = this.href;
+                }, 200);
+                
+                e.preventDefault();
+            });
+        });
+
+        // Telegram Web App integration
+        if (window.Telegram?.WebApp) {
+            const tg = window.Telegram.WebApp;
+            tg.ready();
+            tg.expand();
+            
+            // Set theme colors
+            tg.setHeaderColor('#0A0A0B');
+            tg.setBackgroundColor('#000000');
+        }
+
+        // Check if user has a saved preference
+        const savedDashboard = localStorage.getItem('tuma_last_dashboard');
+        if (savedDashboard) {
+            // You could auto-redirect or highlight their last used dashboard
+            const lastUsedCard = document.querySelector(`.dashboard-card[href="${savedDashboard}"]`);
+            if (lastUsedCard) {
+                lastUsedCard.style.borderColor = '#0066FF';
+            }
+        }
+
+        // Save dashboard preference when clicked
+        document.querySelectorAll('.dashboard-card').forEach(card => {
+            card.addEventListener('click', function() {
+                localStorage.setItem('tuma_last_dashboard', this.getAttribute('href'));
+            });
+        });
+    </script>
 </body>
 </html>
