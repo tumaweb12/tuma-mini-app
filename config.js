@@ -4,15 +4,21 @@
  * In production, these values come from environment variables
  */
 
+/**
+ * Configuration Module
+ * Centralizes all API keys, URLs, and configuration
+ * In production, these values come from environment variables
+ */
+
 // API Configuration
 export const API_CONFIG = {
-  // Supabase Configuration
+  // Supabase Configuration - UPDATE THESE WITH YOUR REAL VALUES!
   supabase: {
-    url: import.meta.env?.VITE_SUPABASE_URL || 'https://your-project.supabase.co',
-    anonKey: import.meta.env?.VITE_SUPABASE_ANON_KEY || 'your-anon-key',
+    url: 'https://btxavqfoirdzwpffvezp.supabase.co', // From your screenshot
+    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ0eGF2cWZvaXJkendwZnJ2ZXpwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE0ODcxMTcsImV4cCI6MjA2NzA2MzExN30.kQKpukFGx-cBl1zZRuXmex02ifkZ751WCUfQPogYutk', // Get this from Supabase Settings > API
   },
   
-  // Map Services
+  // Map Services (these are free and don't need API keys)
   maps: {
     // Using OSRM for routing (no API key needed)
     osrmUrl: 'https://router.project-osrm.org/route/v1',
@@ -23,10 +29,10 @@ export const API_CONFIG = {
     attribution: '© OpenStreetMap contributors'
   },
   
-  // Telegram Configuration
+  // Telegram Configuration (optional for now)
   telegram: {
-    botToken: import.meta.env?.VITE_TELEGRAM_BOT_TOKEN || '',
-    webAppUrl: import.meta.env?.VITE_TELEGRAM_WEBAPP_URL || ''
+    botToken: '', // Leave empty for now
+    webAppUrl: '' // Leave empty for now
   }
 };
 
