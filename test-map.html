@@ -73,10 +73,9 @@
     <script>
         // Configuration (replace with your actual Supabase anon key)
         const SUPABASE_URL = 'https://btxavqfoirdzwpffvezp.supabase.co';
-        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ0eGF2cWZvaXJkendwZmZ2ZXpwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzY4MjkxOTgsImV4cCI6MjA1MjQwNTE5OH0.kQKpukFGx-cB11zZRuXmex02ifkZ751WCUfQPogYutk'; // <-- REPLACE THIS!
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ0eGF2cWZvaXJkendwZmZ2ZXpwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzY4MjkxOTgsImV4cCI6MjA1MjQwNTE5OH0.kQKpukFGx-cB11zZRuXmex02ifkZ751WCUfQPogYutk';
         
         let map;
-        let supabaseClient;
         
         // Helper function to log messages
         function log(message, type = '') {
@@ -209,7 +208,7 @@
         async function testSupabase() {
             log('\n🔌 Testing Supabase connection...');
             
-           if (SUPABASE_ANON_KEY === 'YOUR-ANON-KEY-HERE') {
+            if (SUPABASE_ANON_KEY === 'YOUR-ANON-KEY-HERE') {
                 log('❌ Please add your Supabase anon key first!', 'error');
                 log('1. Go to Supabase Dashboard → Settings → API');
                 log('2. Copy the "anon public" key');
@@ -218,18 +217,20 @@
             }
             
             try {
-                // Initialize Supabase client
-                if (!supabaseClient) {
-                    supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+                // Test direct REST API call instead of using supabase client
+                const response = await fetch(`${SUPABASE_URL}/rest/v1/vendors?select=*&limit=3`, {
+                    headers: {
+                        'apikey': SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
-                
-                // Test query
-                const { data, error } = await supabaseClient
-                    .from('vendors')
-                    .select('*')
-                    .limit(3);
-                
-                if (error) throw error;
+
+                const data = await response.json();
                 
                 log('✅ Supabase connected successfully!', 'success');
                 log(`Found ${data.length} vendors`);
@@ -237,6 +238,8 @@
                 if (data.length > 0) {
                     log('\nSample vendor:');
                     log(JSON.stringify(data[0], null, 2));
+                } else {
+                    log('No vendors found in database (empty table)');
                 }
             } catch (error) {
                 log('❌ Supabase error: ' + error.message, 'error');
