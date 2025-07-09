@@ -433,6 +433,35 @@
             border-color: var(--primary);
         }
 
+        /* Route Preview Map */
+        .route-preview-container {
+            background: var(--surface-elevated);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 12px;
+            margin-top: 16px;
+            height: 180px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .route-preview-placeholder {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: var(--text-tertiary);
+            font-size: 14px;
+            text-align: center;
+        }
+
+        #previewMap {
+            height: 100%;
+            width: 100%;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
         /* Package Details Grid */
         .package-grid {
             display: grid;
@@ -1191,11 +1220,11 @@
                             </svg>
                             GPS Location
                         </button>
-                        <button type="button" class="location-btn" onclick="typeAddress('pickup')">
+                        <button type="button" class="location-btn" onclick="openSimpleLocationModal('pickupLocation')">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                                 <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
                             </svg>
-                            Type Address
+                            Open Map
                         </button>
                     </div>
                 </div>
@@ -1218,12 +1247,20 @@
                             </svg>
                             GPS Location
                         </button>
-                        <button type="button" class="location-btn" onclick="typeAddress('delivery')">
+                        <button type="button" class="location-btn" onclick="openSimpleLocationModal('deliveryLocation')">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                                 <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
                             </svg>
-                            Type Address
+                            Open Map
                         </button>
+                    </div>
+                    
+                    <!-- Route Preview Map -->
+                    <div class="route-preview-container" id="routePreviewContainer">
+                        <div class="route-preview-placeholder" id="previewPlaceholder">
+                            <span>📍 Preview your route here</span>
+                        </div>
+                        <div id="previewMap" style="display: none;"></div>
                     </div>
                 </div>
 
@@ -1428,128 +1465,188 @@
         </div>
     </div>
 
+    <!-- Location Selection Modal -->
+    <div id="simpleLocationModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 3000;">
+        <div style="background: var(--surface-elevated); border-radius: 20px; margin: 20px; height: calc(100% - 40px); display: flex; flex-direction: column; max-width: 500px; margin: 20px auto;">
+            <div style="padding: 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between;">
+                <h3 style="font-size: 20px; font-weight: 600;">Select Location</h3>
+                <button onclick="closeLocationModal()" style="width: 36px; height: 36px; border-radius: 50%; background: var(--surface-high); border: none; display: flex; align-items: center; justify-content: center; cursor: pointer;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
+                        <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                    </svg>
+                </button>
+            </div>
+            <div style="padding: 20px; padding-bottom: 10px;">
+                <div class="input-container">
+                    <input type="text" id="simpleSearch" class="input-field" placeholder="Search for a location..." style="padding-right: 16px;">
+                </div>
+                <button id="simpleSearchBtn" class="location-btn" style="width: 100%; margin-top: 10px;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+                    </svg>
+                    Search
+                </button>
+            </div>
+            <div id="simpleMap" style="flex: 1; min-height: 300px;"></div>
+            <div style="padding: 20px; background: var(--surface-high); border-bottom-left-radius: 20px; border-bottom-right-radius: 20px;">
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 16px;">
+                    <div style="width: 40px; height: 40px; background: var(--primary); border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
+                            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                        </svg>
+                    </div>
+                    <div style="flex: 1;">
+                        <div id="selectedLocationName" style="font-weight: 600;">Move the map to select location</div>
+                        <div id="selectedLocationAddress" style="font-size: 14px; color: var(--text-secondary); margin-top: 4px;">Drag the map to pin your exact location</div>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 12px;">
+                    <button onclick="closeLocationModal()" class="success-button secondary" style="flex: 1;">Cancel</button>
+                    <button onclick="confirmSimpleLocation()" class="success-button primary" style="flex: 1;">Confirm Location</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Map Pin Marker for Modal -->
+    <style>
+        #simpleLocationModal::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 30px;
+            height: 40px;
+            background: url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCAzMCA0MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICAgIDxwYXRoIGQ9Ik0xNSAwQzYuNyAwIDAgNi43IDAgMTVjMCA4LjMgMTUgMjUgMTUgMjVzMTUtMTYuNyAxNS0yNUMzMCA2LjcgMjMuMyAwIDE1IDB6IiBmaWxsPSIjMDA2NkZGIi8+CiAgICA8Y2lyY2xlIGN4PSIxNSIgY3k9IjE1IiByPSI4IiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4=') no-repeat center;
+            pointer-events: none;
+            z-index: 1000;
+        }
+    </style>
+
     <!-- Module imports -->
     <script type="module" src="./vendor.js"></script>
-    <!-- ADD THIS TO YOUR vendor.html JUST BEFORE THE CLOSING </body> TAG -->
+    
+    <!-- Route Preview Map Script -->
+    <script>
+    // Route Preview Map functionality
+    let routePreviewMap = null;
+    let pickupMarker = null;
+    let deliveryMarker = null;
 
-<!-- Google Maps JS + Places (in <head> or before this) -->
-<script>
-// Globals
-let simpleMap = null;
-let currentInputField = null;
-let selectedSimpleLocation = null;
-let autocompleteElement = null;
+    function initRoutePreview() {
+        if (!routePreviewMap) {
+            routePreviewMap = L.map('previewMap', {
+                zoomControl: false,
+                attributionControl: false,
+                dragging: false,
+                touchZoom: false,
+                scrollWheelZoom: false,
+                doubleClickZoom: false,
+                boxZoom: false,
+                keyboard: false
+            }).setView([-1.2921, 36.8219], 13);
 
-function openSimpleLocationModal(inputId) {
-  currentInputField = inputId;
-  document.getElementById('simpleLocationModal').style.display = 'block';
-
-  if (!simpleMap) {
-    // 1) Init Leaflet
-    simpleMap = L.map('simpleMap').setView([-1.2921, 36.8219], 13);
-    L.tileLayer(
-      'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-      { attribution: '© OpenStreetMap contributors' }
-    ).addTo(simpleMap);
-
-    // 2) Reverse‐geocode on drag
-    simpleMap.on('moveend', updateSelectedLocation);
-
-    // 3) PlaceAutocompleteElement setup
-    const input = document.getElementById('simpleSearch');
-    if (input && window.google?.maps?.places) {
-      autocompleteElement = new google.maps.places.PlaceAutocompleteElement({
-        container: input,
-        options: {
-          fields: ['formatted_address','geometry','name'],
-          types: ['address'],
-          componentRestrictions: { country: 'KE' },
-          bounds: new google.maps.LatLngBounds(
-            { lat: -1.5, lng: 36.6 },
-            { lat: -1.0, lng: 37.1 }
-          ),
-          strictBounds: true
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap'
+            }).addTo(routePreviewMap);
         }
-      });
-      autocompleteElement.bindTo('bounds', simpleMap);
+    }
 
-      autocompleteElement.addListener('place_changed', () => {
-        const place = autocompleteElement.getPlace();
-        if (!place.geometry) return;
-        const lat = place.geometry.location.lat();
-        const lng = place.geometry.location.lng();
-        simpleMap.setView([lat, lng], 16);
-        selectedSimpleLocation = {
-          lat, lng,
-          address: place.formatted_address || place.name
-        };
-        document.getElementById('selectedLocationName').textContent =
-          place.name || 'Selected Location';
-        document.getElementById('selectedLocationAddress').textContent =
-          selectedSimpleLocation.address;
-      });
+    function updateRoutePreview() {
+        const pickupInput = document.getElementById('pickupLocation');
+        const deliveryInput = document.getElementById('deliveryLocation');
+        
+        const pickupLat = pickupInput.dataset.lat;
+        const pickupLng = pickupInput.dataset.lng;
+        const deliveryLat = deliveryInput.dataset.lat;
+        const deliveryLng = deliveryInput.dataset.lng;
+        
+        const previewPlaceholder = document.getElementById('previewPlaceholder');
+        const previewMapDiv = document.getElementById('previewMap');
+        
+        if (pickupLat && pickupLng && deliveryLat && deliveryLng) {
+            // Show map, hide placeholder
+            previewPlaceholder.style.display = 'none';
+            previewMapDiv.style.display = 'block';
+            
+            // Initialize map if needed
+            if (!routePreviewMap) {
+                initRoutePreview();
+            }
+            
+            // Remove existing markers
+            if (pickupMarker) routePreviewMap.removeLayer(pickupMarker);
+            if (deliveryMarker) routePreviewMap.removeLayer(deliveryMarker);
+            
+            // Add pickup marker with "P" label
+            const pickupIcon = L.divIcon({
+                className: 'custom-div-icon',
+                html: '<div style="background: #0066FF; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; box-shadow: 0 2px 6px rgba(0,0,0,0.3);">P</div>',
+                iconSize: [24, 24],
+                iconAnchor: [12, 12]
+            });
+            
+            // Add delivery marker with "D" label
+            const deliveryIcon = L.divIcon({
+                className: 'custom-div-icon',
+                html: '<div style="background: #34C759; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; box-shadow: 0 2px 6px rgba(0,0,0,0.3);">D</div>',
+                iconSize: [24, 24],
+                iconAnchor: [12, 12]
+            });
+            
+            pickupMarker = L.marker([parseFloat(pickupLat), parseFloat(pickupLng)], { icon: pickupIcon }).addTo(routePreviewMap);
+            deliveryMarker = L.marker([parseFloat(deliveryLat), parseFloat(deliveryLng)], { icon: deliveryIcon }).addTo(routePreviewMap);
+            
+            // Fit bounds to show both markers
+            const bounds = L.latLngBounds([
+                [parseFloat(pickupLat), parseFloat(pickupLng)],
+                [parseFloat(deliveryLat), parseFloat(deliveryLng)]
+            ]);
+            
+            routePreviewMap.fitBounds(bounds, { padding: [30, 30] });
+            
+            // Force map refresh
+            setTimeout(() => {
+                routePreviewMap.invalidateSize();
+            }, 100);
+        } else {
+            // Hide map, show placeholder
+            previewPlaceholder.style.display = 'flex';
+            previewMapDiv.style.display = 'none';
+        }
+    }
 
-      // wire up the Search button
-      document.getElementById('simpleSearchBtn')
-        .addEventListener('click', () => {
-          google.maps.event.trigger(autocompleteElement, 'place_changed');
+    // Listen for changes to location inputs
+    document.addEventListener('DOMContentLoaded', () => {
+        const pickupInput = document.getElementById('pickupLocation');
+        const deliveryInput = document.getElementById('deliveryLocation');
+        
+        if (pickupInput && deliveryInput) {
+            // Create a MutationObserver to watch for dataset changes
+            const observer = new MutationObserver(() => {
+                updateRoutePreview();
+            });
+            
+            // Configure and start observing
+            const config = { attributes: true, attributeFilter: ['data-lat', 'data-lng'] };
+            observer.observe(pickupInput, config);
+            observer.observe(deliveryInput, config);
+            
+            // Also listen for change events
+            pickupInput.addEventListener('change', updateRoutePreview);
+            deliveryInput.addEventListener('change', updateRoutePreview);
+        }
+    });
+    </script>
+
+    <!-- Google Maps Script -->
+    <script>
+        (g=>{var h,a,k,p="The Google Maps JavaScript API",c="google",l="importLibrary",q="__ib__",m=document,b=window;b=b[c]||(b[c]={});var d=b.maps||(b.maps={}),r=new Set,e=new URLSearchParams,u=()=>h||(h=new Promise(async(f,n)=>{await (a=m.createElement("script"));e.set("libraries",[...r]+"");for(k in g)e.set(k.replace(/[A-Z]/g,t=>"_"+t[0].toLowerCase()),g[k]);e.set("callback",c+".maps."+q);a.src=`https://maps.${c}apis.com/maps/api/js?`+e;d[q]=f;a.onerror=()=>h=n(Error(p+" could not load."));a.nonce=m.querySelector("script[nonce]")?.nonce||"";m.head.append(a)}));d[l]?console.warn(p+" only loads once. Ignoring:",g):d[l]=(f,...n)=>r.add(f)&&u().then(()=>d[l](f,...n))})({
+            key: "AIzaSyBUJEPsBbLqT4K2lgBEWUdHvbiFfGgfXhw",
+            v: "weekly",
+            libraries: ["places"]
         });
-
-      // handle Enter key
-      input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          google.maps.event.trigger(autocompleteElement, 'place_changed');
-        }
-      });
-    }
-  }
-
-  // resize map
-  setTimeout(() => simpleMap.invalidateSize(), 100);
-}
-
-async function updateSelectedLocation() {
-  const { lat, lng } = simpleMap.getCenter();
-  try {
-    const resp = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
-    const data = await resp.json();
-    selectedSimpleLocation = { lat, lng, address: data.display_name };
-    document.getElementById('selectedLocationName').textContent =
-      data.name || 'Selected Location';
-    document.getElementById('selectedLocationAddress').textContent =
-      selectedSimpleLocation.address;
-  } catch (e) {
-    console.error('Reverse geocode failed', e);
-  }
-}
-
-function confirmSimpleLocation() {
-  if (selectedSimpleLocation && currentInputField) {
-    const inp = document.getElementById(currentInputField);
-    inp.value = selectedSimpleLocation.address;
-    inp.dataset.lat = selectedSimpleLocation.lat;
-    inp.dataset.lng = selectedSimpleLocation.lng;
-    inp.dispatchEvent(new Event('change', { bubbles: true }));
-  }
-  closeLocationModal();
-}
-
-function closeLocationModal() {
-  document.getElementById('simpleLocationModal').style.display = 'none';
-  currentInputField = null;
-  selectedSimpleLocation = null;
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-  ['pickupLocation','deliveryLocation','bulkPickupLocation'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) {
-      el.onclick = () => openSimpleLocationModal(id);
-      el.style.cursor = 'pointer';
-    }
-  });
-});
-</script>
+    </script>
 </body>
 </html>
