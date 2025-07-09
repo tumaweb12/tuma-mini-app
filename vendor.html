@@ -1464,7 +1464,7 @@
 
 <!-- ADD THIS SCRIPT TO YOUR vendor.html AFTER YOUR EXISTING SCRIPTS -->
 <script>
-// Simple location selector with built-in search box (Leaflet Control Geocoder)
+// Simple location selector with built-in Nairobi search (Leaflet Control Geocoder)
 let simpleMap = null;
 let currentInputField = null;
 let selectedSimpleLocation = null;
@@ -1479,25 +1479,33 @@ function openSimpleLocationModal(inputId) {
         simpleMap = L.map('simpleMap').setView([-1.2921, 36.8219], 13);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(simpleMap);
 
-        // Add the geocoder control (search box)
-        L.Control.geocoder({ defaultMarkGeocode: false })
-          .on('markgeocode', function(e) {
-            const c = e.geocode.center;
-            // Pan the map to the chosen location
-            simpleMap.setView(c, 16);
+        // 1️⃣ Build a Nominatim geocoder limited to Kenya/Nairobi
+        const nairobiGeocoder = L.Control.Geocoder.nominatim({
+          geocodingQueryParams: {
+            countrycodes: 'ke',                   // only Kenya
+            viewbox: '36.6,-1.5,37.1,-1.0',       // box around Nairobi
+            bounded: 1                            // restrict results to that box
+          }
+        });
 
-            // Save the selected spot
-            selectedSimpleLocation = {
-              lat: c.lat,
-              lng: c.lng,
-              address: e.geocode.name
-            };
-
-            // Update the info display
-            document.getElementById('selectedLocationName').textContent = e.geocode.name;
-            document.getElementById('selectedLocationAddress').textContent = e.geocode.name;
-          })
-          .addTo(simpleMap);
+        // 2️⃣ Add the search control using that Nairobi geocoder
+        L.Control.geocoder({
+          geocoder: nairobiGeocoder,
+          placeholder: 'Search Nairobi…',
+          defaultMarkGeocode: false
+        })
+        .on('markgeocode', function(e) {
+          const c = e.geocode.center;
+          simpleMap.setView(c, 16);
+          selectedSimpleLocation = {
+            lat: c.lat,
+            lng: c.lng,
+            address: e.geocode.name
+          };
+          document.getElementById('selectedLocationName').textContent = e.geocode.name;
+          document.getElementById('selectedLocationAddress').textContent = e.geocode.name;
+        })
+        .addTo(simpleMap);
 
         // Also update whenever the user drags or moves the map
         simpleMap.on('moveend', updateSelectedLocation);
