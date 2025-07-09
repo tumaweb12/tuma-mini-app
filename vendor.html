@@ -18,12 +18,6 @@
     <!-- Leaflet Control Geocoder (Search Plugin) -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
     <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
-
-    <!-- 4) Google Places (key restricted) -->
-<script
-  src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCaWjP3TKWhJrtureRn7q6fIIKk0MPl7bY&libraries=places"
-  async defer
-></script>
   
     <!-- 3) Your config & modules - REMOVED PROBLEMATIC SUPABASE CDN -->
     <script src="./config.js"></script>
@@ -1438,34 +1432,50 @@
     <script type="module" src="./vendor.js"></script>
     <!-- ADD THIS TO YOUR vendor.html JUST BEFORE THE CLOSING </body> TAG -->
 
-<!-- Simple Location Modal -->
-<div id="simpleLocationModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 9999;">
-    <div style="position: relative; width: 100%; height: 100%; background: var(--surface);">
-        <!-- Header -->
-        <div style="position: absolute; top: 0; left: 0; right: 0; background: var(--surface-elevated); padding: 16px; z-index: 1001; display: flex; align-items: center; gap: 16px;">
-            <button onclick="closeLocationModal()" style="background: var(--surface-high); border: none; width: 32px; height: 32px; border-radius: 8px; color: var(--primary); cursor: pointer;">
-                ← 
-            </button>
-            <h3 style="flex: 1; margin: 0;">Select Location</h3>
-            <button onclick="confirmSimpleLocation()" style="background: var(--primary); color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer;">
-                Confirm
-            </button>
-        </div>
-        
-        <!-- Map Container -->
-        <div id="simpleMap" style="position: absolute; top: 60px; left: 0; right: 0; bottom: 0;"></div>
-        
-        <!-- Center Marker -->
-        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; z-index: 1000;">
-            <div style="width: 30px; height: 30px; background: var(--primary); border-radius: 50% 50% 50% 0; transform: rotate(-45deg); border: 3px solid white; box-shadow: 0 3px 10px rgba(0,0,0,0.3);"></div>
-        </div>
-        
-        <!-- Location Info -->
-        <div style="position: absolute; bottom: 20px; left: 20px; right: 20px; background: var(--surface-elevated); padding: 16px; border-radius: 12px; z-index: 1000;">
-            <div id="selectedLocationName" style="font-weight: 600; margin-bottom: 4px;">Select a location</div>
-            <div id="selectedLocationAddress" style="font-size: 14px; color: var(--text-secondary);">Move the map to choose location</div>
-        </div>
+ <!-- Google Maps JS + Places (in <head> or before this) -->
+<script
+  async defer
+  src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCaWjP3TKWhJrtureRn7q6fIIKk0MPl7bY&libraries=places">
+</script>
+
+<!-- ADD THIS TO YOUR vendor.html JUST BEFORE THE CLOSING </body> TAG -->
+<div id="simpleLocationModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.9); z-index:9999;">
+  <div style="position:relative; width:100%; height:100%; background:var(--surface);">
+    <!-- Header -->
+    <div style="position:absolute; top:0; left:0; right:0; background:var(--surface-elevated); padding:16px; z-index:1001; display:flex; align-items:center; gap:16px;">
+      <button onclick="closeLocationModal()" style="background:var(--surface-high); border:none; width:32px; height:32px; border-radius:8px; color:var(--primary); cursor:pointer;">
+        ←
+      </button>
+      <h3 style="flex:1; margin:0; color:var(--text-primary);">Select Location</h3>
+      <button onclick="confirmSimpleLocation()" style="background:var(--primary); color:white; border:none; padding:8px 16px; border-radius:8px; cursor:pointer;">
+        Confirm
+      </button>
     </div>
+
+    <!-- Search box for Google Places (inside modal, above map) -->
+    <div style="position:absolute; top:60px; left:0; right:0; padding:8px; background:var(--surface-elevated); z-index:1001;">
+      <input
+        id="simpleSearch"
+        type="text"
+        placeholder="Search Nairobi address…"
+        style="width:100%; padding:8px; border-radius:8px; border:1px solid var(--border);"
+      />
+    </div>
+
+    <!-- Map Container (below search) -->
+    <div id="simpleMap" style="position:absolute; top:112px; left:0; right:0; bottom:0;"></div>
+
+    <!-- Center Marker -->
+    <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); pointer-events:none; z-index:1000;">
+      <div style="width:30px; height:30px; background:var(--primary); border-radius:50% 50% 50% 0; transform:rotate(-45deg); border:3px solid white; box-shadow:0 3px 10px rgba(0,0,0,0.3);"></div>
+    </div>
+
+    <!-- Location Info (bottom) -->
+    <div style="position:absolute; bottom:20px; left:20px; right:20px; background:var(--surface-elevated); padding:16px; border-radius:12px; z-index:1001;">
+      <div id="selectedLocationName" style="font-weight:600; margin-bottom:4px; color:var(--text-primary);">Select a location</div>
+      <div id="selectedLocationAddress" style="font-size:14px; color:var(--text-secondary);">Move the map to choose location</div>
+    </div>
+  </div>
 </div>
 
 <!-- ADD THIS SCRIPT TO YOUR vendor.html AFTER YOUR EXISTING SCRIPTS -->
@@ -1482,85 +1492,78 @@ function openSimpleLocationModal(inputId) {
   document.getElementById('simpleLocationModal').style.display = 'block';
 
   if (!simpleMap) {
-    // 1) Initialize Leaflet map
+    // 1) Init Leaflet
     simpleMap = L.map('simpleMap').setView([-1.2921, 36.8219], 13);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap contributors'
     }).addTo(simpleMap);
 
-    // 2) Reverse‐geocode when user drags the map
+    // 2) Reverse‐geocode on drag
     simpleMap.on('moveend', updateSelectedLocation);
 
-    // 3) Set up Google Places Autocomplete
+    // 3) Google Places Autocomplete
     const input = document.getElementById('simpleSearch');
-    autocomplete = new google.maps.places.Autocomplete(input, {
-      types: ['address'],
-      componentRestrictions: { country: 'ke' },
-      bounds: new google.maps.LatLngBounds(
-        { lat: -1.5, lng: 36.6 },  // SW Nairobi
-        { lat: -1.0, lng: 37.1 }   // NE Nairobi
-      ),
-      strictBounds: true
-    });
+    if (input && window.google && google.maps.places) {
+      autocomplete = new google.maps.places.Autocomplete(input, {
+        types: ['address'],
+        componentRestrictions: { country: 'ke' },
+        bounds: new google.maps.LatLngBounds(
+          { lat: -1.5, lng: 36.6 },
+          { lat: -1.0, lng: 37.1 }
+        ),
+        strictBounds: true
+      });
 
-    // 4) Handle place selection
-    autocomplete.addListener('place_changed', () => {
-      const place = autocomplete.getPlace();
-      if (!place.geometry) return;
+      autocomplete.addListener('place_changed', () => {
+        const place = autocomplete.getPlace();
+        if (!place.geometry) return;
+        const lat = place.geometry.location.lat();
+        const lng = place.geometry.location.lng();
 
-      const lat = place.geometry.location.lat();
-      const lng = place.geometry.location.lng();
-
-      // Pan the map & save selection
-      simpleMap.setView([lat, lng], 16);
-      selectedSimpleLocation = {
-        lat,
-        lng,
-        address: place.formatted_address || place.name
-      };
-
-      // Update info display
-      document.getElementById('selectedLocationName').textContent =
-        place.name || 'Selected Location';
-      document.getElementById('selectedLocationAddress').textContent =
-        selectedSimpleLocation.address;
-    });
+        simpleMap.setView([lat, lng], 16);
+        selectedSimpleLocation = {
+          lat, lng,
+          address: place.formatted_address || place.name
+        };
+        document.getElementById('selectedLocationName').textContent =
+          place.name || 'Selected Location';
+        document.getElementById('selectedLocationAddress').textContent =
+          selectedSimpleLocation.address;
+      });
+    }
   }
 
-  // Ensure map sizing is correct when modal opens
+  // Make sure the map resizes correctly
   setTimeout(() => simpleMap.invalidateSize(), 100);
 }
 
-// Reverse‐geocode on map move
+// Reverse‐geocode map center
 async function updateSelectedLocation() {
-  const center = simpleMap.getCenter();
+  const { lat, lng } = simpleMap.getCenter();
   try {
-    const resp = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${center.lat}&lon=${center.lng}`
-    );
-    const data = await resp.json();
+    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
+    const data = await res.json();
     selectedSimpleLocation = {
-      lat: center.lat,
-      lng: center.lng,
+      lat, lng,
       address: data.display_name
     };
     document.getElementById('selectedLocationName').textContent =
       data.name || 'Selected Location';
     document.getElementById('selectedLocationAddress').textContent =
       selectedSimpleLocation.address;
-  } catch (err) {
-    console.error('Reverse geocode failed', err);
+  } catch (e) {
+    console.error('Reverse geocode failed', e);
   }
 }
 
-// Confirm & close the modal
+// Confirm & close
 function confirmSimpleLocation() {
   if (selectedSimpleLocation && currentInputField) {
-    const input = document.getElementById(currentInputField);
-    input.value = selectedSimpleLocation.address;
-    input.dataset.lat = selectedSimpleLocation.lat;
-    input.dataset.lng = selectedSimpleLocation.lng;
-    input.dispatchEvent(new Event('change', { bubbles: true }));
+    const inp = document.getElementById(currentInputField);
+    inp.value = selectedSimpleLocation.address;
+    inp.dataset.lat = selectedSimpleLocation.lat;
+    inp.dataset.lng = selectedSimpleLocation.lng;
+    inp.dispatchEvent(new Event('change', { bubbles: true }));
   }
   closeLocationModal();
 }
@@ -1571,9 +1574,9 @@ function closeLocationModal() {
   selectedSimpleLocation = null;
 }
 
-// Wire up inputs to open the modal
+// Hook inputs
 document.addEventListener('DOMContentLoaded', () => {
-  ['pickupLocation', 'deliveryLocation', 'bulkPickupLocation'].forEach(id => {
+  ['pickupLocation','deliveryLocation','bulkPickupLocation'].forEach(id => {
     const el = document.getElementById(id);
     if (el) {
       el.onclick = () => openSimpleLocationModal(id);
