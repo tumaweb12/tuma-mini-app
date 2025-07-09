@@ -14,7 +14,11 @@
     <!-- 2) Leaflet (CSS+JS) -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    
+
+    <!-- Leaflet Control Geocoder (Search Plugin) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
+    <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
+  
     <!-- 3) Your config & modules - REMOVED PROBLEMATIC SUPABASE CDN -->
     <script src="./config.js"></script>
     <script type="module" src="./supabaseClient.js"></script>
@@ -1460,7 +1464,7 @@
 
 <!-- ADD THIS SCRIPT TO YOUR vendor.html AFTER YOUR EXISTING SCRIPTS -->
 <script>
-// Simple location selector that won't conflict with your code
+// Simple location selector with built-in search box (Leaflet Control Geocoder)
 let simpleMap = null;
 let currentInputField = null;
 let selectedSimpleLocation = null;
@@ -1474,34 +1478,51 @@ function openSimpleLocationModal(inputId) {
     if (!simpleMap) {
         simpleMap = L.map('simpleMap').setView([-1.2921, 36.8219], 13);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(simpleMap);
-        
-        // Update location when map moves
+
+        // Add the geocoder control (search box)
+        L.Control.geocoder({ defaultMarkGeocode: false })
+          .on('markgeocode', function(e) {
+            const c = e.geocode.center;
+            // Pan the map to the chosen location
+            simpleMap.setView(c, 16);
+
+            // Save the selected spot
+            selectedSimpleLocation = {
+              lat: c.lat,
+              lng: c.lng,
+              address: e.geocode.name
+            };
+
+            // Update the info display
+            document.getElementById('selectedLocationName').textContent = e.geocode.name;
+            document.getElementById('selectedLocationAddress').textContent = e.geocode.name;
+          })
+          .addTo(simpleMap);
+
+        // Also update whenever the user drags or moves the map
         simpleMap.on('moveend', updateSelectedLocation);
     }
     
+    // Fix map sizing when it appears
     setTimeout(() => simpleMap.invalidateSize(), 100);
 }
 
-// Update selected location based on map center
+// Update selected location based on map center (for drag & drop)
 async function updateSelectedLocation() {
     const center = simpleMap.getCenter();
-    const lat = center.lat;
-    const lng = center.lng;
-    
+    const { lat, lng } = center;
     try {
-        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
-        const data = await response.json();
-        
+        const resp = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
+        const data = await resp.json();
         selectedSimpleLocation = {
-            lat: lat,
-            lng: lng,
+            lat,
+            lng,
             address: data.display_name || 'Unknown location'
         };
-        
         document.getElementById('selectedLocationName').textContent = data.name || 'Selected Location';
         document.getElementById('selectedLocationAddress').textContent = selectedSimpleLocation.address;
-    } catch (error) {
-        console.error('Geocoding error:', error);
+    } catch (err) {
+        console.error('Geocoding error:', err);
     }
 }
 
@@ -1512,8 +1533,7 @@ function confirmSimpleLocation() {
         input.value = selectedSimpleLocation.address;
         input.dataset.lat = selectedSimpleLocation.lat;
         input.dataset.lng = selectedSimpleLocation.lng;
-        
-        // Trigger change event for your existing code
+        // Let your other code know it changed
         input.dispatchEvent(new Event('change', { bubbles: true }));
     }
     closeLocationModal();
@@ -1526,27 +1546,15 @@ function closeLocationModal() {
     selectedSimpleLocation = null;
 }
 
-// Update your existing onclick handlers
-document.addEventListener('DOMContentLoaded', function() {
-    // Make location inputs open the modal
-    const pickupInput = document.getElementById('pickupLocation');
-    const deliveryInput = document.getElementById('deliveryLocation');
-    const bulkPickupInput = document.getElementById('bulkPickupLocation');
-    
-    if (pickupInput) {
-        pickupInput.onclick = () => openSimpleLocationModal('pickupLocation');
-        pickupInput.style.cursor = 'pointer';
-    }
-    
-    if (deliveryInput) {
-        deliveryInput.onclick = () => openSimpleLocationModal('deliveryLocation');
-        deliveryInput.style.cursor = 'pointer';
-    }
-    
-    if (bulkPickupInput) {
-        bulkPickupInput.onclick = () => openSimpleLocationModal('bulkPickupLocation');
-        bulkPickupInput.style.cursor = 'pointer';
-    }
+// Wire up your inputs to open the modal
+document.addEventListener('DOMContentLoaded', () => {
+    ['pickupLocation', 'deliveryLocation', 'bulkPickupLocation'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.onclick = () => openSimpleLocationModal(id);
+            el.style.cursor = 'pointer';
+        }
+    });
 });
 </script>
 </body>
