@@ -756,3 +756,102 @@ if (document.readyState === 'loading') {
 } else {
     initialize();
 }
+// ─── Inline Map-Modal Functions ───────────────────────────────────
+
+// Shared state for the modal
+let simpleMap = null;
+let currentInputField = null;
+let selectedSimpleLocation = null;
+
+// 1) Open the modal & lazy-init the map + search
+window.openSimpleLocationModal = function(inputId) {
+  currentInputField = inputId;
+  document.getElementById('simpleLocationModal').style.display = 'block';
+
+  if (!simpleMap) {
+    // init Leaflet
+    simpleMap = L.map('simpleMap').setView([-1.2921, 36.8219], 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(simpleMap);
+
+    // when the user drags or zooms, re-reverse-geocode center
+    simpleMap.on('moveend', updateSelectedLocation);
+
+    // wire up the “🔍 Search” button
+    const searchBtn   = document.getElementById('simpleSearchBtn');
+    const searchInput = document.getElementById('simpleSearch');
+    if (searchBtn && searchInput) {
+      searchBtn.addEventListener('click', async () => {
+        const q = searchInput.value.trim();
+        if (!q) return;
+        try {
+          const result = await geocodeAddress(q);
+          simpleMap.setView([result.lat, result.lng], 16);
+          selectedSimpleLocation = {
+            lat: result.lat,
+            lng: result.lng,
+            address: result.display_name
+          };
+          updateLocationDisplay();
+        } catch {
+          alert('Could not find that address.');
+        }
+      });
+      searchInput.addEventListener('keypress', e => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          searchBtn.click();
+        }
+      });
+    }
+  }
+
+  // force a resize after the modal opens
+  setTimeout(() => simpleMap.invalidateSize(), 100);
+};
+
+// 2) Reverse-geocode the map’s center
+async function updateSelectedLocation() {
+  const c = simpleMap.getCenter();
+  try {
+    const resp = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${c.lat}&lon=${c.lng}`
+    );
+    const data = await resp.json();
+    selectedSimpleLocation = {
+      lat: c.lat,
+      lng: c.lng,
+      address: data.display_name
+    };
+    updateLocationDisplay();
+  } catch (err) {
+    console.error('Reverse-geocode failed', err);
+  }
+}
+
+// 3) Update the two text lines in the modal
+function updateLocationDisplay() {
+  if (!selectedSimpleLocation) return;
+  const name = selectedSimpleLocation.address.split(',')[0] || 'Selected Location';
+  document.getElementById('selectedLocationName').textContent    = name;
+  document.getElementById('selectedLocationAddress').textContent = selectedSimpleLocation.address;
+}
+
+// 4) Copy the chosen address back into the input and close
+window.confirmSimpleLocation = function() {
+  if (!selectedSimpleLocation || !currentInputField) return;
+  const inp = document.getElementById(currentInputField);
+  inp.value             = selectedSimpleLocation.address;
+  inp.dataset.lat       = selectedSimpleLocation.lat;
+  inp.dataset.lng       = selectedSimpleLocation.lng;
+  inp.dispatchEvent(new Event('change', { bubbles: true }));
+  closeLocationModal();
+};
+
+// 5) Simply hide the modal again
+window.closeLocationModal = function() {
+  document.getElementById('simpleLocationModal').style.display = 'none';
+  currentInputField = null;
+  selectedSimpleLocation = null;
+};
+// ───────────────────────────────────────────────────────────────────
+
