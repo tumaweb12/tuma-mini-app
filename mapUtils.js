@@ -126,11 +126,7 @@ export function calculateStraightDistance(point1, point2) {
  * Get route from OSRM
  */
 export async function getRoute(waypoints, options = {}) {
-  // Format waypoints for OSRM
-  const coordinates = waypoints
-    .map(wp => `${wp.lng},${wp.lat}`)
-    .join(';');
-
+  const coordinates = waypoints.map(wp => `${wp.lng},${wp.lat}`).join(';');
   const url = `${API_CONFIG.maps.osrmUrl}/driving/${coordinates}?` + new URLSearchParams({
     overview: options.overview || 'full',
     geometries: options.geometries || 'geojson',
@@ -142,27 +138,21 @@ export async function getRoute(waypoints, options = {}) {
     const response = await fetch(url);
     const data = await response.json();
 
-    if (data.code !== 'Ok') {
-      throw new Error(data.message || 'Route calculation failed');
-    }
-
+    if (data.code !== 'Ok') throw new Error(data.message || 'Route calculation failed');
     const route = data.routes[0];
+
     return {
-      distance: route.distance / 1000, // Convert to km
-      duration: route.duration / 60, // Convert to minutes
+      distance: route.distance / 1000,
+      duration: route.duration / 60,
       geometry: route.geometry,
       waypoints: data.waypoints
     };
   } catch (error) {
     console.error('OSRM routing error:', error);
-    // Fallback to straight-line distance with 30% markup
-    const distance = calculateStraightDistance(waypoints[0], waypoints[waypoints.length - 1]) * 1.3;
-    return {
-      distance,
-      duration: distance * 3, // Rough estimate: 3 minutes per km
-      geometry: null,
-      waypoints: []
-    };
+    const distance = calculateStraightDistance(
+      waypoints[0], waypoints[waypoints.length - 1]
+    ) * 1.3;
+    return { distance, duration: distance * 3, geometry: null, waypoints: [] };
   }
 }
 
@@ -171,13 +161,8 @@ export async function getRoute(waypoints, options = {}) {
  */
 export function drawRoute(map, routeGeometry, options = {}) {
   const routeLayer = L.geoJSON(routeGeometry, {
-    style: {
-      color: options.color || '#0066FF',
-      weight: options.weight || 5,
-      opacity: options.opacity || 0.8
-    }
+    style: { color: options.color || '#0066FF', weight: options.weight || 5, opacity: options.opacity || 0.8 }
   });
-
   routeLayer.addTo(map);
   return routeLayer;
 }
@@ -190,36 +175,29 @@ export async function geocodeAddress(address) {
   const normalizedAddress = address.toLowerCase().trim();
   for (const [key, location] of Object.entries(COMMON_LOCATIONS)) {
     if (normalizedAddress.includes(key) || location.name.toLowerCase().includes(normalizedAddress)) {
-      return {
-        lat: location.lat,
-        lng: location.lng,
-        display_name: `${location.name}, Nairobi, Kenya`
-      };
+      return { lat: location.lat, lng: location.lng, display_name: `${location.name}, Nairobi, Kenya` };
     }
   }
 
   // Use Nominatim for geocoding
-  const url = `${API_CONFIG.maps.nominatimUrl}/search?` + new URLSearchParams({
+  const url = `${API_CONFIG.maps.nominatimUrl}/search?${new URLSearchParams({
     q: address + ', Nairobi, Kenya',
     format: 'json',
-    limit: 1,
+    limit: '1',
     countrycodes: 'ke'
-  });
+  })}`;
 
   try {
-    const response = await fetch(url, {
-      headers: {
-        'User-Agent': 'Tuma Delivery App'
-      }
-    });
+    const response = await fetch(url, { headers: { 'User-Agent': 'Tuma Delivery App' } });
     const data = await response.json();
 
     if (data.length > 0) {
-      return {
-        lat: parseFloat(data[0].lat),
-        lng: parseFloat(data[0].lon),
-        display_name: data[0].display_name
-      };
+      return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon), display_name: data[0].display_name };
     }
-    
+
     throw new Error('Address not found');
+  } catch (error) {
+    console.error('Geocoding error:', error);
+    throw error;
+  }
+}
