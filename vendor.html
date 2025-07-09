@@ -17,10 +17,7 @@
 
     <!-- Leaflet Control Geocoder (Search Plugin) -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
-    <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script> 
-
-    <!-- Google Maps + Places (restricted to your domains) -->
-<script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCaWjP3TKWhJrtureRn7q6fIIKk0MPl7bY&libraries=places"></script>
+    <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
   
     <!-- 3) Your config & modules - REMOVED PROBLEMATIC SUPABASE CDN -->
     <script src="./config.js"></script>
@@ -1433,119 +1430,139 @@
 
     <!-- Module imports -->
     <script type="module" src="./vendor.js"></script>
-  <script>
-// Globals
+    <!-- ADD THIS TO YOUR vendor.html JUST BEFORE THE CLOSING </body> TAG -->
+
+<!-- Simple Location Modal -->
+<div id="simpleLocationModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 9999;">
+    <div style="position: relative; width: 100%; height: 100%; background: var(--surface);">
+        <!-- Header -->
+        <div style="position: absolute; top: 0; left: 0; right: 0; background: var(--surface-elevated); padding: 16px; z-index: 1001; display: flex; align-items: center; gap: 16px;">
+            <button onclick="closeLocationModal()" style="background: var(--surface-high); border: none; width: 32px; height: 32px; border-radius: 8px; color: var(--primary); cursor: pointer;">
+                ← 
+            </button>
+            <h3 style="flex: 1; margin: 0;">Select Location</h3>
+            <button onclick="confirmSimpleLocation()" style="background: var(--primary); color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer;">
+                Confirm
+            </button>
+        </div>
+        
+        <!-- Map Container -->
+        <div id="simpleMap" style="position: absolute; top: 60px; left: 0; right: 0; bottom: 0;"></div>
+        
+        <!-- Center Marker -->
+        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; z-index: 1000;">
+            <div style="width: 30px; height: 30px; background: var(--primary); border-radius: 50% 50% 50% 0; transform: rotate(-45deg); border: 3px solid white; box-shadow: 0 3px 10px rgba(0,0,0,0.3);"></div>
+        </div>
+        
+        <!-- Location Info -->
+        <div style="position: absolute; bottom: 20px; left: 20px; right: 20px; background: var(--surface-elevated); padding: 16px; border-radius: 12px; z-index: 1000;">
+            <div id="selectedLocationName" style="font-weight: 600; margin-bottom: 4px;">Select a location</div>
+            <div id="selectedLocationAddress" style="font-size: 14px; color: var(--text-secondary);">Move the map to choose location</div>
+        </div>
+    </div>
+</div>
+
+<!-- ADD THIS SCRIPT TO YOUR vendor.html AFTER YOUR EXISTING SCRIPTS -->
+<script>
+// Simple location selector with built-in Nairobi search (Leaflet Control Geocoder)
 let simpleMap = null;
 let currentInputField = null;
 let selectedSimpleLocation = null;
-let autocomplete = null;
 
 // Open the location modal
 function openSimpleLocationModal(inputId) {
-  currentInputField = inputId;
-  document.getElementById('simpleLocationModal').style.display = 'block';
+    currentInputField = inputId;
+    document.getElementById('simpleLocationModal').style.display = 'block';
+    
+    // Initialize map if not already done
+    if (!simpleMap) {
+        simpleMap = L.map('simpleMap').setView([-1.2921, 36.8219], 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(simpleMap);
 
-  if (!simpleMap) {
-    // 1) Initialize the Leaflet map with OSM tiles
-    simpleMap = L.map('simpleMap').setView([-1.2921, 36.8219], 13);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap contributors'
-    }).addTo(simpleMap);
+        // 1️⃣ Build a Nominatim geocoder limited to Kenya/Nairobi
+        const nairobiGeocoder = L.Control.Geocoder.nominatim({
+          geocodingQueryParams: {
+            countrycodes: 'ke',                   // only Kenya
+            viewbox: '36.6,-1.5,37.1,-1.0',       // box around Nairobi
+            bounded: 1                            // restrict results to that box
+          }
+        });
 
-    // 2) When user drags the map, reverse-geocode via Nominatim
-    simpleMap.on('moveend', updateSelectedLocation);
+        // 2️⃣ Add the search control using that Nairobi geocoder
+        L.Control.geocoder({
+          geocoder: nairobiGeocoder,
+          placeholder: 'Search Nairobi…',
+          defaultMarkGeocode: false
+        })
+        .on('markgeocode', function(e) {
+          const c = e.geocode.center;
+          simpleMap.setView(c, 16);
+          selectedSimpleLocation = {
+            lat: c.lat,
+            lng: c.lng,
+            address: e.geocode.name
+          };
+          document.getElementById('selectedLocationName').textContent = e.geocode.name;
+          document.getElementById('selectedLocationAddress').textContent = e.geocode.name;
+        })
+        .addTo(simpleMap);
 
-    // 3) Set up Google Places Autocomplete on our input
-    const input = document.getElementById('simpleSearch');
-    autocomplete = new google.maps.places.Autocomplete(input, {
-      types: ['address'],
-      componentRestrictions: { country: 'ke' },
-      bounds: new google.maps.LatLngBounds(
-        { lat: -1.5, lng: 36.6 },  // SW Nairobi
-        { lat: -1.0, lng: 37.1 }   // NE Nairobi
-      ),
-      strictBounds: true
-    });
-
-    // 4) Handle place selection
-    autocomplete.addListener('place_changed', () => {
-      const place = autocomplete.getPlace();
-      if (!place.geometry) return;  // no geometry, bail
-
-      const lat = place.geometry.location.lat();
-      const lng = place.geometry.location.lng();
-
-      // Pan map & save selection
-      simpleMap.setView([lat, lng], 16);
-      selectedSimpleLocation = {
-        lat,
-        lng,
-        address: place.formatted_address || place.name
-      };
-
-      // Update UI
-      document.getElementById('selectedLocationName').textContent =
-        place.name || 'Selected Location';
-      document.getElementById('selectedLocationAddress').textContent =
-        selectedSimpleLocation.address;
-    });
-  }
-
-  // Force Leaflet to recalc its size
-  setTimeout(() => simpleMap.invalidateSize(), 100);
+        // Also update whenever the user drags or moves the map
+        simpleMap.on('moveend', updateSelectedLocation);
+    }
+    
+    // Fix map sizing when it appears
+    setTimeout(() => simpleMap.invalidateSize(), 100);
 }
 
-// Reverse-geocode when map is moved
+// Update selected location based on map center (for drag & drop)
 async function updateSelectedLocation() {
-  const { lat, lng } = simpleMap.getCenter();
-  try {
-    const resp = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`
-    );
-    const data = await resp.json();
-    selectedSimpleLocation = {
-      lat,
-      lng,
-      address: data.display_name
-    };
-    document.getElementById('selectedLocationName').textContent =
-      data.name || 'Selected Location';
-    document.getElementById('selectedLocationAddress').textContent =
-      selectedSimpleLocation.address;
-  } catch (err) {
-    console.error('Reverse geocode failed', err);
-  }
+    const center = simpleMap.getCenter();
+    const { lat, lng } = center;
+    try {
+        const resp = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
+        const data = await resp.json();
+        selectedSimpleLocation = {
+            lat,
+            lng,
+            address: data.display_name || 'Unknown location'
+        };
+        document.getElementById('selectedLocationName').textContent = data.name || 'Selected Location';
+        document.getElementById('selectedLocationAddress').textContent = selectedSimpleLocation.address;
+    } catch (err) {
+        console.error('Geocoding error:', err);
+    }
 }
 
-// Confirm & close the modal
+// Confirm location selection
 function confirmSimpleLocation() {
-  if (selectedSimpleLocation && currentInputField) {
-    const input = document.getElementById(currentInputField);
-    input.value = selectedSimpleLocation.address;
-    input.dataset.lat = selectedSimpleLocation.lat;
-    input.dataset.lng = selectedSimpleLocation.lng;
-    // notify your other code
-    input.dispatchEvent(new Event('change', { bubbles: true }));
-  }
-  closeLocationModal();
+    if (selectedSimpleLocation && currentInputField) {
+        const input = document.getElementById(currentInputField);
+        input.value = selectedSimpleLocation.address;
+        input.dataset.lat = selectedSimpleLocation.lat;
+        input.dataset.lng = selectedSimpleLocation.lng;
+        // Let your other code know it changed
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    closeLocationModal();
 }
 
 // Close the modal
 function closeLocationModal() {
-  document.getElementById('simpleLocationModal').style.display = 'none';
-  currentInputField = null;
-  selectedSimpleLocation = null;
+    document.getElementById('simpleLocationModal').style.display = 'none';
+    currentInputField = null;
+    selectedSimpleLocation = null;
 }
 
-// Wire up inputs to open the modal
+// Wire up your inputs to open the modal
 document.addEventListener('DOMContentLoaded', () => {
-  ['pickupLocation', 'deliveryLocation', 'bulkPickupLocation'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) {
-      el.onclick = () => openSimpleLocationModal(id);
-      el.style.cursor = 'pointer';
-    }
-  });
+    ['pickupLocation', 'deliveryLocation', 'bulkPickupLocation'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.onclick = () => openSimpleLocationModal(id);
+            el.style.cursor = 'pointer';
+        }
+    });
 });
 </script>
 </body>
