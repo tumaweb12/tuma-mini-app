@@ -1629,18 +1629,19 @@
     let routePreviewMap = null;
     let pickupMarker = null;
     let deliveryMarker = null;
+    let routeLine = null;
 
     function initRoutePreview() {
         if (!routePreviewMap) {
             routePreviewMap = L.map('previewMap', {
-                zoomControl: false,
+                zoomControl: true,  // Enable zoom controls
                 attributionControl: false,
-                dragging: false,
-                touchZoom: false,
-                scrollWheelZoom: false,
-                doubleClickZoom: false,
-                boxZoom: false,
-                keyboard: false
+                dragging: true,     // Allow dragging on desktop
+                touchZoom: true,    // Allow pinch zoom on mobile
+                scrollWheelZoom: true,  // Allow scroll zoom
+                doubleClickZoom: true,  // Allow double click zoom
+                boxZoom: true,
+                keyboard: true
             }).setView([-1.2921, 36.8219], 13);
 
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -1671,36 +1672,64 @@
                 initRoutePreview();
             }
             
-            // Remove existing markers
+            // Remove existing markers and route
             if (pickupMarker) routePreviewMap.removeLayer(pickupMarker);
             if (deliveryMarker) routePreviewMap.removeLayer(deliveryMarker);
+            if (routeLine) routePreviewMap.removeLayer(routeLine);
             
-            // Add pickup marker with "P" label
+            // Add pickup marker with better styling
             const pickupIcon = L.divIcon({
                 className: 'custom-div-icon',
-                html: '<div style="background: #0066FF; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; box-shadow: 0 2px 6px rgba(0,0,0,0.3);">P</div>',
-                iconSize: [24, 24],
-                iconAnchor: [12, 12]
+                html: '<div style="background: #0066FF; color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 16px; box-shadow: 0 3px 10px rgba(0,0,0,0.5); border: 2px solid white;">P</div>',
+                iconSize: [30, 30],
+                iconAnchor: [15, 15]
             });
             
-            // Add delivery marker with "D" label
+            // Add delivery marker with better styling
             const deliveryIcon = L.divIcon({
                 className: 'custom-div-icon',
-                html: '<div style="background: #34C759; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; box-shadow: 0 2px 6px rgba(0,0,0,0.3);">D</div>',
-                iconSize: [24, 24],
-                iconAnchor: [12, 12]
+                html: '<div style="background: #34C759; color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 16px; box-shadow: 0 3px 10px rgba(0,0,0,0.5); border: 2px solid white;">D</div>',
+                iconSize: [30, 30],
+                iconAnchor: [15, 15]
             });
             
-            pickupMarker = L.marker([parseFloat(pickupLat), parseFloat(pickupLng)], { icon: pickupIcon }).addTo(routePreviewMap);
-            deliveryMarker = L.marker([parseFloat(deliveryLat), parseFloat(deliveryLng)], { icon: deliveryIcon }).addTo(routePreviewMap);
+            const pickupCoords = [parseFloat(pickupLat), parseFloat(pickupLng)];
+            const deliveryCoords = [parseFloat(deliveryLat), parseFloat(deliveryLng)];
             
-            // Fit bounds to show both markers
-            const bounds = L.latLngBounds([
-                [parseFloat(pickupLat), parseFloat(pickupLng)],
-                [parseFloat(deliveryLat), parseFloat(deliveryLng)]
-            ]);
+            pickupMarker = L.marker(pickupCoords, { icon: pickupIcon }).addTo(routePreviewMap);
+            deliveryMarker = L.marker(deliveryCoords, { icon: deliveryIcon }).addTo(routePreviewMap);
             
-            routePreviewMap.fitBounds(bounds, { padding: [30, 30] });
+            // Add popup labels
+            pickupMarker.bindPopup('<strong>Pickup Location</strong><br>' + pickupInput.value.substring(0, 50) + '...').openPopup();
+            deliveryMarker.bindPopup('<strong>Delivery Location</strong><br>' + deliveryInput.value.substring(0, 50) + '...');
+            
+            // Draw a curved route line
+            const midLat = (pickupCoords[0] + deliveryCoords[0]) / 2;
+            const midLng = (pickupCoords[1] + deliveryCoords[1]) / 2;
+            const offsetLat = midLat + (deliveryCoords[1] - pickupCoords[1]) * 0.1;
+            const offsetLng = midLng - (deliveryCoords[0] - pickupCoords[0]) * 0.1;
+            
+            // Create a curved path
+            const curvePoints = [];
+            for (let i = 0; i <= 20; i++) {
+                const t = i / 20;
+                const lat = (1 - t) * (1 - t) * pickupCoords[0] + 2 * (1 - t) * t * offsetLat + t * t * deliveryCoords[0];
+                const lng = (1 - t) * (1 - t) * pickupCoords[1] + 2 * (1 - t) * t * offsetLng + t * t * deliveryCoords[1];
+                curvePoints.push([lat, lng]);
+            }
+            
+            // Draw the route line
+            routeLine = L.polyline(curvePoints, {
+                color: '#0066FF',
+                weight: 4,
+                opacity: 0.8,
+                dashArray: '10, 10',
+                className: 'route-animation'
+            }).addTo(routePreviewMap);
+            
+            // Fit bounds to show both markers with padding
+            const bounds = L.latLngBounds([pickupCoords, deliveryCoords]);
+            routePreviewMap.fitBounds(bounds, { padding: [50, 50] });
             
             // Force map refresh
             setTimeout(() => {
@@ -1735,6 +1764,66 @@
         }
     });
     </script>
+
+    <!-- Add CSS for route animation -->
+    <style>
+        @keyframes dash {
+            to {
+                stroke-dashoffset: -20;
+            }
+        }
+        
+        .route-animation {
+            animation: dash 1s linear infinite;
+        }
+        
+        /* Fix mobile search button appearance */
+        input[type="search"]::-webkit-search-decoration,
+        input[type="search"]::-webkit-search-cancel-button,
+        input[type="search"]::-webkit-search-results-button,
+        input[type="search"]::-webkit-search-results-decoration {
+            -webkit-appearance: none;
+        }
+        
+        /* Ensure input doesn't show search button on mobile */
+        .input-field {
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+        }
+        
+        /* Style for Leaflet zoom controls */
+        .leaflet-control-zoom {
+            background: var(--surface-elevated) !important;
+            border: 1px solid var(--border) !important;
+            border-radius: 10px !important;
+            overflow: hidden;
+        }
+        
+        .leaflet-control-zoom a {
+            background: var(--surface-elevated) !important;
+            color: var(--text-primary) !important;
+            border-bottom: 1px solid var(--border) !important;
+        }
+        
+        .leaflet-control-zoom a:hover {
+            background: var(--surface-high) !important;
+        }
+        
+        .leaflet-control-zoom a:last-child {
+            border-bottom: none !important;
+        }
+        
+        /* Better mobile touch targets */
+        @media (max-width: 768px) {
+            .leaflet-control-zoom a {
+                width: 36px !important;
+                height: 36px !important;
+                line-height: 36px !important;
+                font-size: 20px !important;
+            }
+        }
+    </style>
 
     <!-- Google Maps Script -->
     <script>
