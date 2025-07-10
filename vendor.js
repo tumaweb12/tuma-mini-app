@@ -678,13 +678,14 @@ function setupAutocomplete() {
         
         const autocomplete = new google.maps.places.Autocomplete(inputElement, {
             componentRestrictions: { country: 'KE' },
-            fields: ['formatted_address', 'geometry', 'name'],
-            types: ['geocode'],
+            fields: ['formatted_address', 'geometry', 'name', 'place_id', 'types'],
+            // Remove type restrictions to allow ALL places
+            // types: ['geocode', 'establishment'], // REMOVED - now searches everything
             bounds: new google.maps.LatLngBounds(
                 new google.maps.LatLng(-1.5, 36.6),
                 new google.maps.LatLng(-1.0, 37.1)
             ),
-            strictBounds: true
+            strictBounds: false  // Allow results outside bounds
         });
         
         autocomplete.addListener('place_changed', () => {
