@@ -355,6 +355,28 @@
             outline: none;
         }
 
+        /* Style for select dropdown */
+        select.input-field {
+            cursor: pointer;
+            appearance: none;
+            background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3e%3cpath d='M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z'/%3e%3c/svg%3e");
+            background-repeat: no-repeat;
+            background-position: right 16px center;
+            background-size: 20px;
+            padding-right: 48px;
+        }
+
+        select.input-field option {
+            background: var(--surface-elevated);
+            color: var(--text-primary);
+        }
+
+        select.input-field optgroup {
+            background: var(--surface-high);
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+
         .input-field::placeholder {
             color: var(--text-tertiary);
         }
@@ -800,6 +822,16 @@
             font-size: 12px;
             color: var(--text-tertiary);
             margin-top: 8px;
+        }
+
+        /* Info Box */
+        .info-box {
+            margin-top: 8px;
+            padding: 10px;
+            background: rgba(255, 243, 205, 0.2);
+            border-radius: 8px;
+            font-size: 13px;
+            color: var(--text-secondary);
         }
 
         /* Vendor Type Badge */
@@ -1347,9 +1379,69 @@
                         </div>
                     </div>
 
-                    <!-- Package Description -->
+                    <!-- Package Category -->
                     <div style="margin-top: 16px;">
-                        <textarea class="textarea-field" id="packageDescription" placeholder="What are you sending? (e.g., documents, electronics, clothes)" rows="3"></textarea>
+                        <select class="input-field" id="packageDescription" required style="cursor: pointer;">
+                            <option value="" disabled selected>What are you sending?</option>
+                            <optgroup label="Documents & Paper">
+                                <option value="documents">📄 Documents & Papers</option>
+                                <option value="books">📚 Books & Magazines</option>
+                                <option value="certificates">📜 Certificates & Legal Papers</option>
+                            </optgroup>
+                            <optgroup label="Electronics">
+                                <option value="phone">📱 Phone / Mobile Device</option>
+                                <option value="laptop">💻 Laptop / Tablet</option>
+                                <option value="electronics-small">🔌 Small Electronics (earphones, chargers)</option>
+                                <option value="electronics-fragile">📷 Fragile Electronics (camera, hard drives)</option>
+                            </optgroup>
+                            <optgroup label="Clothing & Textiles">
+                                <option value="clothes">👕 Clothes & Apparel</option>
+                                <option value="shoes">👟 Shoes & Footwear</option>
+                                <option value="textiles">🧵 Fabrics & Textiles</option>
+                            </optgroup>
+                            <optgroup label="Food & Consumables">
+                                <option value="food-dry">🍪 Dry Food (packaged, non-perishable)</option>
+                                <option value="food-fresh">🥗 Fresh Food (requires quick delivery)</option>
+                                <option value="food-frozen">🧊 Frozen Food (requires cold chain)</option>
+                                <option value="beverages">🥤 Beverages (sealed containers)</option>
+                            </optgroup>
+                            <optgroup label="Health & Medical">
+                                <option value="pharmaceuticals">💊 Pharmaceuticals & Medicine</option>
+                                <option value="medical-equipment">🏥 Medical Equipment</option>
+                                <option value="supplements">💪 Supplements & Vitamins</option>
+                            </optgroup>
+                            <optgroup label="Beauty & Personal Care">
+                                <option value="cosmetics">💄 Cosmetics & Makeup</option>
+                                <option value="perfumes">🌸 Perfumes & Fragrances</option>
+                                <option value="personal-care">🧴 Personal Care Products</option>
+                            </optgroup>
+                            <optgroup label="Home & Living">
+                                <option value="household">🏠 Household Items</option>
+                                <option value="kitchenware">🍽️ Kitchenware & Utensils</option>
+                                <option value="decor">🖼️ Home Decor (non-fragile)</option>
+                                <option value="tools">🔧 Tools & Hardware</option>
+                            </optgroup>
+                            <optgroup label="Fragile Items">
+                                <option value="glassware">🍷 Glassware & Ceramics</option>
+                                <option value="artwork">🎨 Artwork & Collectibles</option>
+                                <option value="fragile-general">⚠️ Fragile Items (general)</option>
+                            </optgroup>
+                            <optgroup label="Liquids & Chemicals">
+                                <option value="cleaning">🧹 Cleaning Supplies</option>
+                                <option value="liquids-sealed">💧 Sealed Liquids (non-hazardous)</option>
+                                <option value="paint">🎨 Paint & Art Supplies</option>
+                            </optgroup>
+                            <optgroup label="Other">
+                                <option value="gifts">🎁 Gifts & Presents</option>
+                                <option value="sports">⚽ Sports Equipment</option>
+                                <option value="toys">🧸 Toys & Games</option>
+                                <option value="automotive">🚗 Automotive Parts</option>
+                                <option value="other">📦 Other (general items)</option>
+                            </optgroup>
+                        </select>
+                        <div class="info-box">
+                            <strong>💡 Smart Clustering:</strong> We group compatible items together for efficient delivery while keeping incompatible items separate (e.g., food away from chemicals).
+                        </div>
                     </div>
                 </div>
 
