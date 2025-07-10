@@ -655,64 +655,74 @@ function displayVendorBadge(vendorInfo) {
     }
 }
 
-// ==================== UPDATED handleLocationChange ====================
-// Prioritizes Google Autocomplete data over Nominatim
 async function handleLocationChange(type) {
-    // Pick the correct input & value
-    const input = (type === 'pickup') ? elements.pickupLocation : elements.deliveryLocation;
+    const input = type === 'pickup' ? elements.pickupLocation : elements.deliveryLocation;
     const address = input.value.trim();
-    const latAttr = input.dataset.lat;
-    const lngAttr = input.dataset.lng;
+    const dsLat = input.dataset.lat;
+    const dsLng = input.dataset.lng;
     
-    let coords = null;
-    
-    // 1) If Google autocomplete already set data-lat/lng, use that:
-    if (latAttr && lngAttr) {
-        coords = {
-            lat: parseFloat(latAttr),
-            lng: parseFloat(lngAttr),
+    // 1) If Google already stamped in coords, use them
+    if (dsLat && dsLng) {
+        const coords = {
+            lat: parseFloat(dsLat),
+            lng: parseFloat(dsLng),
             display_name: address
         };
-        console.log(`Using Google autocomplete coords for ${type}:`, coords);
-    }
-    // 2) Otherwise, only if there's some text, try Nominatim
-    else if (address && address.length >= 3) {
-        try {
-            console.log(`Fallback geocoding ${type}:`, address);
-            coords = await geocodeAddress(address);
-        } catch (err) {
-            console.error('Geocoding error:', err);
+        
+        // Validate service area
+        const serviceAreaCheck = validation.validateServiceArea(coords);
+        if (!serviceAreaCheck.isValid) {
             showNotification(
-                'Could not find the address. Please pick from the suggestions or be more specific.',
+                `Sorry, this location is ${serviceAreaCheck.distance.toFixed(1)}km from our service center. We currently serve areas within ${serviceAreaCheck.maxRadius}km of Nairobi CBD.`,
                 'error'
             );
+            // Clear the input and dataset
+            input.value = '';
+            delete input.dataset.lat;
+            delete input.dataset.lng;
             return;
         }
-    } else {
-        // Nothing to do
+        
+        formState.set(`${type}Coords`, coords);
+        
+        if (formState.get('pickupCoords') && formState.get('deliveryCoords')) {
+            await calculateDistance();
+        }
         return;
     }
     
-    // 3) Validate service area
-    const serviceAreaCheck = validation.validateServiceArea(coords);
-    if (!serviceAreaCheck.isValid) {
+    // 2) Otherwise fall back to your Nominatim geocoder
+    if (!address || address.length < 3) return;
+    
+    try {
+        console.log(`Geocoding ${type} via Nominatim:`, address);
+        const coords = await geocodeAddress(address);
+        
+        // Validate service area
+        const serviceAreaCheck = validation.validateServiceArea(coords);
+        if (!serviceAreaCheck.isValid) {
+            showNotification(
+                `Sorry, this location is ${serviceAreaCheck.distance.toFixed(1)}km from our service center. We currently serve areas within ${serviceAreaCheck.maxRadius}km of Nairobi CBD.`,
+                'error'
+            );
+            // Clear the input and dataset
+            input.value = '';
+            delete input.dataset.lat;
+            delete input.dataset.lng;
+            return;
+        }
+        
+        formState.set(`${type}Coords`, coords);
+        
+        if (formState.get('pickupCoords') && formState.get('deliveryCoords')) {
+            await calculateDistance();
+        }
+    } catch (err) {
+        console.error('Geocoding error:', err);
         showNotification(
-            `Sorry, this location is ${serviceAreaCheck.distance.toFixed(1)}km from our service center. We currently serve areas within ${serviceAreaCheck.maxRadius}km of Nairobi CBD.`,
+            'Could not find that address. Please choose from the dropdown or try a different query.',
             'error'
         );
-        // Clear the input and dataset
-        input.value = '';
-        delete input.dataset.lat;
-        delete input.dataset.lng;
-        return;
-    }
-    
-    // 4) Store valid coordinates
-    formState.set(`${type}Coords`, coords);
-    
-    // 5) If *both* pickup & delivery are now set, compute distance:
-    if (formState.get('pickupCoords') && formState.get('deliveryCoords')) {
-        await calculateDistance();
     }
 }
 
@@ -996,6 +1006,25 @@ window.typeAddress = function(type) {
     const input = type === 'pickup' ? elements.pickupLocation : elements.deliveryLocation;
     input.focus();
     showNotification('Type your address in the field above', 'info');
+};
+// Make sure these are properly global
+window.selectService = function(service) {
+    document.querySelectorAll('.service-card').forEach(el => el.classList.remove('selected'));
+    const selected = document.querySelector(`[data-service="${service}"]`);
+    if (selected) {
+        selected.classList.add('selected');
+        formState.set('selectedService', service);
+        updateProgress(3);
+    }
+};
+
+window.selectSize = function(size) {
+    document.querySelectorAll('.size-option').forEach(el => el.classList.remove('selected'));
+    const selected = document.querySelector(`[data-size="${size}"]`);
+    if (selected) {
+        selected.classList.add('selected');
+        formState.set('selectedSize', size);
+    }
 };
 
 window
