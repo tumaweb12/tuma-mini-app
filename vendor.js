@@ -27,6 +27,12 @@ const BUSINESS_CONFIG = {
             },
             managedVendor: 0.9
         }
+    },
+    // Service area configuration
+    serviceArea: {
+        center: { lat: -1.2921, lng: 36.8219 }, // Nairobi CBD
+        radiusKm: 20, // 20km service radius
+        expandedRadiusKm: 30 // Future expansion radius
     }
 };
 
@@ -156,6 +162,19 @@ const validation = {
             isValid: vehiclesNeeded <= 2,
             totalUnits,
             vehiclesNeeded
+        };
+    },
+    
+    // Check if location is within service radius
+    validateServiceArea: (coords) => {
+        const center = BUSINESS_CONFIG.serviceArea.center;
+        const distance = calculateStraightDistance(center, coords);
+        const maxRadius = BUSINESS_CONFIG.serviceArea.radiusKm;
+        
+        return {
+            isValid: distance <= maxRadius,
+            distance: distance,
+            maxRadius: maxRadius
         };
     }
 };
@@ -299,20 +318,21 @@ function showNotification(message, type = 'info') {
         position: fixed;
         top: 20px;
         right: 20px;
-        background: ${type === 'error' ? '#ff3b30' : '#34c759'};
-        color: white;
+        background: ${type === 'error' ? '#ff3b30' : type === 'warning' ? '#FF9F0A' : '#34c759'};
+        color: ${type === 'warning' ? 'black' : 'white'};
         padding: 12px 20px;
         border-radius: 8px;
         z-index: 3000;
         font-weight: 600;
         box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        max-width: 350px;
     `;
     
     document.body.appendChild(notification);
     
     setTimeout(() => {
         notification.remove();
-    }, 3000);
+    }, type === 'error' ? 5000 : 3000);
 }
 
 // Initialize page
@@ -326,7 +346,235 @@ async function initialize() {
     formState.set('selectedService', 'smart');
     formState.set('selectedSize', 'small');
     
+    // Initialize Google Places Autocomplete
+    initializeGooglePlacesAutocomplete();
+    
     console.log('Vendor dashboard initialized successfully');
+}
+
+// Initialize Google Places Autocomplete
+function initializeGooglePlacesAutocomplete() {
+    // Wait for Google Maps API to load
+    if (window.shareDeliveryDetails = async function() {
+    const parcelCode = elements.displayParcelCode.textContent;
+    const deliveryCode = elements.displayDeliveryCode.textContent;
+    
+    const shareData = {
+        title: 'Tuma Delivery Details',
+        text: `Your parcel ${parcelCode} is on the way! Delivery code: ${deliveryCode}`,
+        url: window.location.origin
+    };
+    
+    if (navigator.share) {
+        try {
+            await navigator.share(shareData);
+        } catch (error) {
+            await navigator.clipboard.writeText(shareData.text);
+            showNotification('Details copied to clipboard!', 'success');
+        }
+    } else {
+        await navigator.clipboard.writeText(shareData.text);
+        showNotification('Details copied to clipboard!', 'success');
+    }
+};
+
+window.bookAnother = function() {
+    elements.successOverlay.style.display = 'none';
+    document.getElementById('deliveryForm').reset();
+    formState.reset();
+    updateCapacityDisplay();
+    updateProgress(1);
+    elements.distanceInfo.style.display = 'none';
+    elements.vendorBadge.style.display = 'none';
+    document.getElementById('mainContent').scrollTop = 0;
+    
+    // Reset form state visually
+    elements.itemCount.textContent = '1';
+    document.querySelectorAll('.size-option').forEach(el => el.classList.remove('selected'));
+    document.querySelector('[data-size="small"]')?.classList.add('selected');
+    document.querySelectorAll('.service-card').forEach(el => el.classList.remove('selected'));
+    document.querySelector('[data-service="smart"]')?.classList.add('selected');
+    
+    // Clear location data attributes
+    if (elements.pickupLocation) {
+        delete elements.pickupLocation.dataset.lat;
+        delete elements.pickupLocation.dataset.lng;
+    }
+    if (elements.deliveryLocation) {
+        delete elements.deliveryLocation.dataset.lat;
+        delete elements.deliveryLocation.dataset.lng;
+    }
+};
+
+// Missing bulk delivery functions
+window.toggleDeliveryType = function(type) {
+    // For now, just log - can implement bulk delivery later
+    console.log('Delivery type:', type);
+};
+
+window.addBulkDelivery = function() {
+    showNotification('Bulk delivery feature coming soon!', 'info');
+};
+
+// Initialize on load
+if (document.readyState === 'loading') {
+    window.addEventListener('DOMContentLoaded', initialize);
+} else {
+    initialize();
+}
+
+// ─── Inline Map-Modal Functions ───────────────────────────────────
+
+// Shared state for the modal
+let simpleMap = null;
+let currentInputField = null;
+let selectedSimpleLocation = null;
+
+// 1) Open the modal & lazy-init the map + search
+window.openSimpleLocationModal = function(inputId) {
+  currentInputField = inputId;
+  document.getElementById('simpleLocationModal').style.display = 'block';
+
+  if (!simpleMap) {
+    // init Leaflet
+    simpleMap = L.map('simpleMap').setView([-1.2921, 36.8219], 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(simpleMap);
+
+    // when the user drags or zooms, re-reverse-geocode center
+    simpleMap.on('moveend', updateSelectedLocation);
+
+    // wire up the "🔍 Search" button
+    const searchBtn   = document.getElementById('simpleSearchBtn');
+    const searchInput = document.getElementById('simpleSearch');
+    if (searchBtn && searchInput) {
+      searchBtn.addEventListener('click', async () => {
+        const q = searchInput.value.trim();
+        if (!q) return;
+        try {
+          const result = await geocodeAddress(q);
+          simpleMap.setView([result.lat, result.lng], 16);
+          selectedSimpleLocation = {
+            lat: result.lat,
+            lng: result.lng,
+            address: result.display_name
+          };
+          updateLocationDisplay();
+        } catch {
+          alert('Could not find that address.');
+        }
+      });
+      searchInput.addEventListener('keypress', e => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          searchBtn.click();
+        }
+      });
+    }
+  }
+
+  // force a resize after the modal opens
+  setTimeout(() => simpleMap.invalidateSize(), 100);
+};
+
+// 2) Reverse-geocode the map's center
+async function updateSelectedLocation() {
+  const c = simpleMap.getCenter();
+  try {
+    const resp = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${c.lat}&lon=${c.lng}`
+    );
+    const data = await resp.json();
+    selectedSimpleLocation = {
+      lat: c.lat,
+      lng: c.lng,
+      address: data.display_name
+    };
+    updateLocationDisplay();
+  } catch (err) {
+    console.error('Reverse-geocode failed', err);
+  }
+}
+
+// 3) Update the two text lines in the modal
+function updateLocationDisplay() {
+  if (!selectedSimpleLocation) return;
+  const name = selectedSimpleLocation.address.split(',')[0] || 'Selected Location';
+  document.getElementById('selectedLocationName').textContent    = name;
+  document.getElementById('selectedLocationAddress').textContent = selectedSimpleLocation.address;
+}
+
+// 4) Copy the chosen address back into the input and close
+window.confirmSimpleLocation = function() {
+  if (!selectedSimpleLocation || !currentInputField) return;
+  
+  // First validate service area
+  const serviceAreaCheck = validation.validateServiceArea(selectedSimpleLocation);
+  if (!serviceAreaCheck.isValid) {
+      showNotification(
+          `This location is ${serviceAreaCheck.distance.toFixed(1)}km from our service center. We currently serve areas within ${serviceAreaCheck.maxRadius}km of Nairobi CBD.`,
+          'error'
+      );
+      return;
+  }
+  
+  const inp = document.getElementById(currentInputField);
+  inp.value             = selectedSimpleLocation.address;
+  inp.dataset.lat       = selectedSimpleLocation.lat;
+  inp.dataset.lng       = selectedSimpleLocation.lng;
+  inp.dispatchEvent(new Event('change', { bubbles: true }));
+  
+  // Trigger handleLocationChange
+  const type = currentInputField.includes('pickup') ? 'pickup' : 'delivery';
+  handleLocationChange(type);
+  
+  closeLocationModal();
+};
+
+// 5) Simply hide the modal again
+window.closeLocationModal = function() {
+  document.getElementById('simpleLocationModal').style.display = 'none';
+  currentInputField = null;
+  selectedSimpleLocation = null;
+};
+// ───────────────────────────────────────────────────────────────────.google && window.google.maps && window.google.maps.places) {
+        setupAutocomplete();
+    } else {
+        // Try again after a delay
+        setTimeout(initializeGooglePlacesAutocomplete, 500);
+    }
+}
+
+// Setup Google Places Autocomplete
+function setupAutocomplete() {
+    const setupField = (inputElement, type) => {
+        if (!inputElement) return;
+        
+        const autocomplete = new google.maps.places.Autocomplete(inputElement, {
+            componentRestrictions: { country: 'KE' },
+            fields: ['formatted_address', 'geometry', 'name'],
+            types: ['geocode'],
+            bounds: new google.maps.LatLngBounds(
+                new google.maps.LatLng(-1.5, 36.6),
+                new google.maps.LatLng(-1.0, 37.1)
+            ),
+            strictBounds: true
+        });
+        
+        autocomplete.addListener('place_changed', () => {
+            const place = autocomplete.getPlace();
+            if (!place.geometry) return;
+            
+            // Store coordinates in dataset
+            inputElement.dataset.lat = place.geometry.location.lat();
+            inputElement.dataset.lng = place.geometry.location.lng();
+            
+            // Call the unified handler
+            handleLocationChange(type);
+        });
+    };
+    
+    setupField(elements.pickupLocation, 'pickup');
+    setupField(elements.deliveryLocation, 'delivery');
 }
 
 // Setup event listeners
@@ -407,27 +655,64 @@ function displayVendorBadge(vendorInfo) {
     }
 }
 
-// Handle location change
+// ==================== UPDATED handleLocationChange ====================
+// Prioritizes Google Autocomplete data over Nominatim
 async function handleLocationChange(type) {
-    const input = type === 'pickup' ? elements.pickupLocation : elements.deliveryLocation;
+    // Pick the correct input & value
+    const input = (type === 'pickup') ? elements.pickupLocation : elements.deliveryLocation;
     const address = input.value.trim();
+    const latAttr = input.dataset.lat;
+    const lngAttr = input.dataset.lng;
     
-    if (!address || address.length < 3) return;
+    let coords = null;
     
-    try {
-        console.log(`Geocoding ${type} address:`, address);
-        const coords = await geocodeAddress(address);
-        formState.set(`${type}Coords`, coords);
-        
-        console.log(`${type} coordinates:`, coords);
-        
-        // Check if both locations are set
-        if (formState.get('pickupCoords') && formState.get('deliveryCoords')) {
-            await calculateDistance();
+    // 1) If Google autocomplete already set data-lat/lng, use that:
+    if (latAttr && lngAttr) {
+        coords = {
+            lat: parseFloat(latAttr),
+            lng: parseFloat(lngAttr),
+            display_name: address
+        };
+        console.log(`Using Google autocomplete coords for ${type}:`, coords);
+    }
+    // 2) Otherwise, only if there's some text, try Nominatim
+    else if (address && address.length >= 3) {
+        try {
+            console.log(`Fallback geocoding ${type}:`, address);
+            coords = await geocodeAddress(address);
+        } catch (err) {
+            console.error('Geocoding error:', err);
+            showNotification(
+                'Could not find the address. Please pick from the suggestions or be more specific.',
+                'error'
+            );
+            return;
         }
-    } catch (error) {
-        console.error('Geocoding error:', error);
-        showNotification('Could not find the address. Please try a more specific address.', 'error');
+    } else {
+        // Nothing to do
+        return;
+    }
+    
+    // 3) Validate service area
+    const serviceAreaCheck = validation.validateServiceArea(coords);
+    if (!serviceAreaCheck.isValid) {
+        showNotification(
+            `Sorry, this location is ${serviceAreaCheck.distance.toFixed(1)}km from our service center. We currently serve areas within ${serviceAreaCheck.maxRadius}km of Nairobi CBD.`,
+            'error'
+        );
+        // Clear the input and dataset
+        input.value = '';
+        delete input.dataset.lat;
+        delete input.dataset.lng;
+        return;
+    }
+    
+    // 4) Store valid coordinates
+    formState.set(`${type}Coords`, coords);
+    
+    // 5) If *both* pickup & delivery are now set, compute distance:
+    if (formState.get('pickupCoords') && formState.get('deliveryCoords')) {
+        await calculateDistance();
     }
 }
 
@@ -671,12 +956,26 @@ window.getLocation = async function(type) {
             lng: position.coords.longitude
         };
         
+        // Validate service area before proceeding
+        const serviceAreaCheck = validation.validateServiceArea(coords);
+        if (!serviceAreaCheck.isValid) {
+            showNotification(
+                `Your location is outside our current service area (${serviceAreaCheck.distance.toFixed(1)}km from CBD). We serve areas within ${serviceAreaCheck.maxRadius}km of Nairobi CBD.`,
+                'error'
+            );
+            return;
+        }
+        
         // Reverse geocode to get address
         const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${coords.lat}&lon=${coords.lng}`);
         const data = await response.json();
         
         const input = type === 'pickup' ? elements.pickupLocation : elements.deliveryLocation;
         input.value = data.display_name || `${coords.lat}, ${coords.lng}`;
+        
+        // Store coords in dataset for consistency
+        input.dataset.lat = coords.lat;
+        input.dataset.lng = coords.lng;
         
         formState.set(`${type}Coords`, coords);
         
@@ -699,159 +998,4 @@ window.typeAddress = function(type) {
     showNotification('Type your address in the field above', 'info');
 };
 
-window.shareDeliveryDetails = async function() {
-    const parcelCode = elements.displayParcelCode.textContent;
-    const deliveryCode = elements.displayDeliveryCode.textContent;
-    
-    const shareData = {
-        title: 'Tuma Delivery Details',
-        text: `Your parcel ${parcelCode} is on the way! Delivery code: ${deliveryCode}`,
-        url: window.location.origin
-    };
-    
-    if (navigator.share) {
-        try {
-            await navigator.share(shareData);
-        } catch (error) {
-            await navigator.clipboard.writeText(shareData.text);
-            showNotification('Details copied to clipboard!', 'success');
-        }
-    } else {
-        await navigator.clipboard.writeText(shareData.text);
-        showNotification('Details copied to clipboard!', 'success');
-    }
-};
-
-window.bookAnother = function() {
-    elements.successOverlay.style.display = 'none';
-    document.getElementById('deliveryForm').reset();
-    formState.reset();
-    updateCapacityDisplay();
-    updateProgress(1);
-    elements.distanceInfo.style.display = 'none';
-    elements.vendorBadge.style.display = 'none';
-    document.getElementById('mainContent').scrollTop = 0;
-    
-    // Reset form state visually
-    elements.itemCount.textContent = '1';
-    document.querySelectorAll('.size-option').forEach(el => el.classList.remove('selected'));
-    document.querySelector('[data-size="small"]')?.classList.add('selected');
-    document.querySelectorAll('.service-card').forEach(el => el.classList.remove('selected'));
-    document.querySelector('[data-service="smart"]')?.classList.add('selected');
-};
-
-// Missing bulk delivery functions
-window.toggleDeliveryType = function(type) {
-    // For now, just log - can implement bulk delivery later
-    console.log('Delivery type:', type);
-};
-
-window.addBulkDelivery = function() {
-    showNotification('Bulk delivery feature coming soon!', 'info');
-};
-
-// Initialize on load
-if (document.readyState === 'loading') {
-    window.addEventListener('DOMContentLoaded', initialize);
-} else {
-    initialize();
-}
-// ─── Inline Map-Modal Functions ───────────────────────────────────
-
-// Shared state for the modal
-let simpleMap = null;
-let currentInputField = null;
-let selectedSimpleLocation = null;
-
-// 1) Open the modal & lazy-init the map + search
-window.openSimpleLocationModal = function(inputId) {
-  currentInputField = inputId;
-  document.getElementById('simpleLocationModal').style.display = 'block';
-
-  if (!simpleMap) {
-    // init Leaflet
-    simpleMap = L.map('simpleMap').setView([-1.2921, 36.8219], 13);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(simpleMap);
-
-    // when the user drags or zooms, re-reverse-geocode center
-    simpleMap.on('moveend', updateSelectedLocation);
-
-    // wire up the “🔍 Search” button
-    const searchBtn   = document.getElementById('simpleSearchBtn');
-    const searchInput = document.getElementById('simpleSearch');
-    if (searchBtn && searchInput) {
-      searchBtn.addEventListener('click', async () => {
-        const q = searchInput.value.trim();
-        if (!q) return;
-        try {
-          const result = await geocodeAddress(q);
-          simpleMap.setView([result.lat, result.lng], 16);
-          selectedSimpleLocation = {
-            lat: result.lat,
-            lng: result.lng,
-            address: result.display_name
-          };
-          updateLocationDisplay();
-        } catch {
-          alert('Could not find that address.');
-        }
-      });
-      searchInput.addEventListener('keypress', e => {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          searchBtn.click();
-        }
-      });
-    }
-  }
-
-  // force a resize after the modal opens
-  setTimeout(() => simpleMap.invalidateSize(), 100);
-};
-
-// 2) Reverse-geocode the map’s center
-async function updateSelectedLocation() {
-  const c = simpleMap.getCenter();
-  try {
-    const resp = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${c.lat}&lon=${c.lng}`
-    );
-    const data = await resp.json();
-    selectedSimpleLocation = {
-      lat: c.lat,
-      lng: c.lng,
-      address: data.display_name
-    };
-    updateLocationDisplay();
-  } catch (err) {
-    console.error('Reverse-geocode failed', err);
-  }
-}
-
-// 3) Update the two text lines in the modal
-function updateLocationDisplay() {
-  if (!selectedSimpleLocation) return;
-  const name = selectedSimpleLocation.address.split(',')[0] || 'Selected Location';
-  document.getElementById('selectedLocationName').textContent    = name;
-  document.getElementById('selectedLocationAddress').textContent = selectedSimpleLocation.address;
-}
-
-// 4) Copy the chosen address back into the input and close
-window.confirmSimpleLocation = function() {
-  if (!selectedSimpleLocation || !currentInputField) return;
-  const inp = document.getElementById(currentInputField);
-  inp.value             = selectedSimpleLocation.address;
-  inp.dataset.lat       = selectedSimpleLocation.lat;
-  inp.dataset.lng       = selectedSimpleLocation.lng;
-  inp.dispatchEvent(new Event('change', { bubbles: true }));
-  closeLocationModal();
-};
-
-// 5) Simply hide the modal again
-window.closeLocationModal = function() {
-  document.getElementById('simpleLocationModal').style.display = 'none';
-  currentInputField = null;
-  selectedSimpleLocation = null;
-};
-// ───────────────────────────────────────────────────────────────────
-
+window
