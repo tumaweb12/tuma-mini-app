@@ -690,14 +690,51 @@ function setupAutocomplete() {
         
         autocomplete.addListener('place_changed', () => {
             const place = autocomplete.getPlace();
-            if (!place.geometry) return;
             
-            // Store coordinates in dataset
-            inputElement.dataset.lat = place.geometry.location.lat();
-            inputElement.dataset.lng = place.geometry.location.lng();
-            
-            // Call the unified handler
-            handleLocationChange(type);
+            // If place has geometry, use it directly
+            if (place.geometry && place.geometry.location) {
+                // Store coordinates in dataset
+                inputElement.dataset.lat = place.geometry.location.lat();
+                inputElement.dataset.lng = place.geometry.location.lng();
+                
+                // Call the unified handler
+                handleLocationChange(type);
+            } else if (place.name || place.formatted_address) {
+                // Place selected but no geometry - use Google Geocoder
+                console.log('Place selected without geometry, using Google Geocoder');
+                const geocoder = new google.maps.Geocoder();
+                const addressToGeocode = place.formatted_address || place.name;
+                
+                geocoder.geocode({ 
+                    address: addressToGeocode,
+                    componentRestrictions: { country: 'KE' }
+                }, (results, status) => {
+                    if (status === 'OK' && results[0]) {
+                        const location = results[0].geometry.location;
+                        inputElement.dataset.lat = location.lat();
+                        inputElement.dataset.lng = location.lng();
+                        
+                        // Update input with formatted address
+                        inputElement.value = results[0].formatted_address;
+                        
+                        // Call the handler
+                        handleLocationChange(type);
+                    } else {
+                        console.error('Google Geocoding failed:', status);
+                        showNotification('Could not find exact location. Please try a different address.', 'error');
+                    }
+                });
+            } else {
+                // No valid place selected
+                showNotification('Please select a valid address from the dropdown', 'warning');
+            }
+        });
+        
+        // Prevent form submission on Enter key in autocomplete
+        inputElement.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+            }
         });
     };
     
@@ -826,7 +863,7 @@ async function handleLocationChange(type) {
     const dsLat = input.dataset.lat;
     const dsLng = input.dataset.lng;
     
-    // If Google already provided coordinates, use them
+    // If coordinates already provided (by Google), use them directly
     if (dsLat && dsLng) {
         const coords = {
             lat: parseFloat(dsLat),
@@ -853,11 +890,68 @@ async function handleLocationChange(type) {
         if (formState.get('pickupCoords') && formState.get('deliveryCoords')) {
             await calculateDistance();
         }
-        return;
+        return; // Exit here - no need to geocode again
     }
     
-    // Otherwise fall back to Nominatim geocoder
+    // Only try Nominatim if user typed address manually without selecting from dropdown
     if (!address || address.length < 3) return;
+    
+    // Check if Google Maps is loaded and try Google Geocoder first
+    if (window.google && window.google.maps && window.google.maps.Geocoder) {
+        console.log(`Using Google Geocoder for manually typed address: ${address}`);
+        const geocoder = new google.maps.Geocoder();
+        
+        geocoder.geocode({ 
+            address: address,
+            componentRestrictions: { country: 'KE' }
+        }, async (results, status) => {
+            if (status === 'OK' && results[0]) {
+                const location = results[0].geometry.location;
+                const coords = {
+                    lat: location.lat(),
+                    lng: location.lng(),
+                    display_name: results[0].formatted_address
+                };
+                
+                // Store in dataset for consistency
+                input.dataset.lat = coords.lat;
+                input.dataset.lng = coords.lng;
+                input.value = results[0].formatted_address;
+                
+                // Validate service area
+                const serviceAreaCheck = validation.validateServiceArea(coords);
+                if (!serviceAreaCheck.isValid) {
+                    showNotification(
+                        `Sorry, this location is ${serviceAreaCheck.distance.toFixed(1)}km from our service center. We currently serve areas within ${serviceAreaCheck.maxRadius}km of Nairobi CBD.`,
+                        'error'
+                    );
+                    // Clear the input and dataset
+                    input.value = '';
+                    delete input.dataset.lat;
+                    delete input.dataset.lng;
+                    return;
+                }
+                
+                formState.set(`${type}Coords`, coords);
+                
+                if (formState.get('pickupCoords') && formState.get('deliveryCoords')) {
+                    await calculateDistance();
+                }
+            } else {
+                // Fall back to Nominatim only if Google Geocoder fails
+                console.log('Google Geocoder failed, trying Nominatim');
+                await geocodeWithNominatim(address, type);
+            }
+        });
+    } else {
+        // Google Maps not loaded, use Nominatim
+        await geocodeWithNominatim(address, type);
+    }
+}
+
+// Separate function for Nominatim geocoding
+async function geocodeWithNominatim(address, type) {
+    const input = type === 'pickup' ? elements.pickupLocation : elements.deliveryLocation;
     
     try {
         console.log(`Geocoding ${type} via Nominatim:`, address);
@@ -877,6 +971,10 @@ async function handleLocationChange(type) {
             return;
         }
         
+        // Store coordinates for consistency
+        input.dataset.lat = coords.lat;
+        input.dataset.lng = coords.lng;
+        
         formState.set(`${type}Coords`, coords);
         
         if (formState.get('pickupCoords') && formState.get('deliveryCoords')) {
@@ -885,7 +983,7 @@ async function handleLocationChange(type) {
     } catch (err) {
         console.error('Geocoding error:', err);
         showNotification(
-            'Could not find that address. Please choose from the dropdown or try a different query.',
+            'Could not find that address. Please select from the dropdown suggestions or try a more specific address.',
             'error'
         );
     }
