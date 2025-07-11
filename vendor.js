@@ -989,6 +989,103 @@ async function geocodeWithNominatim(address, type) {
     }
 }
 
+// Distance cache implementation
+const distanceCache = {
+    // In-memory cache
+    cache: new Map(),
+    
+    // Generate cache key with 100m precision (reduces unique combinations)
+    getKey: (pickup, delivery) => {
+        const p = `${pickup.lat.toFixed(3)},${pickup.lng.toFixed(3)}`;
+        const d = `${delivery.lat.toFixed(3)},${delivery.lng.toFixed(3)}`;
+        return `${p}→${d}`;
+    },
+    
+    // Get from cache
+    get: function(pickup, delivery) {
+        const key = this.getKey(pickup, delivery);
+        const cached = this.cache.get(key);
+        
+        if (cached) {
+            console.log('📦 Distance from cache:', key);
+            // Update last used timestamp
+            cached.lastUsed = Date.now();
+            return cached.data;
+        }
+        return null;
+    },
+    
+    // Set in cache
+    set: function(pickup, delivery, data) {
+        const key = this.getKey(pickup, delivery);
+        console.log('💾 Caching distance:', key);
+        
+        this.cache.set(key, {
+            data: data,
+            created: Date.now(),
+            lastUsed: Date.now(),
+            hitCount: 0
+        });
+        
+        // Also cache the reverse route (delivery → pickup)
+        const reverseKey = this.getKey(delivery, pickup);
+        this.cache.set(reverseKey, {
+            data: { ...data, distance: data.distance }, // Same distance
+            created: Date.now(),
+            lastUsed: Date.now(),
+            hitCount: 0
+        });
+        
+        // Save to localStorage for persistence
+        this.persist();
+    },
+    
+    // Persist to localStorage (survives page reloads)
+    persist: function() {
+        try {
+            const cacheData = Array.from(this.cache.entries()).slice(-1000); // Keep last 1000 entries
+            localStorage.setItem('tuma_distance_cache', JSON.stringify(cacheData));
+        } catch (e) {
+            console.warn('Failed to persist cache:', e);
+        }
+    },
+    
+    // Load from localStorage
+    load: function() {
+        try {
+            const stored = localStorage.getItem('tuma_distance_cache');
+            if (stored) {
+                const cacheData = JSON.parse(stored);
+                cacheData.forEach(([key, value]) => {
+                    this.cache.set(key, value);
+                });
+                console.log(`📦 Loaded ${cacheData.length} cached routes`);
+            }
+        } catch (e) {
+            console.warn('Failed to load cache:', e);
+        }
+    },
+    
+    // Get cache stats
+    getStats: function() {
+        let totalHits = 0;
+        let totalSize = this.cache.size;
+        
+        this.cache.forEach(entry => {
+            totalHits += entry.hitCount || 0;
+        });
+        
+        return {
+            size: totalSize,
+            hits: totalHits,
+            hitRate: totalSize > 0 ? (totalHits / (totalHits + totalSize)) * 100 : 0
+        };
+    }
+};
+
+// Load cache on startup
+distanceCache.load();
+
 // Calculate distance between pickup and delivery
 async function calculateDistance() {
     const pickup = formState.get('pickupCoords');
@@ -996,15 +1093,107 @@ async function calculateDistance() {
     
     if (!pickup || !delivery) return;
     
-    const distance = calculateStraightDistance(pickup, delivery) * 1.3; // Add 30% for road distance
-    formState.set('distance', distance);
+    // Check cache first
+    const cached = distanceCache.get(pickup, delivery);
+    if (cached) {
+        console.log('✅ Using cached distance:', cached.distance, 'km');
+        formState.set('distance', cached.distance);
+        elements.calculatedDistance.textContent = `${cached.distance.toFixed(2)} km`;
+        elements.distanceInfo.style.display = 'block';
+        updateProgress(2);
+        
+        // Show cache savings notification occasionally
+        const stats = distanceCache.getStats();
+        if (stats.hits % 10 === 0 && stats.hits > 0) {
+            showNotification(`💰 Saved ${stats.hits} API calls using smart caching!`, 'success');
+        }
+        return;
+    }
     
-    console.log('Calculated distance:', distance);
+    // Try Google Distance Matrix API
+    if (window.google && window.google.maps) {
+        try {
+            const service = new google.maps.DistanceMatrixService();
+            
+            const response = await new Promise((resolve, reject) => {
+                service.getDistanceMatrix({
+                    origins: [new google.maps.LatLng(pickup.lat, pickup.lng)],
+                    destinations: [new google.maps.LatLng(delivery.lat, delivery.lng)],
+                    travelMode: google.maps.TravelMode.DRIVING,
+                    unitSystem: google.maps.UnitSystem.METRIC,
+                    avoidHighways: false,
+                    avoidTolls: false,
+                    drivingOptions: {
+                        departureTime: new Date(), // For traffic consideration
+                        trafficModel: 'bestguess'
+                    }
+                }, (response, status) => {
+                    if (status === 'OK') {
+                        resolve(response);
+                    } else {
+                        reject(new Error(`Distance Matrix API error: ${status}`));
+                    }
+                });
+            });
+            
+            if (response.rows[0].elements[0].status === 'OK') {
+                const element = response.rows[0].elements[0];
+                const distance = element.distance.value / 1000; // Convert to km
+                const duration = Math.ceil(element.duration.value / 60); // Convert to minutes
+                
+                console.log('📍 Google Distance Matrix:', distance, 'km,', duration, 'minutes');
+                
+                // Cache the result
+                distanceCache.set(pickup, delivery, {
+                    distance: distance,
+                    duration: duration,
+                    timestamp: Date.now()
+                });
+                
+                formState.set('distance', distance);
+                formState.set('duration', duration);
+                
+                // Update UI
+                elements.calculatedDistance.textContent = `${distance.toFixed(2)} km`;
+                elements.distanceInfo.style.display = 'block';
+                
+                // Add duration display if element exists
+                const durationEl = document.getElementById('estimatedDuration');
+                if (durationEl) {
+                    durationEl.textContent = `~${duration} min`;
+                }
+                
+                updateProgress(2);
+                return;
+            }
+        } catch (error) {
+            console.error('Distance Matrix API failed:', error);
+            // Fall through to estimation
+        }
+    }
     
-    // Update UI
-    elements.calculatedDistance.textContent = `${distance.toFixed(2)} km`;
+    // Fallback to estimation (only if Google fails)
+    console.log('⚠️ Using estimation fallback');
+    const straightDistance = calculateStraightDistance(pickup, delivery);
+    const estimatedDistance = straightDistance * 1.5; // 50% buffer for Nairobi roads
+    const estimatedDuration = Math.ceil(estimatedDistance * 3); // 3 min per km average
+    
+    // Cache even estimations to avoid repeated calculations
+    distanceCache.set(pickup, delivery, {
+        distance: estimatedDistance,
+        duration: estimatedDuration,
+        estimated: true,
+        timestamp: Date.now()
+    });
+    
+    formState.set('distance', estimatedDistance);
+    formState.set('duration', estimatedDuration);
+    
+    // Update UI with warning
+    elements.calculatedDistance.textContent = `~${estimatedDistance.toFixed(2)} km`;
     elements.distanceInfo.style.display = 'block';
     
+    showNotification('📏 Using estimated distance. Actual distance may vary.', 'warning');
     updateProgress(2);
 }
 
