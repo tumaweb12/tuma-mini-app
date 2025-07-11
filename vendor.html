@@ -1328,6 +1328,7 @@
                 <div id="distanceInfo" class="distance-info" style="display: none;">
                     <div class="distance-value" id="calculatedDistance">0 km</div>
                     <div class="distance-label">Estimated Distance</div>
+                    <div class="duration-value" id="estimatedDuration" style="font-size: 18px; color: var(--text-secondary); margin-top: 4px;">~0 min</div>
                 </div>
 
                 <!-- Package Details -->
@@ -1630,6 +1631,7 @@
     let pickupMarker = null;
     let deliveryMarker = null;
     let routeLine = null;
+    let directionsRenderer = null;
 
     function initRoutePreview() {
         if (!routePreviewMap) {
@@ -1703,29 +1705,53 @@
             pickupMarker.bindPopup('<strong>Pickup Location</strong><br>' + pickupInput.value.substring(0, 50) + '...').openPopup();
             deliveryMarker.bindPopup('<strong>Delivery Location</strong><br>' + deliveryInput.value.substring(0, 50) + '...');
             
-            // Draw a curved route line
-            const midLat = (pickupCoords[0] + deliveryCoords[0]) / 2;
-            const midLng = (pickupCoords[1] + deliveryCoords[1]) / 2;
-            const offsetLat = midLat + (deliveryCoords[1] - pickupCoords[1]) * 0.1;
-            const offsetLng = midLng - (deliveryCoords[0] - pickupCoords[0]) * 0.1;
-            
-            // Create a curved path
-            const curvePoints = [];
-            for (let i = 0; i <= 20; i++) {
-                const t = i / 20;
-                const lat = (1 - t) * (1 - t) * pickupCoords[0] + 2 * (1 - t) * t * offsetLat + t * t * deliveryCoords[0];
-                const lng = (1 - t) * (1 - t) * pickupCoords[1] + 2 * (1 - t) * t * offsetLng + t * t * deliveryCoords[1];
-                curvePoints.push([lat, lng]);
+            // Try to get actual route using Google Directions
+            if (window.google && window.google.maps) {
+                const directionsService = new google.maps.DirectionsService();
+                
+                directionsService.route({
+                    origin: new google.maps.LatLng(pickupLat, pickupLng),
+                    destination: new google.maps.LatLng(deliveryLat, deliveryLng),
+                    travelMode: google.maps.TravelMode.DRIVING,
+                    unitSystem: google.maps.UnitSystem.METRIC,
+                    avoidHighways: false,
+                    avoidTolls: false
+                }, (result, status) => {
+                    if (status === 'OK' && result.routes[0]) {
+                        // Convert Google route to Leaflet polyline
+                        const route = result.routes[0];
+                        const path = [];
+                        
+                        route.legs[0].steps.forEach(step => {
+                            // Decode Google's polyline
+                            const points = google.maps.geometry.encoding.decodePath(step.polyline.points);
+                            points.forEach(point => {
+                                path.push([point.lat(), point.lng()]);
+                            });
+                        });
+                        
+                        // Draw the actual route
+                        routeLine = L.polyline(path, {
+                            color: '#0066FF',
+                            weight: 5,
+                            opacity: 0.8,
+                            smoothFactor: 1
+                        }).addTo(routePreviewMap);
+                        
+                        // Add route distance/duration as popup
+                        const distance = route.legs[0].distance.text;
+                        const duration = route.legs[0].duration.text;
+                        routeLine.bindPopup(`<strong>Route Info</strong><br>Distance: ${distance}<br>Duration: ${duration}`);
+                        
+                    } else {
+                        // Fallback to curved line if Directions API fails
+                        drawFallbackRoute(pickupCoords, deliveryCoords);
+                    }
+                });
+            } else {
+                // Fallback to curved line if Google not available
+                drawFallbackRoute(pickupCoords, deliveryCoords);
             }
-            
-            // Draw the route line
-            routeLine = L.polyline(curvePoints, {
-                color: '#0066FF',
-                weight: 4,
-                opacity: 0.8,
-                dashArray: '10, 10',
-                className: 'route-animation'
-            }).addTo(routePreviewMap);
             
             // Fit bounds to show both markers with padding
             const bounds = L.latLngBounds([pickupCoords, deliveryCoords]);
@@ -1740,6 +1766,32 @@
             previewPlaceholder.style.display = 'flex';
             previewMapDiv.style.display = 'none';
         }
+    }
+    
+    // Fallback curved route drawing
+    function drawFallbackRoute(pickupCoords, deliveryCoords) {
+        const midLat = (pickupCoords[0] + deliveryCoords[0]) / 2;
+        const midLng = (pickupCoords[1] + deliveryCoords[1]) / 2;
+        const offsetLat = midLat + (deliveryCoords[1] - pickupCoords[1]) * 0.1;
+        const offsetLng = midLng - (deliveryCoords[0] - pickupCoords[0]) * 0.1;
+        
+        // Create a curved path
+        const curvePoints = [];
+        for (let i = 0; i <= 20; i++) {
+            const t = i / 20;
+            const lat = (1 - t) * (1 - t) * pickupCoords[0] + 2 * (1 - t) * t * offsetLat + t * t * deliveryCoords[0];
+            const lng = (1 - t) * (1 - t) * pickupCoords[1] + 2 * (1 - t) * t * offsetLng + t * t * deliveryCoords[1];
+            curvePoints.push([lat, lng]);
+        }
+        
+        // Draw the route line
+        routeLine = L.polyline(curvePoints, {
+            color: '#0066FF',
+            weight: 4,
+            opacity: 0.8,
+            dashArray: '10, 10',
+            className: 'route-animation'
+        }).addTo(routePreviewMap);
     }
 
     // Listen for changes to location inputs
