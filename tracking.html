@@ -1,0 +1,1767 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Track Delivery - Tuma</title>
+    
+    <!-- Leaflet CSS & JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        :root {
+            --primary: #0066FF;
+            --primary-dark: #0052CC;
+            --surface: #0A0A0B;
+            --surface-elevated: #141416;
+            --surface-high: #1C1C1F;
+            --text-primary: #FFFFFF;
+            --text-secondary: #8E8E93;
+            --text-tertiary: #48484A;
+            --border: #2C2C2E;
+            --success: #34C759;
+            --warning: #FF9F0A;
+            --danger: #FF3B30;
+            --safe-area-top: env(safe-area-inset-top);
+            --safe-area-bottom: env(safe-area-inset-bottom);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+            background: #000000;
+            color: var(--text-primary);
+            overflow: hidden;
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .app {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            background: var(--surface);
+            overflow: hidden;
+        }
+
+        /* Header */
+        .header {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: rgba(10, 10, 11, 0.95);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border-bottom: 0.5px solid var(--border);
+            z-index: 1000;
+            padding: 16px 20px;
+        }
+
+        .header-content {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .back-button {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: var(--surface-elevated);
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .header-title {
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        /* Main Content */
+        .main-content {
+            position: absolute;
+            top: 68px;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        /* Tracking Input Section */
+        .tracking-input-section {
+            padding: 20px;
+            background: var(--surface-elevated);
+            margin: 16px;
+            border-radius: 16px;
+            animation: slideUp 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .input-container {
+            position: relative;
+            margin-bottom: 16px;
+        }
+
+        .input-field {
+            width: 100%;
+            background: var(--surface-high);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 16px;
+            font-size: 18px;
+            color: var(--text-primary);
+            transition: all 0.3s;
+            outline: none;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-family: 'SF Mono', monospace;
+        }
+
+        .input-field:focus {
+            border-color: var(--primary);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(0, 102, 255, 0.2);
+        }
+
+        .track-button {
+            width: 100%;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 14px;
+            padding: 16px;
+            font-size: 17px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .track-button:active {
+            scale: 0.98;
+        }
+
+        .track-button:disabled {
+            background: var(--surface-high);
+            opacity: 0.6;
+        }
+
+        /* Multi Parcel Tabs */
+        .parcel-tabs {
+            display: flex;
+            gap: 8px;
+            padding: 0 20px;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+            margin-bottom: 16px;
+        }
+
+        .parcel-tabs::-webkit-scrollbar {
+            display: none;
+        }
+
+        .parcel-tab {
+            background: var(--surface-elevated);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 8px 16px;
+            font-size: 14px;
+            white-space: nowrap;
+            cursor: pointer;
+            transition: all 0.3s;
+            position: relative;
+        }
+
+        .parcel-tab.active {
+            background: var(--primary);
+            border-color: var(--primary);
+        }
+
+        .parcel-tab .remove-btn {
+            margin-left: 8px;
+            font-size: 16px;
+            opacity: 0.7;
+        }
+
+        /* Status Timeline */
+        .status-timeline {
+            background: var(--surface-elevated);
+            margin: 16px;
+            padding: 20px;
+            border-radius: 16px;
+        }
+
+        .timeline-item {
+            display: flex;
+            align-items: flex-start;
+            position: relative;
+            padding-bottom: 24px;
+        }
+
+        .timeline-item:last-child {
+            padding-bottom: 0;
+        }
+
+        .timeline-item:not(:last-child)::before {
+            content: '';
+            position: absolute;
+            left: 20px;
+            top: 40px;
+            width: 2px;
+            height: calc(100% - 16px);
+            background: var(--border);
+        }
+
+        .timeline-item.completed:not(:last-child)::before {
+            background: var(--success);
+        }
+
+        .timeline-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--surface-high);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            z-index: 1;
+            transition: all 0.3s;
+        }
+
+        .timeline-item.completed .timeline-icon {
+            background: var(--success);
+        }
+
+        .timeline-item.active .timeline-icon {
+            background: var(--primary);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(0, 102, 255, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(0, 102, 255, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(0, 102, 255, 0); }
+        }
+
+        .timeline-content {
+            margin-left: 16px;
+            flex: 1;
+        }
+
+        .timeline-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .timeline-time {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        /* Map Container */
+        .map-container {
+            position: relative;
+            height: 300px;
+            margin: 16px;
+            border-radius: 16px;
+            overflow: hidden;
+            background: var(--surface-elevated);
+        }
+
+        #trackingMap {
+            height: 100%;
+            width: 100%;
+        }
+
+        /* Rider Info Card */
+        .rider-card {
+            background: var(--surface-elevated);
+            margin: 16px;
+            padding: 20px;
+            border-radius: 16px;
+        }
+
+        .rider-header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .rider-photo {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: var(--surface-high);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+        }
+
+        .rider-info {
+            flex: 1;
+        }
+
+        .rider-name {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .rider-details {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .rider-rating {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            margin-top: 4px;
+        }
+
+        .star {
+            color: #FFD700;
+        }
+
+        .rider-actions {
+            display: flex;
+            gap: 12px;
+        }
+
+        .action-button {
+            flex: 1;
+            padding: 12px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            background: var(--surface-high);
+            color: var(--text-primary);
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .action-button:active {
+            scale: 0.95;
+            background: var(--primary);
+        }
+
+        /* ETA Card */
+        .eta-card {
+            background: linear-gradient(135deg, var(--surface-elevated), var(--surface-high));
+            margin: 16px;
+            padding: 20px;
+            border-radius: 16px;
+            text-align: center;
+        }
+
+        .eta-time {
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 8px;
+        }
+
+        .eta-label {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-bottom: 16px;
+        }
+
+        .progress-bar {
+            height: 8px;
+            background: var(--surface-high);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 12px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--primary);
+            border-radius: 4px;
+            transition: width 0.5s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .progress-fill::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+            animation: shine 2s infinite;
+        }
+
+        @keyframes shine {
+            0% { left: -100%; }
+            100% { left: 100%; }
+        }
+
+        .eta-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .eta-stat {
+            background: var(--surface-high);
+            padding: 12px;
+            border-radius: 10px;
+        }
+
+        .eta-stat-value {
+            font-size: 20px;
+            font-weight: 600;
+            color: var(--primary);
+        }
+
+        .eta-stat-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        /* Delivery Details */
+        .details-card {
+            background: var(--surface-elevated);
+            margin: 16px;
+            padding: 20px;
+            border-radius: 16px;
+        }
+
+        .details-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: var(--text-secondary);
+        }
+
+        .detail-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .detail-item:last-child {
+            border-bottom: none;
+        }
+
+        .detail-label {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .detail-value {
+            font-size: 14px;
+            color: var(--text-primary);
+            text-align: right;
+            max-width: 60%;
+        }
+
+        /* Action Buttons */
+        .action-section {
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .primary-button {
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 14px;
+            padding: 16px;
+            font-size: 17px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .secondary-button {
+            background: var(--surface-elevated);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 16px;
+            font-size: 17px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        /* Chat Interface */
+        .chat-section {
+            background: var(--surface-elevated);
+            margin: 16px;
+            padding: 20px;
+            border-radius: 16px;
+        }
+
+        .chat-messages {
+            max-height: 200px;
+            overflow-y: auto;
+            margin-bottom: 12px;
+        }
+
+        .chat-message {
+            margin-bottom: 12px;
+            padding: 10px 14px;
+            border-radius: 16px;
+            max-width: 80%;
+        }
+
+        .chat-message.rider {
+            background: var(--surface-high);
+            margin-right: auto;
+        }
+
+        .chat-message.customer {
+            background: var(--primary);
+            margin-left: auto;
+        }
+
+        .chat-input-container {
+            display: flex;
+            gap: 8px;
+        }
+
+        .chat-input {
+            flex: 1;
+            background: var(--surface-high);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 10px 16px;
+            font-size: 14px;
+            color: var(--text-primary);
+            outline: none;
+        }
+
+        .send-button {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--primary);
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+
+        /* Skeleton Loading */
+        .skeleton {
+            background: linear-gradient(90deg, var(--surface-elevated) 25%, var(--surface-high) 50%, var(--surface-elevated) 75%);
+            background-size: 200% 100%;
+            animation: loading 1.5s infinite;
+            border-radius: 8px;
+        }
+
+        @keyframes loading {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+
+        /* Pull to Refresh */
+        .pull-to-refresh {
+            position: absolute;
+            top: -60px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s;
+        }
+
+        .pull-to-refresh.active {
+            top: 20px;
+        }
+
+        .refresh-spinner {
+            width: 24px;
+            height: 24px;
+            border: 3px solid var(--border);
+            border-top: 3px solid var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Notification Toggle */
+        .notification-toggle {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 0;
+        }
+
+        .toggle-label {
+            font-size: 16px;
+        }
+
+        .toggle-switch {
+            position: relative;
+            width: 51px;
+            height: 31px;
+            background: var(--surface-high);
+            border-radius: 31px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .toggle-switch.active {
+            background: var(--success);
+        }
+
+        .toggle-knob {
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 27px;
+            height: 27px;
+            background: white;
+            border-radius: 50%;
+            transition: all 0.3s;
+        }
+
+        .toggle-switch.active .toggle-knob {
+            left: 22px;
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+        }
+
+        .empty-icon {
+            font-size: 64px;
+            margin-bottom: 16px;
+        }
+
+        .empty-title {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .empty-message {
+            font-size: 16px;
+            color: var(--text-secondary);
+        }
+
+        /* Rating Modal */
+        .rating-modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.9);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            backdrop-filter: blur(10px);
+        }
+
+        .rating-content {
+            background: var(--surface-elevated);
+            border-radius: 20px;
+            padding: 32px;
+            text-align: center;
+            max-width: 320px;
+            width: 90%;
+        }
+
+        .rating-stars {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin: 20px 0;
+        }
+
+        .rating-star {
+            font-size: 32px;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: var(--text-tertiary);
+        }
+
+        .rating-star.filled {
+            color: #FFD700;
+            transform: scale(1.1);
+        }
+
+        /* Issue Report Modal */
+        .issue-modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.9);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            backdrop-filter: blur(10px);
+        }
+
+        .issue-content {
+            background: var(--surface-elevated);
+            border-radius: 20px;
+            padding: 32px;
+            max-width: 320px;
+            width: 90%;
+        }
+
+        .issue-options {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin: 20px 0;
+        }
+
+        .issue-option {
+            padding: 12px;
+            background: var(--surface-high);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .issue-option:hover {
+            border-color: var(--primary);
+            background: var(--surface);
+        }
+
+        /* Responsive */
+        @media (min-width: 428px) {
+            .app {
+                max-width: 428px;
+                margin: 0 auto;
+                box-shadow: 0 0 60px rgba(0, 0, 0, 0.5);
+            }
+        }
+
+        /* Motorcycle Icon Animation */
+        @keyframes ride {
+            0%, 100% { transform: translateX(-2px); }
+            50% { transform: translateX(2px); }
+        }
+
+        .motorcycle-marker {
+            animation: ride 1s ease-in-out infinite;
+        }
+
+        /* Offline Banner */
+        .offline-banner {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: var(--warning);
+            color: black;
+            padding: 8px;
+            text-align: center;
+            font-size: 14px;
+            font-weight: 600;
+            transform: translateY(-100%);
+            transition: transform 0.3s;
+            z-index: 2000;
+        }
+
+        .offline-banner.show {
+            transform: translateY(0);
+        }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <!-- Offline Banner -->
+        <div class="offline-banner" id="offlineBanner">
+            📵 You're offline - Tracking data may be outdated
+        </div>
+
+        <!-- Header -->
+        <div class="header">
+            <div class="header-content">
+                <button class="back-button" onclick="window.history.back()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
+                        <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
+                    </svg>
+                </button>
+                <h1 class="header-title">Track Delivery</h1>
+                <button class="back-button" onclick="showDeliveryHistory()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
+                        <path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Pull to Refresh -->
+        <div class="pull-to-refresh" id="pullToRefresh">
+            <div class="refresh-spinner"></div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content" id="mainContent">
+            <!-- Tracking Input Section -->
+            <div class="tracking-input-section" id="trackingInput">
+                <h2 style="font-size: 18px; margin-bottom: 16px;">Enter Parcel Code</h2>
+                <div class="input-container">
+                    <input type="text" 
+                           class="input-field" 
+                           id="parcelCodeInput" 
+                           placeholder="TM******" 
+                           maxlength="8"
+                           pattern="TM[A-Z0-9]{6}">
+                </div>
+                <button class="track-button" id="trackButton" onclick="trackParcel()">
+                    Track Package
+                </button>
+            </div>
+
+            <!-- Multi Parcel Tabs -->
+            <div class="parcel-tabs" id="parcelTabs" style="display: none;">
+                <!-- Tabs will be dynamically added here -->
+            </div>
+
+            <!-- Tracking Details (Hidden by default) -->
+            <div id="trackingDetails" style="display: none;">
+                <!-- Status Timeline -->
+                <div class="status-timeline">
+                    <div class="timeline-item completed" id="timeline-confirmed">
+                        <div class="timeline-icon">✅</div>
+                        <div class="timeline-content">
+                            <div class="timeline-title">Booking Confirmed</div>
+                            <div class="timeline-time">10:30 AM</div>
+                        </div>
+                    </div>
+                    <div class="timeline-item" id="timeline-ready">
+                        <div class="timeline-icon">📦</div>
+                        <div class="timeline-content">
+                            <div class="timeline-title">Ready for Pickup</div>
+                            <div class="timeline-time">--:--</div>
+                        </div>
+                    </div>
+                    <div class="timeline-item" id="timeline-assigned">
+                        <div class="timeline-icon">🏍️</div>
+                        <div class="timeline-content">
+                            <div class="timeline-title">Rider Assigned</div>
+                            <div class="timeline-time">--:--</div>
+                        </div>
+                    </div>
+                    <div class="timeline-item" id="timeline-transit">
+                        <div class="timeline-icon">🚀</div>
+                        <div class="timeline-content">
+                            <div class="timeline-title">In Transit</div>
+                            <div class="timeline-time">--:--</div>
+                        </div>
+                    </div>
+                    <div class="timeline-item" id="timeline-delivery">
+                        <div class="timeline-icon">📍</div>
+                        <div class="timeline-content">
+                            <div class="timeline-title">Out for Delivery</div>
+                            <div class="timeline-time">--:--</div>
+                        </div>
+                    </div>
+                    <div class="timeline-item" id="timeline-delivered">
+                        <div class="timeline-icon">✅</div>
+                        <div class="timeline-content">
+                            <div class="timeline-title">Delivered</div>
+                            <div class="timeline-time">--:--</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Map Container -->
+                <div class="map-container">
+                    <div id="trackingMap"></div>
+                </div>
+
+                <!-- ETA Card -->
+                <div class="eta-card">
+                    <div class="eta-time" id="etaTime">25 min</div>
+                    <div class="eta-label">Estimated Arrival</div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressBar" style="width: 0%"></div>
+                    </div>
+                    <div class="eta-stats">
+                        <div class="eta-stat">
+                            <div class="eta-stat-value" id="distanceRemaining">3.2 km</div>
+                            <div class="eta-stat-label">Distance Remaining</div>
+                        </div>
+                        <div class="eta-stat">
+                            <div class="eta-stat-value" id="arrivalTime">11:45 AM</div>
+                            <div class="eta-stat-label">Arrival Time</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Rider Card -->
+                <div class="rider-card" id="riderCard" style="display: none;">
+                    <div class="rider-header">
+                        <div class="rider-photo" id="riderPhoto">🏍️</div>
+                        <div class="rider-info">
+                            <div class="rider-name" id="riderName">John Mwangi</div>
+                            <div class="rider-details" id="riderDetails">KCB 123A • Honda Boda</div>
+                            <div class="rider-rating">
+                                <span class="star">⭐</span>
+                                <span class="star">⭐</span>
+                                <span class="star">⭐</span>
+                                <span class="star">⭐</span>
+                                <span class="star">⭐</span>
+                                <span id="riderRating" style="margin-left: 8px; color: var(--text-secondary);">4.8</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="rider-actions">
+                        <button class="action-button" onclick="callRider()">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M20.01 15.38c-1.23 0-2.42-.2-3.53-.56a.977.977 0 0 0-1.01.24l-1.57 1.97c-2.83-1.35-5.48-3.9-6.89-6.83l1.95-1.66c.27-.28.35-.67.24-1.02-.37-1.11-.56-2.3-.56-3.53 0-.54-.45-.99-.99-.99H4.19C3.65 3 3 3.24 3 3.99 3 13.28 10.73 21 20.01 21c.71 0 .99-.63.99-1.18v-3.45c0-.54-.45-.99-.99-.99z"/>
+                            </svg>
+                            Call
+                        </button>
+                        <button class="action-button" onclick="messageRider()">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"/>
+                            </svg>
+                            Message
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Delivery Details -->
+                <div class="details-card">
+                    <h3 class="details-title">DELIVERY DETAILS</h3>
+                    <div class="detail-item">
+                        <span class="detail-label">Package</span>
+                        <span class="detail-value" id="packageDesc">Electronics - Laptop</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Recipient</span>
+                        <span class="detail-value" id="recipientInfo">Jane Doe</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Special Instructions</span>
+                        <span class="detail-value" id="specialInstr">Call on arrival</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Service Type</span>
+                        <span class="detail-value" id="serviceType">Express Delivery</span>
+                    </div>
+                </div>
+
+                <!-- Chat Section -->
+                <div class="chat-section">
+                    <h3 class="details-title">MESSAGES</h3>
+                    <div class="chat-messages" id="chatMessages">
+                        <div class="chat-message rider">
+                            <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">Rider • 10:45 AM</div>
+                            <div>I've picked up your package and I'm on my way!</div>
+                        </div>
+                    </div>
+                    <div class="chat-input-container">
+                        <input type="text" class="chat-input" id="chatInput" placeholder="Type a message...">
+                        <button class="send-button" onclick="sendMessage()">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
+                                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="action-section">
+                    <button class="primary-button" onclick="shareTracking()">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/>
+                        </svg>
+                        Share Tracking Link
+                    </button>
+                    
+                    <div class="notification-toggle">
+                        <span class="toggle-label">Push Notifications</span>
+                        <div class="toggle-switch" id="notificationToggle" onclick="toggleNotifications()">
+                            <div class="toggle-knob"></div>
+                        </div>
+                    </div>
+
+                    <button class="secondary-button" onclick="reportIssue()">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/>
+                        </svg>
+                        Report Issue
+                    </button>
+
+                    <button class="secondary-button" id="rateButton" onclick="showRating()" style="display: none;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+                        </svg>
+                        Rate Delivery
+                    </button>
+                </div>
+            </div>
+
+            <!-- Empty State -->
+            <div class="empty-state" id="emptyState" style="display: none;">
+                <div class="empty-icon">📦</div>
+                <h2 class="empty-title">No Active Deliveries</h2>
+                <p class="empty-message">Enter a parcel code to track your delivery</p>
+            </div>
+        </div>
+
+        <!-- Rating Modal -->
+        <div class="rating-modal" id="ratingModal">
+            <div class="rating-content">
+                <h3 style="font-size: 20px; margin-bottom: 8px;">Rate Your Delivery</h3>
+                <p style="color: var(--text-secondary); margin-bottom: 20px;">How was your experience?</p>
+                <div class="rating-stars" id="ratingStars">
+                    <span class="rating-star" onclick="setRating(1)">⭐</span>
+                    <span class="rating-star" onclick="setRating(2)">⭐</span>
+                    <span class="rating-star" onclick="setRating(3)">⭐</span>
+                    <span class="rating-star" onclick="setRating(4)">⭐</span>
+                    <span class="rating-star" onclick="setRating(5)">⭐</span>
+                </div>
+                <textarea class="chat-input" style="width: 100%; margin-top: 16px; height: 80px;" placeholder="Add a comment (optional)"></textarea>
+                <div style="display: flex; gap: 12px; margin-top: 20px;">
+                    <button class="secondary-button" style="flex: 1;" onclick="closeRating()">Cancel</button>
+                    <button class="primary-button" style="flex: 1;" onclick="submitRating()">Submit</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Issue Report Modal -->
+        <div class="issue-modal" id="issueModal">
+            <div class="issue-content">
+                <h3 style="font-size: 20px; margin-bottom: 8px;">Report an Issue</h3>
+                <p style="color: var(--text-secondary); margin-bottom: 20px;">What went wrong?</p>
+                <div class="issue-options">
+                    <div class="issue-option" onclick="selectIssue('delayed')">
+                        <div style="font-weight: 600;">⏰ Delayed Delivery</div>
+                        <div style="font-size: 14px; color: var(--text-secondary); margin-top: 4px;">Package is taking longer than expected</div>
+                    </div>
+                    <div class="issue-option" onclick="selectIssue('wrong-location')">
+                        <div style="font-weight: 600;">📍 Wrong Location</div>
+                        <div style="font-size: 14px; color: var(--text-secondary); margin-top: 4px;">Rider is at incorrect address</div>
+                    </div>
+                    <div class="issue-option" onclick="selectIssue('damaged')">
+                        <div style="font-weight: 600;">📦 Package Damaged</div>
+                        <div style="font-size: 14px; color: var(--text-secondary); margin-top: 4px;">Item was damaged during delivery</div>
+                    </div>
+                    <div class="issue-option" onclick="selectIssue('rider-issue')">
+                        <div style="font-weight: 600;">🏍️ Rider Issue</div>
+                        <div style="font-size: 14px; color: var(--text-secondary); margin-top: 4px;">Problem with delivery personnel</div>
+                    </div>
+                    <div class="issue-option" onclick="selectIssue('other')">
+                        <div style="font-weight: 600;">❓ Other</div>
+                        <div style="font-size: 14px; color: var(--text-secondary); margin-top: 4px;">Something else went wrong</div>
+                    </div>
+                </div>
+                <button class="secondary-button" style="width: 100%; margin-top: 16px;" onclick="closeIssue()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // State Management
+        let trackingState = {
+            parcels: [],
+            currentParcel: null,
+            trackingMap: null,
+            markers: {
+                pickup: null,
+                delivery: null,
+                rider: null
+            },
+            routeLine: null,
+            refreshInterval: null,
+            isRefreshing: false,
+            notificationsEnabled: false
+        };
+
+        // Sample data for simulation
+        const sampleDeliveries = {
+            'TMAB3X9K': {
+                status: 'in-transit',
+                timeline: {
+                    confirmed: { time: '10:30 AM', completed: true },
+                    ready: { time: '10:45 AM', completed: true },
+                    assigned: { time: '11:00 AM', completed: true },
+                    transit: { time: '11:15 AM', completed: true, active: true },
+                    delivery: { time: '--:--', completed: false },
+                    delivered: { time: '--:--', completed: false }
+                },
+                rider: {
+                    name: 'John Mwangi',
+                    phone: '+254712345678',
+                    plateNumber: 'KCB 123A',
+                    bike: 'Honda Boda',
+                    rating: 4.8,
+                    photo: '🏍️'
+                },
+                package: {
+                    description: 'Electronics - Laptop',
+                    recipient: 'Jane Doe',
+                    instructions: 'Call on arrival',
+                    service: 'Express Delivery'
+                },
+                locations: {
+                    pickup: { lat: -1.2921, lng: 36.8219, address: 'CBD, Nairobi' },
+                    delivery: { lat: -1.2635, lng: 36.8104, address: 'Westlands, Nairobi' },
+                    current: { lat: -1.2778, lng: 36.8148 }
+                },
+                progress: 65,
+                eta: 25,
+                distance: 3.2
+            }
+        };
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeTracking();
+            setupEventListeners();
+            checkSavedParcels();
+        });
+
+        function initializeTracking() {
+            // Check for parcel code in URL params
+            const urlParams = new URLSearchParams(window.location.search);
+            const parcelCode = urlParams.get('parcel');
+            if (parcelCode) {
+                document.getElementById('parcelCodeInput').value = parcelCode;
+                trackParcel();
+            }
+
+            // Setup auto-refresh
+            startAutoRefresh();
+
+            // Setup offline detection
+            window.addEventListener('online', () => {
+                document.getElementById('offlineBanner').classList.remove('show');
+                refreshTracking();
+            });
+
+            window.addEventListener('offline', () => {
+                document.getElementById('offlineBanner').classList.add('show');
+            });
+        }
+
+        function setupEventListeners() {
+            // Parcel code input
+            const input = document.getElementById('parcelCodeInput');
+            input.addEventListener('input', (e) => {
+                e.target.value = e.target.value.toUpperCase();
+                validateInput();
+            });
+
+            input.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    trackParcel();
+                }
+            });
+
+            // Pull to refresh
+            let startY = 0;
+            let isPulling = false;
+
+            document.getElementById('mainContent').addEventListener('touchstart', (e) => {
+                if (window.scrollY === 0) {
+                    startY = e.touches[0].clientY;
+                    isPulling = true;
+                }
+            });
+
+            document.getElementById('mainContent').addEventListener('touchmove', (e) => {
+                if (!isPulling) return;
+                
+                const currentY = e.touches[0].clientY;
+                const diff = currentY - startY;
+                
+                if (diff > 50) {
+                    document.getElementById('pullToRefresh').classList.add('active');
+                }
+            });
+
+            document.getElementById('mainContent').addEventListener('touchend', () => {
+                if (document.getElementById('pullToRefresh').classList.contains('active')) {
+                    refreshTracking();
+                }
+                document.getElementById('pullToRefresh').classList.remove('active');
+                isPulling = false;
+            });
+        }
+
+        function validateInput() {
+            const input = document.getElementById('parcelCodeInput');
+            const button = document.getElementById('trackButton');
+            const isValid = /^TM[A-Z0-9]{6}$/.test(input.value);
+            button.disabled = !isValid;
+        }
+
+        function trackParcel() {
+            const parcelCode = document.getElementById('parcelCodeInput').value;
+            if (!/^TM[A-Z0-9]{6}$/.test(parcelCode)) {
+                alert('Please enter a valid parcel code (format: TM******)');
+                return;
+            }
+
+            // Add to tracked parcels
+            if (!trackingState.parcels.find(p => p.code === parcelCode)) {
+                trackingState.parcels.push({ code: parcelCode });
+                saveParcels();
+            }
+
+            // Set as current parcel
+            trackingState.currentParcel = parcelCode;
+
+            // Show tracking details
+            showTrackingDetails(parcelCode);
+            updateParcelTabs();
+        }
+
+        function showTrackingDetails(parcelCode) {
+            // Hide input section, show details
+            document.getElementById('trackingInput').style.display = 'none';
+            document.getElementById('trackingDetails').style.display = 'block';
+            document.getElementById('emptyState').style.display = 'none';
+
+            // Get delivery data (simulated)
+            const delivery = sampleDeliveries[parcelCode] || generateMockDelivery(parcelCode);
+
+            // Update timeline
+            updateTimeline(delivery.timeline);
+
+            // Update ETA
+            updateETA(delivery);
+
+            // Update rider info
+            if (delivery.timeline.assigned.completed) {
+                showRiderInfo(delivery.rider);
+            }
+
+            // Update delivery details
+            updateDeliveryDetails(delivery.package);
+
+            // Initialize map
+            if (!trackingState.trackingMap) {
+                initializeMap();
+            }
+            updateMap(delivery.locations);
+
+            // Show rating button if delivered
+            if (delivery.status === 'delivered') {
+                document.getElementById('rateButton').style.display = 'flex';
+            }
+        }
+
+        function updateTimeline(timeline) {
+            Object.entries(timeline).forEach(([stage, data]) => {
+                const element = document.getElementById(`timeline-${stage}`);
+                if (element) {
+                    if (data.completed) {
+                        element.classList.add('completed');
+                    }
+                    if (data.active) {
+                        element.classList.add('active');
+                    }
+                    element.querySelector('.timeline-time').textContent = data.time;
+                }
+            });
+        }
+
+        function updateETA(delivery) {
+            document.getElementById('etaTime').textContent = `${delivery.eta} min`;
+            document.getElementById('progressBar').style.width = `${delivery.progress}%`;
+            document.getElementById('distanceRemaining').textContent = `${delivery.distance} km`;
+            
+            // Calculate arrival time
+            const now = new Date();
+            now.setMinutes(now.getMinutes() + delivery.eta);
+            const arrivalTime = now.toLocaleTimeString('en-US', { 
+                hour: 'numeric', 
+                minute: '2-digit',
+                hour12: true 
+            });
+            document.getElementById('arrivalTime').textContent = arrivalTime;
+        }
+
+        function showRiderInfo(rider) {
+            document.getElementById('riderCard').style.display = 'block';
+            document.getElementById('riderName').textContent = rider.name;
+            document.getElementById('riderDetails').textContent = `${rider.plateNumber} • ${rider.bike}`;
+            document.getElementById('riderRating').textContent = rider.rating;
+            document.getElementById('riderPhoto').textContent = rider.photo;
+        }
+
+        function updateDeliveryDetails(packageInfo) {
+            document.getElementById('packageDesc').textContent = packageInfo.description;
+            document.getElementById('recipientInfo').textContent = packageInfo.recipient;
+            document.getElementById('specialInstr').textContent = packageInfo.instructions;
+            document.getElementById('serviceType').textContent = packageInfo.service;
+        }
+
+        function initializeMap() {
+            trackingState.trackingMap = L.map('trackingMap', {
+                zoomControl: true,
+                attributionControl: false
+            }).setView([-1.2921, 36.8219], 13);
+
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap'
+            }).addTo(trackingState.trackingMap);
+        }
+
+        function updateMap(locations) {
+            const map = trackingState.trackingMap;
+            
+            // Clear existing markers
+            Object.values(trackingState.markers).forEach(marker => {
+                if (marker) map.removeLayer(marker);
+            });
+            if (trackingState.routeLine) {
+                map.removeLayer(trackingState.routeLine);
+            }
+
+            // Add pickup marker
+            const pickupIcon = L.divIcon({
+                className: 'custom-div-icon',
+                html: '<div style="background: #0066FF; color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; box-shadow: 0 3px 10px rgba(0,0,0,0.5);">P</div>',
+                iconSize: [30, 30],
+                iconAnchor: [15, 15]
+            });
+            trackingState.markers.pickup = L.marker([locations.pickup.lat, locations.pickup.lng], { icon: pickupIcon })
+                .addTo(map)
+                .bindPopup('Pickup: ' + locations.pickup.address);
+
+            // Add delivery marker
+            const deliveryIcon = L.divIcon({
+                className: 'custom-div-icon',
+                html: '<div style="background: #34C759; color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; box-shadow: 0 3px 10px rgba(0,0,0,0.5);">D</div>',
+                iconSize: [30, 30],
+                iconAnchor: [15, 15]
+            });
+            trackingState.markers.delivery = L.marker([locations.delivery.lat, locations.delivery.lng], { icon: deliveryIcon })
+                .addTo(map)
+                .bindPopup('Delivery: ' + locations.delivery.address);
+
+            // Add rider marker if in transit
+            if (locations.current) {
+                const riderIcon = L.divIcon({
+                    className: 'motorcycle-marker',
+                    html: '<div style="font-size: 30px;">🏍️</div>',
+                    iconSize: [30, 30],
+                    iconAnchor: [15, 15]
+                });
+            } else {
+                navigator.clipboard.writeText(url);
+                alert('Tracking link copied to clipboard!');
+            }
+        }
+
+        function toggleNotifications() {
+            const toggle = document.getElementById('notificationToggle');
+            trackingState.notificationsEnabled = !trackingState.notificationsEnabled;
+            
+            if (trackingState.notificationsEnabled) {
+                toggle.classList.add('active');
+                // Request notification permission
+                if ('Notification' in window && Notification.permission === 'default') {
+                    Notification.requestPermission();
+                }
+            } else {
+                toggle.classList.remove('active');
+            }
+            
+            localStorage.setItem('tuma_notifications_enabled', trackingState.notificationsEnabled);
+        }
+
+        function showDeliveryHistory() {
+            // This would typically show a list of past deliveries
+            alert('Delivery history feature coming soon!');
+        }
+
+        function reportIssue() {
+            document.getElementById('issueModal').style.display = 'flex';
+        }
+
+        function selectIssue(issueType) {
+            // Handle issue reporting
+            console.log('Issue reported:', issueType);
+            
+            // Show confirmation
+            alert(`Issue reported: ${issueType}\nOur support team will contact you shortly.`);
+            closeIssue();
+            
+            // In production, this would send the issue to the backend
+        }
+
+        function closeIssue() {
+            document.getElementById('issueModal').style.display = 'none';
+        }
+
+        function showRating() {
+            document.getElementById('ratingModal').style.display = 'flex';
+        }
+
+        function setRating(stars) {
+            const ratingStars = document.querySelectorAll('.rating-star');
+            ratingStars.forEach((star, index) => {
+                if (index < stars) {
+                    star.classList.add('filled');
+                } else {
+                    star.classList.remove('filled');
+                }
+            });
+        }
+
+        function submitRating() {
+            const filledStars = document.querySelectorAll('.rating-star.filled').length;
+            if (filledStars === 0) {
+                alert('Please select a rating');
+                return;
+            }
+            
+            // Submit rating
+            console.log('Rating submitted:', filledStars);
+            alert('Thank you for your feedback!');
+            closeRating();
+            
+            // Hide rating button after submission
+            document.getElementById('rateButton').style.display = 'none';
+        }
+
+        function closeRating() {
+            document.getElementById('ratingModal').style.display = 'none';
+        }
+
+        // Simulate real-time updates
+        function simulateDeliveryProgress() {
+            // This would be replaced with real WebSocket or polling in production
+            setInterval(() => {
+                if (trackingState.currentParcel === 'TMAB3X9K') {
+                    const delivery = sampleDeliveries['TMAB3X9K'];
+                    
+                    // Progress through stages
+                    if (!delivery.timeline.delivered.completed) {
+                        if (delivery.progress < 90) {
+                            delivery.progress += 2;
+                            delivery.eta = Math.max(1, delivery.eta - 1);
+                            delivery.distance = Math.max(0.1, delivery.distance - 0.1);
+                        } else if (!delivery.timeline.delivery.completed) {
+                            delivery.timeline.delivery.completed = true;
+                            delivery.timeline.delivery.time = new Date().toLocaleTimeString('en-US', { 
+                                hour: 'numeric', 
+                                minute: '2-digit',
+                                hour12: true 
+                            });
+                            delivery.timeline.transit.active = false;
+                            delivery.timeline.delivery.active = true;
+                        } else {
+                            delivery.timeline.delivered.completed = true;
+                            delivery.timeline.delivered.time = new Date().toLocaleTimeString('en-US', { 
+                                hour: 'numeric', 
+                                minute: '2-digit',
+                                hour12: true 
+                            });
+                            delivery.timeline.delivery.active = false;
+                            delivery.status = 'delivered';
+                            delivery.progress = 100;
+                            delivery.eta = 0;
+                            delivery.distance = 0;
+                            
+                            // Show rating button
+                            document.getElementById('rateButton').style.display = 'flex';
+                            
+                            // Send notification
+                            if (trackingState.notificationsEnabled && 'Notification' in window && Notification.permission === 'granted') {
+                                new Notification('Delivery Complete! 🎉', {
+                                    body: 'Your package has been delivered successfully.',
+                                    icon: '/icon-192x192.png'
+                                });
+                            }
+                        }
+                        
+                        // Update UI
+                        updateTimeline(delivery.timeline);
+                        updateETA(delivery);
+                    }
+                }
+            }, 5000); // Update every 5 seconds for demo
+        }
+
+        // Start simulation
+        simulateDeliveryProgress();
+
+        // Check notification permission on load
+        window.addEventListener('load', () => {
+            const notificationsEnabled = localStorage.getItem('tuma_notifications_enabled') === 'true';
+            if (notificationsEnabled) {
+                document.getElementById('notificationToggle').classList.add('active');
+                trackingState.notificationsEnabled = true;
+            }
+        });
+    </script>
+</body>
+</html>
+                trackingState.markers.rider = L.marker([locations.current.lat, locations.current.lng], { icon: riderIcon })
+                    .addTo(map)
+                    .bindPopup('Rider Location');
+            }
+
+            // Draw route
+            const routePoints = [
+                [locations.pickup.lat, locations.pickup.lng],
+                [locations.current?.lat || locations.pickup.lat, locations.current?.lng || locations.pickup.lng]
+            ];
+            
+            trackingState.routeLine = L.polyline(routePoints, {
+                color: '#0066FF',
+                weight: 4,
+                opacity: 0.8
+            }).addTo(map);
+
+            // Fit bounds
+            const bounds = L.latLngBounds([
+                [locations.pickup.lat, locations.pickup.lng],
+                [locations.delivery.lat, locations.delivery.lng]
+            ]);
+            if (locations.current) {
+                bounds.extend([locations.current.lat, locations.current.lng]);
+            }
+            map.fitBounds(bounds, { padding: [50, 50] });
+        }
+
+        function updateParcelTabs() {
+            const tabsContainer = document.getElementById('parcelTabs');
+            if (trackingState.parcels.length > 1) {
+                tabsContainer.style.display = 'flex';
+                tabsContainer.innerHTML = trackingState.parcels.map(parcel => `
+                    <div class="parcel-tab ${parcel.code === trackingState.currentParcel ? 'active' : ''}" 
+                         onclick="switchParcel('${parcel.code}')">
+                        ${parcel.code}
+                        <span class="remove-btn" onclick="removeParcel('${parcel.code}', event)">×</span>
+                    </div>
+                `).join('');
+            } else {
+                tabsContainer.style.display = 'none';
+            }
+        }
+
+        function switchParcel(parcelCode) {
+            trackingState.currentParcel = parcelCode;
+            showTrackingDetails(parcelCode);
+            updateParcelTabs();
+        }
+
+        function removeParcel(parcelCode, event) {
+            event.stopPropagation();
+            trackingState.parcels = trackingState.parcels.filter(p => p.code !== parcelCode);
+            saveParcels();
+            
+            if (trackingState.currentParcel === parcelCode) {
+                if (trackingState.parcels.length > 0) {
+                    switchParcel(trackingState.parcels[0].code);
+                } else {
+                    // Show empty state
+                    document.getElementById('trackingInput').style.display = 'block';
+                    document.getElementById('trackingDetails').style.display = 'none';
+                    document.getElementById('emptyState').style.display = 'none';
+                }
+            }
+            updateParcelTabs();
+        }
+
+        function saveParcels() {
+            localStorage.setItem('tuma_tracked_parcels', JSON.stringify(trackingState.parcels));
+        }
+
+        function checkSavedParcels() {
+            const saved = localStorage.getItem('tuma_tracked_parcels');
+            if (saved) {
+                trackingState.parcels = JSON.parse(saved);
+                if (trackingState.parcels.length > 0) {
+                    switchParcel(trackingState.parcels[0].code);
+                    updateParcelTabs();
+                }
+            }
+        }
+
+        function startAutoRefresh() {
+            trackingState.refreshInterval = setInterval(() => {
+                if (trackingState.currentParcel && !trackingState.isRefreshing) {
+                    refreshTracking();
+                }
+            }, 30000); // 30 seconds
+        }
+
+        function refreshTracking() {
+            if (trackingState.isRefreshing) return;
+            trackingState.isRefreshing = true;
+            
+            // Simulate refresh
+            setTimeout(() => {
+                if (trackingState.currentParcel) {
+                    // Update with new data
+                    const delivery = sampleDeliveries[trackingState.currentParcel];
+                    if (delivery) {
+                        // Simulate movement
+                        delivery.progress = Math.min(delivery.progress + 5, 100);
+                        delivery.eta = Math.max(delivery.eta - 2, 0);
+                        delivery.distance = Math.max(delivery.distance - 0.3, 0);
+                        
+                        // Update UI
+                        updateETA(delivery);
+                        
+                        // Update rider location
+                        if (delivery.locations.current) {
+                            delivery.locations.current.lat += (Math.random() - 0.5) * 0.005;
+                            delivery.locations.current.lng += (Math.random() - 0.5) * 0.005;
+                            updateMap(delivery.locations);
+                        }
+                    }
+                }
+                trackingState.isRefreshing = false;
+            }, 1000);
+        }
+
+        function generateMockDelivery(parcelCode) {
+            return {
+                status: 'pending',
+                timeline: {
+                    confirmed: { time: new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }), completed: true },
+                    ready: { time: '--:--', completed: false },
+                    assigned: { time: '--:--', completed: false },
+                    transit: { time: '--:--', completed: false },
+                    delivery: { time: '--:--', completed: false },
+                    delivered: { time: '--:--', completed: false }
+                },
+                rider: {
+                    name: 'Pending Assignment',
+                    phone: '',
+                    plateNumber: '',
+                    bike: '',
+                    rating: 0,
+                    photo: '🏍️'
+                },
+                package: {
+                    description: 'Package',
+                    recipient: 'Recipient',
+                    instructions: 'No special instructions',
+                    service: 'Standard Delivery'
+                },
+                locations: {
+                    pickup: { lat: -1.2921, lng: 36.8219, address: 'Pickup Location' },
+                    delivery: { lat: -1.2635, lng: 36.8104, address: 'Delivery Location' }
+                },
+                progress: 0,
+                eta: 0,
+                distance: 0
+            };
+        }
+
+        // Action Functions
+        function callRider() {
+            const delivery = sampleDeliveries[trackingState.currentParcel];
+            if (delivery && delivery.rider.phone) {
+                window.location.href = `tel:${delivery.rider.phone}`;
+            }
+        }
+
+        function messageRider() {
+            // Show message in chat
+            document.getElementById('chatInput').focus();
+        }
+
+        function sendMessage() {
+            const input = document.getElementById('chatInput');
+            const message = input.value.trim();
+            if (!message) return;
+
+            const chatMessages = document.getElementById('chatMessages');
+            const messageEl = document.createElement('div');
+            messageEl.className = 'chat-message customer';
+            messageEl.innerHTML = `
+                <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">You • ${new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}</div>
+                <div>${message}</div>
+            `;
+            chatMessages.appendChild(messageEl);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            input.value = '';
+
+            // Simulate rider response
+            setTimeout(() => {
+                const responseEl = document.createElement('div');
+                responseEl.className = 'chat-message rider';
+                responseEl.innerHTML = `
+                    <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">Rider • ${new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}</div>
+                    <div>Got it! I'll be there soon.</div>
+                `;
+                chatMessages.appendChild(responseEl);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }, 2000);
+        }
+
+        function shareTracking() {
+            const url = `${window.location.origin}/tracking.html?parcel=${trackingState.currentParcel}`;
+            
+            if (navigator.share) {
+                navigator.share({
+                    title: 'Track My Delivery',
+                    text: `Track delivery ${trackingState.currentParcel}`,
+                    url: url
+                });
