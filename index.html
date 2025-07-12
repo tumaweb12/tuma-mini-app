@@ -31,6 +31,7 @@
             --vendor: #9C27B0;
             --agent: #FF6B00;
             --rider: #00BCD4;
+            --tracking: #2196F3;
         }
 
         body {
@@ -288,8 +289,8 @@
             background: linear-gradient(135deg, var(--rider), transparent);
         }
 
-        .dashboard-card.route::before {
-            background: linear-gradient(135deg, var(--success), transparent);
+        .dashboard-card.tracking::before {
+            background: linear-gradient(135deg, var(--tracking), transparent);
         }
 
         .card-icon {
@@ -455,10 +456,10 @@
                 <div class="card-desc">Deliver parcels</div>
             </a>
 
-            <a href="route.html" class="dashboard-card route">
-                <span class="card-icon">🗺️</span>
-                <div class="card-title">Routes</div>
-                <div class="card-desc">View navigation</div>
+            <a href="tracking.html" class="dashboard-card tracking">
+                <span class="card-icon">📍</span>
+                <div class="card-title">Tracking</div>
+                <div class="card-desc">Track parcels</div>
             </a>
         </div>
 
