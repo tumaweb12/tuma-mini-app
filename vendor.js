@@ -71,6 +71,7 @@ class FormState {
             distance: 0,
             selectedService: 'smart',
             selectedSize: 'small',
+            selectedPaymentMethod: 'cash',
             itemCount: 1,
             packageType: '',
             isLoading: false
@@ -116,6 +117,7 @@ class FormState {
             distance: 0,
             selectedService: 'smart',
             selectedSize: 'small',
+            selectedPaymentMethod: 'cash',
             itemCount: 1,
             packageType: '',
             isLoading: false
@@ -157,7 +159,8 @@ const elements = {
     successOverlay: document.getElementById('successOverlay'),
     displayParcelCode: document.getElementById('displayParcelCode'),
     displayPickupCode: document.getElementById('displayPickupCode'),
-    displayDeliveryCode: document.getElementById('displayDeliveryCode')
+    displayDeliveryCode: document.getElementById('displayDeliveryCode'),
+    displayTotalPrice: document.getElementById('displayTotalPrice')
 };
 
 // Utility functions
@@ -395,6 +398,30 @@ window.selectService = function(service) {
         formState.set('selectedService', service);
         updateProgress(3);
     }
+};
+
+// Select payment method
+window.selectPaymentMethod = function(method) {
+    // Remove selected class from all buttons
+    document.querySelectorAll('.payment-button').forEach(btn => {
+        btn.classList.remove('selected');
+    });
+    
+    // Add selected class to clicked button
+    if (method === 'online') {
+        document.querySelector('.payment-button.pay-now').classList.add('selected');
+    } else {
+        document.querySelector('.payment-button.cash-delivery').classList.add('selected');
+    }
+    
+    // Store selected method
+    formState.set('selectedPaymentMethod', method);
+};
+
+// Track delivery
+window.trackDelivery = function() {
+    const parcelCode = elements.displayParcelCode.textContent;
+    window.location.href = `tracking.html?parcel=${parcelCode}`;
 };
 
 // GPS location function
@@ -1343,6 +1370,11 @@ function showSuccess(codes, price) {
     elements.displayParcelCode.textContent = codes.parcelCode;
     elements.displayPickupCode.textContent = codes.pickupCode;
     elements.displayDeliveryCode.textContent = codes.deliveryCode;
+    
+    // Add price display
+    if (elements.displayTotalPrice && price) {
+        elements.displayTotalPrice.textContent = `KES ${price.toLocaleString()}`;
+    }
     
     elements.successOverlay.style.display = 'flex';
 }
