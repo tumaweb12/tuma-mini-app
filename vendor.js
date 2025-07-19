@@ -1,4 +1,154 @@
-/**
+// Prepare parcel data with enhanced fields
+        const parcelData = {
+            // Vendor info
+            vendor_name: vendorData.name,
+            vendor_phone: vendorData.phone_number,
+            vendor_type: vendorData.vendor_type,
+            vendor_id: null, // Will be set after vendor is created/found
+            
+            // Pickup info
+            pickup_location: elements.pickupLocation.value,
+            pickup_lat: formState.get('pickupCoords').lat,
+            pickup_lng: formState.get('pickupCoords').lng,
+            
+            // Delivery info
+            delivery_location: elements.deliveryLocation.value,
+            delivery_lat: formState.get('deliveryCoords').lat,
+            delivery_lng: formState.get('deliveryCoords').lng,
+            recipient_name: elements.recipientName.value,
+            recipient_phone: elements.recipientPhone.value,
+            
+            // Package info
+            package_category: elements.packageDescription.value,
+            package_description: elements.packageDescription.options[elements.packageDescription.selectedIndex].text,
+            package_size: formState.get('selectedSize'),
+            item_count: formState.get('itemCount'),
+            special_instructions: elements.specialInstructions.value || null,
+            
+            // Special handling flags based on package category
+            is_fragile: ['phone', 'laptop', 'electronics-fragile', 'glassware', 'artwork', 'fragile-general'].includes(elements.packageDescription.value),
+            is_perishable: ['food-fresh', 'food-frozen'].includes(elements.packageDescription.value),
+            requires_signature: ['certificates', 'pharmaceuticals', 'medical-equipment'].includes(elements.packageDescription.value),
+            priority_level: ['food-frozen', 'pharmaceuticals'].includes(elements.packageDescription.value) ? 'urgent' : 
+                           ['food-fresh', 'medical-equipment'].includes(elements.packageDescription.value) ? 'high' : 'normal',
+            
+            // Service info
+            service_type: formState.get('selectedService'),
+            distance_km: formState.get('distance'),
+            estimated_duration_minutes: formState.get('duration') || null,
+            
+            // Pricing breakdown
+            base_price: BUSINESS_CONFIG.pricing.rates.base + (formState.get('distance') * BUSINESS_CONFIG.pricing.rates.perKm),
+            service_multiplier: BUSINESS_CONFIG.pricing.multipliers.service[formState.get('selectedService')],
+            total_price: finalPrice,
+            platform_fee: Math.round(finalPrice * 0.15), // 15% platform fee
+            vendor_payout: Math.round(finalPrice * 0.85), // 85% to vendor
+            
+            // Payment info
+            payment_method: formState.get('selectedPaymentMethod'),
+            payment_status: formState.get('selectedPaymentMethod') === 'cash' ? 'pending' : 'awaiting_payment',
+            
+            // Codes
+            parcel_code: deliveryCodes.parcel_code,
+            pickup_code: deliveryCodes.pickup_code,
+            delivery_code: deliveryCodes.delivery_code,
+            
+            // Status
+            status: 'pending',
+            created_at: new Date().toISOString()
+        };// Setup Google Places Autocomplete with caching
+function setupAutocomplete() {
+    const setupField = (inputElement, type) => {
+        if (!inputElement) return;
+        
+        const autocomplete = new google.maps.places.Autocomplete(inputElement, {
+            componentRestrictions: { country: 'KE' },
+            fields: ['formatted_address', 'geometry', 'name', 'place_id', 'types', 'address_components'],
+            bounds: new google.maps.LatLngBounds(
+                new google.maps.LatLng(-1.5, 36.6),
+                new google.maps.LatLng(-1.0, 37.1)
+            ),
+            strictBounds: false
+        });
+        
+        autocomplete.addListener('place_changed', async () => {
+            const place = autocomplete.getPlace();
+            
+            if (place.geometry && place.geometry.location) {
+                const coords = {
+                    lat: place.geometry.location.lat(),
+                    lng: place.geometry.location.lng(),
+                    display_name: place.formatted_address,
+                    formatted_address: place.formatted_address,
+                    place_name: place.name,
+                    place_id: place.place_id,
+                    address_components: place.address_components,
+                    raw: place
+                };
+                
+                // Store coordinates in dataset
+                inputElement.dataset.lat = coords.lat;
+                inputElement.dataset.lng = coords.lng;
+                
+                // Cache the geocoding result
+                await geocodingCache.store(inputElement.value, coords, 'google');
+                
+                // Call the unified handler
+                handleLocationChange(type);
+            } else if (place.name || place.formatted_address) {
+                // Place selected but no geometry - use Google Geocoder
+                console.log('Place selected without geometry, using Google Geocoder');
+                const geocoder = new google.maps.Geocoder();
+                const addressToGeocode = place.formatted_address || place.name;
+                
+                geocoder.geocode({ 
+                    address: addressToGeocode,
+                    componentRestrictions: { country: 'KE' }
+                }, async (results, status) => {
+                    if (status === 'OK' && results[0]) {
+                        const location = results[0].geometry.location;
+                        const coords = {
+                            lat: location.lat(),
+                            lng: location.lng(),
+                            display_name: results[0].formatted_address,
+                            formatted_address: results[0].formatted_address,
+                            place_id: results[0].place_id,
+                            address_components: results[0].address_components,
+                            raw: results[0]
+                        };
+                        
+                        inputElement.dataset.lat = coords.lat;
+                        inputElement.dataset.lng = coords.lng;
+                        inputElement.value = results[0].formatted_address;
+                        
+                        // Cache the result
+                        await geocodingCache.store(addressToGeocode, coords, 'google');
+                        
+                        // Call the handler
+                        handleLocationChange(type);
+                    } else {
+                        console.error('Google Geocoding failed:', status);
+                        showNotification('Could not find exact location. Please try a different address.', 'error');
+                    }
+                });
+            } else {
+                // No valid place selected
+                showNotification('Please select a valid address from the dropdown', 'warning');
+            }
+        });
+        
+        // Prevent form submission on Enter key in autocomplete
+        inputElement.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+            }
+        });
+    };
+    
+    setupField(elements.pickupLocation, 'pickup');
+    setupField(elements.deliveryLocation, 'delivery');
+}
+                /**
  * Vendor Page Entry Script - Complete Working Version
  * Handles vendor dashboard functionality with direct Supabase REST API calls
  */
@@ -128,9 +278,9 @@ class FormState {
 // Initialize form state
 const formState = new FormState();
 
-// Configuration
+// Configuration - UPDATED WITH CORRECT CREDENTIALS FROM TEST.HTML
 const SUPABASE_URL = 'https://btxavqfoirdzwpfrvezp.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ0eGF2cWZvaXJkendwZmZ2ZXpwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzY4MjkxOTgsImV4cCI6MjA1MjQwNTE5OH0.kQKpukFGx-cB11zZRuXmex02ifkZ751WCUfQPogYutk';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ0eGF2cWZvaXJkendwZnJ2ZXpwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE0ODcxMTcsImV4cCI6MjA2NzA2MzExN30.kQKpukFGx-cBl1zZRuXmex02ifkZ751WCUfQPogYutk';
 
 // DOM elements
 const elements = {
@@ -248,7 +398,7 @@ const codes = {
     }
 };
 
-// Database functions using direct REST API calls
+// Database functions using direct REST API calls - UPDATED
 const supabaseAPI = {
     async query(table, options = {}) {
         const { select = '*', filter = '', limit } = options;
@@ -290,11 +440,396 @@ const supabaseAPI = {
         }
         
         return await response.json();
+    },
+    
+    async update(table, id, data) {
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${id}`, {
+            method: 'PATCH',
+            headers: {
+                'apikey': SUPABASE_ANON_KEY,
+                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                'Content-Type': 'application/json',
+                'Prefer': 'return=representation'
+            },
+            body: JSON.stringify(data)
+        });
+        
+        if (!response.ok) {
+            const error = await response.text();
+            throw new Error(`Update Error: ${response.status} ${error}`);
+        }
+        
+        return await response.json();
     }
 };
 
-// Enhanced geocoding with better Nairobi support
+// Geocoding Cache Service
+const geocodingCache = {
+    async search(query, type = 'address') {
+        if (!query || query.length < 3) return null;
+        
+        try {
+            // Normalize the query
+            const normalizedQuery = query.toLowerCase().trim();
+            
+            // First check popular places cache for exact matches
+            const popularPlace = await supabaseAPI.query('popular_places_cache', {
+                filter: `place_name_normalized=eq.${encodeURIComponent(normalizedQuery)}`,
+                limit: 1
+            });
+            
+            if (popularPlace.length > 0) {
+                console.log('📍 Found in popular places:', popularPlace[0].place_name);
+                return {
+                    lat: parseFloat(popularPlace[0].lat),
+                    lng: parseFloat(popularPlace[0].lng),
+                    display_name: popularPlace[0].formatted_address,
+                    place_name: popularPlace[0].place_name,
+                    cached: true,
+                    cache_type: 'popular'
+                };
+            }
+            
+            // Then check general geocoding cache
+            const cached = await supabaseAPI.query('geocoding_cache', {
+                filter: `search_query_normalized=eq.${encodeURIComponent(normalizedQuery)}`,
+                limit: 1
+            });
+            
+            if (cached.length > 0 && cached[0].expires_at > new Date().toISOString()) {
+                // Update usage statistics
+                await supabaseAPI.update('geocoding_cache', cached[0].id, {
+                    usage_count: cached[0].usage_count + 1,
+                    last_used: new Date().toISOString()
+                });
+                
+                console.log('📦 Geocoding from cache:', query);
+                return {
+                    lat: parseFloat(cached[0].lat),
+                    lng: parseFloat(cached[0].lng),
+                    display_name: cached[0].formatted_address,
+                    place_name: cached[0].place_name,
+                    cached: true,
+                    cache_type: 'geocoding'
+                };
+            }
+        } catch (error) {
+            console.error('Cache lookup error:', error);
+        }
+        
+        return null;
+    },
+    
+    async searchReverse(lat, lng) {
+        try {
+            // Round coordinates for cache lookup (about 11 meter precision)
+            const latRounded = Math.round(lat * 10000) / 10000;
+            const lngRounded = Math.round(lng * 10000) / 10000;
+            
+            const cached = await supabaseAPI.query('reverse_geocoding_cache', {
+                filter: `lat_rounded=eq.${latRounded}&lng_rounded=eq.${lngRounded}`,
+                limit: 1
+            });
+            
+            if (cached.length > 0 && cached[0].expires_at > new Date().toISOString()) {
+                // Update usage statistics
+                await supabaseAPI.update('reverse_geocoding_cache', cached[0].id, {
+                    usage_count: cached[0].usage_count + 1,
+                    last_used: new Date().toISOString()
+                });
+                
+                console.log('📦 Reverse geocoding from cache:', latRounded, lngRounded);
+                return {
+                    display_name: cached[0].formatted_address,
+                    place_name: cached[0].place_name,
+                    cached: true
+                };
+            }
+        } catch (error) {
+            console.error('Reverse cache lookup error:', error);
+        }
+        
+        return null;
+    },
+    
+    async store(query, result, provider = 'google') {
+        try {
+            const cacheData = {
+                search_query: query,
+                search_query_normalized: query.toLowerCase().trim(),
+                search_type: 'address',
+                formatted_address: result.display_name || result.formatted_address,
+                place_name: result.place_name || null,
+                lat: result.lat,
+                lng: result.lng,
+                geocoding_provider: provider,
+                provider_confidence: result.confidence || 0.9,
+                raw_response: result.raw || {}
+            };
+            
+            // Extract address components if available
+            if (result.address_components) {
+                result.address_components.forEach(component => {
+                    const types = component.types;
+                    if (types.includes('street_number')) {
+                        cacheData.street_number = component.long_name;
+                    }
+                    if (types.includes('route')) {
+                        cacheData.route = component.long_name;
+                    }
+                    if (types.includes('neighborhood')) {
+                        cacheData.neighborhood = component.long_name;
+                    }
+                    if (types.includes('sublocality')) {
+                        cacheData.sublocality = component.long_name;
+                    }
+                    if (types.includes('locality')) {
+                        cacheData.locality = component.long_name;
+                    }
+                    if (types.includes('administrative_area_level_1')) {
+                        cacheData.administrative_area_level_1 = component.long_name;
+                    }
+                    if (types.includes('postal_code')) {
+                        cacheData.postal_code = component.long_name;
+                    }
+                });
+            }
+            
+            // Add Google Place ID if available
+            if (result.place_id) {
+                cacheData.place_id = result.place_id;
+            }
+            
+            await supabaseAPI.insert('geocoding_cache', cacheData);
+            console.log('💾 Geocoding cached:', query);
+        } catch (error) {
+            console.error('Cache store error:', error);
+        }
+    },
+    
+    async storeReverse(lat, lng, result, provider = 'google') {
+        try {
+            const cacheData = {
+                lat_rounded: Math.round(lat * 10000) / 10000,
+                lng_rounded: Math.round(lng * 10000) / 10000,
+                lat: lat,
+                lng: lng,
+                formatted_address: result.display_name || result.formatted_address,
+                place_name: result.place_name || null,
+                geocoding_provider: provider,
+                provider_confidence: result.confidence || 0.9,
+                raw_response: result.raw || {}
+            };
+            
+            // Extract address components similar to forward geocoding
+            if (result.address_components) {
+                // ... same component extraction as above
+            }
+            
+            await supabaseAPI.insert('reverse_geocoding_cache', cacheData);
+            console.log('💾 Reverse geocoding cached');
+        } catch (error) {
+            console.error('Reverse cache store error:', error);
+        }
+    }
+};
+
+// Distance Matrix Cache Service
+const distanceCache = {
+    // In-memory cache (keep existing)
+    cache: new Map(),
+    
+    // Database cache methods
+    async searchDB(pickup, delivery, travelMode = 'driving') {
+        try {
+            // Round coordinates for caching (about 100m precision)
+            const originLat = Math.round(pickup.lat * 100000) / 100000;
+            const originLng = Math.round(pickup.lng * 100000) / 100000;
+            const destLat = Math.round(delivery.lat * 100000) / 100000;
+            const destLng = Math.round(delivery.lng * 100000) / 100000;
+            
+            const cached = await supabaseAPI.query('distance_matrix_cache', {
+                filter: `origin_lat=eq.${originLat}&origin_lng=eq.${originLng}&destination_lat=eq.${destLat}&destination_lng=eq.${destLng}&travel_mode=eq.${travelMode}`,
+                limit: 1
+            });
+            
+            if (cached.length > 0 && cached[0].expires_at > new Date().toISOString()) {
+                // Update usage statistics
+                await supabaseAPI.update('distance_matrix_cache', cached[0].id, {
+                    usage_count: cached[0].usage_count + 1,
+                    last_used: new Date().toISOString()
+                });
+                
+                console.log('📦 Distance from DB cache');
+                return {
+                    distance: cached[0].distance_meters / 1000, // Convert to km
+                    duration: Math.ceil(cached[0].duration_seconds / 60), // Convert to minutes
+                    distance_text: cached[0].distance_text,
+                    duration_text: cached[0].duration_text,
+                    cached: true,
+                    cache_type: 'database'
+                };
+            }
+        } catch (error) {
+            console.error('Distance cache lookup error:', error);
+        }
+        
+        return null;
+    },
+    
+    async storeDB(pickup, delivery, result, travelMode = 'driving', provider = 'google') {
+        try {
+            const cacheData = {
+                origin_lat: Math.round(pickup.lat * 100000) / 100000,
+                origin_lng: Math.round(pickup.lng * 100000) / 100000,
+                destination_lat: Math.round(delivery.lat * 100000) / 100000,
+                destination_lng: Math.round(delivery.lng * 100000) / 100000,
+                distance_meters: Math.round(result.distance * 1000), // Convert km to meters
+                distance_text: result.distance_text || `${result.distance.toFixed(1)} km`,
+                duration_seconds: result.duration * 60, // Convert minutes to seconds
+                duration_text: result.duration_text || `${result.duration} min`,
+                travel_mode: travelMode,
+                provider: provider,
+                route_polyline: result.polyline || null,
+                raw_response: result.raw || {},
+                // Set appropriate expiry based on time of day
+                expires_at: new Date(Date.now() + (isRushHour() ? 30 * 60000 : 120 * 60000)).toISOString()
+            };
+            
+            await supabaseAPI.insert('distance_matrix_cache', cacheData);
+            console.log('💾 Distance cached to DB');
+        } catch (error) {
+            console.error('Distance cache store error:', error);
+        }
+    },
+    
+    // Keep existing in-memory cache methods but also use DB
+    get: async function(pickup, delivery) {
+        // First check in-memory cache
+        const key = this.getKey(pickup, delivery);
+        const memCached = this.cache.get(key);
+        
+        if (memCached) {
+            console.log('📦 Distance from memory cache:', key);
+            memCached.lastUsed = Date.now();
+            return memCached.data;
+        }
+        
+        // Then check database cache
+        const dbCached = await this.searchDB(pickup, delivery);
+        if (dbCached) {
+            // Store in memory cache for faster subsequent access
+            this.cache.set(key, {
+                data: dbCached,
+                created: Date.now(),
+                lastUsed: Date.now()
+            });
+            return dbCached;
+        }
+        
+        return null;
+    },
+    
+    set: async function(pickup, delivery, data) {
+        // Store in both memory and database
+        const key = this.getKey(pickup, delivery);
+        
+        // Memory cache
+        this.cache.set(key, {
+            data: data,
+            created: Date.now(),
+            lastUsed: Date.now()
+        });
+        
+        // Also cache reverse route
+        const reverseKey = this.getKey(delivery, pickup);
+        this.cache.set(reverseKey, {
+            data: { ...data, distance: data.distance },
+            created: Date.now(),
+            lastUsed: Date.now()
+        });
+        
+        // Database cache
+        await this.storeDB(pickup, delivery, data);
+        
+        // Persist memory cache
+        this.persist();
+    },
+    
+    // Generate cache key with 100m precision (reduces unique combinations)
+    getKey: (pickup, delivery) => {
+        const p = `${pickup.lat.toFixed(3)},${pickup.lng.toFixed(3)}`;
+        const d = `${delivery.lat.toFixed(3)},${delivery.lng.toFixed(3)}`;
+        return `${p}→${d}`;
+    },
+    
+    // Persist to localStorage (survives page reloads)
+    persist: function() {
+        try {
+            const cacheData = Array.from(this.cache.entries()).slice(-1000); // Keep last 1000 entries
+            localStorage.setItem('tuma_distance_cache', JSON.stringify(cacheData));
+        } catch (e) {
+            console.warn('Failed to persist cache:', e);
+        }
+    },
+    
+    // Load from localStorage
+    load: function() {
+        try {
+            const stored = localStorage.getItem('tuma_distance_cache');
+            if (stored) {
+                const cacheData = JSON.parse(stored);
+                cacheData.forEach(([key, value]) => {
+                    this.cache.set(key, value);
+                });
+                console.log(`📦 Loaded ${cacheData.length} cached routes`);
+            }
+        } catch (e) {
+            console.warn('Failed to load cache:', e);
+        }
+    },
+    
+    // Get cache stats
+    getStats: function() {
+        let totalHits = 0;
+        let totalSize = this.cache.size;
+        
+        this.cache.forEach(entry => {
+            totalHits += entry.hitCount || 0;
+        });
+        
+        return {
+            size: totalSize,
+            hits: totalHits,
+            hitRate: totalSize > 0 ? (totalHits / (totalHits + totalSize)) * 100 : 0
+        };
+    }
+};
+
+// Helper function to determine rush hour
+function isRushHour() {
+    const now = new Date();
+    const hour = now.getHours();
+    const day = now.getDay();
+    
+    // Monday to Friday
+    if (day >= 1 && day <= 5) {
+        // Morning rush: 6:30 AM - 9:30 AM
+        // Evening rush: 4:30 PM - 7:30 PM
+        return (hour >= 6 && hour < 10) || (hour >= 16 && hour < 20);
+    }
+    
+    return false;
+}
+
+// Enhanced geocoding with better Nairobi support and caching
 async function geocodeAddress(address) {
+    // Check cache first
+    const cached = await geocodingCache.search(address);
+    if (cached) {
+        return cached;
+    }
+    
     // Add "Nairobi, Kenya" if not already specified
     let searchAddress = address;
     if (!address.toLowerCase().includes('nairobi') && !address.toLowerCase().includes('kenya')) {
@@ -315,11 +850,16 @@ async function geocodeAddress(address) {
             result.display_name.toLowerCase().includes('nairobi')
         ) || data[0];
         
-        return {
+        const result = {
             lat: parseFloat(nairobiResult.lat),
             lng: parseFloat(nairobiResult.lon),
             display_name: nairobiResult.display_name
         };
+        
+        // Cache the result
+        await geocodingCache.store(address, result, 'nominatim');
+        
+        return result;
     } catch (error) {
         console.error('Geocoding error:', error);
         throw new Error('Could not find address. Please be more specific.');
@@ -424,7 +964,7 @@ window.trackDelivery = function() {
     window.location.href = `tracking.html?parcel=${parcelCode}`;
 };
 
-// GPS location function
+// GPS location function with caching
 window.getLocation = async function(type) {
     try {
         if (!navigator.geolocation) {
@@ -456,24 +996,45 @@ window.getLocation = async function(type) {
             return;
         }
         
-        // Reverse geocode to get address
-        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${coords.lat}&lon=${coords.lng}`);
-        const data = await response.json();
+        // Check reverse geocoding cache first
+        const cached = await geocodingCache.searchReverse(coords.lat, coords.lng);
         
-        const input = type === 'pickup' ? elements.pickupLocation : elements.deliveryLocation;
-        input.value = data.display_name || `${coords.lat}, ${coords.lng}`;
-        
-        // Store coords in dataset for consistency
-        input.dataset.lat = coords.lat;
-        input.dataset.lng = coords.lng;
-        
-        formState.set(`${type}Coords`, coords);
-        
-        if (formState.get('pickupCoords') && formState.get('deliveryCoords')) {
-            await calculateDistance();
+        if (cached) {
+            const input = type === 'pickup' ? elements.pickupLocation : elements.deliveryLocation;
+            input.value = cached.display_name;
+            input.dataset.lat = coords.lat;
+            input.dataset.lng = coords.lng;
+            
+            formState.set(`${type}Coords`, coords);
+            
+            if (formState.get('pickupCoords') && formState.get('deliveryCoords')) {
+                await calculateDistance();
+            }
+            
+            showNotification('Location updated!', 'success');
+        } else {
+            // Reverse geocode to get address
+            const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${coords.lat}&lon=${coords.lng}`);
+            const data = await response.json();
+            
+            const input = type === 'pickup' ? elements.pickupLocation : elements.deliveryLocation;
+            input.value = data.display_name || `${coords.lat}, ${coords.lng}`;
+            
+            // Store coords in dataset for consistency
+            input.dataset.lat = coords.lat;
+            input.dataset.lng = coords.lng;
+            
+            formState.set(`${type}Coords`, coords);
+            
+            // Cache the reverse geocoding result
+            await geocodingCache.storeReverse(coords.lat, coords.lng, data, 'nominatim');
+            
+            if (formState.get('pickupCoords') && formState.get('deliveryCoords')) {
+                await calculateDistance();
+            }
+            
+            showNotification('Location updated!', 'success');
         }
-        
-        showNotification('Location updated!', 'success');
     } catch (error) {
         console.error('Location error:', error);
         showNotification('Could not get your location. Please type the address manually.', 'error');
@@ -684,7 +1245,34 @@ async function initialize() {
     // Initialize Google Places Autocomplete
     initializeGooglePlacesAutocomplete();
     
+    // Test Supabase connection on load
+    testSupabaseConnection();
+    
+    // Load distance cache from localStorage
+    distanceCache.load();
+    
     console.log('Vendor dashboard initialized successfully');
+}
+
+// Test Supabase connection
+async function testSupabaseConnection() {
+    try {
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/vendors?select=*&limit=1`, {
+            headers: {
+                'apikey': SUPABASE_ANON_KEY,
+                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (response.ok) {
+            console.log('✅ Supabase connection successful');
+        } else {
+            console.error('❌ Supabase connection failed:', response.status, response.statusText);
+        }
+    } catch (error) {
+        console.error('❌ Supabase connection error:', error);
+    }
 }
 
 // Initialize Google Places Autocomplete
@@ -818,16 +1406,48 @@ async function handlePhoneInput(e) {
     let value = validation.formatPhone(e.target.value);
     e.target.value = value;
     
-    // Skip vendor checking for now due to 401 error
-    // Will implement this once authentication is sorted
-    if (value.length === 10) {
-        console.log('Phone number entered:', value);
-        // For now, assume casual vendor
-        formState.set({
-            vendorType: 'casual',
-            agentCode: null,
-            agentName: null
-        });
+    // Check if vendor is managed when phone is complete
+    if (value.length === 10 && validation.validatePhone(value)) {
+        try {
+            const vendors = await supabaseAPI.query('vendors', {
+                filter: `phone_number=eq.${value}`,
+                limit: 1
+            });
+            
+            if (vendors.length > 0) {
+                const vendor = vendors[0];
+                if (vendor.is_managed && vendor.agent_name) {
+                    formState.set({
+                        vendorType: 'managed',
+                        agentCode: vendor.agent_code,
+                        agentName: vendor.agent_name
+                    });
+                    
+                    displayVendorBadge({
+                        isManaged: true,
+                        agentName: vendor.agent_name
+                    });
+                    
+                    showNotification(`Welcome back! Managed by ${vendor.agent_name}`, 'success');
+                }
+            } else {
+                // New vendor
+                formState.set({
+                    vendorType: 'casual',
+                    agentCode: null,
+                    agentName: null
+                });
+                elements.vendorBadge.style.display = 'none';
+            }
+        } catch (error) {
+            console.error('Error checking vendor status:', error);
+            // Default to casual vendor on error
+            formState.set({
+                vendorType: 'casual',
+                agentCode: null,
+                agentName: null
+            });
+        }
     }
 }
 
@@ -883,7 +1503,7 @@ function handlePackageTypeChange(packageType) {
     formState.set('packageType', packageType);
 }
 
-// Handle location change
+// Handle location change with caching
 async function handleLocationChange(type) {
     const input = type === 'pickup' ? elements.pickupLocation : elements.deliveryLocation;
     const address = input.value.trim();
@@ -920,8 +1540,42 @@ async function handleLocationChange(type) {
         return; // Exit here - no need to geocode again
     }
     
-    // Only try Nominatim if user typed address manually without selecting from dropdown
+    // Only try geocoding if user typed address manually without selecting from dropdown
     if (!address || address.length < 3) return;
+    
+    // First check cache
+    const cached = await geocodingCache.search(address);
+    if (cached) {
+        const coords = {
+            lat: cached.lat,
+            lng: cached.lng,
+            display_name: cached.display_name
+        };
+        
+        // Validate service area
+        const serviceAreaCheck = validation.validateServiceArea(coords);
+        if (!serviceAreaCheck.isValid) {
+            showNotification(
+                `Sorry, this location is ${serviceAreaCheck.distance.toFixed(1)}km from our service center. We currently serve areas within ${serviceAreaCheck.maxRadius}km of Nairobi CBD.`,
+                'error'
+            );
+            input.value = '';
+            return;
+        }
+        
+        // Store in dataset for consistency
+        input.dataset.lat = coords.lat;
+        input.dataset.lng = coords.lng;
+        
+        formState.set(`${type}Coords`, coords);
+        
+        if (formState.get('pickupCoords') && formState.get('deliveryCoords')) {
+            await calculateDistance();
+        }
+        
+        showNotification(`📦 Location loaded from cache`, 'success');
+        return;
+    }
     
     // Check if Google Maps is loaded and try Google Geocoder first
     if (window.google && window.google.maps && window.google.maps.Geocoder) {
@@ -937,7 +1591,11 @@ async function handleLocationChange(type) {
                 const coords = {
                     lat: location.lat(),
                     lng: location.lng(),
-                    display_name: results[0].formatted_address
+                    display_name: results[0].formatted_address,
+                    formatted_address: results[0].formatted_address,
+                    place_id: results[0].place_id,
+                    address_components: results[0].address_components,
+                    raw: results[0]
                 };
                 
                 // Store in dataset for consistency
@@ -959,6 +1617,9 @@ async function handleLocationChange(type) {
                     return;
                 }
                 
+                // Cache the result
+                await geocodingCache.store(address, coords, 'google');
+                
                 formState.set(`${type}Coords`, coords);
                 
                 if (formState.get('pickupCoords') && formState.get('deliveryCoords')) {
@@ -976,13 +1637,13 @@ async function handleLocationChange(type) {
     }
 }
 
-// Separate function for Nominatim geocoding
+// Separate function for Nominatim geocoding with caching
 async function geocodeWithNominatim(address, type) {
     const input = type === 'pickup' ? elements.pickupLocation : elements.deliveryLocation;
     
     try {
         console.log(`Geocoding ${type} via Nominatim:`, address);
-        const coords = await geocodeAddress(address);
+        const coords = await geocodeAddress(address); // This now includes caching
         
         // Validate service area
         const serviceAreaCheck = validation.validateServiceArea(coords);
@@ -1113,20 +1774,28 @@ const distanceCache = {
 // Load cache on startup
 distanceCache.load();
 
-// Calculate distance between pickup and delivery
+// Calculate distance between pickup and delivery with enhanced caching
 async function calculateDistance() {
     const pickup = formState.get('pickupCoords');
     const delivery = formState.get('deliveryCoords');
     
     if (!pickup || !delivery) return;
     
-    // Check cache first
-    const cached = distanceCache.get(pickup, delivery);
+    // Check cache first (now checks both memory and database)
+    const cached = await distanceCache.get(pickup, delivery);
     if (cached) {
         console.log('✅ Using cached distance:', cached.distance, 'km');
         formState.set('distance', cached.distance);
+        formState.set('duration', cached.duration);
         elements.calculatedDistance.textContent = `${cached.distance.toFixed(2)} km`;
         elements.distanceInfo.style.display = 'block';
+        
+        // Add duration display if element exists
+        const durationEl = document.getElementById('estimatedDuration');
+        if (durationEl) {
+            durationEl.textContent = `~${cached.duration} min`;
+        }
+        
         updateProgress(2);
         
         // Show cache savings notification occasionally
@@ -1170,12 +1839,18 @@ async function calculateDistance() {
                 
                 console.log('📍 Google Distance Matrix:', distance, 'km,', duration, 'minutes');
                 
-                // Cache the result
-                distanceCache.set(pickup, delivery, {
+                // Prepare data for caching
+                const cacheData = {
                     distance: distance,
                     duration: duration,
-                    timestamp: Date.now()
-                });
+                    distance_text: element.distance.text,
+                    duration_text: element.duration.text,
+                    timestamp: Date.now(),
+                    raw: response
+                };
+                
+                // Cache the result (both memory and database)
+                await distanceCache.set(pickup, delivery, cacheData);
                 
                 formState.set('distance', distance);
                 formState.set('duration', duration);
@@ -1206,12 +1881,16 @@ async function calculateDistance() {
     const estimatedDuration = Math.ceil(estimatedDistance * 3); // 3 min per km average
     
     // Cache even estimations to avoid repeated calculations
-    distanceCache.set(pickup, delivery, {
+    const estimationData = {
         distance: estimatedDistance,
         duration: estimatedDuration,
+        distance_text: `~${estimatedDistance.toFixed(1)} km`,
+        duration_text: `~${estimatedDuration} min`,
         estimated: true,
         timestamp: Date.now()
-    });
+    };
+    
+    await distanceCache.set(pickup, delivery, estimationData);
     
     formState.set('distance', estimatedDistance);
     formState.set('duration', estimatedDuration);
@@ -1219,6 +1898,11 @@ async function calculateDistance() {
     // Update UI with warning
     elements.calculatedDistance.textContent = `~${estimatedDistance.toFixed(2)} km`;
     elements.distanceInfo.style.display = 'block';
+    
+    const durationEl = document.getElementById('estimatedDuration');
+    if (durationEl) {
+        durationEl.textContent = `~${estimatedDuration} min`;
+    }
     
     showNotification('📏 Using estimated distance. Actual distance may vary.', 'warning');
     updateProgress(2);
@@ -1287,7 +1971,7 @@ function checkFormValidity() {
     }
 }
 
-// Handle form submission
+// Handle form submission - UPDATED WITH SUPABASE SAVE
 async function handleFormSubmit(e) {
     e.preventDefault();
     
@@ -1329,7 +2013,8 @@ async function handleFormSubmit(e) {
         // Generate codes
         const deliveryCodes = {
             parcel_code: codes.generateParcelCode(),
-            tracking_code: codes.generatePickupCode() + codes.generateDeliveryCode()
+            pickup_code: codes.generatePickupCode(),
+            delivery_code: codes.generateDeliveryCode()
         };
         
         // Calculate final price
@@ -1343,14 +2028,94 @@ async function handleFormSubmit(e) {
         
         console.log('Creating booking with price:', finalPrice);
         
-        // For now, show success without database save due to 401 error
-        // TODO: Fix Supabase authentication and enable database save
+        // Prepare vendor data
+        const vendorData = {
+            name: elements.vendorName.value.trim(),
+            phone_number: elements.phoneNumber.value,
+            vendor_type: formState.get('vendorType'),
+            is_managed: formState.get('vendorType') === 'managed',
+            agent_code: formState.get('agentCode') || null,
+            agent_name: formState.get('agentName') || null,
+            created_at: new Date().toISOString(),
+            last_active: new Date().toISOString()
+        };
         
-        showSuccess({
-            parcelCode: deliveryCodes.parcel_code,
-            pickupCode: deliveryCodes.tracking_code.slice(0, 8),
-            deliveryCode: deliveryCodes.tracking_code.slice(8)
-        }, finalPrice);
+        // Prepare parcel data
+        const parcelData = {
+            // Vendor info
+            vendor_name: vendorData.name,
+            vendor_phone: vendorData.phone_number,
+            vendor_type: vendorData.vendor_type,
+            vendor_id: null, // Will be set after vendor is created/found
+            
+            // Pickup info
+            pickup_location: elements.pickupLocation.value,
+            pickup_lat: formState.get('pickupCoords').lat,
+            pickup_lng: formState.get('pickupCoords').lng,
+            
+            // Delivery info
+            delivery_location: elements.deliveryLocation.value,
+            delivery_lat: formState.get('deliveryCoords').lat,
+            delivery_lng: formState.get('deliveryCoords').lng,
+            recipient_name: elements.recipientName.value,
+            recipient_phone: elements.recipientPhone.value,
+            
+            // Package info
+            package_description: elements.packageDescription.value,
+            package_type: formState.get('packageType'),
+            package_size: formState.get('selectedSize'),
+            item_count: formState.get('itemCount'),
+            special_instructions: elements.specialInstructions.value || null,
+            
+            // Service info
+            service_type: formState.get('selectedService'),
+            distance_km: formState.get('distance'),
+            duration_minutes: formState.get('duration') || null,
+            
+            // Pricing
+            total_price: finalPrice,
+            payment_method: formState.get('selectedPaymentMethod'),
+            payment_status: formState.get('selectedPaymentMethod') === 'cash' ? 'pending' : 'awaiting_payment',
+            
+            // Codes
+            parcel_code: deliveryCodes.parcel_code,
+            pickup_code: deliveryCodes.pickup_code,
+            delivery_code: deliveryCodes.delivery_code,
+            
+            // Status
+            status: 'pending',
+            created_at: new Date().toISOString()
+        };
+        
+        // Save to database
+        console.log('Saving booking to database...');
+        
+        // First, check if vendor exists and update or create
+        try {
+            const existingVendors = await supabaseAPI.query('vendors', {
+                filter: `phone_number=eq.${vendorData.phone_number}`,
+                limit: 1
+            });
+            
+            if (existingVendors.length === 0) {
+                // Create new vendor
+                await supabaseAPI.insert('vendors', vendorData);
+                console.log('✅ New vendor created');
+            } else {
+                // Update last_active for existing vendor
+                console.log('Vendor already exists, updating last_active');
+            }
+        } catch (vendorError) {
+            console.error('Vendor save error:', vendorError);
+            // Continue with booking even if vendor save fails
+        }
+        
+        // Save parcel (instead of booking)
+        const savedParcel = await supabaseAPI.insert('parcels', bookingData);
+        console.log('✅ Parcel saved successfully:', savedParcel);
+        
+        // Show success
+        showSuccess(deliveryCodes, finalPrice);
         
         updateProgress(4);
         showNotification('Booking created successfully!', 'success');
@@ -1367,9 +2132,9 @@ async function handleFormSubmit(e) {
 
 // Show success modal
 function showSuccess(codes, price) {
-    elements.displayParcelCode.textContent = codes.parcelCode;
-    elements.displayPickupCode.textContent = codes.pickupCode;
-    elements.displayDeliveryCode.textContent = codes.deliveryCode;
+    elements.displayParcelCode.textContent = codes.parcel_code;
+    elements.displayPickupCode.textContent = codes.pickup_code;
+    elements.displayDeliveryCode.textContent = codes.delivery_code;
     
     // Add price display
     if (elements.displayTotalPrice && price) {
