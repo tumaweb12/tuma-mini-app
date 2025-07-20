@@ -15,19 +15,9 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-    <!-- Add this line after the Leaflet scripts -->
-    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCaWjP3TKWhJrtureRn7q6fIIKk0MPl7bY&libraries=places" async defer></script>
-
     <!-- Leaflet Control Geocoder (Search Plugin) -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
     <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script> 
- 
-    <!-- 3) Your config & modules - REMOVED PROBLEMATIC SUPABASE CDN -->
-    <script type="module" src="./config.js"></script>
-    <script type="module" src="./supabaseClient.js"></script>
-    <script type="module" src="./mapUtils.js"></script>
-    <script type="module" src="./businessLogic.js"></script>
-    <script type="module" src="./vendor.js"></script>
     
     <style>
         * {
@@ -1718,8 +1708,31 @@
         }
     </style>
 
-    <!-- Module imports -->
-    <script type="module" src="./vendor.js"></script>
+    <!-- CRITICAL: Load configuration and vendor.js as regular scripts -->
+    <script>
+        // Global configuration
+        window.SUPABASE_URL = 'https://btxavqfoirdzwpfrvezp.supabase.co';
+        window.SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ0eGF2cWZvaXJkendwZnJ2ZXpwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE0ODcxMTcsImV4cCI6MjA2NzA2MzExN30.kQKpukFGx-cBl1zZRuXmex02ifkZ751WCUfQPogYutk';
+    </script>
+
+    <!-- Load vendor.js as regular script -->
+    <script src="./vendor.js" defer></script>
+    
+    <!-- Ensure all functions are loaded before page becomes interactive -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Check if vendor.js functions are available after a short delay
+            setTimeout(function() {
+                if (typeof updateItemCount !== 'function') {
+                    console.error('❌ Vendor.js functions not loaded properly');
+                    // Show error to user
+                    if (typeof showNotification === 'function') {
+                        showNotification('Page loading error. Please refresh.', 'error');
+                    }
+                }
+            }, 1000);
+        });
+    </script>
     
     <!-- Payment Method and Success Functions -->
     <script>
@@ -1773,6 +1786,31 @@
             // Open tracking page with parcel code
             window.location.href = `tracking.html?parcel=${parcelCode}`;
         }
+    }
+
+    function shareDeliveryDetails() {
+        const parcelCode = document.getElementById('displayParcelCode').textContent;
+        const deliveryCode = document.getElementById('displayDeliveryCode').textContent;
+        const price = document.getElementById('displayTotalPrice').textContent;
+        
+        const message = `🚀 Tuma Delivery Booked!\n\nParcel Code: ${parcelCode}\nDelivery Code: ${deliveryCode}\nAmount: ${price}\n\nTrack your delivery: https://tuma.delivery/track/${parcelCode}`;
+        
+        if (navigator.share) {
+            navigator.share({
+                title: 'Tuma Delivery Details',
+                text: message
+            }).catch(err => console.log('Share cancelled'));
+        } else {
+            // Fallback - copy to clipboard
+            navigator.clipboard.writeText(message).then(() => {
+                showNotification('Delivery details copied to clipboard!', 'success');
+            });
+        }
+    }
+
+    function bookAnother() {
+        // Reload the page to start fresh
+        window.location.reload();
     }
 
     // Update the showSuccess function to display price
@@ -2095,9 +2133,9 @@
     <!-- Google Maps Script -->
     <script>
         (g=>{var h,a,k,p="The Google Maps JavaScript API",c="google",l="importLibrary",q="__ib__",m=document,b=window;b=b[c]||(b[c]={});var d=b.maps||(b.maps={}),r=new Set,e=new URLSearchParams,u=()=>h||(h=new Promise(async(f,n)=>{await (a=m.createElement("script"));e.set("libraries",[...r]+"");for(k in g)e.set(k.replace(/[A-Z]/g,t=>"_"+t[0].toLowerCase()),g[k]);e.set("callback",c+".maps."+q);a.src=`https://maps.${c}apis.com/maps/api/js?`+e;d[q]=f;a.onerror=()=>h=n(Error(p+" could not load."));a.nonce=m.querySelector("script[nonce]")?.nonce||"";m.head.append(a)}));d[l]?console.warn(p+" only loads once. Ignoring:",g):d[l]=(f,...n)=>r.add(f)&&u().then(()=>d[l](f,...n))})({
-            key: "AIzaSyBUJEPsBbLqT4K2lgBEWUdHvbiFfGgfXhw",
+            key: "AIzaSyCaWjP3TKWhJrtureRn7q6fIIKk0MPl7bY",
             v: "weekly",
-            libraries: ["places"]
+            libraries: ["places", "geometry"]
         });
     </script>
 </body>
