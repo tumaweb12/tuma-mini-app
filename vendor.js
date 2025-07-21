@@ -2424,3 +2424,78 @@ if (!document.getElementById('location-success-styles')) {
     console.log('✅ Comprehensive booking button fix applied!');
     console.log('💡 If button is still disabled, run: forceEnableBooking()');
 })();
+// Add this code to the END of your vendor.js file
+// This will intercept and fix the status before submission
+
+(function() {
+    console.log('🔧 Applying direct status fix...');
+    
+    // Store the original insert function
+    const originalInsert = supabaseAPI.insert;
+    
+    // Override the insert function to fix status
+    supabaseAPI.insert = async function(table, data) {
+        if (table === 'parcels') {
+            console.log('📦 Intercepting parcel insert...');
+            console.log('Original status:', data.status);
+            
+            // Force the status to 'submitted'
+            data.status = 'submitted';
+            
+            console.log('✅ Fixed status to:', data.status);
+            console.log('Full parcel data:', JSON.stringify(data, null, 2));
+        }
+        
+        // Call the original insert with fixed data
+        return originalInsert.call(this, table, data);
+    };
+    
+    console.log('✅ Direct status fix applied!');
+})();
+
+// Also add a console helper to manually create a booking
+window.testBooking = async function() {
+    console.log('🧪 Testing booking creation...');
+    
+    // Get current form data
+    const testData = {
+        vendor_name: document.getElementById('vendorName')?.value || 'Test Vendor',
+        vendor_phone: document.getElementById('phoneNumber')?.value || '0700000000',
+        pickup_location: {
+            address: 'Test Pickup',
+            lat: -1.2921,
+            lng: 36.8219
+        },
+        delivery_location: {
+            address: 'Test Delivery', 
+            lat: -1.2821,
+            lng: 36.8319
+        },
+        recipient_name: 'Test Recipient',
+        recipient_phone: '0700000001',
+        package_category: 'documents',
+        package_description: 'Test Package',
+        package_size: 'small',
+        item_count: 1,
+        service_type: 'smart',
+        distance_km: 5,
+        price: 150,
+        total_price: 150,
+        payment_method: 'cash',
+        payment_status: 'pending',
+        parcel_code: 'TEST123',
+        pickup_code: 'PK123',
+        delivery_code: 'DL123',
+        status: 'submitted', // Using correct status
+        created_at: new Date().toISOString()
+    };
+    
+    try {
+        const result = await supabaseAPI.insert('parcels', testData);
+        console.log('✅ Test booking created:', result);
+        return result;
+    } catch (error) {
+        console.error('❌ Test booking failed:', error);
+        return error;
+    }
+};
