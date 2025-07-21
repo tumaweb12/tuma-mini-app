@@ -1,3 +1,4 @@
+/**
  * Vendor Page Entry Script - Complete Working Version
  * Handles vendor dashboard functionality with direct Supabase REST API calls
  */
