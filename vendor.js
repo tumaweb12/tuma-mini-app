@@ -1,5 +1,1171 @@
+// Select payment method
+window.selectPaymentMethod = function(method) {
+    // Remove selected class from all buttons
+    document.querySelectorAll('.payment-button').forEach(btn => {
+        btn.classList.remove('selected');
+    });
+    
+    // Add selected class to clicked button
+    if (method === 'online') {
+        document.querySelector('.payment-button.pay-now').classList.add('selected');
+    } else {
+        document.querySelector('.payment-button.cash-delivery').classList.add('selected');
+    }
+    
+    // Store selected method
+    formState.set('selectedPaymentMethod', method);
+};
 
-                /**
+// Track delivery
+window.trackDelivery = function() {
+    const parcelCode = elements.displayParcelCode.textContent;
+    window.location.href = `tracking.html?parcel=${parcelCode}`;
+};
+
+// GPS location function with caching
+window.getLocation = async function(type) {
+    try {
+        if (!navigator.geolocation) {
+            throw new Error('Geolocation not supported');
+        }
+        
+        showNotification('Getting your location...', 'info');
+        
+        const position = await new Promise((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject, {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 300000
+            });
+        });
+        
+        const coords = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+        };
+        
+        // Validate service area before proceeding
+        const serviceAreaCheck = validation.validateServiceArea(coords);
+        if (!serviceAreaCheck.isValid) {
+            showNotification(
+                `Your location is outside our current service area (${serviceAreaCheck.distance.toFixed(1)}km from CBD). We serve areas within ${serviceAreaCheck.maxRadius}km of Nairobi CBD.`,
+                'error'
+            );
+            return;
+        }
+        
+        // Check reverse geocoding cache first
+        const cached = await geocodingCache.searchReverse(coords.lat, coords.lng);
+        
+        if (cached) {
+            const input = type === 'pickup' ? elements.pickupLocation : elements.deliveryLocation;
+            input.value = cached.display_name;
+            input.dataset.lat = coords.lat;
+            input.dataset.lng = coords.lng;
+            
+            formState.set(`${type}Coords`, coords);
+            
+            if (formState.get('pickupCoords') && formState.get('deliveryCoords')) {
+                await calculateDistance();
+            }
+            
+            showNotification('Location updated!', 'success');
+        } else {
+            // Reverse geocode to get address
+            const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${coords.lat}&lon=${coords.lng}`);
+            const data = await response.json();
+            
+            const input = type === 'pickup' ? elements.pickupLocation : elements.deliveryLocation;
+            input.value = data.display_name || `${coords.lat}, ${coords.lng}`;
+            
+            // Store coords in dataset for consistency
+            input.dataset.lat = coords.lat;
+            input.dataset.lng = coords.lng;
+            
+            formState.set(`${type}Coords`, coords);
+            
+            // Cache the reverse geocoding result
+            await geocodingCache.storeReverse(coords.lat, coords.lng, data, 'nominatim');
+            
+            if (formState.get('pickupCoords') && formState.get('deliveryCoords')) {
+                await calculateDistance();
+            }
+            
+            showNotification('Location updated!', 'success');
+        }
+    } catch (error) {
+        console.error('Location error:', error);
+        showNotification('Could not get your location. Please type the address manually.', 'error');
+    }
+};
+
+// Alias functions
+window.useGPS = window.getLocation;
+window.typeAddress = function(type) {
+    const input = type === 'pickup' ? elements.pickupLocation : elements.deliveryLocation;
+    input.focus();
+    showNotification('Type your address in the field above', 'info');
+};
+
+// Delivery type toggle
+window.toggleDeliveryType = function(type) {
+    // For now, just log - can implement bulk delivery later
+    console.log('Delivery type:', type);
+};
+
+// Add bulk delivery
+window.addBulkDelivery = function() {
+    showNotification('Bulk delivery feature coming soon!', 'info');
+};
+
+// Share delivery details
+window.shareDeliveryDetails = async function() {
+    const parcelCode = elements.displayParcelCode.textContent;
+    const deliveryCode = elements.displayDeliveryCode.textContent;
+    
+    const shareData = {
+        title: 'Tuma Delivery Details',
+        text: `Your parcel ${parcelCode} is on the way! Delivery code: ${deliveryCode}`,
+        url: window.location.origin
+    };
+    
+    if (navigator.share) {
+        try {
+            await navigator.share(shareData);
+        } catch (error) {
+            await navigator.clipboard.writeText(shareData.text);
+            showNotification('Details copied to clipboard!', 'success');
+        }
+    } else {
+        await navigator.clipboard.writeText(shareData.text);
+        showNotification('Details copied to clipboard!', 'success');
+    }
+};
+
+// Book another delivery
+window.bookAnother = function() {
+    elements.successOverlay.style.display = 'none';
+    document.getElementById('deliveryForm').reset();
+    formState.reset();
+    updateCapacityDisplay();
+    updateProgress(1);
+    elements.distanceInfo.style.display = 'none';
+    elements.vendorBadge.style.display = 'none';
+    document.getElementById('mainContent').scrollTop = 0;
+    
+    // Reset form state visually
+    elements.itemCount.textContent = '1';
+    document.querySelectorAll('.size-option').forEach(el => el.classList.remove('selected'));
+    document.querySelector('[data-size="small"]')?.classList.add('selected');
+    document.querySelectorAll('.service-card').forEach(el => el.classList.remove('selected'));
+    document.querySelector('[data-service="smart"]')?.classList.add('selected');
+    
+    // Clear location data attributes
+    if (elements.pickupLocation) {
+        delete elements.pickupLocation.dataset.lat;
+        delete elements.pickupLocation.dataset.lng;
+    }
+    if (elements.deliveryLocation) {
+        delete elements.deliveryLocation.dataset.lat;
+        delete elements.deliveryLocation.dataset.lng;
+    }
+};
+
+// ─── Map Modal Functions ───────────────────────────────────────
+
+// Shared state for the modal
+let simpleMap = null;
+let currentInputField = null;
+let selectedSimpleLocation = null;
+
+// Open the map modal & lazy-init the map + search
+window.openSimpleLocationModal = function(inputId) {
+    currentInputField = inputId;
+    document.getElementById('simpleLocationModal').style.display = 'block';
+
+    if (!simpleMap) {
+        // Initialize Leaflet map
+        simpleMap = L.map('simpleMap').setView([-1.2921, 36.8219], 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap'
+        }).addTo(simpleMap);
+
+        // When the user drags or zooms, re-reverse-geocode center
+        simpleMap.on('moveend', updateSelectedLocation);
+
+        // Wire up the search button
+        const searchBtn = document.getElementById('simpleSearchBtn');
+        const searchInput = document.getElementById('simpleSearch');
+        if (searchBtn && searchInput) {
+            searchBtn.addEventListener('click', async () => {
+                const q = searchInput.value.trim();
+                if (!q) return;
+                try {
+                    const result = await geocodeAddress(q);
+                    simpleMap.setView([result.lat, result.lng], 16);
+                    selectedSimpleLocation = {
+                        lat: result.lat,
+                        lng: result.lng,
+                        address: result.display_name
+                    };
+                    updateLocationDisplay();
+                } catch {
+                    alert('Could not find that address.');
+                }
+            });
+            searchInput.addEventListener('keypress', e => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    searchBtn.click();
+                }
+            });
+        }
+    }
+
+    // Force a resize after the modal opens
+    setTimeout(() => simpleMap.invalidateSize(), 100);
+};
+
+// Reverse-geocode the map's center
+async function updateSelectedLocation() {
+    const c = simpleMap.getCenter();
+    try {
+        const resp = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${c.lat}&lon=${c.lng}`
+        );
+        const data = await resp.json();
+        selectedSimpleLocation = {
+            lat: c.lat,
+            lng: c.lng,
+            address: data.display_name
+        };
+        updateLocationDisplay();
+    } catch (err) {
+        console.error('Reverse-geocode failed', err);
+    }
+}
+
+// Update the location display in the modal
+function updateLocationDisplay() {
+    if (!selectedSimpleLocation) return;
+    const name = selectedSimpleLocation.address.split(',')[0] || 'Selected Location';
+    document.getElementById('selectedLocationName').textContent = name;
+    document.getElementById('selectedLocationAddress').textContent = selectedSimpleLocation.address;
+}
+
+// Confirm location selection
+window.confirmSimpleLocation = function() {
+    if (!selectedSimpleLocation || !currentInputField) return;
+    
+    // First validate service area
+    const serviceAreaCheck = validation.validateServiceArea(selectedSimpleLocation);
+    if (!serviceAreaCheck.isValid) {
+        showNotification(
+            `This location is ${serviceAreaCheck.distance.toFixed(1)}km from our service center. We currently serve areas within ${serviceAreaCheck.maxRadius}km of Nairobi CBD.`,
+            'error'
+        );
+        return;
+    }
+    
+    const inp = document.getElementById(currentInputField);
+    inp.value = selectedSimpleLocation.address;
+    inp.dataset.lat = selectedSimpleLocation.lat;
+    inp.dataset.lng = selectedSimpleLocation.lng;
+    inp.dispatchEvent(new Event('change', { bubbles: true }));
+    
+    // Trigger handleLocationChange
+    const type = currentInputField.includes('pickup') ? 'pickup' : 'delivery';
+    handleLocationChange(type);
+    
+    closeLocationModal();
+};
+
+// Close the location modal
+window.closeLocationModal = function() {
+    document.getElementById('simpleLocationModal').style.display = 'none';
+    currentInputField = null;
+    selectedSimpleLocation = null;
+};
+
+// ─── Core Functions ───────────────────────────────────────
+
+// Initialize page
+async function initialize() {
+    console.log('Initializing vendor dashboard...');
+    setupEventListeners();
+    setupStateSubscriptions();
+    updateCapacityDisplay();
+    
+    // Set default service selection
+    formState.set('selectedService', 'smart');
+    formState.set('selectedSize', 'small');
+    
+    // Initialize Google Places Autocomplete
+    initializeGooglePlacesAutocomplete();
+    
+    // Test Supabase connection on load
+    testSupabaseConnection();
+    
+    // Load distance cache from localStorage
+    distanceCache.load();
+    
+    console.log('Vendor dashboard initialized successfully');
+}
+
+// Test Supabase connection
+async function testSupabaseConnection() {
+    try {
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/vendors?select=*&limit=1`, {
+            headers: {
+                'apikey': SUPABASE_ANON_KEY,
+                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (response.ok) {
+            console.log('✅ Supabase connection successful');
+        } else {
+            console.error('❌ Supabase connection failed:', response.status, response.statusText);
+        }
+    } catch (error) {
+        console.error('❌ Supabase connection error:', error);
+    }
+}
+
+// Initialize Google Places Autocomplete
+function initializeGooglePlacesAutocomplete() {
+    // Wait for Google Maps API to load
+    if (window.google && window.google.maps && window.google.maps.places) {
+        setupAutocomplete();
+    } else {
+        // Try again after a delay
+        setTimeout(initializeGooglePlacesAutocomplete, 500);
+    }
+}
+
+// Setup Google Places Autocomplete with caching
+function setupAutocomplete() {
+    const setupField = (inputElement, type) => {
+        if (!inputElement) return;
+        
+        const autocomplete = new google.maps.places.Autocomplete(inputElement, {
+            componentRestrictions: { country: 'KE' },
+            fields: ['formatted_address', 'geometry', 'name', 'place_id', 'types', 'address_components'],
+            bounds: new google.maps.LatLngBounds(
+                new google.maps.LatLng(-1.5, 36.6),
+                new google.maps.LatLng(-1.0, 37.1)
+            ),
+            strictBounds: false
+        });
+        
+        autocomplete.addListener('place_changed', async () => {
+            const place = autocomplete.getPlace();
+            
+            if (place.geometry && place.geometry.location) {
+                const coords = {
+                    lat: place.geometry.location.lat(),
+                    lng: place.geometry.location.lng(),
+                    display_name: place.formatted_address,
+                    formatted_address: place.formatted_address,
+                    place_name: place.name,
+                    place_id: place.place_id,
+                    address_components: place.address_components,
+                    raw: place
+                };
+                
+                // Store coordinates in dataset
+                inputElement.dataset.lat = coords.lat;
+                inputElement.dataset.lng = coords.lng;
+                
+                // Cache the geocoding result
+                await geocodingCache.store(inputElement.value, coords, 'google');
+                
+                // Call the unified handler
+                handleLocationChange(type);
+            } else if (place.name || place.formatted_address) {
+                // Place selected but no geometry - use Google Geocoder
+                console.log('Place selected without geometry, using Google Geocoder');
+                const geocoder = new google.maps.Geocoder();
+                const addressToGeocode = place.formatted_address || place.name;
+                
+                geocoder.geocode({ 
+                    address: addressToGeocode,
+                    componentRestrictions: { country: 'KE' }
+                }, async (results, status) => {
+                    if (status === 'OK' && results[0]) {
+                        const location = results[0].geometry.location;
+                        const coords = {
+                            lat: location.lat(),
+                            lng: location.lng(),
+                            display_name: results[0].formatted_address,
+                            formatted_address: results[0].formatted_address,
+                            place_id: results[0].place_id,
+                            address_components: results[0].address_components,
+                            raw: results[0]
+                        };
+                        
+                        inputElement.dataset.lat = coords.lat;
+                        inputElement.dataset.lng = coords.lng;
+                        inputElement.value = results[0].formatted_address;
+                        
+                        // Cache the result
+                        await geocodingCache.store(addressToGeocode, coords, 'google');
+                        
+                        // Call the handler
+                        handleLocationChange(type);
+                    } else {
+                        console.error('Google Geocoding failed:', status);
+                        showNotification('Could not find exact location. Please try a different address.', 'error');
+                    }
+                });
+            } else {
+                // No valid place selected
+                showNotification('Please select a valid address from the dropdown', 'warning');
+            }
+        });
+        
+        // Prevent form submission on Enter key in autocomplete
+        inputElement.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+            }
+        });
+    };
+    
+    setupField(elements.pickupLocation, 'pickup');
+    setupField(elements.deliveryLocation, 'delivery');
+}
+
+// Setup event listeners
+function setupEventListeners() {
+    // Phone number input
+    elements.phoneNumber?.addEventListener('input', handlePhoneInput);
+    elements.recipientPhone?.addEventListener('input', handleRecipientPhoneInput);
+    
+    // Location inputs - use 'blur' instead of 'change' for better UX
+    elements.pickupLocation?.addEventListener('blur', () => handleLocationChange('pickup'));
+    elements.deliveryLocation?.addEventListener('blur', () => handleLocationChange('delivery'));
+    
+    // Package description dropdown
+    elements.packageDescription?.addEventListener('change', (e) => {
+        handlePackageTypeChange(e.target.value);
+    });
+    
+    // Character counter
+    elements.specialInstructions?.addEventListener('input', (e) => {
+        const charCountEl = document.getElementById('charCount');
+        if (charCountEl) {
+            charCountEl.textContent = e.target.value.length;
+        }
+    });
+    
+    // Form submission
+    document.getElementById('deliveryForm')?.addEventListener('submit', handleFormSubmit);
+}
+
+// Setup state subscriptions
+function setupStateSubscriptions() {
+    formState.subscribe(['pickupCoords', 'deliveryCoords'], () => {
+        checkFormValidity();
+    });
+    
+    formState.subscribe(['itemCount', 'selectedSize'], () => {
+        updateCapacityDisplay();
+    });
+    
+    formState.subscribe('distance', (distance) => {
+        if (distance > 0) {
+            updatePricing();
+        }
+    });
+}
+
+// Handle phone input
+async function handlePhoneInput(e) {
+    let value = validation.formatPhone(e.target.value);
+    e.target.value = value;
+    
+    // Check if vendor is managed when phone is complete
+    if (value.length === 10 && validation.validatePhone(value)) {
+        try {
+            const vendors = await supabaseAPI.query('vendors', {
+                filter: `phone_number=eq.${value}`,
+                limit: 1
+            });
+            
+            if (vendors.length > 0) {
+                const vendor = vendors[0];
+                if (vendor.is_managed && vendor.agent_name) {
+                    formState.set({
+                        vendorType: 'managed',
+                        agentCode: vendor.agent_code,
+                        agentName: vendor.agent_name
+                    });
+                    
+                    displayVendorBadge({
+                        isManaged: true,
+                        agentName: vendor.agent_name
+                    });
+                    
+                    showNotification(`Welcome back! Managed by ${vendor.agent_name}`, 'success');
+                }
+            } else {
+                // New vendor
+                formState.set({
+                    vendorType: 'casual',
+                    agentCode: null,
+                    agentName: null
+                });
+                elements.vendorBadge.style.display = 'none';
+            }
+        } catch (error) {
+            console.error('Error checking vendor status:', error);
+            // Default to casual vendor on error
+            formState.set({
+                vendorType: 'casual',
+                agentCode: null,
+                agentName: null
+            });
+        }
+    }
+}
+
+// Handle recipient phone input
+function handleRecipientPhoneInput(e) {
+    e.target.value = validation.formatPhone(e.target.value);
+}
+
+// Display vendor badge
+function displayVendorBadge(vendorInfo) {
+    if (vendorInfo.isManaged && vendorInfo.agentName) {
+        elements.vendorBadge.style.display = 'block';
+        elements.vendorBadgeContent.className = 'vendor-badge managed';
+        elements.vendorBadgeContent.innerHTML = `
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/>
+            </svg>
+            <span>Managed by ${vendorInfo.agentName}</span>
+        `;
+    } else {
+        elements.vendorBadge.style.display = 'none';
+    }
+}
+
+// Handle package type selection
+function handlePackageTypeChange(packageType) {
+    if (!packageType) return;
+    
+    const specialHandling = BUSINESS_CONFIG.packageCompatibility.specialHandling[packageType];
+    
+    // Update service recommendation based on package type
+    if (specialHandling) {
+        if (specialHandling.priority === 'urgent' || specialHandling.maxDelay <= 60) {
+            // Recommend Express for time-sensitive items
+            showNotification('⚡ Express delivery recommended for this item type', 'info');
+            
+            // Optionally auto-select Express service
+            if (specialHandling.priority === 'urgent') {
+                selectService('express');
+            }
+        }
+        
+        if (specialHandling.fragile) {
+            showNotification('📦 This item will be handled with extra care', 'info');
+        }
+        
+        if (specialHandling.secure) {
+            showNotification('🔒 This item will be transported securely', 'info');
+        }
+    }
+    
+    // Store package type in form state
+    formState.set('packageType', packageType);
+}
+
+// Handle location change with caching
+async function handleLocationChange(type) {
+    const input = type === 'pickup' ? elements.pickupLocation : elements.deliveryLocation;
+    const address = input.value.trim();
+    const dsLat = input.dataset.lat;
+    const dsLng = input.dataset.lng;
+    
+    // If coordinates already provided (by Google), use them directly
+    if (dsLat && dsLng) {
+        const coords = {
+            lat: parseFloat(dsLat),
+            lng: parseFloat(dsLng),
+            display_name: address
+        };
+        
+        // Validate service area
+        const serviceAreaCheck = validation.validateServiceArea(coords);
+        if (!serviceAreaCheck.isValid) {
+            showNotification(
+                `Sorry, this location is ${serviceAreaCheck.distance.toFixed(1)}km from our service center. We currently serve areas within ${serviceAreaCheck.maxRadius}km of Nairobi CBD.`,
+                'error'
+            );
+            // Clear the input and dataset
+            input.value = '';
+            delete input.dataset.lat;
+            delete input.dataset.lng;
+            return;
+        }
+        
+        formState.set(`${type}Coords`, coords);
+        
+        if (formState.get('pickupCoords') && formState.get('deliveryCoords')) {
+            await calculateDistance();
+        }
+        return; // Exit here - no need to geocode again
+    }
+    
+    // Only try geocoding if user typed address manually without selecting from dropdown
+    if (!address || address.length < 3) return;
+    
+    // First check cache
+    const cached = await geocodingCache.search(address);
+    if (cached) {
+        const coords = {
+            lat: cached.lat,
+            lng: cached.lng,
+            display_name: cached.display_name
+        };
+        
+        // Validate service area
+        const serviceAreaCheck = validation.validateServiceArea(coords);
+        if (!serviceAreaCheck.isValid) {
+            showNotification(
+                `Sorry, this location is ${serviceAreaCheck.distance.toFixed(1)}km from our service center. We currently serve areas within ${serviceAreaCheck.maxRadius}km of Nairobi CBD.`,
+                'error'
+            );
+            input.value = '';
+            return;
+        }
+        
+        // Store in dataset for consistency
+        input.dataset.lat = coords.lat;
+        input.dataset.lng = coords.lng;
+        
+        formState.set(`${type}Coords`, coords);
+        
+        if (formState.get('pickupCoords') && formState.get('deliveryCoords')) {
+            await calculateDistance();
+        }
+        
+        showNotification(`📦 Location loaded from cache`, 'success');
+        return;
+    }
+    
+    // Check if Google Maps is loaded and try Google Geocoder first
+    if (window.google && window.google.maps && window.google.maps.Geocoder) {
+        console.log(`Using Google Geocoder for manually typed address: ${address}`);
+        const geocoder = new google.maps.Geocoder();
+        
+        geocoder.geocode({ 
+            address: address,
+            componentRestrictions: { country: 'KE' }
+        }, async (results, status) => {
+            if (status === 'OK' && results[0]) {
+                const location = results[0].geometry.location;
+                const coords = {
+                    lat: location.lat(),
+                    lng: location.lng(),
+                    display_name: results[0].formatted_address,
+                    formatted_address: results[0].formatted_address,
+                    place_id: results[0].place_id,
+                    address_components: results[0].address_components,
+                    raw: results[0]
+                };
+                
+                // Store in dataset for consistency
+                input.dataset.lat = coords.lat;
+                input.dataset.lng = coords.lng;
+                input.value = results[0].formatted_address;
+                
+                // Validate service area
+                const serviceAreaCheck = validation.validateServiceArea(coords);
+                if (!serviceAreaCheck.isValid) {
+                    showNotification(
+                        `Sorry, this location is ${serviceAreaCheck.distance.toFixed(1)}km from our service center. We currently serve areas within ${serviceAreaCheck.maxRadius}km of Nairobi CBD.`,
+                        'error'
+                    );
+                    // Clear the input and dataset
+                    input.value = '';
+                    delete input.dataset.lat;
+                    delete input.dataset.lng;
+                    return;
+                }
+                
+                // Cache the result
+                await geocodingCache.store(address, coords, 'google');
+                
+                formState.set(`${type}Coords`, coords);
+                
+                if (formState.get('pickupCoords') && formState.get('deliveryCoords')) {
+                    await calculateDistance();
+                }
+            } else {
+                // Fall back to Nominatim only if Google Geocoder fails
+                console.log('Google Geocoder failed, trying Nominatim');
+                await geocodeWithNominatim(address, type);
+            }
+        });
+    } else {
+        // Google Maps not loaded, use Nominatim
+        await geocodeWithNominatim(address, type);
+    }
+}
+
+// Separate function for Nominatim geocoding with caching
+async function geocodeWithNominatim(address, type) {
+    const input = type === 'pickup' ? elements.pickupLocation : elements.deliveryLocation;
+    
+    try {
+        console.log(`Geocoding ${type} via Nominatim:`, address);
+        const coords = await geocodeAddress(address); // This now includes caching
+        
+        // Validate service area
+        const serviceAreaCheck = validation.validateServiceArea(coords);
+        if (!serviceAreaCheck.isValid) {
+            showNotification(
+                `Sorry, this location is ${serviceAreaCheck.distance.toFixed(1)}km from our service center. We currently serve areas within ${serviceAreaCheck.maxRadius}km of Nairobi CBD.`,
+                'error'
+            );
+            // Clear the input and dataset
+            input.value = '';
+            delete input.dataset.lat;
+            delete input.dataset.lng;
+            return;
+        }
+        
+        // Store coordinates for consistency
+        input.dataset.lat = coords.lat;
+        input.dataset.lng = coords.lng;
+        
+        formState.set(`${type}Coords`, coords);
+        
+        if (formState.get('pickupCoords') && formState.get('deliveryCoords')) {
+            await calculateDistance();
+        }
+    } catch (err) {
+        console.error('Geocoding error:', err);
+        showNotification(
+            'Could not find that address. Please select from the dropdown suggestions or try a more specific address.',
+            'error'
+        );
+    }
+}
+
+// Calculate distance between pickup and delivery with enhanced caching
+async function calculateDistance() {
+    const pickup = formState.get('pickupCoords');
+    const delivery = formState.get('deliveryCoords');
+    
+    if (!pickup || !delivery) return;
+    
+    // Check cache first (now checks both memory and database)
+    const cached = await distanceCache.get(pickup, delivery);
+    if (cached) {
+        console.log('✅ Using cached distance:', cached.distance, 'km');
+        formState.set('distance', cached.distance);
+        formState.set('duration', cached.duration);
+        elements.calculatedDistance.textContent = `${cached.distance.toFixed(2)} km`;
+        elements.distanceInfo.style.display = 'block';
+        
+        // Add duration display if element exists
+        const durationEl = document.getElementById('estimatedDuration');
+        if (durationEl) {
+            durationEl.textContent = `~${cached.duration} min`;
+        }
+        
+        updateProgress(2);
+        
+        // Show cache savings notification occasionally
+        const stats = distanceCache.getStats();
+        if (stats.hits % 10 === 0 && stats.hits > 0) {
+            showNotification(`💰 Saved ${stats.hits} API calls using smart caching!`, 'success');
+        }
+        return;
+    }
+    
+    // Try Google Distance Matrix API
+    if (window.google && window.google.maps) {
+        try {
+            const service = new google.maps.DistanceMatrixService();
+            
+            const response = await new Promise((resolve, reject) => {
+                service.getDistanceMatrix({
+                    origins: [new google.maps.LatLng(pickup.lat, pickup.lng)],
+                    destinations: [new google.maps.LatLng(delivery.lat, delivery.lng)],
+                    travelMode: google.maps.TravelMode.DRIVING,
+                    unitSystem: google.maps.UnitSystem.METRIC,
+                    avoidHighways: false,
+                    avoidTolls: false,
+                    drivingOptions: {
+                        departureTime: new Date(), // For traffic consideration
+                        trafficModel: 'bestguess'
+                    }
+                }, (response, status) => {
+                    if (status === 'OK') {
+                        resolve(response);
+                    } else {
+                        reject(new Error(`Distance Matrix API error: ${status}`));
+                    }
+                });
+            });
+            
+            if (response.rows[0].elements[0].status === 'OK') {
+                const element = response.rows[0].elements[0];
+                const distance = element.distance.value / 1000; // Convert to km
+                const duration = Math.ceil(element.duration.value / 60); // Convert to minutes
+                
+                console.log('📍 Google Distance Matrix:', distance, 'km,', duration, 'minutes');
+                
+                // Prepare data for caching
+                const cacheData = {
+                    distance: distance,
+                    duration: duration,
+                    distance_text: element.distance.text,
+                    duration_text: element.duration.text,
+                    timestamp: Date.now(),
+                    raw: response
+                };
+                
+                // Cache the result (both memory and database)
+                await distanceCache.set(pickup, delivery, cacheData);
+                
+                formState.set('distance', distance);
+                formState.set('duration', duration);
+                
+                // Update UI
+                elements.calculatedDistance.textContent = `${distance.toFixed(2)} km`;
+                elements.distanceInfo.style.display = 'block';
+                
+                // Add duration display if element exists
+                const durationEl = document.getElementById('estimatedDuration');
+                if (durationEl) {
+                    durationEl.textContent = `~${duration} min`;
+                }
+                
+                updateProgress(2);
+                return;
+            }
+        } catch (error) {
+            console.error('Distance Matrix API failed:', error);
+            // Fall through to estimation
+        }
+    }
+    
+    // Fallback to estimation (only if Google fails)
+    console.log('⚠️ Using estimation fallback');
+    const straightDistance = calculateStraightDistance(pickup, delivery);
+    const estimatedDistance = straightDistance * 1.5; // 50% buffer for Nairobi roads
+    const estimatedDuration = Math.ceil(estimatedDistance * 3); // 3 min per km average
+    
+    // Cache even estimations to avoid repeated calculations
+    const estimationData = {
+        distance: estimatedDistance,
+        duration: estimatedDuration,
+        distance_text: `~${estimatedDistance.toFixed(1)} km`,
+        duration_text: `~${estimatedDuration} min`,
+        estimated: true,
+        timestamp: Date.now()
+    };
+    
+    await distanceCache.set(pickup, delivery, estimationData);
+    
+    formState.set('distance', estimatedDistance);
+    formState.set('duration', estimatedDuration);
+    
+    // Update UI with warning
+    elements.calculatedDistance.textContent = `~${estimatedDistance.toFixed(2)} km`;
+    elements.distanceInfo.style.display = 'block';
+    
+    const durationEl = document.getElementById('estimatedDuration');
+    if (durationEl) {
+        durationEl.textContent = `~${estimatedDuration} min`;
+    }
+    
+    showNotification('📏 Using estimated distance. Actual distance may vary.', 'warning');
+    updateProgress(2);
+}
+
+// Update pricing display
+function updatePricing() {
+    const distance = formState.get('distance');
+    if (distance <= 0) return;
+    
+    console.log('Updating pricing for distance:', distance);
+    
+    const options = {
+        isManaged: formState.get('vendorType') === 'managed'
+    };
+    
+    elements.expressPrice.textContent = pricing.formatPrice(
+        pricing.calculate(distance, 'express', options)
+    );
+    elements.smartPrice.textContent = pricing.formatPrice(
+        pricing.calculate(distance, 'smart', options)
+    );
+    elements.ecoPrice.textContent = pricing.formatPrice(
+        pricing.calculate(distance, 'eco', options)
+    );
+    
+    elements.servicePriceHint.style.display = 'none';
+}
+
+// Update capacity display
+function updateCapacityDisplay() {
+    const itemCount = formState.get('itemCount');
+    const selectedSize = formState.get('selectedSize');
+    
+    const result = validation.validateCapacity(itemCount, selectedSize);
+    const sizeConfig = BUSINESS_CONFIG.packageSizes[selectedSize];
+    
+    if (result.isValid) {
+        const itemText = itemCount === 1 ? 'item' : 'items';
+        elements.capacityText.textContent = `${itemCount} ${sizeConfig.label.toLowerCase()} ${itemText} • Fits on one motorcycle`;
+        elements.capacityIcon.textContent = '✓';
+        elements.capacityIcon.className = 'capacity-icon';
+    } else {
+        elements.capacityText.textContent = `${itemCount} ${sizeConfig.label.toLowerCase()} items • Needs ${result.vehiclesNeeded} motorcycles`;
+        elements.capacityIcon.textContent = result.vehiclesNeeded > 2 ? '✕' : '!';
+        elements.capacityIcon.className = `capacity-icon ${result.vehiclesNeeded > 2 ? 'danger' : 'warning'}`;
+    }
+    
+    const capacityPercentage = Math.min((result.totalUnits / BUSINESS_CONFIG.vehicleCapacity.motorcycle) * 100, 100);
+    elements.capacityFill.style.width = `${capacityPercentage}%`;
+    elements.capacityFill.className = `capacity-fill ${result.vehiclesNeeded > 2 ? 'danger' : result.vehiclesNeeded > 1 ? 'warning' : ''}`;
+}
+
+// Check form validity
+function checkFormValidity() {
+    const pickup = formState.get('pickupCoords');
+    const delivery = formState.get('deliveryCoords');
+    const distance = formState.get('distance');
+    
+    if (pickup && delivery && distance > 0) {
+        elements.submitBtn.disabled = false;
+        elements.buttonText.textContent = 'Book Delivery';
+    } else {
+        elements.submitBtn.disabled = true;
+        elements.buttonText.textContent = 'Enter locations to see price';
+    }
+}
+
+// Handle form submission - UPDATED WITH SUPABASE SAVE
+async function handleFormSubmit(e) {
+    e.preventDefault();
+    
+    if (formState.get('isLoading')) return;
+    
+    // Validate form
+    const validationResult = validation.validateRequired({
+        vendorName: elements.vendorName.value,
+        phoneNumber: elements.phoneNumber.value,
+        pickupLocation: elements.pickupLocation.value,
+        deliveryLocation: elements.deliveryLocation.value,
+        recipientName: elements.recipientName.value,
+        recipientPhone: elements.recipientPhone.value,
+        packageDescription: elements.packageDescription.value
+    });
+    
+    if (!validationResult.isValid) {
+        showNotification('Please fill in all required fields', 'error');
+        return;
+    }
+    
+    // Validate phone numbers
+    if (!validation.validatePhone(elements.phoneNumber.value)) {
+        showNotification('Please enter a valid vendor phone number', 'error');
+        return;
+    }
+    
+    if (!validation.validatePhone(elements.recipientPhone.value)) {
+        showNotification('Please enter a valid recipient phone number', 'error');
+        return;
+    }
+    
+    // Show loading state
+    formState.set('isLoading', true);
+    elements.submitBtn.classList.add('loading');
+    elements.buttonText.textContent = 'Processing...';
+    
+    try {
+        // Generate codes
+        const deliveryCodes = {
+            parcel_code: codes.generateParcelCode(),
+            pickup_code: codes.generatePickupCode(),
+            delivery_code: codes.generateDeliveryCode()
+        };
+        
+        // Calculate final price
+        const finalPrice = pricing.calculate(
+            formState.get('distance'),
+            formState.get('selectedService'),
+            {
+                isManaged: formState.get('vendorType') === 'managed'
+            }
+        );
+        
+        console.log('Creating booking with price:', finalPrice);
+        
+        // Prepare vendor data
+        const vendorData = {
+            name: elements.vendorName.value.trim(),
+            phone_number: elements.phoneNumber.value,
+            vendor_type: formState.get('vendorType'),
+            is_managed: formState.get('vendorType') === 'managed',
+            agent_code: formState.get('agentCode') || null,
+            agent_name: formState.get('agentName') || null,
+            created_at: new Date().toISOString(),
+            last_active: new Date().toISOString()
+        };
+        
+        // Prepare parcel data with enhanced fields
+        const parcelData = {
+            // Vendor info
+            vendor_name: vendorData.name,
+            vendor_phone: vendorData.phone_number,
+            vendor_type: vendorData.vendor_type,
+            vendor_id: null, // Will be set after vendor is created/found
+            
+            // Pickup info
+            pickup_location: elements.pickupLocation.value,
+            pickup_lat: formState.get('pickupCoords').lat,
+            pickup_lng: formState.get('pickupCoords').lng,
+            
+            // Delivery info
+            delivery_location: elements.deliveryLocation.value,
+            delivery_lat: formState.get('deliveryCoords').lat,
+            delivery_lng: formState.get('deliveryCoords').lng,
+            recipient_name: elements.recipientName.value,
+            recipient_phone: elements.recipientPhone.value,
+            
+            // Package info
+            package_category: elements.packageDescription.value,
+            package_description: elements.packageDescription.options[elements.packageDescription.selectedIndex].text,
+            package_size: formState.get('selectedSize'),
+            item_count: formState.get('itemCount'),
+            special_instructions: elements.specialInstructions.value || null,
+            
+            // Special handling flags based on package category
+            is_fragile: ['phone', 'laptop', 'electronics-fragile', 'glassware', 'artwork', 'fragile-general'].includes(elements.packageDescription.value),
+            is_perishable: ['food-fresh', 'food-frozen'].includes(elements.packageDescription.value),
+            requires_signature: ['certificates', 'pharmaceuticals', 'medical-equipment'].includes(elements.packageDescription.value),
+            priority_level: ['food-frozen', 'pharmaceuticals'].includes(elements.packageDescription.value) ? 'urgent' : 
+                           ['food-fresh', 'medical-equipment'].includes(elements.packageDescription.value) ? 'high' : 'normal',
+            
+            // Service info
+            service_type: formState.get('selectedService'),
+            distance_km: formState.get('distance'),
+            estimated_duration_minutes: formState.get('duration') || null,
+            
+            // Pricing breakdown
+            base_price: BUSINESS_CONFIG.pricing.rates.base + (formState.get('distance') * BUSINESS_CONFIG.pricing.rates.perKm),
+            service_multiplier: BUSINESS_CONFIG.pricing.multipliers.service[formState.get('selectedService')],
+            total_price: finalPrice,
+            platform_fee: Math.round(finalPrice * 0.15), // 15% platform fee
+            vendor_payout: Math.round(finalPrice * 0.85), // 85% to vendor
+            
+            // Payment info
+            payment_method: formState.get('selectedPaymentMethod'),
+            payment_status: formState.get('selectedPaymentMethod') === 'cash' ? 'pending' : 'awaiting_payment',
+            
+            // Codes
+            parcel_code: deliveryCodes.parcel_code,
+            pickup_code: deliveryCodes.pickup_code,
+            delivery_code: deliveryCodes.delivery_code,
+            
+            // Status
+            status: 'pending',
+            created_at: new Date().toISOString()
+        };
+        
+        // Save to database
+        console.log('Saving booking to database...');
+        
+        // First, check if vendor exists and update or create
+        try {
+            const existingVendors = await supabaseAPI.query('vendors', {
+                filter: `phone_number=eq.${vendorData.phone_number}`,
+                limit: 1
+            });
+            
+            if (existingVendors.length === 0) {
+                // Create new vendor
+                await supabaseAPI.insert('vendors', vendorData);
+                console.log('✅ New vendor created');
+            } else {
+                // Update last_active for existing vendor
+                console.log('Vendor already exists, updating last_active');
+            }
+        } catch (vendorError) {
+            console.error('Vendor save error:', vendorError);
+            // Continue with booking even if vendor save fails
+        }
+        
+        // Save parcel - FIXED: Changed from bookingData to parcelData
+        const savedParcel = await supabaseAPI.insert('parcels', parcelData);
+        console.log('✅ Parcel saved successfully:', savedParcel);
+        
+        // Show success
+        showSuccess(deliveryCodes, finalPrice);
+        
+        updateProgress(4);
+        showNotification('Booking created successfully!', 'success');
+        
+    } catch (error) {
+        console.error('Booking error:', error);
+        showNotification('Failed to create booking. Please try again.', 'error');
+    } finally {
+        formState.set('isLoading', false);
+        elements.submitBtn.classList.remove('loading');
+        elements.buttonText.textContent = 'Book Delivery';
+    }
+}
+
+// Show success modal
+function showSuccess(codes, price) {
+    elements.displayParcelCode.textContent = codes.parcel_code;
+    elements.displayPickupCode.textContent = codes.pickup_code;
+    elements.displayDeliveryCode.textContent = codes.delivery_code;
+    
+    // Add price display
+    if (elements.displayTotalPrice && price) {
+        elements.displayTotalPrice.textContent = `KES ${price.toLocaleString()}`;
+    }
+    
+    elements.successOverlay.style.display = 'flex';
+}
+
+// Update progress indicator
+function updateProgress(step) {
+    const steps = document.querySelectorAll('.step');
+    const progressFill = document.getElementById('progressFill');
+    
+    steps.forEach((s, index) => {
+        s.classList.remove('active', 'completed');
+        if (index < step - 1) {
+            s.classList.add('completed');
+        } else if (index === step - 1) {
+            s.classList.add('active');
+        }
+    });
+    
+    progressFill.style.width = `${(step / 4) * 100}%`;
+}
+
+// Initialize on load
+if (document.readyState === 'loading') {
+    window.addEventListener('DOMContentLoaded', initialize);
+} else {
+    initialize();
+}
+
+// Export showNotification to global scope
+window.showNotification = showNotification;/**
  * Vendor Page Entry Script - Complete Working Version
  * Handles vendor dashboard functionality with direct Supabase REST API calls
  */
@@ -487,7 +1653,7 @@ const geocodingCache = {
 
 // Distance Matrix Cache Service
 const distanceCache = {
-    // In-memory cache (keep existing)
+    // In-memory cache
     cache: new Map(),
     
     // Database cache methods
@@ -1137,31 +2303,42 @@ function initializeGooglePlacesAutocomplete() {
     }
 }
 
-// Setup Google Places Autocomplete
+// Setup Google Places Autocomplete with caching
 function setupAutocomplete() {
     const setupField = (inputElement, type) => {
         if (!inputElement) return;
         
         const autocomplete = new google.maps.places.Autocomplete(inputElement, {
             componentRestrictions: { country: 'KE' },
-            fields: ['formatted_address', 'geometry', 'name', 'place_id', 'types'],
-            // Remove type restrictions to allow ALL places
-            // types: ['geocode', 'establishment'], // REMOVED - now searches everything
+            fields: ['formatted_address', 'geometry', 'name', 'place_id', 'types', 'address_components'],
             bounds: new google.maps.LatLngBounds(
                 new google.maps.LatLng(-1.5, 36.6),
                 new google.maps.LatLng(-1.0, 37.1)
             ),
-            strictBounds: false  // Allow results outside bounds
+            strictBounds: false
         });
         
-        autocomplete.addListener('place_changed', () => {
+        autocomplete.addListener('place_changed', async () => {
             const place = autocomplete.getPlace();
             
-            // If place has geometry, use it directly
             if (place.geometry && place.geometry.location) {
+                const coords = {
+                    lat: place.geometry.location.lat(),
+                    lng: place.geometry.location.lng(),
+                    display_name: place.formatted_address,
+                    formatted_address: place.formatted_address,
+                    place_name: place.name,
+                    place_id: place.place_id,
+                    address_components: place.address_components,
+                    raw: place
+                };
+                
                 // Store coordinates in dataset
-                inputElement.dataset.lat = place.geometry.location.lat();
-                inputElement.dataset.lng = place.geometry.location.lng();
+                inputElement.dataset.lat = coords.lat;
+                inputElement.dataset.lng = coords.lng;
+                
+                // Cache the geocoding result
+                await geocodingCache.store(inputElement.value, coords, 'google');
                 
                 // Call the unified handler
                 handleLocationChange(type);
@@ -1174,14 +2351,25 @@ function setupAutocomplete() {
                 geocoder.geocode({ 
                     address: addressToGeocode,
                     componentRestrictions: { country: 'KE' }
-                }, (results, status) => {
+                }, async (results, status) => {
                     if (status === 'OK' && results[0]) {
                         const location = results[0].geometry.location;
-                        inputElement.dataset.lat = location.lat();
-                        inputElement.dataset.lng = location.lng();
+                        const coords = {
+                            lat: location.lat(),
+                            lng: location.lng(),
+                            display_name: results[0].formatted_address,
+                            formatted_address: results[0].formatted_address,
+                            place_id: results[0].place_id,
+                            address_components: results[0].address_components,
+                            raw: results[0]
+                        };
                         
-                        // Update input with formatted address
+                        inputElement.dataset.lat = coords.lat;
+                        inputElement.dataset.lng = coords.lng;
                         inputElement.value = results[0].formatted_address;
+                        
+                        // Cache the result
+                        await geocodingCache.store(addressToGeocode, coords, 'google');
                         
                         // Call the handler
                         handleLocationChange(type);
@@ -1528,6 +2716,140 @@ async function geocodeWithNominatim(address, type) {
     }
 }
 
+// Calculate distance between pickup and delivery with enhanced caching
+async function calculateDistance() {
+    const pickup = formState.get('pickupCoords');
+    const delivery = formState.get('deliveryCoords');
+    
+    if (!pickup || !delivery) return;
+    
+    // Check cache first (now checks both memory and database)
+    const cached = await distanceCache.get(pickup, delivery);
+    if (cached) {
+        console.log('✅ Using cached distance:', cached.distance, 'km');
+        formState.set('distance', cached.distance);
+        formState.set('duration', cached.duration);
+        elements.calculatedDistance.textContent = `${cached.distance.toFixed(2)} km`;
+        elements.distanceInfo.style.display = 'block';
+        
+        // Add duration display if element exists
+        const durationEl = document.getElementById('estimatedDuration');
+        if (durationEl) {
+            durationEl.textContent = `~${cached.duration} min`;
+        }
+        
+        updateProgress(2);
+        
+        // Show cache savings notification occasionally
+        const stats = distanceCache.getStats();
+        if (stats.hits % 10 === 0 && stats.hits > 0) {
+            showNotification(`💰 Saved ${stats.hits} API calls using smart caching!`, 'success');
+        }
+        return;
+    }
+    
+    // Try Google Distance Matrix API
+    if (window.google && window.google.maps) {
+        try {
+            const service = new google.maps.DistanceMatrixService();
+            
+            const response = await new Promise((resolve, reject) => {
+                service.getDistanceMatrix({
+                    origins: [new google.maps.LatLng(pickup.lat, pickup.lng)],
+                    destinations: [new google.maps.LatLng(delivery.lat, delivery.lng)],
+                    travelMode: google.maps.TravelMode.DRIVING,
+                    unitSystem: google.maps.UnitSystem.METRIC,
+                    avoidHighways: false,
+                    avoidTolls: false,
+                    drivingOptions: {
+                        departureTime: new Date(), // For traffic consideration
+                        trafficModel: 'bestguess'
+                    }
+                }, (response, status) => {
+                    if (status === 'OK') {
+                        resolve(response);
+                    } else {
+                        reject(new Error(`Distance Matrix API error: ${status}`));
+                    }
+                });
+            });
+            
+            if (response.rows[0].elements[0].status === 'OK') {
+                const element = response.rows[0].elements[0];
+                const distance = element.distance.value / 1000; // Convert to km
+                const duration = Math.ceil(element.duration.value / 60); // Convert to minutes
+                
+                console.log('📍 Google Distance Matrix:', distance, 'km,', duration, 'minutes');
+                
+                // Prepare data for caching
+                const cacheData = {
+                    distance: distance,
+                    duration: duration,
+                    distance_text: element.distance.text,
+                    duration_text: element.duration.text,
+                    timestamp: Date.now(),
+                    raw: response
+                };
+                
+                // Cache the result (both memory and database)
+                await distanceCache.set(pickup, delivery, cacheData);
+                
+                formState.set('distance', distance);
+                formState.set('duration', duration);
+                
+                // Update UI
+                elements.calculatedDistance.textContent = `${distance.toFixed(2)} km`;
+                elements.distanceInfo.style.display = 'block';
+                
+                // Add duration display if element exists
+                const durationEl = document.getElementById('estimatedDuration');
+                if (durationEl) {
+                    durationEl.textContent = `~${duration} min`;
+                }
+                
+                updateProgress(2);
+                return;
+            }
+        } catch (error) {
+            console.error('Distance Matrix API failed:', error);
+            // Fall through to estimation
+        }
+    }
+    
+    // Fallback to estimation (only if Google fails)
+    console.log('⚠️ Using estimation fallback');
+    const straightDistance = calculateStraightDistance(pickup, delivery);
+    const estimatedDistance = straightDistance * 1.5; // 50% buffer for Nairobi roads
+    const estimatedDuration = Math.ceil(estimatedDistance * 3); // 3 min per km average
+    
+    // Cache even estimations to avoid repeated calculations
+    const estimationData = {
+        distance: estimatedDistance,
+        duration: estimatedDuration,
+        distance_text: `~${estimatedDistance.toFixed(1)} km`,
+        duration_text: `~${estimatedDuration} min`,
+        estimated: true,
+        timestamp: Date.now()
+    };
+    
+    await distanceCache.set(pickup, delivery, estimationData);
+    
+    formState.set('distance', estimatedDistance);
+    formState.set('duration', estimatedDuration);
+    
+    // Update UI with warning
+    elements.calculatedDistance.textContent = `~${estimatedDistance.toFixed(2)} km`;
+    elements.distanceInfo.style.display = 'block';
+    
+    const durationEl = document.getElementById('estimatedDuration');
+    if (durationEl) {
+        durationEl.textContent = `~${estimatedDuration} min`;
+    }
+    
+    showNotification('📏 Using estimated distance. Actual distance may vary.', 'warning');
+    updateProgress(2);
+}
+
 // Update pricing display
 function updatePricing() {
     const distance = formState.get('distance');
@@ -1660,7 +2982,7 @@ async function handleFormSubmit(e) {
             last_active: new Date().toISOString()
         };
         
-        // Prepare parcel data
+        // Prepare parcel data with enhanced fields
         const parcelData = {
             // Vendor info
             vendor_name: vendorData.name,
@@ -1681,19 +3003,32 @@ async function handleFormSubmit(e) {
             recipient_phone: elements.recipientPhone.value,
             
             // Package info
-            package_description: elements.packageDescription.value,
-            package_type: formState.get('packageType'),
+            package_category: elements.packageDescription.value,
+            package_description: elements.packageDescription.options[elements.packageDescription.selectedIndex].text,
             package_size: formState.get('selectedSize'),
             item_count: formState.get('itemCount'),
             special_instructions: elements.specialInstructions.value || null,
             
+            // Special handling flags based on package category
+            is_fragile: ['phone', 'laptop', 'electronics-fragile', 'glassware', 'artwork', 'fragile-general'].includes(elements.packageDescription.value),
+            is_perishable: ['food-fresh', 'food-frozen'].includes(elements.packageDescription.value),
+            requires_signature: ['certificates', 'pharmaceuticals', 'medical-equipment'].includes(elements.packageDescription.value),
+            priority_level: ['food-frozen', 'pharmaceuticals'].includes(elements.packageDescription.value) ? 'urgent' : 
+                           ['food-fresh', 'medical-equipment'].includes(elements.packageDescription.value) ? 'high' : 'normal',
+            
             // Service info
             service_type: formState.get('selectedService'),
             distance_km: formState.get('distance'),
-            duration_minutes: formState.get('duration') || null,
+            estimated_duration_minutes: formState.get('duration') || null,
             
-            // Pricing
+            // Pricing breakdown
+            base_price: BUSINESS_CONFIG.pricing.rates.base + (formState.get('distance') * BUSINESS_CONFIG.pricing.rates.perKm),
+            service_multiplier: BUSINESS_CONFIG.pricing.multipliers.service[formState.get('selectedService')],
             total_price: finalPrice,
+            platform_fee: Math.round(finalPrice * 0.15), // 15% platform fee
+            vendor_payout: Math.round(finalPrice * 0.85), // 85% to vendor
+            
+            // Payment info
             payment_method: formState.get('selectedPaymentMethod'),
             payment_status: formState.get('selectedPaymentMethod') === 'cash' ? 'pending' : 'awaiting_payment',
             
@@ -1730,7 +3065,7 @@ async function handleFormSubmit(e) {
             // Continue with booking even if vendor save fails
         }
         
-        // Save parcel (instead of booking)
+        // Save parcel - FIXED: Changed from bookingData to parcelData
         const savedParcel = await supabaseAPI.insert('parcels', parcelData);
         console.log('✅ Parcel saved successfully:', savedParcel);
         
@@ -1787,4 +3122,6 @@ if (document.readyState === 'loading') {
 } else {
     initialize();
 }
+
+// Export showNotification to global scope
 window.showNotification = showNotification;
