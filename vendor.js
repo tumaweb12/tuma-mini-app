@@ -1,9 +1,3 @@
-// Pricing breakdown
-            base_price: BUSINESS_CONFIG.pricing.rates.base + (formState.get('distance') * BUSINESS_CONFIG.pricing.rates.perKm),
-            service_multiplier: BUSINESS_CONFIG.pricing.multipliers.service[formState.get('selectedService')],
-            price: finalPrice, // Changed from 'total_price' to 'price'
-            platform_fee: Math.round(finalPrice * 0.15), // 15% platform fee
-            /**
  * Vendor Page Entry Script - Complete Working Version
  * Handles vendor dashboard functionality with direct Supabase REST API calls
  */
