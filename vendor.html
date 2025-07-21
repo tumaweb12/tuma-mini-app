@@ -382,6 +382,18 @@
             border-color: var(--danger);
         }
 
+        /* Location success state */
+        @keyframes locationSuccess {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+            100% { transform: scale(1); }
+        }
+        
+        .input-field.location-confirmed {
+            border-color: var(--success) !important;
+            background: rgba(52, 199, 89, 0.05) !important;
+        }
+
         .input-action {
             position: absolute;
             right: 8px;
@@ -396,7 +408,7 @@
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            transition: all 0.2s;
+            transition: all 0.3s;
         }
 
         .input-action:active {
@@ -1713,10 +1725,24 @@
         // Global configuration
         window.SUPABASE_URL = 'https://btxavqfoirdzwpfrvezp.supabase.co';
         window.SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ0eGF2cWZvaXJkendwZnJ2ZXpwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE0ODcxMTcsImV4cCI6MjA2NzA2MzExN30.kQKpukFGx-cBl1zZRuXmex02ifkZ751WCUfQPogYutk';
+        
+        // Define initMap globally before loading Google Maps
+        window.initMap = function() {
+            console.log('✅ Google Maps initialized via callback');
+            // This will trigger the autocomplete setup in vendor.js
+            if (typeof initializeGooglePlacesAutocomplete === 'function') {
+                initializeGooglePlacesAutocomplete();
+            }
+        };
     </script>
 
     <!-- Load vendor.js as regular script -->
     <script src="./vendor.js" defer></script>
+    
+    <!-- Google Maps API with proper initialization -->
+    <script async defer
+        src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCaWjP3TKWhJrtureRn7q6fIIKk0MPl7bY&libraries=places,geometry&callback=initMap">
+    </script>
     
     <!-- Ensure all functions are loaded before page becomes interactive -->
     <script>
@@ -1729,6 +1755,8 @@
                     if (typeof showNotification === 'function') {
                         showNotification('Page loading error. Please refresh.', 'error');
                     }
+                } else {
+                    console.log('✅ Vendor.js functions loaded successfully');
                 }
             }, 1000);
         });
@@ -2129,14 +2157,5 @@
             }
         }
     </style>
-
-    <!-- Google Maps Script -->
-    <script>
-        (g=>{var h,a,k,p="The Google Maps JavaScript API",c="google",l="importLibrary",q="__ib__",m=document,b=window;b=b[c]||(b[c]={});var d=b.maps||(b.maps={}),r=new Set,e=new URLSearchParams,u=()=>h||(h=new Promise(async(f,n)=>{await (a=m.createElement("script"));e.set("libraries",[...r]+"");for(k in g)e.set(k.replace(/[A-Z]/g,t=>"_"+t[0].toLowerCase()),g[k]);e.set("callback",c+".maps."+q);a.src=`https://maps.${c}apis.com/maps/api/js?`+e;d[q]=f;a.onerror=()=>h=n(Error(p+" could not load."));a.nonce=m.querySelector("script[nonce]")?.nonce||"";m.head.append(a)}));d[l]?console.warn(p+" only loads once. Ignoring:",g):d[l]=(f,...n)=>r.add(f)&&u().then(()=>d[l](f,...n))})({
-            key: "AIzaSyCaWjP3TKWhJrtureRn7q6fIIKk0MPl7bY",
-            v: "weekly",
-            libraries: ["places", "geometry"]
-        });
-    </script>
 </body>
 </html>
