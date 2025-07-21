@@ -2271,103 +2271,156 @@ if (!document.getElementById('location-success-styles')) {
     `;
     document.head.appendChild(style);
 }
-// Add this code at the end of your vendor.js file (after line 2273)
-// This is a safe patch that won't break existing functionality
+// Add this code at the very end of your vendor.js file
+// This is a comprehensive fix for the booking button issue
 
-// Fix for booking button not enabling after distance calculation
+// Fix 1: Ensure form validation runs after any state change
 (function() {
-    console.log('🔧 Applying booking button fix...');
+    console.log('🔧 Applying comprehensive booking button fix...');
     
-    // Override the calculateDistance function to ensure form validation
-    const originalCalculateDistance = window.calculateDistance;
-    window.calculateDistance = async function() {
-        // Call the original function
-        const result = await originalCalculateDistance.apply(this, arguments);
-        
-        // After distance is calculated, force form validation
-        setTimeout(() => {
-            const pickup = formState.get('pickupCoords');
-            const delivery = formState.get('deliveryCoords');
-            const distance = formState.get('distance');
-            
-            console.log('📍 Post-distance validation check:', {
-                hasPickup: !!pickup,
-                hasDelivery: !!delivery,
-                distance: distance
-            });
-            
-            if (pickup && delivery && distance > 0) {
-                if (elements.submitBtn) {
-                    elements.submitBtn.disabled = false;
-                    elements.buttonText.textContent = 'Book Delivery';
-                    console.log('✅ Booking button enabled');
-                }
-            }
-        }, 100);
-        
-        return result;
-    };
-    
-    // Add a watcher for form state changes
-    const originalSet = formState.set;
-    formState.set = function(key, value) {
-        // Call original set method
-        originalSet.call(this, key, value);
-        
-        // If distance was set, check form validity
-        if (key === 'distance' && value > 0) {
-            setTimeout(() => {
-                const pickup = formState.get('pickupCoords');
-                const delivery = formState.get('deliveryCoords');
-                
-                if (pickup && delivery) {
-                    if (elements.submitBtn) {
-                        elements.submitBtn.disabled = false;
-                        elements.buttonText.textContent = 'Book Delivery';
-                        console.log('✅ Button enabled after distance set');
-                    }
-                }
-            }, 50);
-        }
-    };
-    
-    // Add manual validation helper
-    window.validateBookingForm = function() {
+    // Override checkFormValidity to be more aggressive
+    window.checkFormValidity = function() {
         const pickup = formState.get('pickupCoords');
         const delivery = formState.get('deliveryCoords');
         const distance = formState.get('distance');
         
-        console.log('Manual validation:', { pickup, delivery, distance });
+        console.log('🔍 Form validity check:', {
+            hasPickup: !!pickup,
+            pickupCoords: pickup,
+            hasDelivery: !!delivery,
+            deliveryCoords: delivery,
+            hasDistance: !!distance,
+            distance: distance
+        });
+        
+        // Get button elements
+        const submitBtn = document.getElementById('submitBtn');
+        const buttonText = document.getElementById('buttonText');
+        
+        if (!submitBtn || !buttonText) {
+            console.error('❌ Submit button elements not found!');
+            return;
+        }
         
         if (pickup && delivery && distance > 0) {
-            elements.submitBtn.disabled = false;
-            elements.buttonText.textContent = 'Book Delivery';
-            return '✅ Form validated and button enabled';
+            submitBtn.disabled = false;
+            buttonText.textContent = 'Book Delivery';
+            console.log('✅ Form is valid - button enabled');
         } else {
-            return '❌ Missing data: ' + 
-                   (!pickup ? 'pickup ' : '') + 
-                   (!delivery ? 'delivery ' : '') + 
-                   (!distance ? 'distance' : '');
+            submitBtn.disabled = true;
+            buttonText.textContent = 'Enter locations to see price';
+            console.log('❌ Form is invalid - button disabled');
         }
     };
     
-    // Also fix the form submission validation for authenticated users
-    const originalHandleFormSubmit = window.handleFormSubmit;
-    window.handleFormSubmit = async function(e) {
-        e.preventDefault();
+    // Fix 2: Watch for state changes more aggressively
+    const originalFormStateSet = formState.set;
+    formState.set = function(key, value) {
+        // Call original
+        originalFormStateSet.call(this, key, value);
         
-        // Fix phone validation for authenticated users
-        if (formState.get('isAuthenticated')) {
-            // Temporarily set a valid phone number to pass validation
-            if (!elements.phoneNumber.value) {
-                elements.phoneNumber.value = '0700000000'; // Dummy valid number
+        // Check validity after any relevant change
+        if (key === 'distance' || key === 'pickupCoords' || key === 'deliveryCoords') {
+            setTimeout(() => {
+                checkFormValidity();
+            }, 100);
+        }
+    };
+    
+    // Fix 3: Ensure calculateDistance always triggers validation
+    const originalCalculateDistance = window.calculateDistance;
+    window.calculateDistance = async function() {
+        console.log('📏 Calculating distance...');
+        const result = await originalCalculateDistance.apply(this, arguments);
+        
+        // Force validation after calculation
+        setTimeout(() => {
+            checkFormValidity();
+            
+            // Double-check and force enable if conditions are met
+            const pickup = formState.get('pickupCoords');
+            const delivery = formState.get('deliveryCoords');
+            const distance = formState.get('distance');
+            
+            if (pickup && delivery && distance > 0) {
+                const submitBtn = document.getElementById('submitBtn');
+                const buttonText = document.getElementById('buttonText');
+                
+                if (submitBtn && submitBtn.disabled) {
+                    console.log('🚨 Force-enabling button after distance calculation');
+                    submitBtn.disabled = false;
+                    buttonText.textContent = 'Book Delivery';
+                }
+            }
+        }, 200);
+        
+        return result;
+    };
+    
+    // Fix 4: Manual validation helper (can be called from console)
+    window.forceEnableBooking = function() {
+        const pickup = formState.get('pickupCoords');
+        const delivery = formState.get('deliveryCoords');
+        const distance = formState.get('distance');
+        
+        console.log('🔨 Force enable booking:', {
+            pickup: pickup,
+            delivery: delivery,
+            distance: distance
+        });
+        
+        const submitBtn = document.getElementById('submitBtn');
+        const buttonText = document.getElementById('buttonText');
+        
+        if (submitBtn && buttonText) {
+            if (pickup && delivery && distance > 0) {
+                submitBtn.disabled = false;
+                buttonText.textContent = 'Book Delivery';
+                return '✅ Button enabled!';
+            } else {
+                return '❌ Missing data - cannot enable. Check pickup, delivery, and distance.';
+            }
+        } else {
+            return '❌ Button elements not found!';
+        }
+    };
+    
+    // Fix 5: Add mutation observer to watch for button state changes
+    const submitBtn = document.getElementById('submitBtn');
+    if (submitBtn) {
+        const observer = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                if (mutation.type === 'attributes' && mutation.attributeName === 'disabled') {
+                    const pickup = formState.get('pickupCoords');
+                    const delivery = formState.get('deliveryCoords');
+                    const distance = formState.get('distance');
+                    
+                    if (pickup && delivery && distance > 0 && submitBtn.disabled) {
+                        console.log('🚨 Button was incorrectly disabled, re-enabling...');
+                        submitBtn.disabled = false;
+                    }
+                }
+            });
+        });
+        
+        observer.observe(submitBtn, { attributes: true });
+    }
+    
+    // Fix 6: Periodically check form validity (failsafe)
+    setInterval(() => {
+        const pickup = formState.get('pickupCoords');
+        const delivery = formState.get('deliveryCoords');
+        const distance = formState.get('distance');
+        
+        if (pickup && delivery && distance > 0) {
+            const submitBtn = document.getElementById('submitBtn');
+            if (submitBtn && submitBtn.disabled) {
+                console.log('⏰ Periodic check: enabling button');
+                checkFormValidity();
             }
         }
-        
-        // Call original submit handler
-        return await originalHandleFormSubmit.call(this, e);
-    };
+    }, 1000);
     
-    console.log('✅ Booking button fix applied successfully');
-    console.log('💡 If button is still disabled, run: validateBookingForm()');
+    console.log('✅ Comprehensive booking button fix applied!');
+    console.log('💡 If button is still disabled, run: forceEnableBooking()');
 })();
