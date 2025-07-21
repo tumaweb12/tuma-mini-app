@@ -1105,9 +1105,53 @@ window.closeLocationModal = function() {
 
 // ─── Core Functions ───────────────────────────────────────
 
+// Check if user is authenticated (future implementation)
+async function checkAuthAndLoadVendor() {
+    // TODO: In the future, this will check for authenticated user
+    // For now, return null to indicate no auth
+    
+    // Future implementation will look like:
+    // const session = await supabase.auth.getSession();
+    // if (session?.user) {
+    //     const vendor = await supabaseAPI.query('vendors', {
+    //         filter: `user_id=eq.${session.user.id}`,
+    //         limit: 1
+    //     });
+    //     return vendor[0];
+    // }
+    
+    return null;
+}
+
 // Initialize page
 async function initialize() {
     console.log('Initializing vendor dashboard...');
+    
+    // Check if user is authenticated
+    const authenticatedVendor = await checkAuthAndLoadVendor();
+    
+    if (authenticatedVendor) {
+        // Hide the "Your Information" section
+        const vendorInfoSection = document.querySelector('.form-section:has(#vendorName)');
+        if (vendorInfoSection) {
+            vendorInfoSection.style.display = 'none';
+        }
+        
+        // Store vendor info in form state
+        formState.set('authenticatedVendor', authenticatedVendor);
+        formState.set('vendorType', authenticatedVendor.vendor_type);
+        formState.set('isAuthenticated', true);
+        
+        // Show vendor badge
+        displayVendorBadge({
+            isManaged: authenticatedVendor.is_managed,
+            agentName: authenticatedVendor.agent_name
+        });
+    } else {
+        // No auth - show the form fields as normal
+        formState.set('isAuthenticated', false);
+    }
+    
     setupEventListeners();
     setupStateSubscriptions();
     updateCapacityDisplay();
@@ -1858,20 +1902,35 @@ async function handleFormSubmit(e) {
     if (formState.get('isLoading')) return;
     
     // Validate form
-    const validationResult = validation.validateRequired({
-        vendorName: elements.vendorName.value,
-        phoneNumber: elements.phoneNumber.value,
+    const requiredFields = {
         pickupLocation: elements.pickupLocation.value,
         deliveryLocation: elements.deliveryLocation.value,
         recipientName: elements.recipientName.value,
         recipientPhone: elements.recipientPhone.value,
         packageDescription: elements.packageDescription.value
-    });
+    };
+    
+    // Only require vendor fields if not authenticated
+    if (!formState.get('isAuthenticated')) {
+        requiredFields.vendorName = elements.vendorName?.value;
+        requiredFields.phoneNumber = elements.phoneNumber?.value;
+    }
+    
+    const validationResult = validation.validateRequired(requiredFields);
     
     if (!validationResult.isValid) {
-        showNotification('Please fill in all required fields', 'error');
+        showNotification('Please fill in all required fields: ' + validationResult.missing.join(', '), 'error');
+        console.error('Missing fields:', validationResult.missing);
         return;
     }
+    
+    // Debug log to check values
+    console.log('Form values:', {
+        vendorName: elements.vendorName?.value || 'Authenticated',
+        phoneNumber: elements.phoneNumber?.value || 'Authenticated',
+        distance: formState.get('distance'),
+        service: formState.get('selectedService')
+    });
     
     // Validate phone numbers
     if (!validation.validatePhone(elements.phoneNumber.value)) {
@@ -1908,21 +1967,42 @@ async function handleFormSubmit(e) {
         
         console.log('Creating booking with price:', finalPrice);
         
-        // Prepare vendor data
-        const vendorData = {
-            vendor_name: elements.vendorName.value.trim(),
-            phone: elements.phoneNumber.value, // Changed from phone_number to phone
-            phone_number: elements.phoneNumber.value, // Keep both for compatibility
-            name: elements.vendorName.value.trim(), // Also include 'name' field
-            vendor_type: formState.get('vendorType'),
-            is_managed: formState.get('vendorType') === 'managed',
-            agent_code: formState.get('agentCode') || null,
-            agent_name: formState.get('agentName') || null,
-            status: 'active',
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-            last_active: new Date().toISOString()
-        };
+        let vendorData;
+        
+        // Check if user is authenticated
+        if (formState.get('isAuthenticated')) {
+            // Use authenticated vendor data
+            vendorData = formState.get('authenticatedVendor');
+            console.log('Using authenticated vendor:', vendorData);
+        } else {
+            // Get vendor data from form inputs
+            const vendorNameValue = elements.vendorName?.value?.trim();
+            const phoneValue = elements.phoneNumber?.value;
+            
+            if (!vendorNameValue || !phoneValue) {
+                showNotification('Please fill in your name and phone number', 'error');
+                console.error('Vendor info missing:', { name: vendorNameValue, phone: phoneValue });
+                return;
+            }
+            
+            // Prepare vendor data from form
+            vendorData = {
+                vendor_name: vendorNameValue,
+                phone: phoneValue,
+                phone_number: phoneValue, // Keep both for compatibility
+                name: vendorNameValue, // Also include 'name' field
+                vendor_type: formState.get('vendorType') || 'casual',
+                is_managed: formState.get('vendorType') === 'managed',
+                agent_code: formState.get('agentCode') || null,
+                agent_name: formState.get('agentName') || null,
+                status: 'active',
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+                last_active: new Date().toISOString()
+            };
+        }
+        
+        console.log('Vendor data:', vendorData);
         
         // Prepare parcel data with enhanced fields
         const parcelData = {
@@ -2004,25 +2084,41 @@ async function handleFormSubmit(e) {
         
         // Save to database
         console.log('Saving booking to database...');
+        console.log('Parcel data:', parcelData);
+        console.log('Price field value:', parcelData.price);
         
-        // First, check if vendor exists and update or create
-        try {
-            const existingVendors = await supabaseAPI.query('vendors', {
-                filter: `phone=eq.${vendorData.phone}`, // Changed from phone_number to phone
-                limit: 1
-            });
-            
-            if (existingVendors.length === 0) {
-                // Create new vendor
-                await supabaseAPI.insert('vendors', vendorData);
-                console.log('✅ New vendor created');
-            } else {
-                // Update last_active for existing vendor
-                console.log('Vendor already exists, updating last_active');
+        // First, check if vendor exists and update or create (only if not authenticated)
+        if (!formState.get('isAuthenticated')) {
+            try {
+                const existingVendors = await supabaseAPI.query('vendors', {
+                    filter: `phone=eq.${vendorData.phone}`, // Changed from phone_number to phone
+                    limit: 1
+                });
+                
+                if (existingVendors.length === 0) {
+                    // Create new vendor
+                    const newVendor = await supabaseAPI.insert('vendors', vendorData);
+                    console.log('✅ New vendor created:', newVendor);
+                    // Use the new vendor's ID
+                    if (newVendor && newVendor[0]) {
+                        parcelData.vendor_id = newVendor[0].id;
+                    }
+                } else {
+                    // Update last_active for existing vendor
+                    console.log('Vendor already exists:', existingVendors[0]);
+                    parcelData.vendor_id = existingVendors[0].id;
+                    // Optionally update last_active
+                    await supabaseAPI.update('vendors', existingVendors[0].id, {
+                        last_active: new Date().toISOString()
+                    });
+                }
+            } catch (vendorError) {
+                console.error('Vendor save error:', vendorError);
+                // Continue with booking even if vendor save fails
             }
-        } catch (vendorError) {
-            console.error('Vendor save error:', vendorError);
-            // Continue with booking even if vendor save fails
+        } else {
+            // For authenticated users, use their vendor ID directly
+            parcelData.vendor_id = vendorData.id;
         }
         
         // Save parcel - FIXED: Changed from bookingData to parcelData
