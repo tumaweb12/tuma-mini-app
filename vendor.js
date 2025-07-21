@@ -264,35 +264,32 @@ const pricing = {
     },
     
     calculateBreakdown: (totalPrice, serviceType) => {
-        // Standard commission splits
-        const platformRate = 0.15; // 15% platform fee
+        // Correct commission splits - vendor pays, doesn't receive
+        const platformRate = 0.30; // 30% platform fee
         const riderRate = 0.70;    // 70% of total goes to rider
-        const vendorRate = 0.15;   // 15% stays with vendor
         
         const platformFee = Math.round(totalPrice * platformRate);
         const riderPayout = Math.round(totalPrice * riderRate);
-        const vendorPayout = Math.round(totalPrice * vendorRate);
         
-        // Ensure all amounts add up to total
-        const calculated = platformFee + riderPayout + vendorPayout;
+        // Ensure exact split
+        const calculated = platformFee + riderPayout;
         const difference = totalPrice - calculated;
         
-        // Add any rounding difference to vendor payout
-        const adjustedVendorPayout = vendorPayout + difference;
+        // Add any rounding difference to platform fee
+        const adjustedPlatformFee = platformFee + difference;
         
         console.log('💰 Pricing breakdown:', {
             total: totalPrice,
-            platform: platformFee,
+            platform: adjustedPlatformFee,
             rider: riderPayout,
-            vendor: adjustedVendorPayout,
-            sum: platformFee + riderPayout + adjustedVendorPayout
+            sum: adjustedPlatformFee + riderPayout
         });
         
         return {
-            platform_fee: platformFee,
-            platform_revenue: platformFee,
+            platform_fee: adjustedPlatformFee,
+            platform_revenue: adjustedPlatformFee,
             rider_payout: riderPayout,
-            vendor_payout: adjustedVendorPayout
+            vendor_payout: 0 // Vendors pay, they don't receive payout
         };
     }
 };
@@ -810,7 +807,6 @@ function showNotification(message, type = 'info') {
 
 // Export showNotification globally
 window.showNotification = showNotification;
-
 // ─── Global Functions ──────────────────────────────────────────────────────
 
 window.updateItemCount = function(change) {
@@ -2040,7 +2036,7 @@ async function handleFormSubmit(e) {
             rider_payout: pricingBreakdown.rider_payout,
             
             agent_commission: (vendorData.agent_code && vendorData.is_managed) 
-                ? Math.round(finalPrice * 0.045)
+                ? Math.round(pricingBreakdown.platform_fee * 0.15) // 15% of platform's 30% fee
                 : 0,
             
             payment_method: formState.get('selectedPaymentMethod'),
@@ -2106,35 +2102,100 @@ async function handleFormSubmit(e) {
 function showSuccess(codes, price) {
     console.log('📋 Showing success with codes:', codes, 'price:', price);
     
+    // Get elements by ID
     const displayParcelCode = document.getElementById('displayParcelCode');
     const displayPickupCode = document.getElementById('displayPickupCode');
     const displayDeliveryCode = document.getElementById('displayDeliveryCode');
     const displayTotalPrice = document.getElementById('displayTotalPrice');
     const successOverlay = document.getElementById('successOverlay');
     
-    if (!displayParcelCode || !displayPickupCode || !displayDeliveryCode) {
-        console.error('❌ Success modal elements not found!');
-        return;
+    // Also try alternative element IDs that might be used
+    const parcelCodeEl = displayParcelCode || document.querySelector('[data-parcel-code]') || document.querySelector('.parcel-code');
+    const pickupCodeEl = displayPickupCode || document.querySelector('[data-pickup-code]') || document.querySelector('.pickup-code');
+    const deliveryCodeEl = displayDeliveryCode || document.querySelector('[data-delivery-code]') || document.querySelector('.delivery-code');
+    const priceEl = displayTotalPrice || document.querySelector('[data-total-price]') || document.querySelector('.total-price');
+    
+    if (!parcelCodeEl || !pickupCodeEl || !deliveryCodeEl) {
+        console.error('❌ Success modal code elements not found! Looking for:', {
+            parcelCode: !!parcelCodeEl,
+            pickupCode: !!pickupCodeEl,
+            deliveryCode: !!deliveryCodeEl
+        });
+        
+        // Try to find any element that might display codes
+        const modalContent = document.querySelector('.success-content, .modal-content, #successOverlay');
+        if (modalContent) {
+            console.log('Modal content HTML:', modalContent.innerHTML);
+        }
     }
     
-    if (typeof codes === 'object') {
-        displayParcelCode.textContent = codes.parcel_code || codes.parcelCode || 'N/A';
-        displayPickupCode.textContent = codes.pickup_code || codes.pickupCode || 'N/A';
-        displayDeliveryCode.textContent = codes.delivery_code || codes.deliveryCode || 'N/A';
-    } else {
-        console.error('❌ Invalid codes object:', codes);
+    // Set the codes
+    if (parcelCodeEl) {
+        parcelCodeEl.textContent = codes.parcel_code || codes.parcelCode || 'N/A';
+        console.log('✅ Set parcel code:', parcelCodeEl.textContent);
     }
     
-    if (displayTotalPrice) {
-        displayTotalPrice.textContent = `KES ${Math.round(price)}`;
+    if (pickupCodeEl) {
+        pickupCodeEl.textContent = codes.pickup_code || codes.pickupCode || 'N/A';
+        console.log('✅ Set pickup code:', pickupCodeEl.textContent);
     }
     
+    if (deliveryCodeEl) {
+        deliveryCodeEl.textContent = codes.delivery_code || codes.deliveryCode || 'N/A';
+        console.log('✅ Set delivery code:', deliveryCodeEl.textContent);
+    }
+    
+    // Display the price
+    if (priceEl) {
+        priceEl.textContent = `KES ${Math.round(price)}`;
+        console.log('✅ Set price:', priceEl.textContent);
+    }
+    
+    // Show the overlay
     if (successOverlay) {
         successOverlay.style.display = 'flex';
+        console.log('✅ Success overlay displayed');
+        
+        // Force a reflow to ensure display updates
+        successOverlay.offsetHeight;
+        
+        // Also try to make it visible through other means
+        successOverlay.style.visibility = 'visible';
+        successOverlay.style.opacity = '1';
+        successOverlay.classList.add('show', 'active');
+    } else {
+        console.error('❌ Success overlay element not found!');
     }
     
-    console.log('✅ Success modal updated');
+    // As a fallback, also try updating any elements with the specific text content
+    const allElements = document.querySelectorAll('*');
+    allElements.forEach(el => {
+        if (el.textContent === 'Parcel Code' || el.textContent === 'TMXXXXXX') {
+            const nextEl = el.nextElementSibling || el.parentElement.querySelector('span, div, p');
+            if (nextEl) {
+                nextEl.textContent = codes.parcel_code || codes.parcelCode || 'N/A';
+                console.log('✅ Updated parcel code via text search');
+            }
+        }
+        if (el.textContent === 'Pickup Code' || el.textContent === 'PKXXXXXX') {
+            const nextEl = el.nextElementSibling || el.parentElement.querySelector('span, div, p');
+            if (nextEl) {
+                nextEl.textContent = codes.pickup_code || codes.pickupCode || 'N/A';
+                console.log('✅ Updated pickup code via text search');
+            }
+        }
+        if (el.textContent === 'Delivery Code' || el.textContent === 'DLXXXXXX') {
+            const nextEl = el.nextElementSibling || el.parentElement.querySelector('span, div, p');
+            if (nextEl) {
+                nextEl.textContent = codes.delivery_code || codes.deliveryCode || 'N/A';
+                console.log('✅ Updated delivery code via text search');
+            }
+        }
+    });
 }
+
+// Override showSuccess globally
+window.showSuccess = showSuccess;
 
 function updateProgress(step) {
     const steps = document.querySelectorAll('.step');
@@ -2266,6 +2327,66 @@ window.testBooking = async function() {
     }
 };
 
+window.debugSuccessModal = function() {
+    console.log('🔍 Debugging success modal...');
+    
+    // Check for overlay
+    const overlay = document.getElementById('successOverlay');
+    console.log('Success overlay found:', !!overlay);
+    if (overlay) {
+        console.log('Overlay display:', overlay.style.display);
+        console.log('Overlay visibility:', overlay.style.visibility);
+        console.log('Overlay classes:', overlay.className);
+    }
+    
+    // Check for code elements
+    const elements = {
+        parcelCode: document.getElementById('displayParcelCode'),
+        pickupCode: document.getElementById('displayPickupCode'),
+        deliveryCode: document.getElementById('displayDeliveryCode'),
+        totalPrice: document.getElementById('displayTotalPrice')
+    };
+    
+    Object.entries(elements).forEach(([key, el]) => {
+        console.log(`${key} element:`, !!el, el?.textContent || 'N/A');
+    });
+    
+    // Look for any elements that might contain codes
+    const possibleCodeElements = document.querySelectorAll('[id*="Code"], [class*="code"], [data-code]');
+    console.log('Possible code elements found:', possibleCodeElements.length);
+    possibleCodeElements.forEach(el => {
+        console.log('Element:', el.tagName, el.id || el.className, '=', el.textContent);
+    });
+    
+    // Check form state
+    console.log('Current form state:', {
+        distance: formState.get('distance'),
+        selectedService: formState.get('selectedService'),
+        isLoading: formState.get('isLoading')
+    });
+    
+    return elements;
+};
+
+// Manual success display function
+window.showSuccessManual = function(parcelCode = 'TM123456', pickupCode = 'PK123456', deliveryCode = 'DL123456', price = 200) {
+    const codes = {
+        parcel_code: parcelCode,
+        pickup_code: pickupCode,
+        delivery_code: deliveryCode
+    };
+    
+    showSuccess(codes, price);
+    
+    // Force display update
+    setTimeout(() => {
+        const overlay = document.getElementById('successOverlay');
+        if (overlay) {
+            overlay.style.cssText = 'display: flex !important; visibility: visible !important; opacity: 1 !important;';
+        }
+    }, 100);
+};
+
 // ─── CSS Styles ────────────────────────────────────────────────────────────
 
 if (!document.getElementById('location-success-styles')) {
@@ -2299,5 +2420,8 @@ if (document.readyState === 'loading') {
 }
 
 console.log('✅ Vendor dashboard script loaded with all integrations');
-console.log('💡 If booking button is disabled, run: forceEnableBooking()');
-console.log('💡 To test booking creation, run: testBooking()');
+console.log('💡 Debug commands available:');
+console.log('   - forceEnableBooking() : Force enable the booking button');
+console.log('   - testBooking() : Create a test booking');
+console.log('   - debugSuccessModal() : Debug why codes might not be showing');
+console.log('   - showSuccessManual() : Manually show success modal with test data');
