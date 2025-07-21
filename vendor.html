@@ -1740,27 +1740,27 @@
     <!-- Load vendor.js as regular script -->
     <script src="./vendor.js"></script>
     
+    <!-- Wait for vendor.js to load before checking functions -->
+    <script>
+        // Use load event instead of DOMContentLoaded to ensure all scripts are loaded
+        window.addEventListener('load', function() {
+            // Check if vendor.js functions are available
+            if (typeof updateItemCount !== 'function' || typeof showNotification !== 'function') {
+                console.error('❌ Vendor.js functions not loaded properly');
+                // Create a basic showNotification function as fallback
+                window.showNotification = function(message, type) {
+                    alert(message);
+                };
+                showNotification('Page loading error. Please refresh.', 'error');
+            } else {
+                console.log('✅ Vendor.js functions loaded successfully');
+            }
+        });
+    </script>
+    
     <!-- Google Maps API with proper initialization -->
     <script async
         src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCaWjP3TKWhJrtureRn7q6fIIKk0MPl7bY&libraries=places,geometry&callback=initMap">
-    </script>
-    
-    <!-- Ensure all functions are loaded before page becomes interactive -->
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            // Check if vendor.js functions are available after a short delay
-            setTimeout(function() {
-                if (typeof updateItemCount !== 'function') {
-                    console.error('❌ Vendor.js functions not loaded properly');
-                    // Show error to user
-                    if (typeof showNotification === 'function') {
-                        showNotification('Page loading error. Please refresh.', 'error');
-                    }
-                } else {
-                    console.log('✅ Vendor.js functions loaded successfully');
-                }
-            }, 1000);
-        });
     </script>
     
     <!-- Payment Method and Success Functions -->
