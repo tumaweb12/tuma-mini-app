@@ -2024,22 +2024,25 @@ if (document.readyState === 'loading') {
 // Export showNotification to global scope
 window.showNotification = showNotification;
 
-// Add CSS for location success animation
-const style = document.createElement('style');
-style.textContent = `
-    @keyframes locationSuccess {
-        0% { transform: scale(1); }
-        50% { transform: scale(1.02); }
-        100% { transform: scale(1); }
-    }
-    
-    .input-field.location-confirmed {
-        border-color: #34C759 !important;
-        background: rgba(52, 199, 89, 0.05) !important;
-    }
-    
-    .input-action {
-        transition: all 0.3s ease;
-    }
-`;
-document.head.appendChild(style);
+// Add CSS for location success animation only if not already added
+if (!document.getElementById('location-success-styles')) {
+    const style = document.createElement('style');
+    style.id = 'location-success-styles';
+    style.textContent = `
+        @keyframes locationSuccess {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+            100% { transform: scale(1); }
+        }
+        
+        .input-field.location-confirmed {
+            border-color: #34C759 !important;
+            background: rgba(52, 199, 89, 0.05) !important;
+        }
+        
+        .input-action {
+            transition: all 0.3s ease;
+        }
+    `;
+    document.head.appendChild(style);
+}
