@@ -2145,7 +2145,7 @@ async function handleFormSubmit(e) {
             delivery_code: deliveryCodes.delivery_code,
             
             // Status
-            status: 'pending',
+            status: 'submitted',
             created_at: new Date().toISOString()
         };
         
