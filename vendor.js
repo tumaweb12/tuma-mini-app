@@ -31,8 +31,8 @@ const BUSINESS_CONFIG = {
     // Service area configuration
     serviceArea: {
         center: { lat: -1.2921, lng: 36.8219 }, // Nairobi CBD
-        radiusKm: 20, // 20km service radius
-        expandedRadiusKm: 30 // Future expansion radius
+        radiusKm: 30, // Increased to 30km service radius
+        expandedRadiusKm: 40 // Future expansion radius
     },
     // Package compatibility matrix
     packageCompatibility: {
@@ -198,6 +198,14 @@ const validation = {
         const center = BUSINESS_CONFIG.serviceArea.center;
         const distance = calculateStraightDistance(center, coords);
         const maxRadius = BUSINESS_CONFIG.serviceArea.radiusKm;
+        
+        console.log('Service area validation:', {
+            location: coords,
+            center: center,
+            distance: distance.toFixed(2) + 'km',
+            maxRadius: maxRadius + 'km',
+            isValid: distance <= maxRadius
+        });
         
         return {
             isValid: distance <= maxRadius,
@@ -716,15 +724,26 @@ async function geocodeAddress(address) {
     }
 }
 
-function calculateStraightDistance(pickup, delivery) {
+function calculateStraightDistance(point1, point2) {
     const R = 6371; // Earth's radius in km
-    const dLat = (delivery.lat - pickup.lat) * Math.PI / 180;
-    const dLng = (delivery.lng - pickup.lng) * Math.PI / 180;
-    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-              Math.cos(pickup.lat * Math.PI / 180) * Math.cos(delivery.lat * Math.PI / 180) *
-              Math.sin(dLng/2) * Math.sin(dLng/2);
+    const lat1 = point1.lat * Math.PI / 180;
+    const lat2 = point2.lat * Math.PI / 180;
+    const deltaLat = (point2.lat - point1.lat) * Math.PI / 180;
+    const deltaLng = (point2.lng - point1.lng) * Math.PI / 180;
+    
+    const a = Math.sin(deltaLat/2) * Math.sin(deltaLat/2) +
+              Math.cos(lat1) * Math.cos(lat2) *
+              Math.sin(deltaLng/2) * Math.sin(deltaLng/2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    return R * c;
+    const distance = R * c;
+    
+    console.log('Distance calculation:', {
+        from: point1,
+        to: point2,
+        distance: distance.toFixed(2) + 'km'
+    });
+    
+    return distance;
 }
 
 // Notification functions
@@ -1404,17 +1423,33 @@ async function handleLocationChange(type) {
         // Validate service area
         const serviceAreaCheck = validation.validateServiceArea(coords);
         if (!serviceAreaCheck.isValid) {
-            showNotification(
-                `Sorry, this location is ${serviceAreaCheck.distance.toFixed(1)}km from our service center. We currently serve areas within ${serviceAreaCheck.maxRadius}km of Nairobi CBD.`,
-                'error'
-            );
-            // Clear the input and dataset
-            input.value = '';
-            delete input.dataset.lat;
-            delete input.dataset.lng;
-            // Remove success indicator
-            updateLocationStatus(input, false);
-            return;
+            // Check if it's a known Nairobi location that should be valid
+            const locationName = address.toLowerCase();
+            const knownNairobiLocations = [
+                'junction mall', 'westgate', 'sarit centre', 'village market', 'two rivers',
+                'garden city', 'thika road mall', 'capital centre', 'yaya centre', 'prestige plaza',
+                'westlands', 'karen', 'lavington', 'kilimani', 'kileleshwa', 'parklands',
+                'kasarani', 'embakasi', 'langata', 'dagoretti', 'kibera', 'kawangware'
+            ];
+            
+            const isKnownLocation = knownNairobiLocations.some(loc => locationName.includes(loc));
+            
+            if (isKnownLocation && serviceAreaCheck.distance < 35) {
+                // Allow known Nairobi locations within 35km
+                console.log('Allowing known Nairobi location:', address);
+            } else {
+                showNotification(
+                    `Sorry, this location is ${serviceAreaCheck.distance.toFixed(1)}km from our service center. We currently serve areas within ${serviceAreaCheck.maxRadius}km of Nairobi CBD.`,
+                    'error'
+                );
+                // Clear the input and dataset
+                input.value = '';
+                delete input.dataset.lat;
+                delete input.dataset.lng;
+                // Remove success indicator
+                updateLocationStatus(input, false);
+                return;
+            }
         }
         
         formState.set(`${type}Coords`, coords);
