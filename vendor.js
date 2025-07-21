@@ -1,4 +1,9 @@
-/**
+// Pricing breakdown
+            base_price: BUSINESS_CONFIG.pricing.rates.base + (formState.get('distance') * BUSINESS_CONFIG.pricing.rates.perKm),
+            service_multiplier: BUSINESS_CONFIG.pricing.multipliers.service[formState.get('selectedService')],
+            price: finalPrice, // Changed from 'total_price' to 'price'
+            platform_fee: Math.round(finalPrice * 0.15), // 15% platform fee
+            /**
  * Vendor Page Entry Script - Complete Working Version
  * Handles vendor dashboard functionality with direct Supabase REST API calls
  */
@@ -1312,7 +1317,7 @@ async function handlePhoneInput(e) {
     if (value.length === 10 && validation.validatePhone(value)) {
         try {
             const vendors = await supabaseAPI.query('vendors', {
-                filter: `phone_number=eq.${value}`,
+                filter: `phone=eq.${value}`, // Changed from phone_number to phone
                 limit: 1
             });
             
@@ -1905,41 +1910,58 @@ async function handleFormSubmit(e) {
         
         // Prepare vendor data
         const vendorData = {
-            name: elements.vendorName.value.trim(),
-            phone_number: elements.phoneNumber.value,
+            vendor_name: elements.vendorName.value.trim(),
+            phone: elements.phoneNumber.value, // Changed from phone_number to phone
+            phone_number: elements.phoneNumber.value, // Keep both for compatibility
+            name: elements.vendorName.value.trim(), // Also include 'name' field
             vendor_type: formState.get('vendorType'),
             is_managed: formState.get('vendorType') === 'managed',
             agent_code: formState.get('agentCode') || null,
             agent_name: formState.get('agentName') || null,
+            status: 'active',
             created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
             last_active: new Date().toISOString()
         };
         
         // Prepare parcel data with enhanced fields
         const parcelData = {
             // Vendor info
-            vendor_name: vendorData.name,
-            vendor_phone: vendorData.phone_number,
+            vendor_name: vendorData.vendor_name,
+            vendor_phone: vendorData.phone, // Use 'phone' field from vendorData
             vendor_type: vendorData.vendor_type,
             vendor_id: null, // Will be set after vendor is created/found
             
-            // Pickup info
-            pickup_location: elements.pickupLocation.value,
+            // Pickup info - Note: pickup_location and delivery_location need to be JSONB
+            pickup_location: {
+                address: elements.pickupLocation.value,
+                lat: formState.get('pickupCoords').lat,
+                lng: formState.get('pickupCoords').lng
+            },
             pickup_lat: formState.get('pickupCoords').lat,
             pickup_lng: formState.get('pickupCoords').lng,
+            pickup_coordinates: `${formState.get('pickupCoords').lat},${formState.get('pickupCoords').lng}`,
             
             // Delivery info
-            delivery_location: elements.deliveryLocation.value,
+            delivery_location: {
+                address: elements.deliveryLocation.value,
+                lat: formState.get('deliveryCoords').lat,
+                lng: formState.get('deliveryCoords').lng
+            },
             delivery_lat: formState.get('deliveryCoords').lat,
             delivery_lng: formState.get('deliveryCoords').lng,
+            delivery_coordinates: `${formState.get('deliveryCoords').lat},${formState.get('deliveryCoords').lng}`,
+            
             recipient_name: elements.recipientName.value,
             recipient_phone: elements.recipientPhone.value,
             
             // Package info
             package_category: elements.packageDescription.value,
             package_description: elements.packageDescription.options[elements.packageDescription.selectedIndex].text,
+            package_type: elements.packageDescription.value,
             package_size: formState.get('selectedSize'),
             item_count: formState.get('itemCount'),
+            number_of_items: formState.get('itemCount'),
             special_instructions: elements.specialInstructions.value || null,
             
             // Special handling flags based on package category
@@ -1951,15 +1973,20 @@ async function handleFormSubmit(e) {
             
             // Service info
             service_type: formState.get('selectedService'),
+            customer_choice: formState.get('selectedService'), // Duplicate for compatibility
             distance_km: formState.get('distance'),
             estimated_duration_minutes: formState.get('duration') || null,
+            duration_minutes: formState.get('duration') || null,
             
-            // Pricing breakdown
+            // Pricing breakdown - IMPORTANT: price is required
             base_price: BUSINESS_CONFIG.pricing.rates.base + (formState.get('distance') * BUSINESS_CONFIG.pricing.rates.perKm),
             service_multiplier: BUSINESS_CONFIG.pricing.multipliers.service[formState.get('selectedService')],
+            price: finalPrice, // Required field
             total_price: finalPrice,
             platform_fee: Math.round(finalPrice * 0.15), // 15% platform fee
+            platform_revenue: Math.round(finalPrice * 0.15), // Same as platform_fee
             vendor_payout: Math.round(finalPrice * 0.85), // 85% to vendor
+            rider_payout: Math.round(finalPrice * 0.7), // Assuming rider gets 70%
             
             // Payment info
             payment_method: formState.get('selectedPaymentMethod'),
@@ -1981,7 +2008,7 @@ async function handleFormSubmit(e) {
         // First, check if vendor exists and update or create
         try {
             const existingVendors = await supabaseAPI.query('vendors', {
-                filter: `phone_number=eq.${vendorData.phone_number}`,
+                filter: `phone=eq.${vendorData.phone}`, // Changed from phone_number to phone
                 limit: 1
             });
             
