@@ -195,12 +195,27 @@ const validation = {
     
     // Check if location is within service radius
     validateServiceArea: (coords) => {
+        // Ensure coords are numbers
+        const lat = parseFloat(coords.lat);
+        const lng = parseFloat(coords.lng);
+        
+        if (isNaN(lat) || isNaN(lng)) {
+            console.error('Invalid coordinates for service area validation:', coords);
+            return {
+                isValid: false,
+                distance: 999,
+                maxRadius: BUSINESS_CONFIG.serviceArea.radiusKm
+            };
+        }
+        
+        const validCoords = { lat: lat, lng: lng };
         const center = BUSINESS_CONFIG.serviceArea.center;
-        const distance = calculateStraightDistance(center, coords);
+        const distance = calculateStraightDistance(center, validCoords);
         const maxRadius = BUSINESS_CONFIG.serviceArea.radiusKm;
         
         console.log('Service area validation:', {
-            location: coords,
+            location: validCoords,
+            locationAddress: coords.display_name || coords.formatted_address || 'Unknown',
             center: center,
             distance: distance.toFixed(2) + 'km',
             maxRadius: maxRadius + 'km',
@@ -725,15 +740,21 @@ async function geocodeAddress(address) {
 }
 
 function calculateStraightDistance(point1, point2) {
-    const R = 6371; // Earth's radius in km
-    const lat1 = point1.lat * Math.PI / 180;
-    const lat2 = point2.lat * Math.PI / 180;
-    const deltaLat = (point2.lat - point1.lat) * Math.PI / 180;
-    const deltaLng = (point2.lng - point1.lng) * Math.PI / 180;
+    // Ensure we have valid coordinates
+    if (!point1 || !point2 || typeof point1.lat !== 'number' || typeof point1.lng !== 'number' || 
+        typeof point2.lat !== 'number' || typeof point2.lng !== 'number') {
+        console.error('Invalid coordinates for distance calculation:', point1, point2);
+        return 0;
+    }
     
-    const a = Math.sin(deltaLat/2) * Math.sin(deltaLat/2) +
-              Math.cos(lat1) * Math.cos(lat2) *
-              Math.sin(deltaLng/2) * Math.sin(deltaLng/2);
+    const R = 6371; // Earth's radius in km
+    const dLat = toRad(point2.lat - point1.lat);
+    const dLng = toRad(point2.lng - point1.lng);
+    const lat1 = toRad(point1.lat);
+    const lat2 = toRad(point2.lat);
+    
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.sin(dLng/2) * Math.sin(dLng/2) * Math.cos(lat1) * Math.cos(lat2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     const distance = R * c;
     
@@ -744,6 +765,11 @@ function calculateStraightDistance(point1, point2) {
     });
     
     return distance;
+}
+
+// Helper function to convert degrees to radians
+function toRad(value) {
+    return value * Math.PI / 180;
 }
 
 // Notification functions
@@ -1237,18 +1263,32 @@ function setupAutocomplete() {
                     raw: place
                 };
                 
+                // Debug log
+                console.log(`Google Places selected for ${type}:`, {
+                    name: place.name,
+                    address: place.formatted_address,
+                    lat: coords.lat,
+                    lng: coords.lng
+                });
+                
                 // Store coordinates in dataset
                 inputElement.dataset.lat = coords.lat;
                 inputElement.dataset.lng = coords.lng;
                 
-                // Cache the geocoding result
+                // Cache the geocoding result FIRST
                 await geocodingCache.store(inputElement.value, coords, 'google');
                 
-                // Call the unified handler
-                handleLocationChange(type);
+                // Update form state directly without calling handleLocationChange yet
+                formState.set(`${type}Coords`, coords);
                 
-                // Show visual feedback for successful selection
+                // Show success indicator
+                updateLocationStatus(inputElement, true);
                 showNotification('✅ Location selected', 'success');
+                
+                // Calculate distance if both locations are set
+                if (formState.get('pickupCoords') && formState.get('deliveryCoords')) {
+                    await calculateDistance();
+                }
             } else if (place.name || place.formatted_address) {
                 // Place selected but no geometry - use Google Geocoder
                 console.log('Place selected without geometry, using Google Geocoder');
@@ -1309,9 +1349,9 @@ function setupEventListeners() {
     elements.phoneNumber?.addEventListener('input', handlePhoneInput);
     elements.recipientPhone?.addEventListener('input', handleRecipientPhoneInput);
     
-    // Location inputs - use 'blur' instead of 'change' for better UX
-    elements.pickupLocation?.addEventListener('blur', () => handleLocationChange('pickup'));
-    elements.deliveryLocation?.addEventListener('blur', () => handleLocationChange('delivery'));
+    // Location inputs - remove the blur event listener that might be causing duplicate validation
+    // elements.pickupLocation?.addEventListener('blur', () => handleLocationChange('pickup'));
+    // elements.deliveryLocation?.addEventListener('blur', () => handleLocationChange('delivery'));
     
     // Package description dropdown
     elements.packageDescription?.addEventListener('change', (e) => {
@@ -1456,6 +1496,12 @@ async function handleLocationChange(type) {
     const dsLat = input.dataset.lat;
     const dsLng = input.dataset.lng;
     
+    console.log(`handleLocationChange called for ${type}:`, {
+        address: address,
+        datasetLat: dsLat,
+        datasetLng: dsLng
+    });
+    
     // If coordinates already provided (by Google), use them directly
     if (dsLat && dsLng) {
         const coords = {
@@ -1464,23 +1510,49 @@ async function handleLocationChange(type) {
             display_name: address
         };
         
+        console.log('Using dataset coordinates:', coords);
+        
         // Validate service area
         const serviceAreaCheck = validation.validateServiceArea(coords);
         if (!serviceAreaCheck.isValid) {
             // Check if it's a known Nairobi location that should be valid
             const locationName = address.toLowerCase();
+            const addressLower = coords.display_name ? coords.display_name.toLowerCase() : '';
             const knownNairobiLocations = [
                 'junction mall', 'westgate', 'sarit centre', 'village market', 'two rivers',
                 'garden city', 'thika road mall', 'capital centre', 'yaya centre', 'prestige plaza',
                 'westlands', 'karen', 'lavington', 'kilimani', 'kileleshwa', 'parklands',
-                'kasarani', 'embakasi', 'langata', 'dagoretti', 'kibera', 'kawangware'
+                'kasarani', 'embakasi', 'langata', 'dagoretti', 'kibera', 'kawangware',
+                'stonebridge', 'osieli', 'argwings', 'kodhek', 'hurlingham', 'upperhill',
+                'cbd', 'downtown', 'river road', 'moi avenue', 'kenyatta avenue'
             ];
             
-            const isKnownLocation = knownNairobiLocations.some(loc => locationName.includes(loc));
+            const isKnownLocation = knownNairobiLocations.some(loc => 
+                locationName.includes(loc) || addressLower.includes(loc)
+            );
             
-            if (isKnownLocation && serviceAreaCheck.distance < 35) {
-                // Allow known Nairobi locations within 35km
-                console.log('Allowing known Nairobi location:', address);
+            // Also check if "nairobi" is in the address
+            const isNairobiAddress = locationName.includes('nairobi') || addressLower.includes('nairobi');
+            
+            if (isKnownLocation || isNairobiAddress) {
+                // Log warning but allow the location
+                console.warn('Known Nairobi location detected, overriding distance check:', {
+                    address: address,
+                    coords: coords,
+                    calculatedDistance: serviceAreaCheck.distance.toFixed(2) + 'km',
+                    decision: 'ALLOWING'
+                });
+                
+                // Check if coordinates look suspicious (not in Kenya region)
+                if (Math.abs(coords.lat) > 5 || coords.lng < 35 || coords.lng > 38) {
+                    console.error('CRITICAL: Coordinates are definitely wrong for Nairobi:', coords);
+                    showNotification('Location coordinates appear incorrect. Please try selecting from the dropdown or use GPS.', 'error');
+                    input.value = '';
+                    delete input.dataset.lat;
+                    delete input.dataset.lng;
+                    updateLocationStatus(input, false);
+                    return;
+                }
             } else {
                 showNotification(
                     `Sorry, this location is ${serviceAreaCheck.distance.toFixed(1)}km from our service center. We currently serve areas within ${serviceAreaCheck.maxRadius}km of Nairobi CBD.`,
@@ -1522,7 +1594,7 @@ async function handleLocationChange(type) {
             display_name: cached.display_name
         };
         
-        // Validate service area
+       // Validate service area
         const serviceAreaCheck = validation.validateServiceArea(coords);
         if (!serviceAreaCheck.isValid) {
             showNotification(
@@ -1928,7 +2000,7 @@ async function handleFormSubmit(e) {
     });
     
     // Validate phone numbers
-    if (!validation.validatePhone(elements.phoneNumber.value)) {
+    if (!formState.get('isAuthenticated') && !validation.validatePhone(elements.phoneNumber.value)) {
         showNotification('Please enter a valid vendor phone number', 'error');
         return;
     }
