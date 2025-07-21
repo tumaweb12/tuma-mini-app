@@ -2125,15 +2125,20 @@ async function handleFormSubmit(e) {
             estimated_duration_minutes: formState.get('duration') || null,
             duration_minutes: formState.get('duration') || null,
             
-            // Pricing breakdown - IMPORTANT: price is required
+           // Pricing breakdown - IMPORTANT: price is required
             base_price: BUSINESS_CONFIG.pricing.rates.base + (formState.get('distance') * BUSINESS_CONFIG.pricing.rates.perKm),
             service_multiplier: BUSINESS_CONFIG.pricing.multipliers.service[formState.get('selectedService')],
             price: finalPrice, // Required field
             total_price: finalPrice,
-            platform_fee: Math.round(finalPrice * 0.15), // 15% platform fee
-            platform_revenue: Math.round(finalPrice * 0.15), // Same as platform_fee
-            vendor_payout: Math.round(finalPrice * 0.85), // 85% to vendor
-            rider_payout: Math.round(finalPrice * 0.7), // Assuming rider gets 70%
+            platform_fee: Math.round(finalPrice * 0.30), // 30% platform fee
+            platform_revenue: Math.round(finalPrice * 0.30), // Same as platform_fee
+            vendor_payout: 0, // Vendors pay, they don't receive
+            rider_payout: Math.round(finalPrice * 0.70), // 70% to rider
+            
+            // Agent commission (if vendor has an agent)
+            agent_commission: (vendorData.agent_code && vendorData.is_managed) 
+                ? Math.round(finalPrice * 0.045) // 4.5% of total (15% of platform's 30%)
+                : 0,
             
             // Payment info
             payment_method: formState.get('selectedPaymentMethod'),
@@ -2499,3 +2504,139 @@ window.testBooking = async function() {
         return error;
     }
 };
+// Fix for the success modal not displaying codes and price properly
+// Add this to the end of your vendor.js file
+
+(function() {
+    console.log('🔧 Fixing success modal display...');
+    
+    // Override the showSuccess function to ensure codes are displayed
+    window.showSuccess = function(codes, price) {
+        console.log('📋 Showing success with codes:', codes, 'price:', price);
+        
+        // Ensure we have the element references
+        const displayParcelCode = document.getElementById('displayParcelCode');
+        const displayPickupCode = document.getElementById('displayPickupCode');
+        const displayDeliveryCode = document.getElementById('displayDeliveryCode');
+        const displayTotalPrice = document.getElementById('displayTotalPrice');
+        const successOverlay = document.getElementById('successOverlay');
+        
+        if (!displayParcelCode || !displayPickupCode || !displayDeliveryCode) {
+            console.error('❌ Success modal elements not found!');
+            return;
+        }
+        
+        // Handle different code object structures
+        if (typeof codes === 'object') {
+            displayParcelCode.textContent = codes.parcel_code || codes.parcelCode || 'N/A';
+            displayPickupCode.textContent = codes.pickup_code || codes.pickupCode || 'N/A';
+            displayDeliveryCode.textContent = codes.delivery_code || codes.deliveryCode || 'N/A';
+        } else {
+            console.error('❌ Invalid codes object:', codes);
+        }
+        
+        // Display the price
+        if (displayTotalPrice) {
+            displayTotalPrice.textContent = `KES ${Math.round(price)}`;
+        }
+        
+        // Show the overlay
+        if (successOverlay) {
+            successOverlay.style.display = 'flex';
+        }
+        
+        console.log('✅ Success modal updated');
+    };
+    
+    // Fix the pricing calculation to ensure proper distribution
+    window.fixPricingCalculation = function(totalPrice, serviceType) {
+        // Standard commission splits
+        const platformRate = 0.15; // 15% platform fee
+        const riderRate = 0.70;    // 70% of total goes to rider
+        const vendorRate = 0.15;   // 15% stays with vendor
+        
+        const platformFee = Math.round(totalPrice * platformRate);
+        const riderPayout = Math.round(totalPrice * riderRate);
+        const vendorPayout = Math.round(totalPrice * vendorRate);
+        
+        // Ensure all amounts add up to total
+        const calculated = platformFee + riderPayout + vendorPayout;
+        const difference = totalPrice - calculated;
+        
+        // Add any rounding difference to vendor payout
+        const adjustedVendorPayout = vendorPayout + difference;
+        
+        console.log('💰 Pricing breakdown:', {
+            total: totalPrice,
+            platform: platformFee,
+            rider: riderPayout,
+            vendor: adjustedVendorPayout,
+            sum: platformFee + riderPayout + adjustedVendorPayout
+        });
+        
+        return {
+            platform_fee: platformFee,
+            platform_revenue: platformFee,
+            rider_payout: riderPayout,
+            vendor_payout: adjustedVendorPayout
+        };
+    };
+    
+    // Override the handleFormSubmit to fix the success display
+    const originalHandleFormSubmit = window.handleFormSubmit;
+    window.handleFormSubmit = async function(e) {
+        e.preventDefault();
+        
+        try {
+            // Store the codes before submission
+            let generatedCodes = null;
+            let calculatedPrice = null;
+            
+            // Intercept the parcel data creation
+            const originalInsert = supabaseAPI.insert;
+            supabaseAPI.insert = async function(table, data) {
+                if (table === 'parcels') {
+                    // Capture the codes and price
+                    generatedCodes = {
+                        parcel_code: data.parcel_code,
+                        pickup_code: data.pickup_code,
+                        delivery_code: data.delivery_code
+                    };
+                    calculatedPrice = data.total_price || data.price;
+                    
+                    // Fix the pricing calculation
+                    const fixedPricing = fixPricingCalculation(calculatedPrice, data.service_type);
+                    Object.assign(data, fixedPricing);
+                    
+                    console.log('📦 Captured booking data:', {
+                        codes: generatedCodes,
+                        price: calculatedPrice,
+                        pricing: fixedPricing
+                    });
+                }
+                
+                return originalInsert.call(this, table, data);
+            };
+            
+            // Call original submit
+            await originalHandleFormSubmit.call(this, e);
+            
+            // Restore original insert
+            supabaseAPI.insert = originalInsert;
+            
+            // If we have codes, ensure they're displayed
+            if (generatedCodes && calculatedPrice) {
+                console.log('📋 Ensuring success display with:', generatedCodes, calculatedPrice);
+                setTimeout(() => {
+                    showSuccess(generatedCodes, calculatedPrice);
+                }, 500);
+            }
+            
+        } catch (error) {
+            console.error('Submission error:', error);
+            showNotification('Failed to create booking. Please try again.', 'error');
+        }
+    };
+    
+    console.log('✅ Success modal fixes applied!');
+})();
