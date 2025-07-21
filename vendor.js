@@ -3,7 +3,8 @@
  * Handles vendor dashboard functionality with direct Supabase REST API calls
  */
 
-// Embedded configuration to avoid import issues
+// ─── Configuration ─────────────────────────────────────────────────────────
+
 const BUSINESS_CONFIG = {
     packageSizes: {
         small: { label: 'Small', units: 1, maxWeight: 2 },
@@ -28,25 +29,21 @@ const BUSINESS_CONFIG = {
             managedVendor: 0.9
         }
     },
-    // Service area configuration
     serviceArea: {
         center: { lat: -1.2921, lng: 36.8219 }, // Nairobi CBD
         radiusKm: 30, // Increased to 30km service radius
         expandedRadiusKm: 40 // Future expansion radius
     },
-    // Package compatibility matrix
     packageCompatibility: {
-        // Define groups that should NOT be mixed
         incompatibleGroups: [
-            ['food-dry', 'food-fresh', 'food-frozen', 'beverages'],  // Food items
-            ['pharmaceuticals', 'medical-equipment', 'supplements'],   // Medical items
-            ['cleaning', 'liquids-sealed', 'paint'],                  // Chemicals/liquids
-            ['perfumes', 'cosmetics'],                                // Strong scents
+            ['food-dry', 'food-fresh', 'food-frozen', 'beverages'],
+            ['pharmaceuticals', 'medical-equipment', 'supplements'],
+            ['cleaning', 'liquids-sealed', 'paint'],
+            ['perfumes', 'cosmetics'],
         ],
-        // Special handling requirements
         specialHandling: {
-            'food-fresh': { maxDelay: 60, priority: 'high' },         // 60 min max
-            'food-frozen': { maxDelay: 45, priority: 'urgent' },      // 45 min max
+            'food-fresh': { maxDelay: 60, priority: 'high' },
+            'food-frozen': { maxDelay: 45, priority: 'urgent' },
             'pharmaceuticals': { secure: true, priority: 'high' },
             'medical-equipment': { secure: true, fragile: true },
             'glassware': { fragile: true, padding: 'extra' },
@@ -59,7 +56,12 @@ const BUSINESS_CONFIG = {
     }
 };
 
-// Simple form state management
+// Supabase Configuration
+const SUPABASE_URL = 'https://btxavqfoirdzwpfrvezp.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ0eGF2cWZvaXJkendwZnJ2ZXpwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE0ODcxMTcsImV4cCI6MjA2NzA2MzExN30.kQKpukFGx-cBl1zZRuXmex02ifkZ751WCUfQPogYutk';
+
+// ─── State Management ──────────────────────────────────────────────────────
+
 class FormState {
     constructor() {
         this.state = {
@@ -74,7 +76,9 @@ class FormState {
             selectedPaymentMethod: 'cash',
             itemCount: 1,
             packageType: '',
-            isLoading: false
+            isLoading: false,
+            isAuthenticated: false,
+            authenticatedVendor: null
         };
         this.subscribers = {};
     }
@@ -86,6 +90,11 @@ class FormState {
         } else {
             this.state[key] = value;
             this.notify(key);
+        }
+        
+        // Auto-trigger form validation on relevant changes
+        if (key === 'distance' || key === 'pickupCoords' || key === 'deliveryCoords') {
+            setTimeout(() => checkFormValidity(), 100);
         }
     }
 
@@ -108,7 +117,7 @@ class FormState {
     }
 
     reset() {
-        this.state = {
+        const defaultState = {
             vendorType: 'casual',
             agentCode: null,
             agentName: null,
@@ -120,19 +129,20 @@ class FormState {
             selectedPaymentMethod: 'cash',
             itemCount: 1,
             packageType: '',
-            isLoading: false
+            isLoading: false,
+            isAuthenticated: false,
+            authenticatedVendor: null
         };
+        this.state = { ...defaultState };
+        Object.keys(defaultState).forEach(key => this.notify(key));
     }
 }
 
 // Initialize form state
 const formState = new FormState();
 
-// Configuration - UPDATED WITH CORRECT CREDENTIALS FROM TEST.HTML
-const SUPABASE_URL = 'https://btxavqfoirdzwpfrvezp.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ0eGF2cWZvaXJkendwZnJ2ZXpwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE0ODcxMTcsImV4cCI6MjA2NzA2MzExN30.kQKpukFGx-cBl1zZRuXmex02ifkZ751WCUfQPogYutk';
+// ─── DOM Elements ──────────────────────────────────────────────────────────
 
-// DOM elements
 const elements = {
     vendorName: document.getElementById('vendorName'),
     phoneNumber: document.getElementById('phoneNumber'),
@@ -163,7 +173,8 @@ const elements = {
     displayTotalPrice: document.getElementById('displayTotalPrice')
 };
 
-// Utility functions
+// ─── Utility Functions ─────────────────────────────────────────────────────
+
 const validation = {
     formatPhone: (phone) => {
         return phone.replace(/\D/g, '').slice(0, 10);
@@ -193,9 +204,7 @@ const validation = {
         };
     },
     
-    // Check if location is within service radius
     validateServiceArea: (coords) => {
-        // Ensure coords are numbers
         const lat = parseFloat(coords.lat);
         const lng = parseFloat(coords.lng);
         
@@ -239,12 +248,10 @@ const pricing = {
         
         let basePrice = rates.base + (distance * rates.perKm);
         
-        // Apply service multiplier
         if (multipliers.service[serviceType]) {
             basePrice *= multipliers.service[serviceType];
         }
         
-        // Apply managed vendor discount
         if (options.isManaged) {
             basePrice *= multipliers.managedVendor;
         }
@@ -254,6 +261,39 @@ const pricing = {
     
     formatPrice: (price) => {
         return `KES ${price.toLocaleString()}`;
+    },
+    
+    calculateBreakdown: (totalPrice, serviceType) => {
+        // Standard commission splits
+        const platformRate = 0.15; // 15% platform fee
+        const riderRate = 0.70;    // 70% of total goes to rider
+        const vendorRate = 0.15;   // 15% stays with vendor
+        
+        const platformFee = Math.round(totalPrice * platformRate);
+        const riderPayout = Math.round(totalPrice * riderRate);
+        const vendorPayout = Math.round(totalPrice * vendorRate);
+        
+        // Ensure all amounts add up to total
+        const calculated = platformFee + riderPayout + vendorPayout;
+        const difference = totalPrice - calculated;
+        
+        // Add any rounding difference to vendor payout
+        const adjustedVendorPayout = vendorPayout + difference;
+        
+        console.log('💰 Pricing breakdown:', {
+            total: totalPrice,
+            platform: platformFee,
+            rider: riderPayout,
+            vendor: adjustedVendorPayout,
+            sum: platformFee + riderPayout + adjustedVendorPayout
+        });
+        
+        return {
+            platform_fee: platformFee,
+            platform_revenue: platformFee,
+            rider_payout: riderPayout,
+            vendor_payout: adjustedVendorPayout
+        };
     }
 };
 
@@ -271,7 +311,8 @@ const codes = {
     }
 };
 
-// Database functions using direct REST API calls - UPDATED
+// ─── Database Functions ────────────────────────────────────────────────────
+
 const supabaseAPI = {
     async query(table, options = {}) {
         const { select = '*', filter = '', limit } = options;
@@ -296,6 +337,12 @@ const supabaseAPI = {
     },
     
     async insert(table, data) {
+        // Fix status before submission for parcels
+        if (table === 'parcels') {
+            console.log('📦 Processing parcel insert...');
+            data.status = 'submitted'; // Ensure correct status
+        }
+        
         const response = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
             method: 'POST',
             headers: {
@@ -336,16 +383,16 @@ const supabaseAPI = {
     }
 };
 
-// Geocoding Cache Service
+// ─── Geocoding Cache Service ───────────────────────────────────────────────
+
 const geocodingCache = {
     async search(query, type = 'address') {
         if (!query || query.length < 3) return null;
         
         try {
-            // Normalize the query
             const normalizedQuery = query.toLowerCase().trim();
             
-            // First check popular places cache for exact matches
+            // Check popular places cache first
             const popularPlace = await supabaseAPI.query('popular_places_cache', {
                 filter: `place_name_normalized=eq.${encodeURIComponent(normalizedQuery)}`,
                 limit: 1
@@ -370,7 +417,6 @@ const geocodingCache = {
             });
             
             if (cached.length > 0 && cached[0].expires_at > new Date().toISOString()) {
-                // Update usage statistics
                 await supabaseAPI.update('geocoding_cache', cached[0].id, {
                     usage_count: cached[0].usage_count + 1,
                     last_used: new Date().toISOString()
@@ -395,7 +441,6 @@ const geocodingCache = {
     
     async searchReverse(lat, lng) {
         try {
-            // Round coordinates for cache lookup (about 11 meter precision)
             const latRounded = Math.round(lat * 10000) / 10000;
             const lngRounded = Math.round(lng * 10000) / 10000;
             
@@ -405,7 +450,6 @@ const geocodingCache = {
             });
             
             if (cached.length > 0 && cached[0].expires_at > new Date().toISOString()) {
-                // Update usage statistics
                 await supabaseAPI.update('reverse_geocoding_cache', cached[0].id, {
                     usage_count: cached[0].usage_count + 1,
                     last_used: new Date().toISOString()
@@ -440,7 +484,6 @@ const geocodingCache = {
                 raw_response: result.raw || {}
             };
             
-            // Extract address components if available
             if (result.address_components) {
                 result.address_components.forEach(component => {
                     const types = component.types;
@@ -468,7 +511,6 @@ const geocodingCache = {
                 });
             }
             
-            // Add Google Place ID if available
             if (result.place_id) {
                 cacheData.place_id = result.place_id;
             }
@@ -494,11 +536,6 @@ const geocodingCache = {
                 raw_response: result.raw || {}
             };
             
-            // Extract address components similar to forward geocoding
-            if (result.address_components) {
-                // ... same component extraction as above
-            }
-            
             await supabaseAPI.insert('reverse_geocoding_cache', cacheData);
             console.log('💾 Reverse geocoding cached');
         } catch (error) {
@@ -507,15 +544,13 @@ const geocodingCache = {
     }
 };
 
-// Distance Matrix Cache Service
+// ─── Distance Cache Service ────────────────────────────────────────────────
+
 const distanceCache = {
-    // In-memory cache
     cache: new Map(),
     
-    // Database cache methods
     async searchDB(pickup, delivery, travelMode = 'driving') {
         try {
-            // Round coordinates for caching (about 100m precision)
             const originLat = Math.round(pickup.lat * 100000) / 100000;
             const originLng = Math.round(pickup.lng * 100000) / 100000;
             const destLat = Math.round(delivery.lat * 100000) / 100000;
@@ -527,7 +562,6 @@ const distanceCache = {
             });
             
             if (cached.length > 0 && cached[0].expires_at > new Date().toISOString()) {
-                // Update usage statistics
                 await supabaseAPI.update('distance_matrix_cache', cached[0].id, {
                     usage_count: cached[0].usage_count + 1,
                     last_used: new Date().toISOString()
@@ -535,8 +569,8 @@ const distanceCache = {
                 
                 console.log('📦 Distance from DB cache');
                 return {
-                    distance: cached[0].distance_meters / 1000, // Convert to km
-                    duration: Math.ceil(cached[0].duration_seconds / 60), // Convert to minutes
+                    distance: cached[0].distance_meters / 1000,
+                    duration: Math.ceil(cached[0].duration_seconds / 60),
                     distance_text: cached[0].distance_text,
                     duration_text: cached[0].duration_text,
                     cached: true,
@@ -557,15 +591,14 @@ const distanceCache = {
                 origin_lng: Math.round(pickup.lng * 100000) / 100000,
                 destination_lat: Math.round(delivery.lat * 100000) / 100000,
                 destination_lng: Math.round(delivery.lng * 100000) / 100000,
-                distance_meters: Math.round(result.distance * 1000), // Convert km to meters
+                distance_meters: Math.round(result.distance * 1000),
                 distance_text: result.distance_text || `${result.distance.toFixed(1)} km`,
-                duration_seconds: result.duration * 60, // Convert minutes to seconds
+                duration_seconds: result.duration * 60,
                 duration_text: result.duration_text || `${result.duration} min`,
                 travel_mode: travelMode,
                 provider: provider,
                 route_polyline: result.polyline || null,
                 raw_response: result.raw || {},
-                // Set appropriate expiry based on time of day
                 expires_at: new Date(Date.now() + (isRushHour() ? 30 * 60000 : 120 * 60000)).toISOString()
             };
             
@@ -576,9 +609,7 @@ const distanceCache = {
         }
     },
     
-    // Keep existing in-memory cache methods but also use DB
     get: async function(pickup, delivery) {
-        // First check in-memory cache
         const key = this.getKey(pickup, delivery);
         const memCached = this.cache.get(key);
         
@@ -588,10 +619,8 @@ const distanceCache = {
             return memCached.data;
         }
         
-        // Then check database cache
         const dbCached = await this.searchDB(pickup, delivery);
         if (dbCached) {
-            // Store in memory cache for faster subsequent access
             this.cache.set(key, {
                 data: dbCached,
                 created: Date.now(),
@@ -604,17 +633,14 @@ const distanceCache = {
     },
     
     set: async function(pickup, delivery, data) {
-        // Store in both memory and database
         const key = this.getKey(pickup, delivery);
         
-        // Memory cache
         this.cache.set(key, {
             data: data,
             created: Date.now(),
             lastUsed: Date.now()
         });
         
-        // Also cache reverse route
         const reverseKey = this.getKey(delivery, pickup);
         this.cache.set(reverseKey, {
             data: { ...data, distance: data.distance },
@@ -622,31 +648,26 @@ const distanceCache = {
             lastUsed: Date.now()
         });
         
-        // Database cache
         await this.storeDB(pickup, delivery, data);
         
-        // Persist memory cache
         this.persist();
     },
     
-    // Generate cache key with 100m precision (reduces unique combinations)
     getKey: (pickup, delivery) => {
         const p = `${pickup.lat.toFixed(3)},${pickup.lng.toFixed(3)}`;
         const d = `${delivery.lat.toFixed(3)},${delivery.lng.toFixed(3)}`;
         return `${p}→${d}`;
     },
     
-    // Persist to localStorage (survives page reloads)
     persist: function() {
         try {
-            const cacheData = Array.from(this.cache.entries()).slice(-1000); // Keep last 1000 entries
+            const cacheData = Array.from(this.cache.entries()).slice(-1000);
             localStorage.setItem('tuma_distance_cache', JSON.stringify(cacheData));
         } catch (e) {
             console.warn('Failed to persist cache:', e);
         }
     },
     
-    // Load from localStorage
     load: function() {
         try {
             const stored = localStorage.getItem('tuma_distance_cache');
@@ -662,7 +683,6 @@ const distanceCache = {
         }
     },
     
-    // Get cache stats
     getStats: function() {
         let totalHits = 0;
         let totalSize = this.cache.size;
@@ -679,31 +699,26 @@ const distanceCache = {
     }
 };
 
-// Helper function to determine rush hour
+// ─── Helper Functions ──────────────────────────────────────────────────────
+
 function isRushHour() {
     const now = new Date();
     const hour = now.getHours();
     const day = now.getDay();
     
-    // Monday to Friday
     if (day >= 1 && day <= 5) {
-        // Morning rush: 6:30 AM - 9:30 AM
-        // Evening rush: 4:30 PM - 7:30 PM
         return (hour >= 6 && hour < 10) || (hour >= 16 && hour < 20);
     }
     
     return false;
 }
 
-// Enhanced geocoding with better Nairobi support and caching
 async function geocodeAddress(address) {
-    // Check cache first
     const cached = await geocodingCache.search(address);
     if (cached) {
         return cached;
     }
     
-    // Add "Nairobi, Kenya" if not already specified
     let searchAddress = address;
     if (!address.toLowerCase().includes('nairobi') && !address.toLowerCase().includes('kenya')) {
         searchAddress = `${address}, Nairobi, Kenya`;
@@ -718,7 +733,6 @@ async function geocodeAddress(address) {
             throw new Error('Address not found');
         }
         
-        // Prefer results within Nairobi
         const nairobiResult = data.find(result => 
             result.display_name.toLowerCase().includes('nairobi')
         ) || data[0];
@@ -729,7 +743,6 @@ async function geocodeAddress(address) {
             display_name: nairobiResult.display_name
         };
         
-        // Cache the result
         await geocodingCache.store(address, result, 'nominatim');
         
         return result;
@@ -740,7 +753,6 @@ async function geocodeAddress(address) {
 }
 
 function calculateStraightDistance(point1, point2) {
-    // Ensure we have valid coordinates
     if (!point1 || !point2 || typeof point1.lat !== 'number' || typeof point1.lng !== 'number' || 
         typeof point2.lat !== 'number' || typeof point2.lng !== 'number') {
         console.error('Invalid coordinates for distance calculation:', point1, point2);
@@ -767,12 +779,10 @@ function calculateStraightDistance(point1, point2) {
     return distance;
 }
 
-// Helper function to convert degrees to radians
 function toRad(value) {
     return value * Math.PI / 180;
 }
 
-// Notification functions
 function showNotification(message, type = 'info') {
     const notification = document.createElement('div');
     notification.className = `notification ${type}`;
@@ -798,9 +808,11 @@ function showNotification(message, type = 'info') {
     }, type === 'error' ? 5000 : 3000);
 }
 
-// ─── Global Functions (Must be defined before initialize()) ───────────────
+// Export showNotification globally
+window.showNotification = showNotification;
 
-// Update item count
+// ─── Global Functions ──────────────────────────────────────────────────────
+
 window.updateItemCount = function(change) {
     const currentCount = formState.get('itemCount');
     const newCount = currentCount + change;
@@ -814,7 +826,6 @@ window.updateItemCount = function(change) {
     }
 };
 
-// Select package size
 window.selectSize = function(size) {
     document.querySelectorAll('.size-option').forEach(el => el.classList.remove('selected'));
     const selected = document.querySelector(`[data-size="${size}"]`);
@@ -824,7 +835,6 @@ window.selectSize = function(size) {
     }
 };
 
-// Select service type
 window.selectService = function(service) {
     document.querySelectorAll('.service-card').forEach(el => el.classList.remove('selected'));
     const selected = document.querySelector(`[data-service="${service}"]`);
@@ -835,31 +845,25 @@ window.selectService = function(service) {
     }
 };
 
-// Select payment method
 window.selectPaymentMethod = function(method) {
-    // Remove selected class from all buttons
     document.querySelectorAll('.payment-button').forEach(btn => {
         btn.classList.remove('selected');
     });
     
-    // Add selected class to clicked button
     if (method === 'online') {
         document.querySelector('.payment-button.pay-now').classList.add('selected');
     } else {
         document.querySelector('.payment-button.cash-delivery').classList.add('selected');
     }
     
-    // Store selected method
     formState.set('selectedPaymentMethod', method);
 };
 
-// Track delivery
 window.trackDelivery = function() {
     const parcelCode = elements.displayParcelCode.textContent;
     window.location.href = `tracking.html?parcel=${parcelCode}`;
 };
 
-// GPS location function with caching
 window.getLocation = async function(type) {
     try {
         if (!navigator.geolocation) {
@@ -881,7 +885,6 @@ window.getLocation = async function(type) {
             lng: position.coords.longitude
         };
         
-        // Validate service area before proceeding
         const serviceAreaCheck = validation.validateServiceArea(coords);
         if (!serviceAreaCheck.isValid) {
             showNotification(
@@ -891,7 +894,6 @@ window.getLocation = async function(type) {
             return;
         }
         
-        // Check reverse geocoding cache first
         const cached = await geocodingCache.searchReverse(coords.lat, coords.lng);
         
         if (cached) {
@@ -908,20 +910,17 @@ window.getLocation = async function(type) {
             
             showNotification('Location updated!', 'success');
         } else {
-            // Reverse geocode to get address
             const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${coords.lat}&lon=${coords.lng}`);
             const data = await response.json();
             
             const input = type === 'pickup' ? elements.pickupLocation : elements.deliveryLocation;
             input.value = data.display_name || `${coords.lat}, ${coords.lng}`;
             
-            // Store coords in dataset for consistency
             input.dataset.lat = coords.lat;
             input.dataset.lng = coords.lng;
             
             formState.set(`${type}Coords`, coords);
             
-            // Cache the reverse geocoding result
             await geocodingCache.storeReverse(coords.lat, coords.lng, data, 'nominatim');
             
             if (formState.get('pickupCoords') && formState.get('deliveryCoords')) {
@@ -936,26 +935,22 @@ window.getLocation = async function(type) {
     }
 };
 
-// Alias functions
 window.useGPS = window.getLocation;
+
 window.typeAddress = function(type) {
     const input = type === 'pickup' ? elements.pickupLocation : elements.deliveryLocation;
     input.focus();
     showNotification('Type your address in the field above', 'info');
 };
 
-// Delivery type toggle
 window.toggleDeliveryType = function(type) {
-    // For now, just log - can implement bulk delivery later
     console.log('Delivery type:', type);
 };
 
-// Add bulk delivery
 window.addBulkDelivery = function() {
     showNotification('Bulk delivery feature coming soon!', 'info');
 };
 
-// Share delivery details
 window.shareDeliveryDetails = async function() {
     const parcelCode = elements.displayParcelCode.textContent;
     const deliveryCode = elements.displayDeliveryCode.textContent;
@@ -979,7 +974,6 @@ window.shareDeliveryDetails = async function() {
     }
 };
 
-// Book another delivery
 window.bookAnother = function() {
     elements.successOverlay.style.display = 'none';
     document.getElementById('deliveryForm').reset();
@@ -990,14 +984,12 @@ window.bookAnother = function() {
     elements.vendorBadge.style.display = 'none';
     document.getElementById('mainContent').scrollTop = 0;
     
-    // Reset form state visually
     elements.itemCount.textContent = '1';
     document.querySelectorAll('.size-option').forEach(el => el.classList.remove('selected'));
     document.querySelector('[data-size="small"]')?.classList.add('selected');
     document.querySelectorAll('.service-card').forEach(el => el.classList.remove('selected'));
     document.querySelector('[data-service="smart"]')?.classList.add('selected');
     
-    // Clear location data attributes
     if (elements.pickupLocation) {
         delete elements.pickupLocation.dataset.lat;
         delete elements.pickupLocation.dataset.lng;
@@ -1008,29 +1000,24 @@ window.bookAnother = function() {
     }
 };
 
-// ─── Map Modal Functions ───────────────────────────────────────
+// ─── Map Modal Functions ───────────────────────────────────────────────────
 
-// Shared state for the modal (ONLY DECLARE THESE ONCE)
 let simpleMap = null;
 let currentInputField = null;
 let selectedSimpleLocation = null;
 
-// Open the map modal & lazy-init the map + search
 window.openSimpleLocationModal = function(inputId) {
     currentInputField = inputId;
     document.getElementById('simpleLocationModal').style.display = 'block';
 
     if (!simpleMap) {
-        // Initialize Leaflet map
         simpleMap = L.map('simpleMap').setView([-1.2921, 36.8219], 13);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap'
         }).addTo(simpleMap);
 
-        // When the user drags or zooms, re-reverse-geocode center
         simpleMap.on('moveend', updateSelectedLocation);
 
-        // Wire up the search button
         const searchBtn = document.getElementById('simpleSearchBtn');
         const searchInput = document.getElementById('simpleSearch');
         if (searchBtn && searchInput) {
@@ -1059,11 +1046,9 @@ window.openSimpleLocationModal = function(inputId) {
         }
     }
 
-    // Force a resize after the modal opens
     setTimeout(() => simpleMap.invalidateSize(), 100);
 };
 
-// Reverse-geocode the map's center
 async function updateSelectedLocation() {
     const c = simpleMap.getCenter();
     try {
@@ -1082,7 +1067,6 @@ async function updateSelectedLocation() {
     }
 }
 
-// Update the location display in the modal
 function updateLocationDisplay() {
     if (!selectedSimpleLocation) return;
     const name = selectedSimpleLocation.address.split(',')[0] || 'Selected Location';
@@ -1090,11 +1074,9 @@ function updateLocationDisplay() {
     document.getElementById('selectedLocationAddress').textContent = selectedSimpleLocation.address;
 }
 
-// Confirm location selection
 window.confirmSimpleLocation = function() {
     if (!selectedSimpleLocation || !currentInputField) return;
     
-    // First validate service area
     const serviceAreaCheck = validation.validateServiceArea(selectedSimpleLocation);
     if (!serviceAreaCheck.isValid) {
         showNotification(
@@ -1110,66 +1092,44 @@ window.confirmSimpleLocation = function() {
     inp.dataset.lng = selectedSimpleLocation.lng;
     inp.dispatchEvent(new Event('change', { bubbles: true }));
     
-    // Trigger handleLocationChange
     const type = currentInputField.includes('pickup') ? 'pickup' : 'delivery';
     handleLocationChange(type);
     
     closeLocationModal();
 };
 
-// Close the location modal
 window.closeLocationModal = function() {
     document.getElementById('simpleLocationModal').style.display = 'none';
     currentInputField = null;
     selectedSimpleLocation = null;
 };
 
-// ─── Core Functions ───────────────────────────────────────
+// ─── Core Functions ────────────────────────────────────────────────────────
 
-// Check if user is authenticated (future implementation)
 async function checkAuthAndLoadVendor() {
-    // TODO: In the future, this will check for authenticated user
-    // For now, return null to indicate no auth
-    
-    // Future implementation will look like:
-    // const session = await supabase.auth.getSession();
-    // if (session?.user) {
-    //     const vendor = await supabaseAPI.query('vendors', {
-    //         filter: `user_id=eq.${session.user.id}`,
-    //         limit: 1
-    //     });
-    //     return vendor[0];
-    // }
-    
-    return null;
+    return null; // Future implementation will check for authenticated user
 }
 
-// Initialize page
 async function initialize() {
     console.log('Initializing vendor dashboard...');
     
-    // Check if user is authenticated
     const authenticatedVendor = await checkAuthAndLoadVendor();
     
     if (authenticatedVendor) {
-        // Hide the "Your Information" section
         const vendorInfoSection = document.querySelector('.form-section:has(#vendorName)');
         if (vendorInfoSection) {
             vendorInfoSection.style.display = 'none';
         }
         
-        // Store vendor info in form state
         formState.set('authenticatedVendor', authenticatedVendor);
         formState.set('vendorType', authenticatedVendor.vendor_type);
         formState.set('isAuthenticated', true);
         
-        // Show vendor badge
         displayVendorBadge({
             isManaged: authenticatedVendor.is_managed,
             agentName: authenticatedVendor.agent_name
         });
     } else {
-        // No auth - show the form fields as normal
         formState.set('isAuthenticated', false);
     }
     
@@ -1177,23 +1137,19 @@ async function initialize() {
     setupStateSubscriptions();
     updateCapacityDisplay();
     
-    // Set default service selection
     formState.set('selectedService', 'smart');
     formState.set('selectedSize', 'small');
     
-    // Initialize Google Places Autocomplete
     initializeGooglePlacesAutocomplete();
-    
-    // Test Supabase connection on load
     testSupabaseConnection();
-    
-    // Load distance cache from localStorage
     distanceCache.load();
+    
+    // Setup form validation monitoring
+    setupFormValidationMonitoring();
     
     console.log('Vendor dashboard initialized successfully');
 }
 
-// Test Supabase connection
 async function testSupabaseConnection() {
     try {
         const response = await fetch(`${SUPABASE_URL}/rest/v1/vendors?select=*&limit=1`, {
@@ -1214,26 +1170,21 @@ async function testSupabaseConnection() {
     }
 }
 
-// Initialize Google Places Autocomplete
 function initializeGooglePlacesAutocomplete() {
-    // Wait for Google Maps API to load
     if (window.google && window.google.maps && window.google.maps.places) {
         console.log('✅ Google Maps API loaded, setting up autocomplete');
         setupAutocomplete();
     } else {
         console.log('⏳ Waiting for Google Maps API...');
-        // Try again after a delay
         setTimeout(initializeGooglePlacesAutocomplete, 500);
     }
 }
 
-// Global callback for Google Maps
 window.initMap = function() {
     console.log('✅ Google Maps initialized via callback');
     initializeGooglePlacesAutocomplete();
 };
 
-// Setup Google Places Autocomplete with caching
 function setupAutocomplete() {
     const setupField = (inputElement, type) => {
         if (!inputElement) return;
@@ -1263,7 +1214,6 @@ function setupAutocomplete() {
                     raw: place
                 };
                 
-                // Debug log
                 console.log(`Google Places selected for ${type}:`, {
                     name: place.name,
                     address: place.formatted_address,
@@ -1271,26 +1221,20 @@ function setupAutocomplete() {
                     lng: coords.lng
                 });
                 
-                // Store coordinates in dataset
                 inputElement.dataset.lat = coords.lat;
                 inputElement.dataset.lng = coords.lng;
                 
-                // Cache the geocoding result FIRST
                 await geocodingCache.store(inputElement.value, coords, 'google');
                 
-                // Update form state directly without calling handleLocationChange yet
                 formState.set(`${type}Coords`, coords);
                 
-                // Show success indicator
                 updateLocationStatus(inputElement, true);
                 showNotification('✅ Location selected', 'success');
                 
-                // Calculate distance if both locations are set
                 if (formState.get('pickupCoords') && formState.get('deliveryCoords')) {
                     await calculateDistance();
                 }
             } else if (place.name || place.formatted_address) {
-                // Place selected but no geometry - use Google Geocoder
                 console.log('Place selected without geometry, using Google Geocoder');
                 const geocoder = new google.maps.Geocoder();
                 const addressToGeocode = place.formatted_address || place.name;
@@ -1315,10 +1259,8 @@ function setupAutocomplete() {
                         inputElement.dataset.lng = coords.lng;
                         inputElement.value = results[0].formatted_address;
                         
-                        // Cache the result
                         await geocodingCache.store(addressToGeocode, coords, 'google');
                         
-                        // Call the handler
                         handleLocationChange(type);
                     } else {
                         console.error('Google Geocoding failed:', status);
@@ -1326,12 +1268,10 @@ function setupAutocomplete() {
                     }
                 });
             } else {
-                // No valid place selected
                 showNotification('Please select a valid address from the dropdown', 'warning');
             }
         });
         
-        // Prevent form submission on Enter key in autocomplete
         inputElement.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
                 e.preventDefault();
@@ -1343,22 +1283,14 @@ function setupAutocomplete() {
     setupField(elements.deliveryLocation, 'delivery');
 }
 
-// Setup event listeners
 function setupEventListeners() {
-    // Phone number input
     elements.phoneNumber?.addEventListener('input', handlePhoneInput);
     elements.recipientPhone?.addEventListener('input', handleRecipientPhoneInput);
     
-    // Location inputs - remove the blur event listener that might be causing duplicate validation
-    // elements.pickupLocation?.addEventListener('blur', () => handleLocationChange('pickup'));
-    // elements.deliveryLocation?.addEventListener('blur', () => handleLocationChange('delivery'));
-    
-    // Package description dropdown
     elements.packageDescription?.addEventListener('change', (e) => {
         handlePackageTypeChange(e.target.value);
     });
     
-    // Character counter
     elements.specialInstructions?.addEventListener('input', (e) => {
         const charCountEl = document.getElementById('charCount');
         if (charCountEl) {
@@ -1366,11 +1298,9 @@ function setupEventListeners() {
         }
     });
     
-    // Form submission
     document.getElementById('deliveryForm')?.addEventListener('submit', handleFormSubmit);
 }
 
-// Setup state subscriptions
 function setupStateSubscriptions() {
     formState.subscribe(['pickupCoords', 'deliveryCoords'], () => {
         checkFormValidity();
@@ -1387,16 +1317,14 @@ function setupStateSubscriptions() {
     });
 }
 
-// Handle phone input
 async function handlePhoneInput(e) {
     let value = validation.formatPhone(e.target.value);
     e.target.value = value;
     
-    // Check if vendor is managed when phone is complete
     if (value.length === 10 && validation.validatePhone(value)) {
         try {
             const vendors = await supabaseAPI.query('vendors', {
-                filter: `phone=eq.${value}`, // Changed from phone_number to phone
+                filter: `phone=eq.${value}`,
                 limit: 1
             });
             
@@ -1417,7 +1345,6 @@ async function handlePhoneInput(e) {
                     showNotification(`Welcome back! Managed by ${vendor.agent_name}`, 'success');
                 }
             } else {
-                // New vendor
                 formState.set({
                     vendorType: 'casual',
                     agentCode: null,
@@ -1427,7 +1354,6 @@ async function handlePhoneInput(e) {
             }
         } catch (error) {
             console.error('Error checking vendor status:', error);
-            // Default to casual vendor on error
             formState.set({
                 vendorType: 'casual',
                 agentCode: null,
@@ -1437,12 +1363,10 @@ async function handlePhoneInput(e) {
     }
 }
 
-// Handle recipient phone input
 function handleRecipientPhoneInput(e) {
     e.target.value = validation.formatPhone(e.target.value);
 }
 
-// Display vendor badge
 function displayVendorBadge(vendorInfo) {
     if (vendorInfo.isManaged && vendorInfo.agentName) {
         elements.vendorBadge.style.display = 'block';
@@ -1458,19 +1382,15 @@ function displayVendorBadge(vendorInfo) {
     }
 }
 
-// Handle package type selection
 function handlePackageTypeChange(packageType) {
     if (!packageType) return;
     
     const specialHandling = BUSINESS_CONFIG.packageCompatibility.specialHandling[packageType];
     
-    // Update service recommendation based on package type
     if (specialHandling) {
         if (specialHandling.priority === 'urgent' || specialHandling.maxDelay <= 60) {
-            // Recommend Express for time-sensitive items
             showNotification('⚡ Express delivery recommended for this item type', 'info');
             
-            // Optionally auto-select Express service
             if (specialHandling.priority === 'urgent') {
                 selectService('express');
             }
@@ -1485,11 +1405,9 @@ function handlePackageTypeChange(packageType) {
         }
     }
     
-    // Store package type in form state
     formState.set('packageType', packageType);
 }
 
-// Handle location change with caching
 async function handleLocationChange(type) {
     const input = type === 'pickup' ? elements.pickupLocation : elements.deliveryLocation;
     const address = input.value.trim();
@@ -1502,7 +1420,6 @@ async function handleLocationChange(type) {
         datasetLng: dsLng
     });
     
-    // If coordinates already provided (by Google), use them directly
     if (dsLat && dsLng) {
         const coords = {
             lat: parseFloat(dsLat),
@@ -1512,10 +1429,8 @@ async function handleLocationChange(type) {
         
         console.log('Using dataset coordinates:', coords);
         
-        // Validate service area
         const serviceAreaCheck = validation.validateServiceArea(coords);
         if (!serviceAreaCheck.isValid) {
-            // Check if it's a known Nairobi location that should be valid
             const locationName = address.toLowerCase();
             const addressLower = coords.display_name ? coords.display_name.toLowerCase() : '';
             const knownNairobiLocations = [
@@ -1531,11 +1446,9 @@ async function handleLocationChange(type) {
                 locationName.includes(loc) || addressLower.includes(loc)
             );
             
-            // Also check if "nairobi" is in the address
             const isNairobiAddress = locationName.includes('nairobi') || addressLower.includes('nairobi');
             
             if (isKnownLocation || isNairobiAddress) {
-                // Log warning but allow the location
                 console.warn('Known Nairobi location detected, overriding distance check:', {
                     address: address,
                     coords: coords,
@@ -1543,7 +1456,6 @@ async function handleLocationChange(type) {
                     decision: 'ALLOWING'
                 });
                 
-                // Check if coordinates look suspicious (not in Kenya region)
                 if (Math.abs(coords.lat) > 5 || coords.lng < 35 || coords.lng > 38) {
                     console.error('CRITICAL: Coordinates are definitely wrong for Nairobi:', coords);
                     showNotification('Location coordinates appear incorrect. Please try selecting from the dropdown or use GPS.', 'error');
@@ -1558,34 +1470,28 @@ async function handleLocationChange(type) {
                     `Sorry, this location is ${serviceAreaCheck.distance.toFixed(1)}km from our service center. We currently serve areas within ${serviceAreaCheck.maxRadius}km of Nairobi CBD.`,
                     'error'
                 );
-                // Clear the input and dataset
                 input.value = '';
                 delete input.dataset.lat;
                 delete input.dataset.lng;
-                // Remove success indicator
                 updateLocationStatus(input, false);
                 return;
             }
         }
         
         formState.set(`${type}Coords`, coords);
-        
-        // Show success indicator
         updateLocationStatus(input, true);
         
         if (formState.get('pickupCoords') && formState.get('deliveryCoords')) {
             await calculateDistance();
         }
-        return; // Exit here - no need to geocode again
+        return;
     }
     
-    // Only try geocoding if user typed address manually without selecting from dropdown
     if (!address || address.length < 3) {
         updateLocationStatus(input, false);
         return;
     }
     
-    // First check cache
     const cached = await geocodingCache.search(address);
     if (cached) {
         const coords = {
@@ -1594,7 +1500,6 @@ async function handleLocationChange(type) {
             display_name: cached.display_name
         };
         
-       // Validate service area
         const serviceAreaCheck = validation.validateServiceArea(coords);
         if (!serviceAreaCheck.isValid) {
             showNotification(
@@ -1606,13 +1511,10 @@ async function handleLocationChange(type) {
             return;
         }
         
-        // Store in dataset for consistency
         input.dataset.lat = coords.lat;
         input.dataset.lng = coords.lng;
         
         formState.set(`${type}Coords`, coords);
-        
-        // Show success indicator
         updateLocationStatus(input, true);
         
         if (formState.get('pickupCoords') && formState.get('deliveryCoords')) {
@@ -1623,7 +1525,6 @@ async function handleLocationChange(type) {
         return;
     }
     
-    // Check if Google Maps is loaded and try Google Geocoder first
     if (window.google && window.google.maps && window.google.maps.Geocoder) {
         console.log(`Using Google Geocoder for manually typed address: ${address}`);
         const geocoder = new google.maps.Geocoder();
@@ -1644,19 +1545,16 @@ async function handleLocationChange(type) {
                     raw: results[0]
                 };
                 
-                // Store in dataset for consistency
                 input.dataset.lat = coords.lat;
                 input.dataset.lng = coords.lng;
                 input.value = results[0].formatted_address;
                 
-                // Validate service area
                 const serviceAreaCheck = validation.validateServiceArea(coords);
                 if (!serviceAreaCheck.isValid) {
                     showNotification(
                         `Sorry, this location is ${serviceAreaCheck.distance.toFixed(1)}km from our service center. We currently serve areas within ${serviceAreaCheck.maxRadius}km of Nairobi CBD.`,
                         'error'
                     );
-                    // Clear the input and dataset
                     input.value = '';
                     delete input.dataset.lat;
                     delete input.dataset.lng;
@@ -1664,40 +1562,32 @@ async function handleLocationChange(type) {
                     return;
                 }
                 
-                // Cache the result
                 await geocodingCache.store(address, coords, 'google');
                 
                 formState.set(`${type}Coords`, coords);
-                
-                // Show success indicator
                 updateLocationStatus(input, true);
                 
                 if (formState.get('pickupCoords') && formState.get('deliveryCoords')) {
                     await calculateDistance();
                 }
             } else {
-                // Fall back to Nominatim only if Google Geocoder fails
                 console.log('Google Geocoder failed, trying Nominatim');
                 await geocodeWithNominatim(address, type);
             }
         });
     } else {
-        // Google Maps not loaded, use Nominatim
         await geocodeWithNominatim(address, type);
     }
 }
 
-// Helper function to update location input visual status
 function updateLocationStatus(input, isValid) {
     const container = input.parentElement;
     const actionButton = container.querySelector('.input-action');
     
     if (isValid) {
-        // Add success state
         input.classList.add('location-confirmed');
         input.classList.remove('error');
         
-        // Change icon to checkmark
         if (actionButton) {
             actionButton.innerHTML = `
                 <svg viewBox="0 0 24 24" style="fill: #34C759;">
@@ -1707,13 +1597,10 @@ function updateLocationStatus(input, isValid) {
             actionButton.style.background = 'rgba(52, 199, 89, 0.1)';
         }
         
-        // Add subtle animation
         input.style.animation = 'locationSuccess 0.3s ease-out';
     } else {
-        // Remove success state
         input.classList.remove('location-confirmed');
         
-        // Reset icon to location pin
         if (actionButton) {
             actionButton.innerHTML = `
                 <svg viewBox="0 0 24 24">
@@ -1725,29 +1612,25 @@ function updateLocationStatus(input, isValid) {
     }
 }
 
-// Separate function for Nominatim geocoding with caching
 async function geocodeWithNominatim(address, type) {
     const input = type === 'pickup' ? elements.pickupLocation : elements.deliveryLocation;
     
     try {
         console.log(`Geocoding ${type} via Nominatim:`, address);
-        const coords = await geocodeAddress(address); // This now includes caching
+        const coords = await geocodeAddress(address);
         
-        // Validate service area
         const serviceAreaCheck = validation.validateServiceArea(coords);
         if (!serviceAreaCheck.isValid) {
             showNotification(
                 `Sorry, this location is ${serviceAreaCheck.distance.toFixed(1)}km from our service center. We currently serve areas within ${serviceAreaCheck.maxRadius}km of Nairobi CBD.`,
                 'error'
             );
-            // Clear the input and dataset
             input.value = '';
             delete input.dataset.lat;
             delete input.dataset.lng;
             return;
         }
         
-        // Store coordinates for consistency
         input.dataset.lat = coords.lat;
         input.dataset.lng = coords.lng;
         
@@ -1765,14 +1648,14 @@ async function geocodeWithNominatim(address, type) {
     }
 }
 
-// Calculate distance between pickup and delivery with enhanced caching
 async function calculateDistance() {
     const pickup = formState.get('pickupCoords');
     const delivery = formState.get('deliveryCoords');
     
     if (!pickup || !delivery) return;
     
-    // Check cache first (now checks both memory and database)
+    console.log('📏 Calculating distance...');
+    
     const cached = await distanceCache.get(pickup, delivery);
     if (cached) {
         console.log('✅ Using cached distance:', cached.distance, 'km');
@@ -1781,7 +1664,6 @@ async function calculateDistance() {
         elements.calculatedDistance.textContent = `${cached.distance.toFixed(2)} km`;
         elements.distanceInfo.style.display = 'block';
         
-        // Add duration display if element exists
         const durationEl = document.getElementById('estimatedDuration');
         if (durationEl) {
             durationEl.textContent = `~${cached.duration} min`;
@@ -1789,15 +1671,35 @@ async function calculateDistance() {
         
         updateProgress(2);
         
-        // Show cache savings notification occasionally
         const stats = distanceCache.getStats();
         if (stats.hits % 10 === 0 && stats.hits > 0) {
             showNotification(`💰 Saved ${stats.hits} API calls using smart caching!`, 'success');
         }
+        
+        // Force form validation after distance calculation
+        setTimeout(() => {
+            checkFormValidity();
+            
+            // Double-check and force enable if conditions are met
+            const pickupCheck = formState.get('pickupCoords');
+            const deliveryCheck = formState.get('deliveryCoords');
+            const distanceCheck = formState.get('distance');
+            
+            if (pickupCheck && deliveryCheck && distanceCheck > 0) {
+                const submitBtn = document.getElementById('submitBtn');
+                const buttonText = document.getElementById('buttonText');
+                
+                if (submitBtn && submitBtn.disabled) {
+                    console.log('🚨 Force-enabling button after distance calculation');
+                    submitBtn.disabled = false;
+                    buttonText.textContent = 'Book Delivery';
+                }
+            }
+        }, 200);
+        
         return;
     }
     
-    // Try Google Distance Matrix API
     if (window.google && window.google.maps) {
         try {
             const service = new google.maps.DistanceMatrixService();
@@ -1811,7 +1713,7 @@ async function calculateDistance() {
                     avoidHighways: false,
                     avoidTolls: false,
                     drivingOptions: {
-                        departureTime: new Date(), // For traffic consideration
+                        departureTime: new Date(),
                         trafficModel: 'bestguess'
                     }
                 }, (response, status) => {
@@ -1825,12 +1727,11 @@ async function calculateDistance() {
             
             if (response.rows[0].elements[0].status === 'OK') {
                 const element = response.rows[0].elements[0];
-                const distance = element.distance.value / 1000; // Convert to km
-                const duration = Math.ceil(element.duration.value / 60); // Convert to minutes
+                const distance = element.distance.value / 1000;
+                const duration = Math.ceil(element.duration.value / 60);
                 
                 console.log('📍 Google Distance Matrix:', distance, 'km,', duration, 'minutes');
                 
-                // Prepare data for caching
                 const cacheData = {
                     distance: distance,
                     duration: duration,
@@ -1840,38 +1741,38 @@ async function calculateDistance() {
                     raw: response
                 };
                 
-                // Cache the result (both memory and database)
                 await distanceCache.set(pickup, delivery, cacheData);
                 
                 formState.set('distance', distance);
                 formState.set('duration', duration);
                 
-                // Update UI
                 elements.calculatedDistance.textContent = `${distance.toFixed(2)} km`;
                 elements.distanceInfo.style.display = 'block';
                 
-                // Add duration display if element exists
                 const durationEl = document.getElementById('estimatedDuration');
                 if (durationEl) {
                     durationEl.textContent = `~${duration} min`;
                 }
                 
                 updateProgress(2);
+                
+                // Force validation here too
+                setTimeout(() => {
+                    checkFormValidity();
+                }, 200);
+                
                 return;
             }
         } catch (error) {
             console.error('Distance Matrix API failed:', error);
-            // Fall through to estimation
         }
     }
     
-    // Fallback to estimation (only if Google fails)
     console.log('⚠️ Using estimation fallback');
     const straightDistance = calculateStraightDistance(pickup, delivery);
-    const estimatedDistance = straightDistance * 1.5; // 50% buffer for Nairobi roads
-    const estimatedDuration = Math.ceil(estimatedDistance * 3); // 3 min per km average
+    const estimatedDistance = straightDistance * 1.5;
+    const estimatedDuration = Math.ceil(estimatedDistance * 3);
     
-    // Cache even estimations to avoid repeated calculations
     const estimationData = {
         distance: estimatedDistance,
         duration: estimatedDuration,
@@ -1886,7 +1787,6 @@ async function calculateDistance() {
     formState.set('distance', estimatedDistance);
     formState.set('duration', estimatedDuration);
     
-    // Update UI with warning
     elements.calculatedDistance.textContent = `~${estimatedDistance.toFixed(2)} km`;
     elements.distanceInfo.style.display = 'block';
     
@@ -1897,9 +1797,13 @@ async function calculateDistance() {
     
     showNotification('📏 Using estimated distance. Actual distance may vary.', 'warning');
     updateProgress(2);
+    
+    // Force validation here too
+    setTimeout(() => {
+        checkFormValidity();
+    }, 200);
 }
 
-// Update pricing display
 function updatePricing() {
     const distance = formState.get('distance');
     if (distance <= 0) return;
@@ -1923,7 +1827,6 @@ function updatePricing() {
     elements.servicePriceHint.style.display = 'none';
 }
 
-// Update capacity display
 function updateCapacityDisplay() {
     const itemCount = formState.get('itemCount');
     const selectedSize = formState.get('selectedSize');
@@ -1947,28 +1850,44 @@ function updateCapacityDisplay() {
     elements.capacityFill.className = `capacity-fill ${result.vehiclesNeeded > 2 ? 'danger' : result.vehiclesNeeded > 1 ? 'warning' : ''}`;
 }
 
-// Check form validity
 function checkFormValidity() {
     const pickup = formState.get('pickupCoords');
     const delivery = formState.get('deliveryCoords');
     const distance = formState.get('distance');
     
+    console.log('🔍 Form validity check:', {
+        hasPickup: !!pickup,
+        pickupCoords: pickup,
+        hasDelivery: !!delivery,
+        deliveryCoords: delivery,
+        hasDistance: !!distance,
+        distance: distance
+    });
+    
+    const submitBtn = document.getElementById('submitBtn');
+    const buttonText = document.getElementById('buttonText');
+    
+    if (!submitBtn || !buttonText) {
+        console.error('❌ Submit button elements not found!');
+        return;
+    }
+    
     if (pickup && delivery && distance > 0) {
-        elements.submitBtn.disabled = false;
-        elements.buttonText.textContent = 'Book Delivery';
+        submitBtn.disabled = false;
+        buttonText.textContent = 'Book Delivery';
+        console.log('✅ Form is valid - button enabled');
     } else {
-        elements.submitBtn.disabled = true;
-        elements.buttonText.textContent = 'Enter locations to see price';
+        submitBtn.disabled = true;
+        buttonText.textContent = 'Enter locations to see price';
+        console.log('❌ Form is invalid - button disabled');
     }
 }
 
-// Handle form submission - UPDATED WITH SUPABASE SAVE
 async function handleFormSubmit(e) {
     e.preventDefault();
     
     if (formState.get('isLoading')) return;
     
-    // Validate form
     const requiredFields = {
         pickupLocation: elements.pickupLocation.value,
         deliveryLocation: elements.deliveryLocation.value,
@@ -1977,7 +1896,6 @@ async function handleFormSubmit(e) {
         packageDescription: elements.packageDescription.value
     };
     
-    // Only require vendor fields if not authenticated
     if (!formState.get('isAuthenticated')) {
         requiredFields.vendorName = elements.vendorName?.value;
         requiredFields.phoneNumber = elements.phoneNumber?.value;
@@ -1991,7 +1909,6 @@ async function handleFormSubmit(e) {
         return;
     }
     
-    // Debug log to check values
     console.log('Form values:', {
         vendorName: elements.vendorName?.value || 'Authenticated',
         phoneNumber: elements.phoneNumber?.value || 'Authenticated',
@@ -1999,7 +1916,6 @@ async function handleFormSubmit(e) {
         service: formState.get('selectedService')
     });
     
-    // Validate phone numbers
     if (!formState.get('isAuthenticated') && !validation.validatePhone(elements.phoneNumber.value)) {
         showNotification('Please enter a valid vendor phone number', 'error');
         return;
@@ -2010,20 +1926,17 @@ async function handleFormSubmit(e) {
         return;
     }
     
-    // Show loading state
     formState.set('isLoading', true);
     elements.submitBtn.classList.add('loading');
     elements.buttonText.textContent = 'Processing...';
     
     try {
-        // Generate codes
         const deliveryCodes = {
             parcel_code: codes.generateParcelCode(),
             pickup_code: codes.generatePickupCode(),
             delivery_code: codes.generateDeliveryCode()
         };
         
-        // Calculate final price
         const finalPrice = pricing.calculate(
             formState.get('distance'),
             formState.get('selectedService'),
@@ -2036,13 +1949,10 @@ async function handleFormSubmit(e) {
         
         let vendorData;
         
-        // Check if user is authenticated
         if (formState.get('isAuthenticated')) {
-            // Use authenticated vendor data
             vendorData = formState.get('authenticatedVendor');
             console.log('Using authenticated vendor:', vendorData);
         } else {
-            // Get vendor data from form inputs
             const vendorNameValue = elements.vendorName?.value?.trim();
             const phoneValue = elements.phoneNumber?.value;
             
@@ -2052,12 +1962,11 @@ async function handleFormSubmit(e) {
                 return;
             }
             
-            // Prepare vendor data from form
             vendorData = {
                 vendor_name: vendorNameValue,
                 phone: phoneValue,
-                phone_number: phoneValue, // Keep both for compatibility
-                name: vendorNameValue, // Also include 'name' field
+                phone_number: phoneValue,
+                name: vendorNameValue,
                 vendor_type: formState.get('vendorType') || 'casual',
                 is_managed: formState.get('vendorType') === 'managed',
                 agent_code: formState.get('agentCode') || null,
@@ -2071,15 +1980,15 @@ async function handleFormSubmit(e) {
         
         console.log('Vendor data:', vendorData);
         
-        // Prepare parcel data with enhanced fields
+        // Calculate pricing breakdown
+        const pricingBreakdown = pricing.calculateBreakdown(finalPrice, formState.get('selectedService'));
+        
         const parcelData = {
-            // Vendor info
             vendor_name: vendorData.vendor_name,
-            vendor_phone: vendorData.phone, // Use 'phone' field from vendorData
+            vendor_phone: vendorData.phone,
             vendor_type: vendorData.vendor_type,
-            vendor_id: null, // Will be set after vendor is created/found
+            vendor_id: null,
             
-            // Pickup info - Note: pickup_location and delivery_location need to be JSONB
             pickup_location: {
                 address: elements.pickupLocation.value,
                 lat: formState.get('pickupCoords').lat,
@@ -2089,7 +1998,6 @@ async function handleFormSubmit(e) {
             pickup_lng: formState.get('pickupCoords').lng,
             pickup_coordinates: `${formState.get('pickupCoords').lat},${formState.get('pickupCoords').lng}`,
             
-            // Delivery info
             delivery_location: {
                 address: elements.deliveryLocation.value,
                 lat: formState.get('deliveryCoords').lat,
@@ -2102,7 +2010,6 @@ async function handleFormSubmit(e) {
             recipient_name: elements.recipientName.value,
             recipient_phone: elements.recipientPhone.value,
             
-            // Package info
             package_category: elements.packageDescription.value,
             package_description: elements.packageDescription.options[elements.packageDescription.selectedIndex].text,
             package_type: elements.packageDescription.value,
@@ -2111,93 +2018,76 @@ async function handleFormSubmit(e) {
             number_of_items: formState.get('itemCount'),
             special_instructions: elements.specialInstructions.value || null,
             
-            // Special handling flags based on package category
             is_fragile: ['phone', 'laptop', 'electronics-fragile', 'glassware', 'artwork', 'fragile-general'].includes(elements.packageDescription.value),
             is_perishable: ['food-fresh', 'food-frozen'].includes(elements.packageDescription.value),
             requires_signature: ['certificates', 'pharmaceuticals', 'medical-equipment'].includes(elements.packageDescription.value),
             priority_level: ['food-frozen', 'pharmaceuticals'].includes(elements.packageDescription.value) ? 'urgent' : 
                            ['food-fresh', 'medical-equipment'].includes(elements.packageDescription.value) ? 'high' : 'normal',
             
-            // Service info
             service_type: formState.get('selectedService'),
-            customer_choice: formState.get('selectedService'), // Duplicate for compatibility
+            customer_choice: formState.get('selectedService'),
             distance_km: formState.get('distance'),
             estimated_duration_minutes: formState.get('duration') || null,
             duration_minutes: formState.get('duration') || null,
             
-           // Pricing breakdown - IMPORTANT: price is required
             base_price: BUSINESS_CONFIG.pricing.rates.base + (formState.get('distance') * BUSINESS_CONFIG.pricing.rates.perKm),
             service_multiplier: BUSINESS_CONFIG.pricing.multipliers.service[formState.get('selectedService')],
-            price: finalPrice, // Required field
+            price: finalPrice,
             total_price: finalPrice,
-            platform_fee: Math.round(finalPrice * 0.30), // 30% platform fee
-            platform_revenue: Math.round(finalPrice * 0.30), // Same as platform_fee
-            vendor_payout: 0, // Vendors pay, they don't receive
-            rider_payout: Math.round(finalPrice * 0.70), // 70% to rider
+            platform_fee: pricingBreakdown.platform_fee,
+            platform_revenue: pricingBreakdown.platform_revenue,
+            vendor_payout: pricingBreakdown.vendor_payout,
+            rider_payout: pricingBreakdown.rider_payout,
             
-            // Agent commission (if vendor has an agent)
             agent_commission: (vendorData.agent_code && vendorData.is_managed) 
-                ? Math.round(finalPrice * 0.045) // 4.5% of total (15% of platform's 30%)
+                ? Math.round(finalPrice * 0.045)
                 : 0,
             
-            // Payment info
             payment_method: formState.get('selectedPaymentMethod'),
             payment_status: formState.get('selectedPaymentMethod') === 'cash' ? 'pending' : 'awaiting_payment',
             
-            // Codes
             parcel_code: deliveryCodes.parcel_code,
             pickup_code: deliveryCodes.pickup_code,
             delivery_code: deliveryCodes.delivery_code,
             
-            // Status
             status: 'submitted',
             created_at: new Date().toISOString()
         };
         
-        // Save to database
         console.log('Saving booking to database...');
         console.log('Parcel data:', parcelData);
         console.log('Price field value:', parcelData.price);
         
-        // First, check if vendor exists and update or create (only if not authenticated)
         if (!formState.get('isAuthenticated')) {
             try {
                 const existingVendors = await supabaseAPI.query('vendors', {
-                    filter: `phone=eq.${vendorData.phone}`, // Changed from phone_number to phone
+                    filter: `phone=eq.${vendorData.phone}`,
                     limit: 1
                 });
                 
                 if (existingVendors.length === 0) {
-                    // Create new vendor
                     const newVendor = await supabaseAPI.insert('vendors', vendorData);
                     console.log('✅ New vendor created:', newVendor);
-                    // Use the new vendor's ID
                     if (newVendor && newVendor[0]) {
                         parcelData.vendor_id = newVendor[0].id;
                     }
                 } else {
-                    // Update last_active for existing vendor
                     console.log('Vendor already exists:', existingVendors[0]);
                     parcelData.vendor_id = existingVendors[0].id;
-                    // Optionally update last_active
                     await supabaseAPI.update('vendors', existingVendors[0].id, {
                         last_active: new Date().toISOString()
                     });
                 }
             } catch (vendorError) {
                 console.error('Vendor save error:', vendorError);
-                // Continue with booking even if vendor save fails
             }
         } else {
-            // For authenticated users, use their vendor ID directly
             parcelData.vendor_id = vendorData.id;
         }
         
-        // Save parcel - FIXED: Changed from bookingData to parcelData
         const savedParcel = await supabaseAPI.insert('parcels', parcelData);
         console.log('✅ Parcel saved successfully:', savedParcel);
         
-        // Show success
         showSuccess(deliveryCodes, finalPrice);
         
         updateProgress(4);
@@ -2213,21 +2103,39 @@ async function handleFormSubmit(e) {
     }
 }
 
-// Show success modal
 function showSuccess(codes, price) {
-    elements.displayParcelCode.textContent = codes.parcel_code;
-    elements.displayPickupCode.textContent = codes.pickup_code;
-    elements.displayDeliveryCode.textContent = codes.delivery_code;
+    console.log('📋 Showing success with codes:', codes, 'price:', price);
     
-    // Add price display
-    if (elements.displayTotalPrice && price) {
-        elements.displayTotalPrice.textContent = `KES ${price.toLocaleString()}`;
+    const displayParcelCode = document.getElementById('displayParcelCode');
+    const displayPickupCode = document.getElementById('displayPickupCode');
+    const displayDeliveryCode = document.getElementById('displayDeliveryCode');
+    const displayTotalPrice = document.getElementById('displayTotalPrice');
+    const successOverlay = document.getElementById('successOverlay');
+    
+    if (!displayParcelCode || !displayPickupCode || !displayDeliveryCode) {
+        console.error('❌ Success modal elements not found!');
+        return;
     }
     
-    elements.successOverlay.style.display = 'flex';
+    if (typeof codes === 'object') {
+        displayParcelCode.textContent = codes.parcel_code || codes.parcelCode || 'N/A';
+        displayPickupCode.textContent = codes.pickup_code || codes.pickupCode || 'N/A';
+        displayDeliveryCode.textContent = codes.delivery_code || codes.deliveryCode || 'N/A';
+    } else {
+        console.error('❌ Invalid codes object:', codes);
+    }
+    
+    if (displayTotalPrice) {
+        displayTotalPrice.textContent = `KES ${Math.round(price)}`;
+    }
+    
+    if (successOverlay) {
+        successOverlay.style.display = 'flex';
+    }
+    
+    console.log('✅ Success modal updated');
 }
 
-// Update progress indicator
 function updateProgress(step) {
     const steps = document.querySelectorAll('.step');
     const progressFill = document.getElementById('progressFill');
@@ -2244,153 +2152,10 @@ function updateProgress(step) {
     progressFill.style.width = `${(step / 4) * 100}%`;
 }
 
-// Initialize on load
-if (document.readyState === 'loading') {
-    window.addEventListener('DOMContentLoaded', initialize);
-} else {
-    initialize();
-}
+// ─── Form Validation Monitoring ────────────────────────────────────────────
 
-// Export showNotification to global scope
-window.showNotification = showNotification;
-
-// Add CSS for location success animation only if not already added
-if (!document.getElementById('location-success-styles')) {
-    const style = document.createElement('style');
-    style.id = 'location-success-styles';
-    style.textContent = `
-        @keyframes locationSuccess {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.02); }
-            100% { transform: scale(1); }
-        }
-        
-        .input-field.location-confirmed {
-            border-color: #34C759 !important;
-            background: rgba(52, 199, 89, 0.05) !important;
-        }
-        
-        .input-action {
-            transition: all 0.3s ease;
-        }
-    `;
-    document.head.appendChild(style);
-}
-// Add this code at the very end of your vendor.js file
-// This is a comprehensive fix for the booking button issue
-
-// Fix 1: Ensure form validation runs after any state change
-(function() {
-    console.log('🔧 Applying comprehensive booking button fix...');
-    
-    // Override checkFormValidity to be more aggressive
-    window.checkFormValidity = function() {
-        const pickup = formState.get('pickupCoords');
-        const delivery = formState.get('deliveryCoords');
-        const distance = formState.get('distance');
-        
-        console.log('🔍 Form validity check:', {
-            hasPickup: !!pickup,
-            pickupCoords: pickup,
-            hasDelivery: !!delivery,
-            deliveryCoords: delivery,
-            hasDistance: !!distance,
-            distance: distance
-        });
-        
-        // Get button elements
-        const submitBtn = document.getElementById('submitBtn');
-        const buttonText = document.getElementById('buttonText');
-        
-        if (!submitBtn || !buttonText) {
-            console.error('❌ Submit button elements not found!');
-            return;
-        }
-        
-        if (pickup && delivery && distance > 0) {
-            submitBtn.disabled = false;
-            buttonText.textContent = 'Book Delivery';
-            console.log('✅ Form is valid - button enabled');
-        } else {
-            submitBtn.disabled = true;
-            buttonText.textContent = 'Enter locations to see price';
-            console.log('❌ Form is invalid - button disabled');
-        }
-    };
-    
-    // Fix 2: Watch for state changes more aggressively
-    const originalFormStateSet = formState.set;
-    formState.set = function(key, value) {
-        // Call original
-        originalFormStateSet.call(this, key, value);
-        
-        // Check validity after any relevant change
-        if (key === 'distance' || key === 'pickupCoords' || key === 'deliveryCoords') {
-            setTimeout(() => {
-                checkFormValidity();
-            }, 100);
-        }
-    };
-    
-    // Fix 3: Ensure calculateDistance always triggers validation
-    const originalCalculateDistance = window.calculateDistance;
-    window.calculateDistance = async function() {
-        console.log('📏 Calculating distance...');
-        const result = await originalCalculateDistance.apply(this, arguments);
-        
-        // Force validation after calculation
-        setTimeout(() => {
-            checkFormValidity();
-            
-            // Double-check and force enable if conditions are met
-            const pickup = formState.get('pickupCoords');
-            const delivery = formState.get('deliveryCoords');
-            const distance = formState.get('distance');
-            
-            if (pickup && delivery && distance > 0) {
-                const submitBtn = document.getElementById('submitBtn');
-                const buttonText = document.getElementById('buttonText');
-                
-                if (submitBtn && submitBtn.disabled) {
-                    console.log('🚨 Force-enabling button after distance calculation');
-                    submitBtn.disabled = false;
-                    buttonText.textContent = 'Book Delivery';
-                }
-            }
-        }, 200);
-        
-        return result;
-    };
-    
-    // Fix 4: Manual validation helper (can be called from console)
-    window.forceEnableBooking = function() {
-        const pickup = formState.get('pickupCoords');
-        const delivery = formState.get('deliveryCoords');
-        const distance = formState.get('distance');
-        
-        console.log('🔨 Force enable booking:', {
-            pickup: pickup,
-            delivery: delivery,
-            distance: distance
-        });
-        
-        const submitBtn = document.getElementById('submitBtn');
-        const buttonText = document.getElementById('buttonText');
-        
-        if (submitBtn && buttonText) {
-            if (pickup && delivery && distance > 0) {
-                submitBtn.disabled = false;
-                buttonText.textContent = 'Book Delivery';
-                return '✅ Button enabled!';
-            } else {
-                return '❌ Missing data - cannot enable. Check pickup, delivery, and distance.';
-            }
-        } else {
-            return '❌ Button elements not found!';
-        }
-    };
-    
-    // Fix 5: Add mutation observer to watch for button state changes
+function setupFormValidationMonitoring() {
+    // Watch for button state changes
     const submitBtn = document.getElementById('submitBtn');
     if (submitBtn) {
         const observer = new MutationObserver((mutations) => {
@@ -2411,7 +2176,7 @@ if (!document.getElementById('location-success-styles')) {
         observer.observe(submitBtn, { attributes: true });
     }
     
-    // Fix 6: Periodically check form validity (failsafe)
+    // Periodically check form validity (failsafe)
     setInterval(() => {
         const pickup = formState.get('pickupCoords');
         const delivery = formState.get('deliveryCoords');
@@ -2425,44 +2190,40 @@ if (!document.getElementById('location-success-styles')) {
             }
         }
     }, 1000);
-    
-    console.log('✅ Comprehensive booking button fix applied!');
-    console.log('💡 If button is still disabled, run: forceEnableBooking()');
-})();
-// Add this code to the END of your vendor.js file
-// This will intercept and fix the status before submission
+}
 
-(function() {
-    console.log('🔧 Applying direct status fix...');
+// ─── Helper Functions ──────────────────────────────────────────────────────
+
+window.forceEnableBooking = function() {
+    const pickup = formState.get('pickupCoords');
+    const delivery = formState.get('deliveryCoords');
+    const distance = formState.get('distance');
     
-    // Store the original insert function
-    const originalInsert = supabaseAPI.insert;
+    console.log('🔨 Force enable booking:', {
+        pickup: pickup,
+        delivery: delivery,
+        distance: distance
+    });
     
-    // Override the insert function to fix status
-    supabaseAPI.insert = async function(table, data) {
-        if (table === 'parcels') {
-            console.log('📦 Intercepting parcel insert...');
-            console.log('Original status:', data.status);
-            
-            // Force the status to 'submitted'
-            data.status = 'submitted';
-            
-            console.log('✅ Fixed status to:', data.status);
-            console.log('Full parcel data:', JSON.stringify(data, null, 2));
+    const submitBtn = document.getElementById('submitBtn');
+    const buttonText = document.getElementById('buttonText');
+    
+    if (submitBtn && buttonText) {
+        if (pickup && delivery && distance > 0) {
+            submitBtn.disabled = false;
+            buttonText.textContent = 'Book Delivery';
+            return '✅ Button enabled!';
+        } else {
+            return '❌ Missing data - cannot enable. Check pickup, delivery, and distance.';
         }
-        
-        // Call the original insert with fixed data
-        return originalInsert.call(this, table, data);
-    };
-    
-    console.log('✅ Direct status fix applied!');
-})();
+    } else {
+        return '❌ Button elements not found!';
+    }
+};
 
-// Also add a console helper to manually create a booking
 window.testBooking = async function() {
     console.log('🧪 Testing booking creation...');
     
-    // Get current form data
     const testData = {
         vendor_name: document.getElementById('vendorName')?.value || 'Test Vendor',
         vendor_phone: document.getElementById('phoneNumber')?.value || '0700000000',
@@ -2491,7 +2252,7 @@ window.testBooking = async function() {
         parcel_code: 'TEST123',
         pickup_code: 'PK123',
         delivery_code: 'DL123',
-        status: 'submitted', // Using correct status
+        status: 'submitted',
         created_at: new Date().toISOString()
     };
     
@@ -2504,139 +2265,39 @@ window.testBooking = async function() {
         return error;
     }
 };
-// Fix for the success modal not displaying codes and price properly
-// Add this to the end of your vendor.js file
 
-(function() {
-    console.log('🔧 Fixing success modal display...');
-    
-    // Override the showSuccess function to ensure codes are displayed
-    window.showSuccess = function(codes, price) {
-        console.log('📋 Showing success with codes:', codes, 'price:', price);
-        
-        // Ensure we have the element references
-        const displayParcelCode = document.getElementById('displayParcelCode');
-        const displayPickupCode = document.getElementById('displayPickupCode');
-        const displayDeliveryCode = document.getElementById('displayDeliveryCode');
-        const displayTotalPrice = document.getElementById('displayTotalPrice');
-        const successOverlay = document.getElementById('successOverlay');
-        
-        if (!displayParcelCode || !displayPickupCode || !displayDeliveryCode) {
-            console.error('❌ Success modal elements not found!');
-            return;
+// ─── CSS Styles ────────────────────────────────────────────────────────────
+
+if (!document.getElementById('location-success-styles')) {
+    const style = document.createElement('style');
+    style.id = 'location-success-styles';
+    style.textContent = `
+        @keyframes locationSuccess {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+            100% { transform: scale(1); }
         }
         
-        // Handle different code object structures
-        if (typeof codes === 'object') {
-            displayParcelCode.textContent = codes.parcel_code || codes.parcelCode || 'N/A';
-            displayPickupCode.textContent = codes.pickup_code || codes.pickupCode || 'N/A';
-            displayDeliveryCode.textContent = codes.delivery_code || codes.deliveryCode || 'N/A';
-        } else {
-            console.error('❌ Invalid codes object:', codes);
+        .input-field.location-confirmed {
+            border-color: #34C759 !important;
+            background: rgba(52, 199, 89, 0.05) !important;
         }
         
-        // Display the price
-        if (displayTotalPrice) {
-            displayTotalPrice.textContent = `KES ${Math.round(price)}`;
+        .input-action {
+            transition: all 0.3s ease;
         }
-        
-        // Show the overlay
-        if (successOverlay) {
-            successOverlay.style.display = 'flex';
-        }
-        
-        console.log('✅ Success modal updated');
-    };
-    
-    // Fix the pricing calculation to ensure proper distribution
-    window.fixPricingCalculation = function(totalPrice, serviceType) {
-        // Standard commission splits
-        const platformRate = 0.15; // 15% platform fee
-        const riderRate = 0.70;    // 70% of total goes to rider
-        const vendorRate = 0.15;   // 15% stays with vendor
-        
-        const platformFee = Math.round(totalPrice * platformRate);
-        const riderPayout = Math.round(totalPrice * riderRate);
-        const vendorPayout = Math.round(totalPrice * vendorRate);
-        
-        // Ensure all amounts add up to total
-        const calculated = platformFee + riderPayout + vendorPayout;
-        const difference = totalPrice - calculated;
-        
-        // Add any rounding difference to vendor payout
-        const adjustedVendorPayout = vendorPayout + difference;
-        
-        console.log('💰 Pricing breakdown:', {
-            total: totalPrice,
-            platform: platformFee,
-            rider: riderPayout,
-            vendor: adjustedVendorPayout,
-            sum: platformFee + riderPayout + adjustedVendorPayout
-        });
-        
-        return {
-            platform_fee: platformFee,
-            platform_revenue: platformFee,
-            rider_payout: riderPayout,
-            vendor_payout: adjustedVendorPayout
-        };
-    };
-    
-    // Override the handleFormSubmit to fix the success display
-    const originalHandleFormSubmit = window.handleFormSubmit;
-    window.handleFormSubmit = async function(e) {
-        e.preventDefault();
-        
-        try {
-            // Store the codes before submission
-            let generatedCodes = null;
-            let calculatedPrice = null;
-            
-            // Intercept the parcel data creation
-            const originalInsert = supabaseAPI.insert;
-            supabaseAPI.insert = async function(table, data) {
-                if (table === 'parcels') {
-                    // Capture the codes and price
-                    generatedCodes = {
-                        parcel_code: data.parcel_code,
-                        pickup_code: data.pickup_code,
-                        delivery_code: data.delivery_code
-                    };
-                    calculatedPrice = data.total_price || data.price;
-                    
-                    // Fix the pricing calculation
-                    const fixedPricing = fixPricingCalculation(calculatedPrice, data.service_type);
-                    Object.assign(data, fixedPricing);
-                    
-                    console.log('📦 Captured booking data:', {
-                        codes: generatedCodes,
-                        price: calculatedPrice,
-                        pricing: fixedPricing
-                    });
-                }
-                
-                return originalInsert.call(this, table, data);
-            };
-            
-            // Call original submit
-            await originalHandleFormSubmit.call(this, e);
-            
-            // Restore original insert
-            supabaseAPI.insert = originalInsert;
-            
-            // If we have codes, ensure they're displayed
-            if (generatedCodes && calculatedPrice) {
-                console.log('📋 Ensuring success display with:', generatedCodes, calculatedPrice);
-                setTimeout(() => {
-                    showSuccess(generatedCodes, calculatedPrice);
-                }, 500);
-            }
-            
-        } catch (error) {
-            console.error('Submission error:', error);
-            showNotification('Failed to create booking. Please try again.', 'error');
-        }
-    };
-    
-    console.log('✅ Success modal fixes applied!');
-})();
+    `;
+    document.head.appendChild(style);
+}
+
+// ─── Initialize on Load ────────────────────────────────────────────────────
+
+if (document.readyState === 'loading') {
+    window.addEventListener('DOMContentLoaded', initialize);
+} else {
+    initialize();
+}
+
+console.log('✅ Vendor dashboard script loaded with all integrations');
+console.log('💡 If booking button is disabled, run: forceEnableBooking()');
+console.log('💡 To test booking creation, run: testBooking()');
