@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="telegram-web-app" content="true">
     <title>Tuma - Rider Dashboard</title>
     
     <!-- Telegram Web App runtime -->
@@ -14,13 +13,6 @@
     <!-- Leaflet (CSS+JS) -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    
-    <!-- Your config & modules -->
-    <script src="./config.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
-    <script type="module" src="./supabaseClient.js"></script>
-    <script type="module" src="./mapUtils.js"></script>
-    <script type="module" src="./businessLogic.js"></script>
     
     <style>
         * {
@@ -267,95 +259,6 @@
         }
 
         .status-badge.offline {
-            background: var(--surface-high);
-            color: var(--text-secondary);
-        }
-
-        /* Commission Status */
-        .commission-status {
-            background: var(--surface-elevated);
-            border-radius: 14px;
-            padding: 16px;
-            margin: 0 0 20px;
-            border: 1px solid var(--border);
-            transition: all 0.3s;
-        }
-        
-        .commission-status.warning {
-            border-color: var(--warning);
-            background: rgba(255, 159, 10, 0.1);
-        }
-        
-        .commission-status.blocked {
-            border-color: var(--danger);
-            background: rgba(255, 59, 48, 0.1);
-        }
-        
-        .commission-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 12px;
-        }
-        
-        .commission-title {
-            font-size: 14px;
-            font-weight: 600;
-            color: var(--text-secondary);
-        }
-        
-        .commission-amount {
-            font-size: 16px;
-            font-weight: 700;
-            color: var(--text-primary);
-        }
-        
-        .commission-progress {
-            height: 8px;
-            background: var(--surface-high);
-            border-radius: 4px;
-            overflow: hidden;
-            margin-bottom: 12px;
-        }
-        
-        .commission-progress-bar {
-            height: 100%;
-            background: var(--primary);
-            border-radius: 4px;
-            transition: width 0.3s ease;
-        }
-        
-        .commission-status.warning .commission-progress-bar {
-            background: var(--warning);
-        }
-        
-        .commission-status.blocked .commission-progress-bar {
-            background: var(--danger);
-        }
-        
-        .commission-actions {
-            display: flex;
-            gap: 8px;
-        }
-        
-        .commission-pay-button,
-        .commission-details-button {
-            flex: 1;
-            padding: 10px;
-            border-radius: 8px;
-            border: none;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        
-        .commission-pay-button {
-            background: var(--primary);
-            color: white;
-        }
-        
-        .commission-details-button {
             background: var(--surface-high);
             color: var(--text-secondary);
         }
@@ -943,6 +846,29 @@
             color: white;
         }
 
+        /* Notifications */
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes slideOut {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+        }
+
         /* Responsive */
         @media (min-width: 428px) {
             .app {
@@ -991,26 +917,6 @@
                 </div>
             </div>
 
-            <!-- Quick Actions Bar -->
-            <div class="quick-actions">
-                <button class="quick-action" onclick="toggleBreakMode()">
-                    <span class="action-icon">☕</span>
-                    <span class="action-label">Break</span>
-                </button>
-                <button class="quick-action" onclick="viewEarningsDetails()">
-                    <span class="action-icon">📊</span>
-                    <span class="action-label">Analytics</span>
-                </button>
-                <button class="quick-action" onclick="showHotZones()">
-                    <span class="action-icon">🔥</span>
-                    <span class="action-label">Hot Zones</span>
-                </button>
-                <button class="quick-action" onclick="callSupport()">
-                    <span class="action-icon">📞</span>
-                    <span class="action-label">Support</span>
-                </button>
-            </div>
-
             <!-- Form Container -->
             <form class="form-container">
                 <!-- Hero Section -->
@@ -1025,26 +931,7 @@
                     </span>
                 </div>
 
-                <!-- Commission Status (Example - JS will replace this) -->
-                <div id="commissionContainer">
-                    <div class="commission-status">
-                        <div class="commission-header">
-                            <span class="commission-title">Platform Commission</span>
-                            <span class="commission-amount">KES 0 / 300</span>
-                        </div>
-                        <div class="commission-progress">
-                            <div class="commission-progress-bar" style="width: 0%"></div>
-                        </div>
-                        <div class="commission-actions">
-                            <button type="button" class="commission-pay-button" onclick="openPaymentModal()">
-                                Pay Commission
-                            </button>
-                            <button type="button" class="commission-details-button" onclick="viewCommissionDetails()">
-                                View Details
-                            </button>
-                        </div>
-                    </div>
-                </div>
+                <!-- Commission container will be injected here by JS -->
 
                 <!-- Earnings Overview -->
                 <div class="form-section">
@@ -1061,29 +948,6 @@
                         <div class="earnings-card">
                             <div class="earnings-value">KES <span id="monthlyEarnings">0</span></div>
                             <div class="earnings-label">This Month</div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Incentive Progress (Example - JS will update this) -->
-                <div class="form-section">
-                    <div class="incentive-widget">
-                        <div class="peak-hour-banner" style="display: none;">
-                            <span class="peak-icon">🔥</span>
-                            <span>Peak Hours Active! 20% bonus on all deliveries</span>
-                        </div>
-                        <div class="daily-bonus-progress">
-                            <h3 class="bonus-title">Daily Bonus Progress</h3>
-                            <div class="progress-container">
-                                <div class="progress-bar">
-                                    <div class="progress-fill" style="width: 0%"></div>
-                                </div>
-                                <div class="progress-text">
-                                    <span>0/5 deliveries</span>
-                                    <span class="bonus-amount">KES 100</span>
-                                </div>
-                            </div>
-                            <p class="progress-message">Complete 5 deliveries for Starter bonus!</p>
                         </div>
                     </div>
                 </div>
@@ -1106,35 +970,6 @@
                             <div class="stat-icon">⭐</div>
                             <div class="stat-value" id="riderRating">5.0</div>
                             <div class="stat-label">Rating</div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Performance Metrics -->
-                <div class="form-section">
-                    <div class="performance-metrics">
-                        <h2 class="section-title">Today's Performance</h2>
-                        <div class="metrics-grid">
-                            <div class="metric-card">
-                                <div class="metric-icon">⚡</div>
-                                <div class="metric-value">0</div>
-                                <div class="metric-label">Deliveries/Hour</div>
-                            </div>
-                            <div class="metric-card">
-                                <div class="metric-icon">💰</div>
-                                <div class="metric-value">KES 0</div>
-                                <div class="metric-label">Per KM</div>
-                            </div>
-                            <div class="metric-card">
-                                <div class="metric-icon">⏱️</div>
-                                <div class="metric-value">0 min</div>
-                                <div class="metric-label">Avg Time</div>
-                            </div>
-                            <div class="metric-card">
-                                <div class="metric-icon">✅</div>
-                                <div class="metric-value">0%</div>
-                                <div class="metric-label">Accept Rate</div>
-                            </div>
                         </div>
                     </div>
                 </div>
@@ -1175,7 +1010,7 @@
                     </div>
                     
                     <div class="route-list" id="routeList">
-                        <!-- Example route card - JS will populate -->
+                        <!-- Routes will be populated by JS -->
                         <div class="route-card">
                             <div class="route-header">
                                 <div class="route-cluster">Loading Routes...</div>
@@ -1216,20 +1051,59 @@
         </button>
     </div>
 
-    <!-- Placeholder functions -->
+    <!-- Placeholder functions that will be overridden by the external JS -->
     <script>
-        // These will be overridden by rider.js
+        // Menu handler
         function showMenu() {
             console.log('Menu clicked');
+            // This will be overridden by the external JS
         }
         
-        // Show nav button if there's an active route
-        if (localStorage.getItem('tuma_active_route')) {
-            document.getElementById('navButton').style.display = 'flex';
+        // Additional global functions that might be called before external JS loads
+        function viewCommissionDetails() {
+            console.log('View commission details');
         }
+        
+        function closePaymentModal() {
+            const modal = document.querySelector('.payment-modal');
+            if (modal) {
+                modal.remove();
+            }
+        }
+        
+        // Check for active route on page load
+        window.addEventListener('DOMContentLoaded', function() {
+            if (localStorage.getItem('tuma_active_route')) {
+                const navButton = document.getElementById('navButton');
+                if (navButton) {
+                    navButton.style.display = 'flex';
+                }
+            }
+        });
     </script>
 
-    <!-- Main rider script -->
-    <script type="module" src="./rider.js"></script>
+    <!-- Load the main JavaScript file -->
+    <script type="module">
+        // Create a simple addCustomStyles function in case the external JS needs it
+        window.addCustomStyles = function() {
+            const existingStyle = document.getElementById('custom-styles');
+            if (!existingStyle) {
+                const style = document.createElement('style');
+                style.id = 'custom-styles';
+                style.textContent = `
+                    /* Additional styles will be injected here by the external JS */
+                `;
+                document.head.appendChild(style);
+            }
+        };
+        
+        // Import and initialize the external JavaScript
+        import('./rider.js').then(module => {
+            console.log('Rider module loaded successfully');
+        }).catch(error => {
+            console.error('Error loading rider module:', error);
+            // Fallback initialization if needed
+        });
+    </script>
 </body>
 </html>
