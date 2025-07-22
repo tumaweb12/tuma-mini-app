@@ -1223,7 +1223,7 @@ async function checkActiveDeliveries() {
         if (!state.rider || state.rider.id === 'demo-rider-001') return;
         
         const activeParcels = await supabaseAPI.query('parcels', {
-            filter: `rider_id=eq.${state.rider.id}&status=in.(assigned,picked_up)`,
+            filter: `rider_id=eq.${state.rider.id}&status=in.(route_assigned,picked,in_transit)`,
             order: 'created_at.asc'
         });
         
@@ -1641,7 +1641,7 @@ window.verifyCode = async function(type) {
                 await supabaseAPI.update('parcels',
                     `id=eq.${activeStop.parcelId}`,
                     {
-                        status: type === 'pickup' ? 'picked_up' : 'delivered',
+                        status: type === 'pickup' ? 'pickup' : 'delivery',
                         [`${type}_timestamp`]: activeStop.timestamp.toISOString()
                     }
                 );
