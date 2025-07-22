@@ -652,6 +652,12 @@ function isPeakHour() {
 
 async function loadActiveBonuses() {
     try {
+        // Skip for temporary riders
+        if (!state.rider || state.rider.id.startsWith('temp-')) {
+            state.activeBonuses = [];
+            return;
+        }
+        
         // Load active bonuses from database
         const bonuses = await supabaseAPI.query('rider_bonuses', {
             filter: `rider_id=eq.${state.rider.id}&is_active=eq.true&expires_at=gt.${new Date().toISOString()}`,
@@ -947,13 +953,12 @@ async function initialize() {
     // Initialize commission tracker
     state.commissionTracker = new CommissionTracker(BUSINESS_CONFIG.commission);
     
-    // Check if user is authenticated
+    // Check if user is authenticated (optional for now)
     const authenticated = await checkAuthAndLoadRider();
     
     if (!authenticated) {
-        showNotification('Please login to continue', 'error');
-        // Redirect to login or show login modal
-        return;
+        // Create a temporary rider for testing
+        await createTemporaryRider();
     }
     
     // Update rider name
@@ -1053,7 +1058,25 @@ async function loadRiderByPhone(phone) {
     return false;
 }
 
-async function loadEarnings() {
+async function createTemporaryRider() {
+    // Create a temporary rider ID
+    const tempId = 'temp-' + Date.now();
+    
+    state.rider = {
+        id: tempId,
+        rider_name: 'Test Rider',
+        phone: '0700000000',
+        status: 'active',
+        total_deliveries: 0,
+        completed_deliveries: 0,
+        total_distance: 0,
+        rating: 5.0,
+        unpaid_commission: 0,
+        verification_status: 'verified'
+    };
+    
+    console.log('Created temporary rider:', state.rider.id);
+}
     try {
         if (!state.rider) return;
         
@@ -1097,7 +1120,18 @@ async function loadEarnings() {
 
 async function loadStats() {
     try {
-        if (!state.rider) return;
+        if (!state.rider) {
+            state.stats = { deliveries: 0, distance: 0, rating: 5.0 };
+            updateStatsDisplay();
+            return;
+        }
+        
+        // For temporary riders, show default stats
+        if (state.rider.id.startsWith('temp-')) {
+            state.stats = { deliveries: 0, distance: 0, rating: 5.0 };
+            updateStatsDisplay();
+            return;
+        }
         
         state.stats = {
             deliveries: state.rider.completed_deliveries || 0,
@@ -1215,8 +1249,8 @@ async function checkActiveDeliveries() {
             }
         }
         
-        // Otherwise check database for active deliveries
-        if (!state.rider) return;
+        // Skip database check for temporary riders
+        if (!state.rider || state.rider.id.startsWith('temp-')) return;
         
         const activeParcels = await supabaseAPI.query('parcels', {
             filter: `rider_id=eq.${state.rider.id}&status=in.(route_assigned,picked,in_transit)`,
@@ -1329,7 +1363,7 @@ function getCurrentLocation() {
 
 function startLocationUpdates() {
     setInterval(() => {
-        if (state.status === 'online' && state.rider) {
+        if (state.status === 'online' && state.rider && !state.rider.id.startsWith('temp-')) {
             getCurrentLocation();
             
             if (state.currentLocation) {
@@ -1383,7 +1417,8 @@ async function toggleStatus() {
         `;
     }
     
-    if (state.rider) {
+    // Only update database for non-temporary riders
+    if (state.rider && !state.rider.id.startsWith('temp-')) {
         try {
             await supabaseAPI.update('riders', 
                 `id=eq.${state.rider.id}`, 
@@ -1487,16 +1522,18 @@ window.claimRoute = async function(routeId) {
             
             const flatParcels = parcels.flat();
             
-            // Update parcels to assign to this rider
-            for (const parcel of flatParcels) {
-                await supabaseAPI.update('parcels', 
-                    `id=eq.${parcel.id}`,
-                    { 
-                        rider_id: state.rider.id,
-                        status: 'assigned',
-                        assigned_at: new Date().toISOString()
-                    }
-                );
+            // Update parcels to assign to this rider (skip for temporary riders)
+            if (!state.rider.id.startsWith('temp-')) {
+                for (const parcel of flatParcels) {
+                    await supabaseAPI.update('parcels', 
+                        `id=eq.${parcel.id}`,
+                        { 
+                            rider_id: state.rider.id,
+                            status: 'assigned',
+                            assigned_at: new Date().toISOString()
+                        }
+                    );
+                }
             }
             
             // Create route with sequenced stops
@@ -1572,14 +1609,16 @@ window.verifyCode = async function(type) {
             activeStop.completed = true;
             activeStop.timestamp = new Date();
             
-            // Update parcel status in database
-            await supabaseAPI.update('parcels',
-                `id=eq.${activeStop.parcelId}`,
-                {
-                    status: type === 'pickup' ? 'pickup' : 'delivery',
-                    [`${type}_timestamp`]: activeStop.timestamp.toISOString()
-                }
-            );
+            // Update parcel status in database (skip for temporary riders)
+            if (!state.rider.id.startsWith('temp-')) {
+                await supabaseAPI.update('parcels',
+                    `id=eq.${activeStop.parcelId}`,
+                    {
+                        status: type === 'pickup' ? 'pickup' : 'delivery',
+                        [`${type}_timestamp`]: activeStop.timestamp.toISOString()
+                    }
+                );
+            }
             
             // Handle commission for deliveries
             if (type === 'delivery') {
@@ -1601,14 +1640,16 @@ window.verifyCode = async function(type) {
                         deliveryPrice
                     );
                     
-                    // Update database
-                    await supabaseAPI.update('riders',
-                        `id=eq.${state.rider.id}`,
-                        {
-                            unpaid_commission: commissionResult.totalUnpaid,
-                            is_commission_blocked: commissionResult.isBlocked
-                        }
-                    );
+                    // Update database (skip for temporary riders)
+                    if (!state.rider.id.startsWith('temp-')) {
+                        await supabaseAPI.update('riders',
+                            `id=eq.${state.rider.id}`,
+                            {
+                                unpaid_commission: commissionResult.totalUnpaid,
+                                is_commission_blocked: commissionResult.isBlocked
+                            }
+                        );
+                    }
                     
                     displayCommissionStatus();
                     
