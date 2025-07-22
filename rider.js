@@ -18,12 +18,6 @@ const BUSINESS_CONFIG = {
         eco: { label: 'Eco', multiplier: 0.8 }
     },
     incentives: {
-        daily_targets: [
-            { deliveries: 5, bonus: 100, label: "Starter" },
-            { deliveries: 10, bonus: 200, label: "Active" },
-            { deliveries: 15, bonus: 400, label: "Champion" },
-            { deliveries: 20, bonus: 700, label: "Legend" }
-        ],
         peak_hours: {
             morning: { start: 7, end: 10, multiplier: 1.2 },
             evening: { start: 17, end: 20, multiplier: 1.3 }
@@ -159,16 +153,6 @@ class CommissionTracker {
 
     async initialize(riderId, api) {
         try {
-            // Skip database query for demo rider
-            if (riderId === 'demo-rider-001') {
-                console.log('Demo mode: Using default commission values');
-                this.state.unpaidCommission = 0;
-                this.state.totalPaid = 0;
-                this.state.isBlocked = false;
-                this.state.lastPayment = null;
-                return;
-            }
-            
             const riders = await api.query('riders', {
                 filter: `id=eq.${riderId}`,
                 limit: 1
@@ -187,7 +171,7 @@ class CommissionTracker {
     }
 
     async addDeliveryCommission(parcelId, deliveryPrice) {
-        const commission = deliveryPrice * this.config.platformFeeRate;
+        const commission = deliveryPrice * this.config.platform;
         this.state.unpaidCommission += commission;
         this.state.pendingDeliveries.push({
             parcelId,
@@ -201,7 +185,7 @@ class CommissionTracker {
             isBlocked: false
         };
 
-        if (this.state.unpaidCommission >= this.config.maxUnpaidCommission) {
+        if (this.state.unpaidCommission >= this.config.maxUnpaid) {
             this.state.isBlocked = true;
             result.isBlocked = true;
         } else if (this.state.unpaidCommission >= this.config.warningThreshold) {
@@ -217,7 +201,7 @@ class CommissionTracker {
             totalPaid: Math.round(this.state.totalPaid),
             pendingCount: this.state.pendingDeliveries.length,
             isBlocked: this.state.isBlocked,
-            percentageUsed: Math.round((this.state.unpaidCommission / this.config.maxUnpaidCommission) * 100)
+            percentageUsed: Math.round((this.state.unpaidCommission / this.config.maxUnpaid) * 100)
         };
     }
 
@@ -232,7 +216,7 @@ class CommissionTracker {
                 <div class="commission-status ${isWarning ? 'warning' : ''} ${isBlocked ? 'blocked' : ''}">
                     <div class="commission-header">
                         <span class="commission-title">Platform Commission</span>
-                        <span class="commission-amount">KES ${summary.unpaid} / ${this.config.maxUnpaidCommission}</span>
+                        <span class="commission-amount">KES ${summary.unpaid} / ${this.config.maxUnpaid}</span>
                     </div>
                     <div class="commission-progress">
                         <div class="commission-progress-bar" style="width: ${percentage}%"></div>
@@ -258,7 +242,7 @@ class CommissionTracker {
                     <div class="blocked-content">
                         <div class="blocked-icon">🚫</div>
                         <h2>Account Temporarily Restricted</h2>
-                        <p>You've reached the maximum unpaid commission limit of KES ${this.config.maxUnpaidCommission}.</p>
+                        <p>You've reached the maximum unpaid commission limit of KES ${this.config.maxUnpaid}.</p>
                         <p class="blocked-amount">Amount Due: KES ${summary.unpaid}</p>
                         <button class="pay-now-button" onclick="openPaymentModal()">
                             Pay Now to Continue
@@ -437,6 +421,32 @@ class CommissionTracker {
                 font-size: 14px;
                 color: var(--text-tertiary);
             }
+            
+            /* Make route cards clickable */
+            .route-card:not(.claimed) {
+                transition: all 0.3s ease;
+            }
+            
+            .route-card:not(.claimed):hover {
+                transform: translateY(-2px);
+                box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+                border-color: var(--primary);
+            }
+            
+            .route-card:not(.claimed):active {
+                transform: translateY(0);
+            }
+            
+            .route-card.claimed {
+                opacity: 0.6;
+                background: var(--surface-dim);
+            }
+            
+            /* Prevent button from triggering card click */
+            .claim-button {
+                position: relative;
+                z-index: 2;
+            }
         `;
     }
 }
@@ -464,7 +474,8 @@ const state = {
     commissionTracker: null,
     currentLocation: null,
     mapInitialized: false,
-    parcelsInPossession: []
+    parcelsInPossession: [],
+    activeBonuses: [] // Admin-triggered bonuses
 };
 
 // ─── DOM Elements ──────────────────────────────────────────────────────────
@@ -639,26 +650,62 @@ function isPeakHour() {
     return { isPeak: false, multiplier: 1, type: 'normal' };
 }
 
+async function loadActiveBonuses() {
+    try {
+        // Load active bonuses from database
+        const bonuses = await supabaseAPI.query('rider_bonuses', {
+            filter: `rider_id=eq.${state.rider.id}&is_active=eq.true&expires_at=gt.${new Date().toISOString()}`,
+            order: 'created_at.desc'
+        });
+        
+        state.activeBonuses = bonuses;
+        
+        // Also check for global bonuses
+        const globalBonuses = await supabaseAPI.query('global_bonuses', {
+            filter: `is_active=eq.true&expires_at=gt.${new Date().toISOString()}`,
+            order: 'created_at.desc'
+        });
+        
+        state.activeBonuses = [...state.activeBonuses, ...globalBonuses];
+        
+    } catch (error) {
+        console.error('Error loading bonuses:', error);
+        state.activeBonuses = [];
+    }
+}
+
 function calculateDailyBonus() {
     const deliveries = state.stats.deliveries;
-    let currentTarget = null;
-    let nextTarget = null;
+    let applicableBonuses = [];
     
-    for (let i = 0; i < BUSINESS_CONFIG.incentives.daily_targets.length; i++) {
-        const target = BUSINESS_CONFIG.incentives.daily_targets[i];
-        if (deliveries >= target.deliveries) {
-            currentTarget = target;
-        } else if (!nextTarget) {
-            nextTarget = target;
+    // Check each active bonus
+    state.activeBonuses.forEach(bonus => {
+        if (bonus.type === 'delivery_target' && deliveries >= bonus.target_deliveries) {
+            applicableBonuses.push(bonus);
         }
-    }
+    });
     
-    return { currentTarget, nextTarget, deliveries };
+    // Sort by bonus amount descending and take the highest
+    applicableBonuses.sort((a, b) => b.bonus_amount - a.bonus_amount);
+    
+    return {
+        currentBonus: applicableBonuses[0] || null,
+        nextBonus: state.activeBonuses.find(b => 
+            b.type === 'delivery_target' && 
+            b.target_deliveries > deliveries
+        ) || null,
+        deliveries
+    };
 }
 
 function displayIncentiveProgress() {
-    const { currentTarget, nextTarget, deliveries } = calculateDailyBonus();
+    const { currentBonus, nextBonus, deliveries } = calculateDailyBonus();
     const peakStatus = isPeakHour();
+    
+    // Only show if there are active bonuses
+    if (state.activeBonuses.length === 0 && !peakStatus.isPeak) {
+        return;
+    }
     
     const incentiveHTML = `
         <div class="incentive-widget">
@@ -669,23 +716,25 @@ function displayIncentiveProgress() {
                 </div>
             ` : ''}
             
-            <div class="daily-bonus-progress">
-                <h3 class="bonus-title">Daily Bonus Progress</h3>
-                ${nextTarget ? `
+            ${nextBonus ? `
+                <div class="daily-bonus-progress">
+                    <h3 class="bonus-title">${nextBonus.title || 'Daily Bonus Progress'}</h3>
                     <div class="progress-container">
                         <div class="progress-bar">
-                            <div class="progress-fill" style="width: ${(deliveries / nextTarget.deliveries * 100)}%"></div>
+                            <div class="progress-fill" style="width: ${(deliveries / nextBonus.target_deliveries * 100)}%"></div>
                         </div>
                         <div class="progress-text">
-                            <span>${deliveries}/${nextTarget.deliveries} deliveries</span>
-                            <span class="bonus-amount">KES ${nextTarget.bonus}</span>
+                            <span>${deliveries}/${nextBonus.target_deliveries} deliveries</span>
+                            <span class="bonus-amount">KES ${nextBonus.bonus_amount}</span>
                         </div>
                     </div>
-                    <p class="progress-message">Complete ${nextTarget.deliveries - deliveries} more for ${nextTarget.label} bonus!</p>
-                ` : `
-                    <p class="max-bonus-reached">🎉 Maximum daily bonus achieved! KES ${currentTarget?.bonus || 0}</p>
-                `}
-            </div>
+                    <p class="progress-message">Complete ${nextBonus.target_deliveries - deliveries} more for bonus!</p>
+                </div>
+            ` : currentBonus ? `
+                <div class="daily-bonus-progress">
+                    <p class="max-bonus-reached">🎉 Bonus achieved! KES ${currentBonus.bonus_amount}</p>
+                </div>
+            ` : ''}
         </div>
     `;
     
@@ -794,6 +843,9 @@ function displayRoutes() {
     
     if (!elements.routeList) return;
     
+    // Check if rider already has an active route
+    const hasActiveRoute = state.claimedRoute !== null;
+    
     if (filteredRoutes.length === 0) {
         elements.routeList.innerHTML = `
             <div class="empty-state">
@@ -806,8 +858,9 @@ function displayRoutes() {
     }
     
     elements.routeList.innerHTML = filteredRoutes.map(route => `
-        <div class="route-card ${route.status !== 'available' ? 'claimed' : ''}" 
-             onclick="${route.status === 'available' ? `claimRoute('${route.id}')` : ''}">
+        <div class="route-card ${route.status !== 'available' || hasActiveRoute ? 'claimed' : ''}" 
+             onclick="${route.status === 'available' && !hasActiveRoute ? `claimRoute('${route.id}')` : ''}"
+             style="cursor: ${route.status === 'available' && !hasActiveRoute ? 'pointer' : 'not-allowed'}">
             <div class="route-header">
                 <div class="route-cluster">${route.name}</div>
                 <div class="route-type ${route.type}">${route.type.toUpperCase()}</div>
@@ -830,8 +883,9 @@ function displayRoutes() {
                 <span class="route-distance">📍 ${Math.round(route.distance)} km total</span>
                 <span class="route-time">⏱️ ~${Math.round(route.distance * 2 + route.deliveries * 5)} min</span>
             </div>
-            <button class="claim-button" type="button" ${route.status !== 'available' ? 'disabled' : ''}>
-                ${route.status === 'available' ? 'Claim Route' : 'Already Claimed'}
+            <button class="claim-button" type="button" ${route.status !== 'available' || hasActiveRoute ? 'disabled' : ''}
+                    onclick="event.stopPropagation()">
+                ${hasActiveRoute ? 'Route Active' : (route.status === 'available' ? 'Claim Route' : 'Already Claimed')}
             </button>
         </div>
     `).join('');
@@ -891,17 +945,15 @@ async function initialize() {
     window.state = state;
     
     // Initialize commission tracker
-    state.commissionTracker = new CommissionTracker({
-        maxUnpaidCommission: BUSINESS_CONFIG.commission.maxUnpaid,
-        platformFeeRate: BUSINESS_CONFIG.commission.platform,
-        warningThreshold: BUSINESS_CONFIG.commission.warningThreshold
-    });
+    state.commissionTracker = new CommissionTracker(BUSINESS_CONFIG.commission);
     
     // Check if user is authenticated
     const authenticated = await checkAuthAndLoadRider();
     
     if (!authenticated) {
-        await loadDemoRider();
+        showNotification('Please login to continue', 'error');
+        // Redirect to login or show login modal
+        return;
     }
     
     // Update rider name
@@ -930,6 +982,7 @@ async function initialize() {
     setupEventListeners();
     await loadEarnings();
     await loadStats();
+    await loadActiveBonuses();
     await loadAvailableRoutes();
     await checkActiveDeliveries();
     
@@ -1000,59 +1053,38 @@ async function loadRiderByPhone(phone) {
     return false;
 }
 
-async function loadDemoRider() {
-    state.rider = {
-        id: 'demo-rider-001',
-        rider_name: 'Demo Rider',
-        phone: '0700000000',
-        status: 'active',
-        total_deliveries: 0,
-        completed_deliveries: 0,
-        total_distance: 0,
-        rating: 5.0,
-        unpaid_commission: 0,
-        verification_status: 'verified'
-    };
-}
-
 async function loadEarnings() {
     try {
-        if (!state.rider || state.rider.id === 'demo-rider-001') {
-            state.earnings = {
-                daily: 2340,
-                weekly: 14520,
-                monthly: 58000
-            };
-        } else {
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            
-            const weekStart = new Date(today);
-            weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-            
-            const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-            
-            const dailyParcels = await supabaseAPI.query('parcels', {
-                filter: `rider_id=eq.${state.rider.id}&status=eq.delivered&delivery_timestamp=gte.${today.toISOString()}`,
-                select: 'rider_payout'
-            });
-            
-            const weeklyParcels = await supabaseAPI.query('parcels', {
-                filter: `rider_id=eq.${state.rider.id}&status=eq.delivered&delivery_timestamp=gte.${weekStart.toISOString()}`,
-                select: 'rider_payout'
-            });
-            
-            const monthlyParcels = await supabaseAPI.query('parcels', {
-                filter: `rider_id=eq.${state.rider.id}&status=eq.delivered&delivery_timestamp=gte.${monthStart.toISOString()}`,
-                select: 'rider_payout'
-            });
-            
-            state.earnings = {
-                daily: dailyParcels.reduce((sum, p) => sum + (p.rider_payout || 0), 0),
-                weekly: weeklyParcels.reduce((sum, p) => sum + (p.rider_payout || 0), 0),
-                monthly: monthlyParcels.reduce((sum, p) => sum + (p.rider_payout || 0), 0)
-            };
-        }
+        if (!state.rider) return;
+        
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        const weekStart = new Date(today);
+        weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+        
+        const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+        
+        const dailyParcels = await supabaseAPI.query('parcels', {
+            filter: `rider_id=eq.${state.rider.id}&status=eq.delivered&delivery_timestamp=gte.${today.toISOString()}`,
+            select: 'rider_payout'
+        });
+        
+        const weeklyParcels = await supabaseAPI.query('parcels', {
+            filter: `rider_id=eq.${state.rider.id}&status=eq.delivered&delivery_timestamp=gte.${weekStart.toISOString()}`,
+            select: 'rider_payout'
+        });
+        
+        const monthlyParcels = await supabaseAPI.query('parcels', {
+            filter: `rider_id=eq.${state.rider.id}&status=eq.delivered&delivery_timestamp=gte.${monthStart.toISOString()}`,
+            select: 'rider_payout'
+        });
+        
+        state.earnings = {
+            daily: dailyParcels.reduce((sum, p) => sum + (p.rider_payout || 0), 0),
+            weekly: weeklyParcels.reduce((sum, p) => sum + (p.rider_payout || 0), 0),
+            monthly: monthlyParcels.reduce((sum, p) => sum + (p.rider_payout || 0), 0)
+        };
         
         updateEarningsDisplay();
         
@@ -1065,19 +1097,13 @@ async function loadEarnings() {
 
 async function loadStats() {
     try {
-        if (!state.rider || state.rider.id === 'demo-rider-001') {
-            state.stats = {
-                deliveries: 156,
-                distance: 342,
-                rating: 4.8
-            };
-        } else {
-            state.stats = {
-                deliveries: state.rider.completed_deliveries || 0,
-                distance: Math.round(state.rider.total_distance || 0),
-                rating: state.rider.rating || 5.0
-            };
-        }
+        if (!state.rider) return;
+        
+        state.stats = {
+            deliveries: state.rider.completed_deliveries || 0,
+            distance: Math.round(state.rider.total_distance || 0),
+            rating: state.rider.rating || 5.0
+        };
         
         updateStatsDisplay();
         
@@ -1097,7 +1123,7 @@ async function loadAvailableRoutes() {
         console.log('Unclaimed parcels found:', unclaimedParcels.length);
         
         if (unclaimedParcels.length === 0) {
-            state.availableRoutes = getDemoRoutes();
+            state.availableRoutes = [];
         } else {
             state.availableRoutes = createRoutes(unclaimedParcels);
         }
@@ -1106,47 +1132,9 @@ async function loadAvailableRoutes() {
         
     } catch (error) {
         console.error('Error loading routes:', error);
-        state.availableRoutes = getDemoRoutes();
+        state.availableRoutes = [];
         displayRoutes();
     }
-}
-
-function getDemoRoutes() {
-    return [
-        {
-            id: 'demo-route-001',
-            name: 'Westlands Morning Cluster',
-            type: 'smart',
-            deliveries: 5,
-            pickups: 5,
-            distance: 12,
-            total_earnings: 1750,
-            status: 'available',
-            parcels: []
-        },
-        {
-            id: 'demo-route-002',
-            name: 'CBD Express Route',
-            type: 'express',
-            deliveries: 3,
-            pickups: 3,
-            distance: 8,
-            total_earnings: 1200,
-            status: 'available',
-            parcels: []
-        },
-        {
-            id: 'demo-route-003',
-            name: 'Karen Eco Route',
-            type: 'eco',
-            deliveries: 8,
-            pickups: 8,
-            distance: 25,
-            total_earnings: 2400,
-            status: 'available',
-            parcels: []
-        }
-    ];
 }
 
 function createRoutes(parcels) {
@@ -1204,13 +1192,21 @@ async function checkActiveDeliveries() {
         if (storedRoute) {
             try {
                 state.claimedRoute = JSON.parse(storedRoute);
+                
+                // Disable all routes if there's an active route
+                if (state.availableRoutes) {
+                    state.availableRoutes.forEach(r => {
+                        r.status = 'claimed';
+                    });
+                }
+                
                 showActiveRoute();
+                displayRoutes(); // Re-display routes with disabled state
                 
                 // Show navigation button
                 const navButton = document.getElementById('navButton');
                 if (navButton) {
                     navButton.style.display = 'flex';
-                    console.log('Navigation button shown from stored route');
                 }
                 return;
             } catch (error) {
@@ -1220,7 +1216,7 @@ async function checkActiveDeliveries() {
         }
         
         // Otherwise check database for active deliveries
-        if (!state.rider || state.rider.id === 'demo-rider-001') return;
+        if (!state.rider) return;
         
         const activeParcels = await supabaseAPI.query('parcels', {
             filter: `rider_id=eq.${state.rider.id}&status=in.(route_assigned,picked,in_transit)`,
@@ -1239,7 +1235,6 @@ async function checkActiveDeliveries() {
             const navButton = document.getElementById('navButton');
             if (navButton) {
                 navButton.style.display = 'flex';
-                console.log('Navigation button shown from active parcels');
             }
         }
         
@@ -1334,7 +1329,7 @@ function getCurrentLocation() {
 
 function startLocationUpdates() {
     setInterval(() => {
-        if (state.status === 'online' && state.rider && state.rider.id !== 'demo-rider-001') {
+        if (state.status === 'online' && state.rider) {
             getCurrentLocation();
             
             if (state.currentLocation) {
@@ -1388,7 +1383,7 @@ async function toggleStatus() {
         `;
     }
     
-    if (state.rider && state.rider.id !== 'demo-rider-001') {
+    if (state.rider) {
         try {
             await supabaseAPI.update('riders', 
                 `id=eq.${state.rider.id}`, 
@@ -1466,6 +1461,12 @@ window.claimRoute = async function(routeId) {
         window.event.stopPropagation();
     }
     
+    // Check if already has an active route
+    if (state.claimedRoute) {
+        showNotification('You already have an active route!', 'warning');
+        return;
+    }
+    
     const route = state.availableRoutes.find(r => r.id === routeId);
     if (!route || route.status !== 'available') return;
     
@@ -1486,18 +1487,16 @@ window.claimRoute = async function(routeId) {
             
             const flatParcels = parcels.flat();
             
-            // Update parcels to assign to this rider (skip for demo rider)
-            if (state.rider.id !== 'demo-rider-001') {
-                for (const parcel of flatParcels) {
-                    await supabaseAPI.update('parcels', 
-                        `id=eq.${parcel.id}`,
-                        { 
-                            rider_id: state.rider.id,
-                            status: 'assigned',
-                            assigned_at: new Date().toISOString()
-                        }
-                    );
-                }
+            // Update parcels to assign to this rider
+            for (const parcel of flatParcels) {
+                await supabaseAPI.update('parcels', 
+                    `id=eq.${parcel.id}`,
+                    { 
+                        rider_id: state.rider.id,
+                        status: 'assigned',
+                        assigned_at: new Date().toISOString()
+                    }
+                );
             }
             
             // Create route with sequenced stops
@@ -1515,28 +1514,13 @@ window.claimRoute = async function(routeId) {
             // Show navigation button
             const navButton = document.getElementById('navButton');
             if (navButton) navButton.style.display = 'flex';
-        } else {
-            // Demo route - create demo stops
-            const demoStops = createDemoStops(route);
-            state.claimedRoute = {
-                ...route,
-                parcels: [],
-                stops: demoStops
-            };
-            
-            // Store the claimed route for the route page
-            localStorage.setItem('tuma_active_route', JSON.stringify(state.claimedRoute));
-            
-            showActiveRoute();
-            
-            // Show navigation button
-            const navButton = document.getElementById('navButton');
-            if (navButton) navButton.style.display = 'flex';
-            
-            showNotification('Demo route claimed!', 'success');
         }
         
-        route.status = 'claimed';
+        // After successful claim, mark ALL routes as unavailable
+        state.availableRoutes.forEach(r => {
+            r.status = 'claimed';
+        });
+        
         displayRoutes();
         
         showNotification(
@@ -1552,54 +1536,6 @@ window.claimRoute = async function(routeId) {
         state.isLoading = false;
     }
 };
-
-// Helper function to create demo stops
-function createDemoStops(route) {
-    const demoStops = [];
-    
-    // Create demo pickups
-    for (let i = 0; i < route.pickups; i++) {
-        demoStops.push({
-            id: `demo-${route.id}-pickup-${i+1}`,
-            parcelId: `demo-parcel-${i+1}`,
-            type: 'pickup',
-            address: `Demo Pickup Location ${i+1}`,
-            location: { 
-                lat: -1.2921 + (Math.random() - 0.5) * 0.05, 
-                lng: 36.8219 + (Math.random() - 0.5) * 0.05 
-            },
-            parcelCode: `PRC-DEMO${i+1}`,
-            verificationCode: `PKP-${1000 + i}`,
-            customerName: `Demo Sender ${i+1}`,
-            customerPhone: `+2547${Math.floor(10000000 + Math.random() * 90000000)}`,
-            completed: false,
-            timestamp: null
-        });
-    }
-    
-    // Create demo deliveries
-    for (let i = 0; i < route.deliveries; i++) {
-        demoStops.push({
-            id: `demo-${route.id}-delivery-${i+1}`,
-            parcelId: `demo-parcel-${i+1}`,
-            type: 'delivery',
-            address: `Demo Delivery Location ${i+1}`,
-            location: { 
-                lat: -1.2921 + (Math.random() - 0.5) * 0.05, 
-                lng: 36.8219 + (Math.random() - 0.5) * 0.05 
-            },
-            parcelCode: `PRC-DEMO${i+1}`,
-            verificationCode: `DLV-${2000 + i}`,
-            customerName: `Demo Receiver ${i+1}`,
-            customerPhone: `+2547${Math.floor(10000000 + Math.random() * 90000000)}`,
-            completed: false,
-            timestamp: null,
-            dependsOn: `demo-${route.id}-pickup-${i+1}`
-        });
-    }
-    
-    return demoStops;
-}
 
 window.verifyCode = async function(type) {
     const code = elements.codeInput.value.toUpperCase();
@@ -1637,25 +1573,35 @@ window.verifyCode = async function(type) {
             activeStop.timestamp = new Date();
             
             // Update parcel status in database
-            if (state.rider.id !== 'demo-rider-001') {
-                await supabaseAPI.update('parcels',
-                    `id=eq.${activeStop.parcelId}`,
-                    {
-                        status: type === 'pickup' ? 'pickup' : 'delivery',
-                        [`${type}_timestamp`]: activeStop.timestamp.toISOString()
-                    }
-                );
-            }
+            await supabaseAPI.update('parcels',
+                `id=eq.${activeStop.parcelId}`,
+                {
+                    status: type === 'pickup' ? 'pickup' : 'delivery',
+                    [`${type}_timestamp`]: activeStop.timestamp.toISOString()
+                }
+            );
             
             // Handle commission for deliveries
             if (type === 'delivery') {
-                const parcel = state.claimedRoute.parcels.find(p => p.id === activeStop.parcelId);
-                if (parcel && state.commissionTracker && state.rider.id !== 'demo-rider-001') {
+                // Find the parcel
+                let deliveryPrice = 0;
+                
+                if (state.claimedRoute.parcels && state.claimedRoute.parcels.length > 0) {
+                    const parcel = state.claimedRoute.parcels.find(p => p.id === activeStop.parcelId);
+                    deliveryPrice = parcel?.price || 500; // Default price if not found
+                } else {
+                    // Default price for routes without parcel data
+                    deliveryPrice = 500;
+                }
+                
+                // Always update commission tracker
+                if (state.commissionTracker) {
                     const commissionResult = await state.commissionTracker.addDeliveryCommission(
-                        parcel.id,
-                        parcel.price
+                        activeStop.parcelId,
+                        deliveryPrice
                     );
                     
+                    // Update database
                     await supabaseAPI.update('riders',
                         `id=eq.${state.rider.id}`,
                         {
@@ -1678,7 +1624,7 @@ window.verifyCode = async function(type) {
                 }
                 
                 // Update earnings
-                const riderPayout = parcel?.rider_payout || (parcel?.price * BUSINESS_CONFIG.commission.rider) || 350;
+                const riderPayout = deliveryPrice * BUSINESS_CONFIG.commission.rider;
                 state.earnings.daily += riderPayout;
                 state.stats.deliveries++;
                 
@@ -1720,11 +1666,6 @@ window.verifyCode = async function(type) {
                 showNotification('🎉 Route completed! Great work!', 'success');
                 await loadAvailableRoutes();
             }
-            
-        } else {
-            // Demo verification
-            showNotification('Demo: Code verified successfully!', 'success');
-            elements.codeInput.value = '';
         }
         
         haptic('success');
@@ -1894,6 +1835,17 @@ window.closePaymentModal = function() {
     }
 };
 
+window.goBack = function() {
+    // Clear any active route data if needed
+    if (window.location.pathname.includes('route.html')) {
+        // Navigate back to rider dashboard
+        window.location.href = './rider.html';
+    } else {
+        // General back navigation
+        window.history.back();
+    }
+};
+
 // ─── Custom Styles Function ────────────────────────────────────────────────
 
 function addCustomStyles() {
@@ -1935,10 +1887,28 @@ window.tumaDebug = {
         console.log('Statuses:', parcels.map(p => ({ id: p.id, status: p.status, rider_id: p.rider_id })));
         return parcels;
     },
-    resetDemo: () => {
+    resetAuth: () => {
         localStorage.removeItem('tuma_rider_phone');
         localStorage.removeItem('tuma_active_route');
         window.location.reload();
+    },
+    loadBonuses: async () => {
+        await loadActiveBonuses();
+        console.log('Active bonuses:', state.activeBonuses);
+        displayIncentiveProgress();
+    },
+    testBonus: (deliveries, amount) => {
+        // Add a test bonus
+        state.activeBonuses.push({
+            id: 'test-bonus',
+            type: 'delivery_target',
+            title: 'Test Bonus',
+            target_deliveries: deliveries,
+            bonus_amount: amount,
+            is_active: true,
+            expires_at: new Date(Date.now() + 86400000).toISOString()
+        });
+        displayIncentiveProgress();
     }
 };
 
