@@ -159,6 +159,16 @@ class CommissionTracker {
 
     async initialize(riderId, api) {
         try {
+            // Skip database query for demo rider
+            if (riderId === 'demo-rider-001') {
+                console.log('Demo mode: Using default commission values');
+                this.state.unpaidCommission = 0;
+                this.state.totalPaid = 0;
+                this.state.isBlocked = false;
+                this.state.lastPayment = null;
+                return;
+            }
+            
             const riders = await api.query('riders', {
                 filter: `id=eq.${riderId}`,
                 limit: 1
@@ -1239,7 +1249,7 @@ async function checkActiveDeliveries() {
 }
 
 function showActiveRoute() {
-    if (!state.claimedRoute || !elements.activeDeliverySection) return;
+    if (!state.claimedRoute) return;
     
     const activeStops = state.claimedRoute.stops.filter(s => !s.completed);
     if (activeStops.length === 0) return;
@@ -1247,7 +1257,17 @@ function showActiveRoute() {
     const nextStop = activeStops[0];
     const parcelsInPossession = EnhancedRouteManager.getParcelsInPossession(state.claimedRoute.stops);
     
-    elements.activeDeliverySection.style.display = 'block';
+    // Show the active delivery section
+    if (elements.activeDeliverySection) {
+        elements.activeDeliverySection.style.display = 'block';
+    }
+    
+    // Show navigation button
+    const navButton = document.getElementById('navButton');
+    if (navButton) {
+        navButton.style.display = 'flex';
+        console.log('Navigation button shown');
+    }
     
     // Update active delivery display with more info
     const deliveryHTML = `
@@ -1281,7 +1301,7 @@ function showActiveRoute() {
     `;
     
     // Replace the inner content of active delivery section
-    const activeDeliveryCard = elements.activeDeliverySection.querySelector('.active-delivery');
+    const activeDeliveryCard = elements.activeDeliverySection?.querySelector('.active-delivery');
     if (activeDeliveryCard) {
         activeDeliveryCard.innerHTML = deliveryHTML;
     }
@@ -1611,18 +1631,20 @@ window.verifyCode = async function(type) {
             activeStop.timestamp = new Date();
             
             // Update parcel status in database
-            await supabaseAPI.update('parcels',
-                `id=eq.${activeStop.parcelId}`,
-                {
-                    status: type === 'pickup' ? 'picked_up' : 'delivered',
-                    [`${type}_timestamp`]: activeStop.timestamp.toISOString()
-                }
-            );
+            if (state.rider.id !== 'demo-rider-001') {
+                await supabaseAPI.update('parcels',
+                    `id=eq.${activeStop.parcelId}`,
+                    {
+                        status: type === 'pickup' ? 'picked_up' : 'delivered',
+                        [`${type}_timestamp`]: activeStop.timestamp.toISOString()
+                    }
+                );
+            }
             
             // Handle commission for deliveries
             if (type === 'delivery') {
                 const parcel = state.claimedRoute.parcels.find(p => p.id === activeStop.parcelId);
-                if (parcel && state.commissionTracker) {
+                if (parcel && state.commissionTracker && state.rider.id !== 'demo-rider-001') {
                     const commissionResult = await state.commissionTracker.addDeliveryCommission(
                         parcel.id,
                         parcel.price
@@ -1650,7 +1672,7 @@ window.verifyCode = async function(type) {
                 }
                 
                 // Update earnings
-                const riderPayout = parcel.rider_payout || (parcel.price * BUSINESS_CONFIG.commission.rider);
+                const riderPayout = parcel?.rider_payout || (parcel?.price * BUSINESS_CONFIG.commission.rider) || 350;
                 state.earnings.daily += riderPayout;
                 state.stats.deliveries++;
                 
@@ -1658,6 +1680,9 @@ window.verifyCode = async function(type) {
                 updateStatsDisplay();
                 displayIncentiveProgress();
             }
+            
+            // Update stored route
+            localStorage.setItem('tuma_active_route', JSON.stringify(state.claimedRoute));
             
             elements.codeInput.value = '';
             showNotification(`${type} verified successfully!`, 'success');
@@ -1682,6 +1707,9 @@ window.verifyCode = async function(type) {
                 // Hide navigation button
                 const navButton = document.getElementById('navButton');
                 if (navButton) navButton.style.display = 'none';
+                
+                // Clear stored route
+                localStorage.removeItem('tuma_active_route');
                 
                 showNotification('🎉 Route completed! Great work!', 'success');
                 await loadAvailableRoutes();
