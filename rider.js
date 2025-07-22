@@ -1189,6 +1189,27 @@ function calculateRouteEarnings(parcels) {
 
 async function checkActiveDeliveries() {
     try {
+        // First check if there's a stored active route
+        const storedRoute = localStorage.getItem('tuma_active_route');
+        if (storedRoute) {
+            try {
+                state.claimedRoute = JSON.parse(storedRoute);
+                showActiveRoute();
+                
+                // Show navigation button
+                const navButton = document.getElementById('navButton');
+                if (navButton) {
+                    navButton.style.display = 'flex';
+                    console.log('Navigation button shown from stored route');
+                }
+                return;
+            } catch (error) {
+                console.error('Error parsing stored route:', error);
+                localStorage.removeItem('tuma_active_route');
+            }
+        }
+        
+        // Otherwise check database for active deliveries
         if (!state.rider || state.rider.id === 'demo-rider-001') return;
         
         const activeParcels = await supabaseAPI.query('parcels', {
@@ -1206,7 +1227,10 @@ async function checkActiveDeliveries() {
             
             // Show navigation button
             const navButton = document.getElementById('navButton');
-            if (navButton) navButton.style.display = 'flex';
+            if (navButton) {
+                navButton.style.display = 'flex';
+                console.log('Navigation button shown from active parcels');
+            }
         }
         
     } catch (error) {
@@ -1436,16 +1460,18 @@ window.claimRoute = async function(routeId) {
             
             const flatParcels = parcels.flat();
             
-            // Update parcels to assign to this rider
-            for (const parcel of flatParcels) {
-                await supabaseAPI.update('parcels', 
-                    `id=eq.${parcel.id}`,
-                    { 
-                        rider_id: state.rider.id,
-                        status: 'assigned',
-                        assigned_at: new Date().toISOString()
-                    }
-                );
+            // Update parcels to assign to this rider (skip for demo rider)
+            if (state.rider.id !== 'demo-rider-001') {
+                for (const parcel of flatParcels) {
+                    await supabaseAPI.update('parcels', 
+                        `id=eq.${parcel.id}`,
+                        { 
+                            rider_id: state.rider.id,
+                            status: 'assigned',
+                            assigned_at: new Date().toISOString()
+                        }
+                    );
+                }
             }
             
             // Create route with sequenced stops
@@ -1455,13 +1481,32 @@ window.claimRoute = async function(routeId) {
                 stops: EnhancedRouteManager.sequenceStops(flatParcels)
             };
             
+            // Store the claimed route for the route page
+            localStorage.setItem('tuma_active_route', JSON.stringify(state.claimedRoute));
+            
             showActiveRoute();
             
             // Show navigation button
             const navButton = document.getElementById('navButton');
             if (navButton) navButton.style.display = 'flex';
         } else {
-            // Demo route
+            // Demo route - create demo stops
+            const demoStops = createDemoStops(route);
+            state.claimedRoute = {
+                ...route,
+                parcels: [],
+                stops: demoStops
+            };
+            
+            // Store the claimed route for the route page
+            localStorage.setItem('tuma_active_route', JSON.stringify(state.claimedRoute));
+            
+            showActiveRoute();
+            
+            // Show navigation button
+            const navButton = document.getElementById('navButton');
+            if (navButton) navButton.style.display = 'flex';
+            
             showNotification('Demo route claimed!', 'success');
         }
         
@@ -1481,6 +1526,54 @@ window.claimRoute = async function(routeId) {
         state.isLoading = false;
     }
 };
+
+// Helper function to create demo stops
+function createDemoStops(route) {
+    const demoStops = [];
+    
+    // Create demo pickups
+    for (let i = 0; i < route.pickups; i++) {
+        demoStops.push({
+            id: `demo-${route.id}-pickup-${i+1}`,
+            parcelId: `demo-parcel-${i+1}`,
+            type: 'pickup',
+            address: `Demo Pickup Location ${i+1}`,
+            location: { 
+                lat: -1.2921 + (Math.random() - 0.5) * 0.05, 
+                lng: 36.8219 + (Math.random() - 0.5) * 0.05 
+            },
+            parcelCode: `PRC-DEMO${i+1}`,
+            verificationCode: `PKP-${1000 + i}`,
+            customerName: `Demo Sender ${i+1}`,
+            customerPhone: `+2547${Math.floor(10000000 + Math.random() * 90000000)}`,
+            completed: false,
+            timestamp: null
+        });
+    }
+    
+    // Create demo deliveries
+    for (let i = 0; i < route.deliveries; i++) {
+        demoStops.push({
+            id: `demo-${route.id}-delivery-${i+1}`,
+            parcelId: `demo-parcel-${i+1}`,
+            type: 'delivery',
+            address: `Demo Delivery Location ${i+1}`,
+            location: { 
+                lat: -1.2921 + (Math.random() - 0.5) * 0.05, 
+                lng: 36.8219 + (Math.random() - 0.5) * 0.05 
+            },
+            parcelCode: `PRC-DEMO${i+1}`,
+            verificationCode: `DLV-${2000 + i}`,
+            customerName: `Demo Receiver ${i+1}`,
+            customerPhone: `+2547${Math.floor(10000000 + Math.random() * 90000000)}`,
+            completed: false,
+            timestamp: null,
+            dependsOn: `demo-${route.id}-pickup-${i+1}`
+        });
+    }
+    
+    return demoStops;
+}
 
 window.verifyCode = async function(type) {
     const code = elements.codeInput.value.toUpperCase();
@@ -1814,13 +1907,6 @@ window.tumaDebug = {
         window.location.reload();
     }
 };
-    },
-    resetDemo: () => {
-        localStorage.removeItem('tuma_rider_phone');
-        localStorage.removeItem('tuma_active_route');
-        window.location.reload();
-    }
-};
 
 // Override window.haptic if not already defined
 if (!window.haptic) {
@@ -1829,5 +1915,3 @@ if (!window.haptic) {
 
 // Make showNotification globally available
 window.showNotification = showNotification;
-
-console.log('✅ rider.js loaded successfully!');
