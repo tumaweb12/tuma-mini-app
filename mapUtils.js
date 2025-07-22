@@ -201,3 +201,191 @@ export async function geocodeAddress(address) {
     throw error;
   }
 }
+
+/**
+ * Create a route summary popup
+ * This function creates an HTML popup with route information
+ */
+export function createRouteSummaryPopup(route) {
+  if (!route) return '';
+  
+  const totalDistance = route.distance || 0;
+  const totalParcels = route.deliveries || 0;
+  const totalEarnings = route.total_earnings || 0;
+  const routeType = route.type || 'standard';
+  
+  return `
+    <div class="route-summary-popup">
+      <h3 class="popup-title">${route.name || 'Route'}</h3>
+      <div class="popup-content">
+        <div class="popup-stat">
+          <span class="stat-label">Type:</span>
+          <span class="stat-value route-type-${routeType}">${routeType.toUpperCase()}</span>
+        </div>
+        <div class="popup-stat">
+          <span class="stat-label">Parcels:</span>
+          <span class="stat-value">${totalParcels}</span>
+        </div>
+        <div class="popup-stat">
+          <span class="stat-label">Distance:</span>
+          <span class="stat-value">${totalDistance.toFixed(1)} km</span>
+        </div>
+        <div class="popup-stat">
+          <span class="stat-label">Earnings:</span>
+          <span class="stat-value">KES ${totalEarnings}</span>
+        </div>
+        <div class="popup-stat">
+          <span class="stat-label">Est. Time:</span>
+          <span class="stat-value">${Math.round(totalDistance * 2 + totalParcels * 5)} min</span>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * Create a stop marker popup
+ * This function creates an HTML popup for individual stops
+ */
+export function createStopPopup(stop) {
+  if (!stop) return '';
+  
+  const isPickup = stop.type === 'pickup';
+  const icon = isPickup ? '📦' : '📍';
+  const statusClass = stop.completed ? 'completed' : 'pending';
+  
+  return `
+    <div class="stop-popup ${statusClass}">
+      <div class="popup-header">
+        <span class="stop-icon">${icon}</span>
+        <span class="stop-type">${stop.type.toUpperCase()}</span>
+      </div>
+      <div class="popup-details">
+        <div class="detail-row">
+          <strong>Address:</strong><br>
+          ${stop.address}
+        </div>
+        <div class="detail-row">
+          <strong>Customer:</strong> ${stop.customerName}
+        </div>
+        <div class="detail-row">
+          <strong>Phone:</strong> <a href="tel:${stop.customerPhone}">${stop.customerPhone}</a>
+        </div>
+        <div class="detail-row">
+          <strong>Parcel Code:</strong> ${stop.parcelCode}
+        </div>
+        ${stop.specialInstructions ? `
+          <div class="detail-row">
+            <strong>Instructions:</strong><br>
+            ${stop.specialInstructions}
+          </div>
+        ` : ''}
+        ${stop.completed ? `
+          <div class="detail-row completed-time">
+            <strong>Completed:</strong> ${new Date(stop.timestamp).toLocaleTimeString()}
+          </div>
+        ` : ''}
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * Fit map to show all markers
+ */
+export function fitMapToBounds(map, markers) {
+  if (!markers || markers.length === 0) return;
+  
+  const group = new L.featureGroup(markers);
+  map.fitBounds(group.getBounds().pad(0.1));
+}
+
+/**
+ * Update rider location on map
+ */
+export function updateRiderLocation(map, marker, newLocation) {
+  if (marker) {
+    marker.setLatLng([newLocation.lat, newLocation.lng]);
+  } else {
+    marker = addMarker(map, newLocation.lat, newLocation.lng, {
+      type: 'rider',
+      title: 'Your Location'
+    });
+  }
+  return marker;
+}
+
+/**
+ * Calculate optimal route through multiple stops
+ */
+export async function calculateOptimalRoute(stops, startLocation) {
+  // For now, return stops in the order they're provided
+  // This can be enhanced with TSP algorithm for optimization
+  const waypoints = [startLocation];
+  
+  stops.forEach(stop => {
+    if (stop.location && stop.location.lat && stop.location.lng) {
+      waypoints.push(stop.location);
+    }
+  });
+  
+  if (waypoints.length < 2) return null;
+  
+  try {
+    const route = await getRoute(waypoints);
+    return route;
+  } catch (error) {
+    console.error('Error calculating optimal route:', error);
+    return null;
+  }
+}
+
+/**
+ * Show user's current location on map
+ */
+export function showCurrentLocation(map, onSuccess, onError) {
+  if ("geolocation" in navigator) {
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const location = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude
+        };
+        
+        // Add marker for current location
+        const marker = addMarker(map, location.lat, location.lng, {
+          type: 'rider',
+          title: 'Your Location',
+          popup: 'You are here'
+        });
+        
+        // Center map on location
+        map.setView([location.lat, location.lng], 15);
+        
+        if (onSuccess) onSuccess(location, marker);
+      },
+      (error) => {
+        console.error('Geolocation error:', error);
+        if (onError) onError(error);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 5000,
+        maximumAge: 0
+      }
+    );
+  } else {
+    if (onError) onError(new Error('Geolocation not supported'));
+  }
+}
+
+/**
+ * Clear all layers from map except base tile layer
+ */
+export function clearMapLayers(map) {
+  map.eachLayer((layer) => {
+    if (!(layer instanceof L.TileLayer)) {
+      map.removeLayer(layer);
+    }
+  });
+}
