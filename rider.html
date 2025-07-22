@@ -153,6 +153,52 @@
             background: var(--surface-high);
         }
 
+        /* Quick Actions Bar */
+        .quick-actions {
+            display: flex;
+            gap: 8px;
+            padding: 12px 20px;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+        }
+
+        .quick-actions::-webkit-scrollbar {
+            display: none;
+        }
+
+        .quick-action {
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            padding: 12px 16px;
+            background: var(--surface-elevated);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+            color: var(--text-primary);
+        }
+
+        .quick-action:active {
+            scale: 0.95;
+            background: var(--surface-high);
+        }
+
+        .action-icon {
+            font-size: 24px;
+        }
+
+        .action-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
         /* Form Container */
         .form-container {
             padding: 20px;
@@ -164,7 +210,7 @@
             background: linear-gradient(135deg, #1a1a1a 0%, #0f0f0f 100%);
             border-radius: 16px;
             padding: 24px;
-            margin-bottom: 24px;
+            margin-bottom: 20px;
             text-align: center;
             position: relative;
             overflow: hidden;
@@ -225,6 +271,95 @@
             color: var(--text-secondary);
         }
 
+        /* Commission Status */
+        .commission-status {
+            background: var(--surface-elevated);
+            border-radius: 14px;
+            padding: 16px;
+            margin: 0 0 20px;
+            border: 1px solid var(--border);
+            transition: all 0.3s;
+        }
+        
+        .commission-status.warning {
+            border-color: var(--warning);
+            background: rgba(255, 159, 10, 0.1);
+        }
+        
+        .commission-status.blocked {
+            border-color: var(--danger);
+            background: rgba(255, 59, 48, 0.1);
+        }
+        
+        .commission-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        
+        .commission-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+        
+        .commission-amount {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+        
+        .commission-progress {
+            height: 8px;
+            background: var(--surface-high);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 12px;
+        }
+        
+        .commission-progress-bar {
+            height: 100%;
+            background: var(--primary);
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+        
+        .commission-status.warning .commission-progress-bar {
+            background: var(--warning);
+        }
+        
+        .commission-status.blocked .commission-progress-bar {
+            background: var(--danger);
+        }
+        
+        .commission-actions {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .commission-pay-button,
+        .commission-details-button {
+            flex: 1;
+            padding: 10px;
+            border-radius: 8px;
+            border: none;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .commission-pay-button {
+            background: var(--primary);
+            color: white;
+        }
+        
+        .commission-details-button {
+            background: var(--surface-high);
+            color: var(--text-secondary);
+        }
+
         /* Form Sections */
         .form-section {
             margin-bottom: 24px;
@@ -240,6 +375,8 @@
         .form-section:nth-child(5) { animation-delay: 0.3s; }
         .form-section:nth-child(6) { animation-delay: 0.35s; }
         .form-section:nth-child(7) { animation-delay: 0.4s; }
+        .form-section:nth-child(8) { animation-delay: 0.45s; }
+        .form-section:nth-child(9) { animation-delay: 0.5s; }
 
         @keyframes slideUp {
             to {
@@ -299,6 +436,85 @@
             color: rgba(255, 255, 255, 0.9);
         }
 
+        /* Incentive Widget */
+        .incentive-widget {
+            background: var(--surface-elevated);
+            border-radius: 14px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+            margin-bottom: 20px;
+        }
+        
+        .peak-hour-banner {
+            background: linear-gradient(135deg, var(--warning) 0%, var(--express) 100%);
+            color: black;
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 600;
+            font-size: 14px;
+        }
+        
+        .peak-icon {
+            font-size: 20px;
+            animation: pulse 2s ease-in-out infinite;
+        }
+        
+        .daily-bonus-progress {
+            padding: 16px;
+        }
+        
+        .bonus-title {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+        
+        .progress-container {
+            margin-bottom: 8px;
+        }
+        
+        .progress-bar {
+            height: 8px;
+            background: var(--surface-high);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 8px;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary) 0%, var(--success) 100%);
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+        
+        .progress-text {
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+        }
+        
+        .bonus-amount {
+            color: var(--success);
+            font-weight: 700;
+        }
+        
+        .progress-message {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-top: 8px;
+        }
+        
+        .max-bonus-reached {
+            text-align: center;
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--success);
+            padding: 20px;
+        }
+
         /* Stats Overview */
         .stats-row {
             display: flex;
@@ -338,7 +554,49 @@
             color: var(--text-secondary);
         }
 
-        /* Active Delivery */
+        /* Performance Metrics */
+        .performance-metrics {
+            margin-bottom: 24px;
+        }
+        
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+        }
+        
+        .metric-card {
+            background: var(--surface-elevated);
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+            border: 1px solid var(--border);
+            transition: all 0.3s;
+        }
+        
+        .metric-card:hover {
+            border-color: var(--primary);
+            transform: translateY(-2px);
+        }
+        
+        .metric-icon {
+            font-size: 24px;
+            margin-bottom: 8px;
+        }
+        
+        .metric-value {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 4px;
+        }
+        
+        .metric-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        /* Active Delivery with Multi-Stop Support */
         .active-delivery {
             background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
             border-radius: 14px;
@@ -347,25 +605,6 @@
             margin-bottom: 20px;
         }
 
-        .delivery-status {
-            font-size: 14px;
-            opacity: 0.9;
-            margin-bottom: 8px;
-        }
-
-        .delivery-address {
-            font-size: 18px;
-            font-weight: 600;
-            margin-bottom: 16px;
-        }
-
-        .delivery-info {
-            display: flex;
-            justify-content: space-between;
-            font-size: 14px;
-        }
-
-        /* Active Route Info */
         .active-route-info {
             margin-bottom: 16px;
         }
@@ -382,12 +621,6 @@
             background: rgba(255, 255, 255, 0.2);
             border-radius: 3px;
             overflow: hidden;
-        }
-        
-        .progress-fill {
-            height: 100%;
-            background: linear-gradient(90deg, rgba(255, 255, 255, 0.8) 0%, rgba(52, 199, 89, 0.8) 100%);
-            transition: width 0.3s ease;
         }
         
         .carrying-indicator {
@@ -435,7 +668,7 @@
             opacity: 0.9;
         }
 
-        /* Available Routes */
+        /* Available Routes with Enhanced Info */
         .route-tabs {
             display: flex;
             gap: 8px;
@@ -463,7 +696,7 @@
             color: white;
         }
 
-        /* Route Cards */
+        /* Route Cards Enhanced */
         .route-list {
             display: flex;
             flex-direction: column;
@@ -758,7 +991,25 @@
                 </div>
             </div>
 
-            <!-- Quick Actions Bar will be inserted here by JS -->
+            <!-- Quick Actions Bar -->
+            <div class="quick-actions">
+                <button class="quick-action" onclick="toggleBreakMode()">
+                    <span class="action-icon">☕</span>
+                    <span class="action-label">Break</span>
+                </button>
+                <button class="quick-action" onclick="viewEarningsDetails()">
+                    <span class="action-icon">📊</span>
+                    <span class="action-label">Analytics</span>
+                </button>
+                <button class="quick-action" onclick="showHotZones()">
+                    <span class="action-icon">🔥</span>
+                    <span class="action-label">Hot Zones</span>
+                </button>
+                <button class="quick-action" onclick="callSupport()">
+                    <span class="action-icon">📞</span>
+                    <span class="action-label">Support</span>
+                </button>
+            </div>
 
             <!-- Form Container -->
             <form class="form-container">
@@ -774,7 +1025,26 @@
                     </span>
                 </div>
 
-                <!-- Commission Status will be inserted here by JS -->
+                <!-- Commission Status (Example - JS will replace this) -->
+                <div id="commissionContainer">
+                    <div class="commission-status">
+                        <div class="commission-header">
+                            <span class="commission-title">Platform Commission</span>
+                            <span class="commission-amount">KES 0 / 300</span>
+                        </div>
+                        <div class="commission-progress">
+                            <div class="commission-progress-bar" style="width: 0%"></div>
+                        </div>
+                        <div class="commission-actions">
+                            <button type="button" class="commission-pay-button" onclick="openPaymentModal()">
+                                Pay Commission
+                            </button>
+                            <button type="button" class="commission-details-button" onclick="viewCommissionDetails()">
+                                View Details
+                            </button>
+                        </div>
+                    </div>
+                </div>
 
                 <!-- Earnings Overview -->
                 <div class="form-section">
@@ -795,7 +1065,28 @@
                     </div>
                 </div>
 
-                <!-- Incentive Progress will be inserted here by JS -->
+                <!-- Incentive Progress (Example - JS will update this) -->
+                <div class="form-section">
+                    <div class="incentive-widget">
+                        <div class="peak-hour-banner" style="display: none;">
+                            <span class="peak-icon">🔥</span>
+                            <span>Peak Hours Active! 20% bonus on all deliveries</span>
+                        </div>
+                        <div class="daily-bonus-progress">
+                            <h3 class="bonus-title">Daily Bonus Progress</h3>
+                            <div class="progress-container">
+                                <div class="progress-bar">
+                                    <div class="progress-fill" style="width: 0%"></div>
+                                </div>
+                                <div class="progress-text">
+                                    <span>0/5 deliveries</span>
+                                    <span class="bonus-amount">KES 100</span>
+                                </div>
+                            </div>
+                            <p class="progress-message">Complete 5 deliveries for Starter bonus!</p>
+                        </div>
+                    </div>
+                </div>
 
                 <!-- Performance Stats -->
                 <div class="form-section">
@@ -819,18 +1110,40 @@
                     </div>
                 </div>
 
-                <!-- Performance Metrics will be inserted here by JS -->
-
-                <!-- Active Delivery -->
-                <div class="form-section" id="activeDeliverySection" style="display: none;">
-                    <h2 class="section-title">Current Delivery</h2>
-                    <div class="active-delivery">
-                        <div class="delivery-status">En route to pickup</div>
-                        <div class="delivery-address" id="currentAddress">Loading...</div>
-                        <div class="delivery-info">
-                            <span>Parcel: <strong id="currentParcel">-</strong></span>
-                            <span>ETA: <strong id="currentETA">-</strong></span>
+                <!-- Performance Metrics -->
+                <div class="form-section">
+                    <div class="performance-metrics">
+                        <h2 class="section-title">Today's Performance</h2>
+                        <div class="metrics-grid">
+                            <div class="metric-card">
+                                <div class="metric-icon">⚡</div>
+                                <div class="metric-value">0</div>
+                                <div class="metric-label">Deliveries/Hour</div>
+                            </div>
+                            <div class="metric-card">
+                                <div class="metric-icon">💰</div>
+                                <div class="metric-value">KES 0</div>
+                                <div class="metric-label">Per KM</div>
+                            </div>
+                            <div class="metric-card">
+                                <div class="metric-icon">⏱️</div>
+                                <div class="metric-value">0 min</div>
+                                <div class="metric-label">Avg Time</div>
+                            </div>
+                            <div class="metric-card">
+                                <div class="metric-icon">✅</div>
+                                <div class="metric-value">0%</div>
+                                <div class="metric-label">Accept Rate</div>
+                            </div>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Active Delivery (Hidden by default) -->
+                <div class="form-section" id="activeDeliverySection" style="display: none;">
+                    <h2 class="section-title">Current Route</h2>
+                    <div class="active-delivery">
+                        <!-- Content will be populated by JS -->
                     </div>
                 </div>
 
@@ -862,7 +1175,34 @@
                     </div>
                     
                     <div class="route-list" id="routeList">
-                        <!-- Routes will be populated here -->
+                        <!-- Example route card - JS will populate -->
+                        <div class="route-card">
+                            <div class="route-header">
+                                <div class="route-cluster">Loading Routes...</div>
+                                <div class="route-type smart">SMART</div>
+                            </div>
+                            <div class="route-details">
+                                <div class="route-detail">
+                                    <div class="route-detail-value">0</div>
+                                    <div class="route-detail-label">Pickups</div>
+                                </div>
+                                <div class="route-detail">
+                                    <div class="route-detail-value">0</div>
+                                    <div class="route-detail-label">Deliveries</div>
+                                </div>
+                                <div class="route-detail">
+                                    <div class="route-detail-value">KES 0</div>
+                                    <div class="route-detail-label">Earnings</div>
+                                </div>
+                            </div>
+                            <div class="route-info-bar">
+                                <span class="route-distance">📍 0 km total</span>
+                                <span class="route-time">⏱️ ~0 min</span>
+                            </div>
+                            <button class="claim-button" disabled>
+                                Loading...
+                            </button>
+                        </div>
                     </div>
                 </div>
             </form>
@@ -876,11 +1216,16 @@
         </button>
     </div>
 
-    <!-- Menu function placeholder -->
+    <!-- Placeholder functions -->
     <script>
+        // These will be overridden by rider.js
         function showMenu() {
-            // Placeholder for menu functionality
             console.log('Menu clicked');
+        }
+        
+        // Show nav button if there's an active route
+        if (localStorage.getItem('tuma_active_route')) {
+            document.getElementById('navButton').style.display = 'flex';
         }
     </script>
 
