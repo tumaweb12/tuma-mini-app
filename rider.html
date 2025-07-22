@@ -958,6 +958,159 @@
             }
         }
 
+        /* Menu Styles */
+        .menu-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(10px);
+            z-index: 200;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .menu-overlay.active {
+            opacity: 1;
+        }
+
+        .menu-drawer {
+            position: fixed;
+            top: 0;
+            left: -320px;
+            width: 320px;
+            height: 100%;
+            background: var(--surface-elevated);
+            z-index: 201;
+            transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .menu-drawer.active {
+            transform: translateX(320px);
+        }
+
+        .menu-header {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            padding: 30px 20px 20px;
+            padding-top: calc(30px + var(--safe-area-top));
+            position: relative;
+        }
+
+        .menu-close {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 40px;
+            height: 40px;
+            border: none;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+
+        .menu-profile {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            color: white;
+        }
+
+        .profile-avatar {
+            width: 60px;
+            height: 60px;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: 700;
+        }
+
+        .profile-info {
+            flex: 1;
+        }
+
+        .profile-name {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .profile-phone {
+            font-size: 14px;
+            opacity: 0.9;
+            margin-bottom: 4px;
+        }
+
+        .profile-rating {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .menu-items {
+            flex: 1;
+            padding: 20px 0;
+        }
+
+        .menu-item {
+            display: flex;
+            align-items: center;
+            padding: 16px 20px;
+            color: var(--text-primary);
+            text-decoration: none;
+            transition: background 0.2s;
+        }
+
+        .menu-item:active {
+            background: var(--surface-high);
+        }
+
+        .menu-icon {
+            font-size: 24px;
+            width: 40px;
+        }
+
+        .menu-label {
+            flex: 1;
+            font-size: 16px;
+            font-weight: 500;
+        }
+
+        .menu-arrow {
+            font-size: 20px;
+            color: var(--text-secondary);
+        }
+
+        .menu-divider {
+            height: 1px;
+            background: var(--border);
+            margin: 10px 20px;
+        }
+
+        .menu-item.logout {
+            color: var(--danger);
+        }
+
+        .menu-footer {
+            padding: 20px;
+            text-align: center;
+            border-top: 1px solid var(--border);
+        }
+
+        .app-version {
+            font-size: 12px;
+            color: var(--text-tertiary);
+        }
+
         /* Responsive */
         @media (min-width: 428px) {
             .app {
@@ -1144,11 +1297,218 @@
 
     <!-- Ensure all global functions are available before rider.js loads -->
     <script>
-        // Define all global functions that might be called before rider.js loads
-        window.showMenu = function() {
-            console.log('Menu clicked - will be overridden by rider.js');
+        // State placeholder (will be overridden by rider.js)
+        window.state = {
+            rider: null,
+            status: 'online',
+            earnings: { daily: 0, weekly: 0, monthly: 0 },
+            stats: { deliveries: 0, distance: 0, rating: 5.0 }
         };
         
+        // Haptic feedback helper
+        window.haptic = function(type = 'light') {
+            if (window.navigator && window.navigator.vibrate) {
+                switch(type) {
+                    case 'light': window.navigator.vibrate(10); break;
+                    case 'medium': window.navigator.vibrate(30); break;
+                    case 'heavy': window.navigator.vibrate(50); break;
+                    case 'success': window.navigator.vibrate([10, 50, 10]); break;
+                    default: window.navigator.vibrate(10);
+                }
+            }
+        };
+        
+        // Menu functions
+        window.showMenu = function() {
+            // Create menu overlay
+            const menuOverlay = document.createElement('div');
+            menuOverlay.className = 'menu-overlay';
+            menuOverlay.onclick = closeMenu;
+            
+            // Create menu drawer
+            const menuDrawer = document.createElement('div');
+            menuDrawer.className = 'menu-drawer';
+            
+            menuDrawer.innerHTML = `
+                <div class="menu-header">
+                    <div class="menu-profile">
+                        <div class="profile-avatar">
+                            <span>${window.state?.rider?.rider_name?.charAt(0) || 'R'}</span>
+                        </div>
+                        <div class="profile-info">
+                            <div class="profile-name">${window.state?.rider?.rider_name || 'Rider'}</div>
+                            <div class="profile-phone">${window.state?.rider?.phone || '+254700000000'}</div>
+                            <div class="profile-rating">
+                                ⭐ ${window.state?.rider?.rating || '5.0'} • ${window.state?.rider?.completed_deliveries || '0'} deliveries
+                            </div>
+                        </div>
+                    </div>
+                    <button class="menu-close" onclick="closeMenu()">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
+                            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                        </svg>
+                    </button>
+                </div>
+                
+                <div class="menu-items">
+                    <a href="#" class="menu-item" onclick="navigateToEarnings()">
+                        <span class="menu-icon">💰</span>
+                        <span class="menu-label">Earnings History</span>
+                        <span class="menu-arrow">›</span>
+                    </a>
+                    
+                    <a href="#" class="menu-item" onclick="navigateToProfile()">
+                        <span class="menu-icon">👤</span>
+                        <span class="menu-label">My Profile</span>
+                        <span class="menu-arrow">›</span>
+                    </a>
+                    
+                    <a href="#" class="menu-item" onclick="navigateToVehicle()">
+                        <span class="menu-icon">🏍️</span>
+                        <span class="menu-label">Vehicle Details</span>
+                        <span class="menu-arrow">›</span>
+                    </a>
+                    
+                    <a href="#" class="menu-item" onclick="navigateToDocuments()">
+                        <span class="menu-icon">📄</span>
+                        <span class="menu-label">Documents</span>
+                        <span class="menu-arrow">›</span>
+                    </a>
+                    
+                    <div class="menu-divider"></div>
+                    
+                    <a href="#" class="menu-item" onclick="navigateToSupport()">
+                        <span class="menu-icon">🎧</span>
+                        <span class="menu-label">Support Center</span>
+                        <span class="menu-arrow">›</span>
+                    </a>
+                    
+                    <a href="#" class="menu-item" onclick="navigateToFAQ()">
+                        <span class="menu-icon">❓</span>
+                        <span class="menu-label">FAQs</span>
+                        <span class="menu-arrow">›</span>
+                    </a>
+                    
+                    <a href="#" class="menu-item" onclick="navigateToTraining()">
+                        <span class="menu-icon">🎓</span>
+                        <span class="menu-label">Training Videos</span>
+                        <span class="menu-arrow">›</span>
+                    </a>
+                    
+                    <div class="menu-divider"></div>
+                    
+                    <a href="#" class="menu-item" onclick="navigateToSettings()">
+                        <span class="menu-icon">⚙️</span>
+                        <span class="menu-label">Settings</span>
+                        <span class="menu-arrow">›</span>
+                    </a>
+                    
+                    <a href="#" class="menu-item" onclick="showAbout()">
+                        <span class="menu-icon">ℹ️</span>
+                        <span class="menu-label">About Tuma</span>
+                        <span class="menu-arrow">›</span>
+                    </a>
+                    
+                    <a href="#" class="menu-item logout" onclick="logout()">
+                        <span class="menu-icon">🚪</span>
+                        <span class="menu-label">Logout</span>
+                    </a>
+                </div>
+                
+                <div class="menu-footer">
+                    <div class="app-version">Version 1.0.0</div>
+                </div>
+            `;
+            
+            // Add to body
+            document.body.appendChild(menuOverlay);
+            document.body.appendChild(menuDrawer);
+            
+            // Animate in
+            setTimeout(() => {
+                menuOverlay.classList.add('active');
+                menuDrawer.classList.add('active');
+            }, 10);
+            
+            window.haptic('light');
+        };
+
+        window.closeMenu = function() {
+            const overlay = document.querySelector('.menu-overlay');
+            const drawer = document.querySelector('.menu-drawer');
+            
+            if (overlay) overlay.classList.remove('active');
+            if (drawer) drawer.classList.remove('active');
+            
+            setTimeout(() => {
+                if (overlay) overlay.remove();
+                if (drawer) drawer.remove();
+            }, 300);
+        };
+        
+        // Menu navigation functions
+        window.navigateToEarnings = function() {
+            closeMenu();
+            console.log('Navigate to earnings - will be implemented');
+            // window.location.href = './earnings.html';
+        };
+        
+        window.navigateToProfile = function() {
+            closeMenu();
+            console.log('Navigate to profile - will be implemented');
+            // window.location.href = './profile.html';
+        };
+        
+        window.navigateToVehicle = function() {
+            closeMenu();
+            console.log('Navigate to vehicle - will be implemented');
+            // window.location.href = './vehicle.html';
+        };
+        
+        window.navigateToDocuments = function() {
+            closeMenu();
+            console.log('Navigate to documents - will be implemented');
+            // window.location.href = './documents.html';
+        };
+        
+        window.navigateToSupport = function() {
+            closeMenu();
+            window.location.href = 'tel:+254700123456';
+        };
+        
+        window.navigateToFAQ = function() {
+            closeMenu();
+            console.log('Navigate to FAQ - will be implemented');
+            // window.location.href = './faq.html';
+        };
+        
+        window.navigateToTraining = function() {
+            closeMenu();
+            console.log('Navigate to training - will be implemented');
+            // window.location.href = './training.html';
+        };
+        
+        window.navigateToSettings = function() {
+            closeMenu();
+            console.log('Navigate to settings - will be implemented');
+            // window.location.href = './settings.html';
+        };
+        
+        window.showAbout = function() {
+            closeMenu();
+            alert('Tuma - Your Reliable Delivery Partner\n\nVersion 1.0.0\n\n© 2024 Tuma Technologies');
+        };
+        
+        window.logout = function() {
+            if (confirm('Are you sure you want to logout?')) {
+                closeMenu();
+                localStorage.removeItem('tuma_rider_phone');
+                localStorage.removeItem('tuma_active_route');
+                window.location.href = './index.html';
+            }
+        };
+        
+        // Other placeholder functions
         window.toggleBreakMode = function() {
             console.log('Break mode - will be overridden by rider.js');
         };
@@ -1162,7 +1522,7 @@
         };
         
         window.callSupport = function() {
-            console.log('Call support - will be overridden by rider.js');
+            window.location.href = 'tel:+254700123456';
         };
         
         window.filterRoutes = function(type) {
