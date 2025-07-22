@@ -1814,3 +1814,20 @@ window.tumaDebug = {
         window.location.reload();
     }
 };
+    },
+    resetDemo: () => {
+        localStorage.removeItem('tuma_rider_phone');
+        localStorage.removeItem('tuma_active_route');
+        window.location.reload();
+    }
+};
+
+// Override window.haptic if not already defined
+if (!window.haptic) {
+    window.haptic = haptic;
+}
+
+// Make showNotification globally available
+window.showNotification = showNotification;
+
+console.log('✅ rider.js loaded successfully!');
