@@ -830,7 +830,7 @@ function displayRoutes() {
                 <span class="route-distance">📍 ${Math.round(route.distance)} km total</span>
                 <span class="route-time">⏱️ ~${Math.round(route.distance * 2 + route.deliveries * 5)} min</span>
             </div>
-            <button class="claim-button" ${route.status !== 'available' ? 'disabled' : ''}>
+            <button class="claim-button" type="button" ${route.status !== 'available' ? 'disabled' : ''}>
                 ${route.status === 'available' ? 'Claim Route' : 'Already Claimed'}
             </button>
         </div>
@@ -1460,6 +1460,12 @@ window.filterRoutes = function(type) {
 };
 
 window.claimRoute = async function(routeId) {
+    // Prevent any default form submission
+    if (window.event) {
+        window.event.preventDefault();
+        window.event.stopPropagation();
+    }
+    
     const route = state.availableRoutes.find(r => r.id === routeId);
     if (!route || route.status !== 'available') return;
     
