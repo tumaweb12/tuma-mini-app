@@ -459,21 +459,27 @@ const state = {
 
 // ─── DOM Elements ──────────────────────────────────────────────────────────
 
-const elements = {
-    statusBadge: document.getElementById('statusBadge'),
-    dailyEarnings: document.getElementById('dailyEarnings'),
-    weeklyEarnings: document.getElementById('weeklyEarnings'),
-    monthlyEarnings: document.getElementById('monthlyEarnings'),
-    totalDeliveries: document.getElementById('totalDeliveries'),
-    totalDistance: document.getElementById('totalDistance'),
-    activeDeliverySection: document.getElementById('activeDeliverySection'),
-    currentAddress: document.getElementById('currentAddress'),
-    currentParcel: document.getElementById('currentParcel'),
-    currentETA: document.getElementById('currentETA'),
-    codeInput: document.getElementById('codeInput'),
-    routeList: document.getElementById('routeList'),
-    mainContent: document.getElementById('mainContent')
-};
+let elements = {};
+
+function initializeElements() {
+    elements = {
+        statusBadge: document.getElementById('statusBadge'),
+        dailyEarnings: document.getElementById('dailyEarnings'),
+        weeklyEarnings: document.getElementById('weeklyEarnings'),
+        monthlyEarnings: document.getElementById('monthlyEarnings'),
+        totalDeliveries: document.getElementById('totalDeliveries'),
+        totalDistance: document.getElementById('totalDistance'),
+        riderRating: document.getElementById('riderRating'),
+        riderName: document.getElementById('riderName'),
+        activeDeliverySection: document.getElementById('activeDeliverySection'),
+        currentAddress: document.getElementById('currentAddress'),
+        currentParcel: document.getElementById('currentParcel'),
+        currentETA: document.getElementById('currentETA'),
+        codeInput: document.getElementById('codeInput'),
+        routeList: document.getElementById('routeList'),
+        mainContent: document.getElementById('mainContent')
+    };
+}
 
 // ─── Database Functions ────────────────────────────────────────────────────
 
@@ -682,7 +688,7 @@ function displayIncentiveProgress() {
 function calculatePerformanceMetrics() {
     const today = new Date();
     const startTime = new Date(today.setHours(6, 0, 0, 0));
-    const hoursWorked = (Date.now() - startTime) / (1000 * 60 * 60);
+    const hoursWorked = Math.max((Date.now() - startTime) / (1000 * 60 * 60), 1);
     
     return {
         deliveriesPerHour: (state.stats.deliveries / hoursWorked).toFixed(1),
@@ -757,10 +763,122 @@ function addQuickActions() {
     }
 }
 
+// ─── Display Functions ─────────────────────────────────────────────────────
+
+function updateEarningsDisplay() {
+    if (elements.dailyEarnings) elements.dailyEarnings.textContent = Math.round(state.earnings.daily).toLocaleString();
+    if (elements.weeklyEarnings) elements.weeklyEarnings.textContent = Math.round(state.earnings.weekly).toLocaleString();
+    if (elements.monthlyEarnings) elements.monthlyEarnings.textContent = Math.round(state.earnings.monthly).toLocaleString();
+}
+
+function updateStatsDisplay() {
+    if (elements.totalDeliveries) elements.totalDeliveries.textContent = state.stats.deliveries;
+    if (elements.totalDistance) elements.totalDistance.textContent = state.stats.distance;
+    if (elements.riderRating) elements.riderRating.textContent = state.stats.rating;
+}
+
+function displayRoutes() {
+    const filteredRoutes = state.currentFilter === 'all' 
+        ? state.availableRoutes 
+        : state.availableRoutes.filter(r => r.type === state.currentFilter);
+    
+    if (!elements.routeList) return;
+    
+    if (filteredRoutes.length === 0) {
+        elements.routeList.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-icon">🗺️</div>
+                <h3 class="empty-title">No Routes Available</h3>
+                <p class="empty-message">Check back soon for new clustered routes</p>
+            </div>
+        `;
+        return;
+    }
+    
+    elements.routeList.innerHTML = filteredRoutes.map(route => `
+        <div class="route-card ${route.status !== 'available' ? 'claimed' : ''}" 
+             onclick="${route.status === 'available' ? `claimRoute('${route.id}')` : ''}">
+            <div class="route-header">
+                <div class="route-cluster">${route.name}</div>
+                <div class="route-type ${route.type}">${route.type.toUpperCase()}</div>
+            </div>
+            <div class="route-details">
+                <div class="route-detail">
+                    <div class="route-detail-value">${route.pickups}</div>
+                    <div class="route-detail-label">Pickups</div>
+                </div>
+                <div class="route-detail">
+                    <div class="route-detail-value">${route.deliveries}</div>
+                    <div class="route-detail-label">Deliveries</div>
+                </div>
+                <div class="route-detail">
+                    <div class="route-detail-value">KES ${Math.round(route.total_earnings)}</div>
+                    <div class="route-detail-label">Earnings</div>
+                </div>
+            </div>
+            <div class="route-info-bar">
+                <span class="route-distance">📍 ${Math.round(route.distance)} km total</span>
+                <span class="route-time">⏱️ ~${Math.round(route.distance * 2 + route.deliveries * 5)} min</span>
+            </div>
+            <button class="claim-button" ${route.status !== 'available' ? 'disabled' : ''}>
+                ${route.status === 'available' ? 'Claim Route' : 'Already Claimed'}
+            </button>
+        </div>
+    `).join('');
+}
+
+function displayCommissionStatus() {
+    if (!state.commissionTracker) return;
+    
+    const ui = state.commissionTracker.createCommissionUI();
+    
+    const existingContainer = document.getElementById('commissionContainer');
+    if (existingContainer) {
+        existingContainer.remove();
+    }
+    
+    const commissionContainer = document.createElement('div');
+    commissionContainer.id = 'commissionContainer';
+    commissionContainer.innerHTML = ui.statusBar;
+    
+    const heroSection = document.querySelector('.hero-section');
+    if (heroSection && heroSection.parentNode) {
+        heroSection.parentNode.insertBefore(commissionContainer, heroSection.nextSibling);
+    }
+    
+    if (ui.warningMessage) {
+        const warningDiv = document.createElement('div');
+        warningDiv.innerHTML = ui.warningMessage;
+        commissionContainer.appendChild(warningDiv.firstChild);
+    }
+}
+
+function showBlockedOverlay() {
+    if (!state.commissionTracker) return;
+    
+    const ui = state.commissionTracker.createCommissionUI();
+    
+    const existingOverlay = document.getElementById('commissionBlockedOverlay');
+    if (existingOverlay) {
+        existingOverlay.remove();
+    }
+    
+    const overlay = document.createElement('div');
+    overlay.id = 'commissionBlockedOverlay';
+    overlay.innerHTML = ui.blockedMessage;
+    document.body.appendChild(overlay);
+}
+
 // ─── Core Functions ────────────────────────────────────────────────────────
 
 async function initialize() {
     console.log('Initializing rider dashboard...');
+    
+    // Initialize DOM elements
+    initializeElements();
+    
+    // Update state reference for menu
+    window.state = state;
     
     // Initialize commission tracker
     state.commissionTracker = new CommissionTracker({
@@ -774,6 +892,11 @@ async function initialize() {
     
     if (!authenticated) {
         await loadDemoRider();
+    }
+    
+    // Update rider name
+    if (elements.riderName && state.rider) {
+        elements.riderName.textContent = state.rider.rider_name || 'Rider';
     }
     
     // Initialize commission tracker
@@ -961,6 +1084,8 @@ async function loadAvailableRoutes() {
             order: 'created_at.asc'
         });
         
+        console.log('Unclaimed parcels found:', unclaimedParcels.length);
+        
         if (unclaimedParcels.length === 0) {
             state.availableRoutes = getDemoRoutes();
         } else {
@@ -1078,6 +1203,10 @@ async function checkActiveDeliveries() {
             };
             
             showActiveRoute();
+            
+            // Show navigation button
+            const navButton = document.getElementById('navButton');
+            if (navButton) navButton.style.display = 'flex';
         }
         
     } catch (error) {
@@ -1086,7 +1215,7 @@ async function checkActiveDeliveries() {
 }
 
 function showActiveRoute() {
-    if (!state.claimedRoute) return;
+    if (!state.claimedRoute || !elements.activeDeliverySection) return;
     
     const activeStops = state.claimedRoute.stops.filter(s => !s.completed);
     if (activeStops.length === 0) return;
@@ -1178,108 +1307,19 @@ function startLocationUpdates() {
     }, 30000);
 }
 
-// ─── Display Functions ─────────────────────────────────────────────────────
-
-function updateEarningsDisplay() {
-    elements.dailyEarnings.textContent = Math.round(state.earnings.daily).toLocaleString();
-    elements.weeklyEarnings.textContent = Math.round(state.earnings.weekly).toLocaleString();
-    elements.monthlyEarnings.textContent = Math.round(state.earnings.monthly).toLocaleString();
-}
-
-function updateStatsDisplay() {
-    elements.totalDeliveries.textContent = state.stats.deliveries;
-    elements.totalDistance.textContent = state.stats.distance;
-}
-
-function displayRoutes() {
-    const filteredRoutes = state.currentFilter === 'all' 
-        ? state.availableRoutes 
-        : state.availableRoutes.filter(r => r.type === state.currentFilter);
-    
-    if (filteredRoutes.length === 0) {
-        elements.routeList.innerHTML = `
-            <div class="empty-state">
-                <div class="empty-icon">🗺️</div>
-                <h3 class="empty-title">No Routes Available</h3>
-                <p class="empty-message">Check back soon for new clustered routes</p>
-            </div>
-        `;
-        return;
-    }
-    
-    elements.routeList.innerHTML = filteredRoutes.map(route => `
-        <div class="route-card ${route.status !== 'available' ? 'claimed' : ''}" 
-             onclick="${route.status === 'available' ? `claimRoute('${route.id}')` : ''}">
-            <div class="route-header">
-                <div class="route-cluster">${route.name}</div>
-                <div class="route-type ${route.type}">${route.type.toUpperCase()}</div>
-            </div>
-            <div class="route-details">
-                <div class="route-detail">
-                    <div class="route-detail-value">${route.pickups}</div>
-                    <div class="route-detail-label">Pickups</div>
-                </div>
-                <div class="route-detail">
-                    <div class="route-detail-value">${route.deliveries}</div>
-                    <div class="route-detail-label">Deliveries</div>
-                </div>
-                <div class="route-detail">
-                    <div class="route-detail-value">KES ${Math.round(route.total_earnings)}</div>
-                    <div class="route-detail-label">Earnings</div>
-                </div>
-            </div>
-            <div class="route-info-bar">
-                <span class="route-distance">📍 ${Math.round(route.distance)} km total</span>
-                <span class="route-time">⏱️ ~${Math.round(route.distance * 2 + route.deliveries * 5)} min</span>
-            </div>
-            <button class="claim-button" ${route.status !== 'available' ? 'disabled' : ''}>
-                ${route.status === 'available' ? 'Claim Route' : 'Already Claimed'}
-            </button>
-        </div>
-    `).join('');
-}
-
-function displayCommissionStatus() {
-    if (!state.commissionTracker) return;
-    
-    const ui = state.commissionTracker.createCommissionUI();
-    
-    const commissionContainer = document.createElement('div');
-    commissionContainer.id = 'commissionContainer';
-    commissionContainer.innerHTML = ui.statusBar;
-    
-    const heroSection = document.querySelector('.hero-section');
-    if (heroSection && heroSection.parentNode) {
-        heroSection.parentNode.insertBefore(commissionContainer, heroSection.nextSibling);
-    }
-    
-    if (ui.warningMessage) {
-        const warningDiv = document.createElement('div');
-        warningDiv.innerHTML = ui.warningMessage;
-        commissionContainer.appendChild(warningDiv.firstChild);
-    }
-}
-
-function showBlockedOverlay() {
-    if (!state.commissionTracker) return;
-    
-    const ui = state.commissionTracker.createCommissionUI();
-    
-    const overlay = document.createElement('div');
-    overlay.id = 'commissionBlockedOverlay';
-    overlay.innerHTML = ui.blockedMessage;
-    document.body.appendChild(overlay);
-}
-
 // ─── Event Listeners ───────────────────────────────────────────────────────
 
 function setupEventListeners() {
-    elements.codeInput?.addEventListener('input', (e) => {
-        let value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
-        e.target.value = value;
-    });
+    if (elements.codeInput) {
+        elements.codeInput.addEventListener('input', (e) => {
+            let value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+            e.target.value = value;
+        });
+    }
     
-    elements.statusBadge?.addEventListener('click', toggleStatus);
+    if (elements.statusBadge) {
+        elements.statusBadge.addEventListener('click', toggleStatus);
+    }
 }
 
 async function toggleStatus() {
@@ -1416,6 +1456,10 @@ window.claimRoute = async function(routeId) {
             };
             
             showActiveRoute();
+            
+            // Show navigation button
+            const navButton = document.getElementById('navButton');
+            if (navButton) navButton.style.display = 'flex';
         } else {
             // Demo route
             showNotification('Demo route claimed!', 'success');
@@ -1541,30 +1585,19 @@ window.verifyCode = async function(type) {
             if (allComplete) {
                 elements.activeDeliverySection.style.display = 'none';
                 state.claimedRoute = null;
+                
+                // Hide navigation button
+                const navButton = document.getElementById('navButton');
+                if (navButton) navButton.style.display = 'none';
+                
                 showNotification('🎉 Route completed! Great work!', 'success');
                 await loadAvailableRoutes();
             }
             
         } else {
-            // Fallback to old single parcel logic
-            let searchFilter = '';
-            if (type === 'pickup') {
-                searchFilter = `pickup_code=eq.${code}`;
-            } else {
-                searchFilter = `delivery_code=eq.${code}`;
-            }
-            
-            const parcels = await supabaseAPI.query('parcels', {
-                filter: searchFilter,
-                limit: 1
-            });
-            
-            if (parcels.length === 0) {
-                showNotification('Invalid code. Please check and try again.', 'error');
-                return;
-            }
-            
-            // Continue with old logic...
+            // Demo verification
+            showNotification('Demo: Code verified successfully!', 'success');
+            elements.codeInput.value = '';
         }
         
         haptic('success');
@@ -1620,80 +1653,164 @@ window.openPaymentModal = function() {
     
     document.body.appendChild(modal);
     
-    const style = document.createElement('style');
-    style.textContent = `
-        .payment-modal {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.9);
-            backdrop-filter: blur(10px);
-            z-index: 10000;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-        }
-        
-        .payment-content {
-            background: var(--surface-elevated);
-            border-radius: 20px;
-            padding: 32px 24px;
-            max-width: 400px;
-            width: 100%;
-        }
-        
-        .payment-content h2 {
-            font-size: 24px;
-            font-weight: 700;
-            margin-bottom: 16px;
-        }
-        
-        .payment-amount {
-            font-size: 32px;
-            font-weight: 700;
-            color: var(--warning);
-            text-align: center;
-            margin: 24px 0;
-        }
-        
-        .payment-instructions {
-            background: var(--surface-high);
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 24px;
-        }
-        
-        .payment-instructions h3 {
-            font-size: 16px;
-            margin-bottom: 12px;
-        }
-        
-        .payment-instructions ol {
-            margin-left: 20px;
-            color: var(--text-secondary);
-        }
-        
-        .payment-instructions li {
-            margin-bottom: 8px;
-            line-height: 1.5;
-        }
-        
-        .payment-instructions strong {
-            color: var(--text-primary);
-            font-weight: 600;
-        }
-        
-        .modal-close {
-            width: 100%;
-            background: var(--primary);
-            color: white;
-            border: none;
-            border-radius: 12px;
-            padding: 16px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-        }
+    // Add payment modal styles if not already present
+    const existingStyle = document.getElementById('payment-modal-styles');
+    if (!existingStyle) {
+        const style = document.createElement('style');
+        style.id = 'payment-modal-styles';
+        style.textContent = `
+            .payment-modal {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0, 0, 0, 0.9);
+                backdrop-filter: blur(10px);
+                z-index: 10000;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 20px;
+            }
+            
+            .payment-content {
+                background: var(--surface-elevated);
+                border-radius: 20px;
+                padding: 32px 24px;
+                max-width: 400px;
+                width: 100%;
+            }
+            
+            .payment-content h2 {
+                font-size: 24px;
+                font-weight: 700;
+                margin-bottom: 16px;
+            }
+            
+            .payment-amount {
+                font-size: 32px;
+                font-weight: 700;
+                color: var(--warning);
+                text-align: center;
+                margin: 24px 0;
+            }
+            
+            .payment-instructions {
+                background: var(--surface-high);
+                border-radius: 12px;
+                padding: 20px;
+                margin-bottom: 24px;
+            }
+            
+            .payment-instructions h3 {
+                font-size: 16px;
+                margin-bottom: 12px;
+            }
+            
+            .payment-instructions ol {
+                margin-left: 20px;
+                color: var(--text-secondary);
+            }
+            
+            .payment-instructions li {
+                margin-bottom: 8px;
+                line-height: 1.5;
+            }
+            
+            .payment-instructions strong {
+                color: var(--text-primary);
+                font-weight: 600;
+            }
+            
+            .modal-close {
+                width: 100%;
+                background: var(--primary);
+                color: white;
+                border: none;
+                border-radius: 12px;
+                padding: 16px;
+                font-size: 16px;
+                font-weight: 600;
+                cursor: pointer;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+    
+    haptic('light');
+};
+
+window.viewCommissionDetails = function() {
+    const summary = state.commissionTracker.getSummary();
+    
+    showNotification(
+        `Commission Details: KES ${summary.unpaid} unpaid from ${summary.pendingCount} deliveries`,
+        'info'
+    );
+    
+    console.log('Commission details:', {
+        unpaid: summary.unpaid,
+        totalPaid: summary.totalPaid,
+        pendingCount: summary.pendingCount,
+        percentageUsed: summary.percentageUsed,
+        isBlocked: summary.isBlocked
+    });
+    
+    haptic('light');
+};
+
+window.closePaymentModal = function() {
+    const modal = document.querySelector('.payment-modal');
+    if (modal) {
+        modal.remove();
+    }
+};
+
+// ─── Custom Styles Function ────────────────────────────────────────────────
+
+function addCustomStyles() {
+    const existingStyle = document.getElementById('custom-styles');
+    if (!existingStyle && state.commissionTracker) {
+        const style = document.createElement('style');
+        style.id = 'custom-styles';
+        style.textContent = state.commissionTracker.getCommissionStyles();
+        document.head.appendChild(style);
+    }
+}
+
+// ─── Initialize on DOM Ready ───────────────────────────────────────────────
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initialize);
+} else {
+    initialize();
+}
+
+// ─── Export for Debugging ──────────────────────────────────────────────────
+
+window.tumaDebug = {
+    state,
+    supabaseAPI,
+    checkParcels: async () => {
+        const parcels = await supabaseAPI.query('parcels', {
+            filter: 'status=eq.submitted&rider_id=is.null',
+            limit: 10
+        });
+        console.log('Available parcels:', parcels);
+        return parcels;
+    },
+    checkAllParcels: async () => {
+        const parcels = await supabaseAPI.query('parcels', {
+            limit: 20
+        });
+        console.log('All parcels:', parcels);
+        console.log('Statuses:', parcels.map(p => ({ id: p.id, status: p.status, rider_id: p.rider_id })));
+        return parcels;
+    },
+    resetDemo: () => {
+        localStorage.removeItem('tuma_rider_phone');
+        localStorage.removeItem('tuma_active_route');
+        window.location.reload();
+    }
+};
