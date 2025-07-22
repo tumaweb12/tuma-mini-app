@@ -933,16 +933,19 @@
             100% { transform: translate(-50%, -50%) rotate(360deg); }
         }
 
-        /* Success Screen */
+         /* Success Screen - Now Scrollable */
         .success-overlay {
             position: fixed;
             inset: 0;
             background: rgba(0, 0, 0, 0.9);
             display: none;
-            align-items: center;
+            align-items: flex-start; /* Changed: Start from top instead of center */
             justify-content: center;
             z-index: 2000;
             backdrop-filter: blur(10px);
+            overflow-y: auto; /* Added: Enable vertical scrolling */
+            -webkit-overflow-scrolling: touch; /* Added: Smooth scrolling on iOS */
+            padding: 20px 0; /* Added: Vertical padding for spacing */
         }
 
         .success-modal {
@@ -952,107 +955,50 @@
             text-align: center;
             max-width: 320px;
             width: 90%;
+            margin: 20px auto; /* Added: Margin for spacing */
             animation: modalBounce 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            max-height: none; /* Added: Remove height constraints */
+            height: auto; /* Added: Let modal grow as needed */
         }
 
-        @keyframes modalBounce {
-            0% { transform: scale(0.5) translateY(50px); opacity: 0; }
-            100% { transform: scale(1) translateY(0); opacity: 1; }
+        /* Added: Responsive adjustments for small screens */
+        @media (max-height: 700px) {
+            .success-overlay {
+                align-items: flex-start;
+            }
+            
+            .success-modal {
+                margin: 10px auto 40px;
+            }
         }
 
-        .success-icon {
-            width: 64px;
-            height: 64px;
-            background: var(--success);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto 20px;
-            animation: successPulse 0.6s ease-out;
+        @media (max-height: 600px) {
+            .success-modal {
+                padding: 24px;
+            }
+            
+            .success-icon {
+                width: 48px;
+                height: 48px;
+                margin: 0 auto 16px;
+            }
+            
+            .success-title {
+                font-size: 20px;
+                margin-bottom: 8px;
+            }
+            
+            .codes-container {
+                padding: 16px;
+                margin-bottom: 16px;
+            }
         }
 
-        @keyframes successPulse {
-            0% { transform: scale(0); }
-            50% { transform: scale(1.2); }
-            100% { transform: scale(1); }
-        }
-
-        .success-title {
-            font-size: 24px;
-            font-weight: 700;
-            margin-bottom: 12px;
-        }
-
-        .success-message {
-            font-size: 16px;
-            color: var(--text-secondary);
-            margin-bottom: 24px;
-        }
-
-        .codes-container {
-            background: var(--surface-high);
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 24px;
-        }
-
-        .code-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 12px 0;
-            border-bottom: 1px solid var(--border);
-        }
-
-        .code-item:last-child {
-            border-bottom: none;
-        }
-
-        .code-label {
-            font-size: 14px;
-            color: var(--text-secondary);
-        }
-
-        .code-value {
-            font-size: 18px;
-            font-weight: 600;
-            color: var(--primary);
-            font-family: 'SF Mono', monospace;
-            letter-spacing: 1px;
-        }
-
-        .success-actions {
-            display: flex;
-            gap: 12px;
-        }
-
-        .success-button {
-            flex: 1;
-            padding: 14px;
-            border-radius: 12px;
-            border: none;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .success-button.primary {
-            background: var(--primary);
-            color: white;
-        }
-
-        .success-button.secondary {
-            background: var(--surface-high);
-            color: var(--text-primary);
-        }
-
-        .success-button:active {
-            scale: 0.95;
+        /* Added: Extra padding when mobile keyboard is open */
+        @media (max-height: 500px) {
+            .success-overlay {
+                padding: 10px 0 60px;
+            }
         }
 
         /* Payment Button Styles */
@@ -1837,7 +1783,13 @@
         }
     }
 
-    function bookAnother() {
+   function bookAnother() {
+        // Close modal properly first
+        const overlay = document.getElementById('successOverlay');
+        if (overlay) {
+            overlay.style.display = 'none';
+            document.body.style.overflow = ''; // Re-enable body scroll
+        }
         // Reload the page to start fresh
         window.location.reload();
     }
@@ -1863,6 +1815,8 @@
         }
         
         successOverlay.style.display = 'flex';
+        successOverlay.scrollTop = 0; // Added: Scroll to top of modal
+        document.body.style.overflow = 'hidden'; // Added: Prevent body scroll
         
         // Log for debugging
         console.log('HTML showSuccess called with:', {
@@ -1875,7 +1829,6 @@
             }
         });
     }
-
     // Notification function (if not already defined)
     function showNotification(message, type = 'info') {
         // Create notification element
