@@ -28,6 +28,7 @@
             --surface: #0A0A0B;
             --surface-elevated: #141416;
             --surface-high: #1C1C1F;
+            --surface-dim: #070708;
             --text-primary: #FFFFFF;
             --text-secondary: #8E8E93;
             --text-tertiary: #48484A;
@@ -706,16 +707,15 @@
             overflow: hidden;
         }
 
-        .route-card:hover {
+        .route-card:hover:not(.claimed) {
             transform: translateY(-2px);
             border-color: var(--primary);
             box-shadow: 0 4px 20px rgba(0, 102, 255, 0.2);
         }
 
         .route-card.claimed {
-            border-color: var(--success);
-            background: var(--surface-high);
-            opacity: 0.7;
+            opacity: 0.6;
+            background: var(--surface-dim);
             cursor: not-allowed;
         }
 
@@ -798,6 +798,8 @@
             font-weight: 600;
             cursor: pointer;
             transition: all 0.2s;
+            position: relative;
+            z-index: 2;
         }
 
         .claim-button:active {
@@ -1176,6 +1178,7 @@
                 </div>
 
                 <!-- Commission container will be injected here by JS -->
+                <div id="commissionContainer"></div>
 
                 <!-- Earnings Overview -->
                 <div class="form-section">
@@ -1336,7 +1339,7 @@
                             <span>${window.state?.rider?.rider_name?.charAt(0) || 'R'}</span>
                         </div>
                         <div class="profile-info">
-                            <div class="profile-name">${window.state?.rider?.rider_name || 'Rider'}</div>
+                            <div class="profile-name">${window.state?.rider?.rider_name || 'Test Rider'}</div>
                             <div class="profile-phone">${window.state?.rider?.phone || '+254700000000'}</div>
                             <div class="profile-rating">
                                 ⭐ ${window.state?.rider?.rating || '5.0'} • ${window.state?.rider?.completed_deliveries || '0'} deliveries
