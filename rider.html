@@ -263,6 +263,95 @@
             color: var(--text-secondary);
         }
 
+        /* Commission Status */
+        .commission-status {
+            background: var(--surface-elevated);
+            border-radius: 14px;
+            padding: 16px;
+            margin: 0 0 20px;
+            border: 1px solid var(--border);
+            transition: all 0.3s;
+        }
+        
+        .commission-status.warning {
+            border-color: var(--warning);
+            background: rgba(255, 159, 10, 0.1);
+        }
+        
+        .commission-status.blocked {
+            border-color: var(--danger);
+            background: rgba(255, 59, 48, 0.1);
+        }
+        
+        .commission-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        
+        .commission-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+        
+        .commission-amount {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+        
+        .commission-progress {
+            height: 8px;
+            background: var(--surface-high);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 12px;
+        }
+        
+        .commission-progress-bar {
+            height: 100%;
+            background: var(--primary);
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+        
+        .commission-status.warning .commission-progress-bar {
+            background: var(--warning);
+        }
+        
+        .commission-status.blocked .commission-progress-bar {
+            background: var(--danger);
+        }
+        
+        .commission-actions {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .commission-pay-button,
+        .commission-details-button {
+            flex: 1;
+            padding: 10px;
+            border-radius: 8px;
+            border: none;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .commission-pay-button {
+            background: var(--primary);
+            color: white;
+        }
+        
+        .commission-details-button {
+            background: var(--surface-high);
+            color: var(--text-secondary);
+        }
+
         /* Form Sections */
         .form-section {
             margin-bottom: 24px;
@@ -917,6 +1006,8 @@
                 </div>
             </div>
 
+            <!-- Quick Actions Bar will be added by JS -->
+
             <!-- Form Container -->
             <form class="form-container">
                 <!-- Hero Section -->
@@ -1051,59 +1142,91 @@
         </button>
     </div>
 
-    <!-- Placeholder functions that will be overridden by the external JS -->
+    <!-- Ensure all global functions are available before rider.js loads -->
     <script>
-        // Menu handler
-        function showMenu() {
-            console.log('Menu clicked');
-            // This will be overridden by the external JS
-        }
+        // Define all global functions that might be called before rider.js loads
+        window.showMenu = function() {
+            console.log('Menu clicked - will be overridden by rider.js');
+        };
         
-        // Additional global functions that might be called before external JS loads
-        function viewCommissionDetails() {
-            console.log('View commission details');
-        }
+        window.toggleBreakMode = function() {
+            console.log('Break mode - will be overridden by rider.js');
+        };
         
-        function closePaymentModal() {
+        window.viewEarningsDetails = function() {
+            console.log('Earnings details - will be overridden by rider.js');
+        };
+        
+        window.showHotZones = function() {
+            console.log('Hot zones - will be overridden by rider.js');
+        };
+        
+        window.callSupport = function() {
+            console.log('Call support - will be overridden by rider.js');
+        };
+        
+        window.filterRoutes = function(type) {
+            console.log('Filter routes:', type, '- will be overridden by rider.js');
+        };
+        
+        window.claimRoute = function(routeId) {
+            console.log('Claim route:', routeId, '- will be overridden by rider.js');
+        };
+        
+        window.verifyCode = function(type) {
+            console.log('Verify code:', type, '- will be overridden by rider.js');
+        };
+        
+        window.navigateToRoute = function() {
+            console.log('Navigate to route - will be overridden by rider.js');
+        };
+        
+        window.openPaymentModal = function() {
+            console.log('Open payment modal - will be overridden by rider.js');
+        };
+        
+        window.viewCommissionDetails = function() {
+            console.log('View commission details - will be overridden by rider.js');
+        };
+        
+        window.closePaymentModal = function() {
             const modal = document.querySelector('.payment-modal');
             if (modal) {
                 modal.remove();
             }
-        }
+        };
         
-        // Check for active route on page load
-        window.addEventListener('DOMContentLoaded', function() {
-            if (localStorage.getItem('tuma_active_route')) {
-                const navButton = document.getElementById('navButton');
-                if (navButton) {
-                    navButton.style.display = 'flex';
-                }
-            }
-        });
-    </script>
-
-    <!-- Load the main JavaScript file -->
-    <script type="module">
-        // Create a simple addCustomStyles function in case the external JS needs it
+        // Helper function for custom styles
         window.addCustomStyles = function() {
             const existingStyle = document.getElementById('custom-styles');
             if (!existingStyle) {
                 const style = document.createElement('style');
                 style.id = 'custom-styles';
-                style.textContent = `
-                    /* Additional styles will be injected here by the external JS */
-                `;
                 document.head.appendChild(style);
             }
         };
-        
-        // Import and initialize the external JavaScript
-        import('./rider.js').then(module => {
-            console.log('Rider module loaded successfully');
-        }).catch(error => {
-            console.error('Error loading rider module:', error);
-            // Fallback initialization if needed
-        });
+    </script>
+
+    <!-- Load the external JavaScript file after DOM is ready -->
+    <script type="module">
+        // Wait for DOM to be fully loaded before importing rider.js
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', async () => {
+                try {
+                    await import('./rider.js');
+                    console.log('Rider.js loaded successfully');
+                } catch (error) {
+                    console.error('Error loading rider.js:', error);
+                }
+            });
+        } else {
+            // DOM is already loaded
+            import('./rider.js').then(() => {
+                console.log('Rider.js loaded successfully');
+            }).catch(error => {
+                console.error('Error loading rider.js:', error);
+            });
+        }
     </script>
 </body>
 </html>
