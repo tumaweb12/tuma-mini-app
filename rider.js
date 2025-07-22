@@ -1915,3 +1915,5 @@ if (!window.haptic) {
 
 // Make showNotification globally available
 window.showNotification = showNotification;
+
+console.log('✅ rider.js loaded successfully!');
