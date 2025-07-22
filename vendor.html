@@ -1842,39 +1842,39 @@
         window.location.reload();
     }
 
-// Update the showSuccess function to display price
-function showSuccess(codes, price) {
-    const displayParcelCode = document.getElementById('displayParcelCode');
-    const displayPickupCode = document.getElementById('displayPickupCode');
-    const displayDeliveryCode = document.getElementById('displayDeliveryCode');
-    const displayTotalPrice = document.getElementById('displayTotalPrice');
-    const successOverlay = document.getElementById('successOverlay');
-    
-    // Fixed: Use snake_case to match what vendor.js sends
-    displayParcelCode.textContent = codes.parcel_code || codes.parcelCode || '-';
-    displayPickupCode.textContent = codes.pickup_code || codes.pickupCode || '-';
-    displayDeliveryCode.textContent = codes.delivery_code || codes.deliveryCode || '-';
-    
-    // Display the price
-    if (typeof pricing !== 'undefined' && pricing.formatPrice) {
-        displayTotalPrice.textContent = pricing.formatPrice(price);
-    } else {
-        displayTotalPrice.textContent = `KES ${Math.round(price)}`;
-    }
-    
-    successOverlay.style.display = 'flex';
-    
-    // Log for debugging
-    console.log('HTML showSuccess called with:', {
-        codes: codes,
-        price: price,
-        displayed: {
-            parcel: displayParcelCode.textContent,
-            pickup: displayPickupCode.textContent,
-            delivery: displayDeliveryCode.textContent
+    // FIXED: Update the showSuccess function to handle snake_case from vendor.js
+    function showSuccess(codes, price) {
+        const displayParcelCode = document.getElementById('displayParcelCode');
+        const displayPickupCode = document.getElementById('displayPickupCode');
+        const displayDeliveryCode = document.getElementById('displayDeliveryCode');
+        const displayTotalPrice = document.getElementById('displayTotalPrice');
+        const successOverlay = document.getElementById('successOverlay');
+        
+        // Fixed: Use snake_case to match what vendor.js sends
+        displayParcelCode.textContent = codes.parcel_code || codes.parcelCode || '-';
+        displayPickupCode.textContent = codes.pickup_code || codes.pickupCode || '-';
+        displayDeliveryCode.textContent = codes.delivery_code || codes.deliveryCode || '-';
+        
+        // Display the price
+        if (typeof pricing !== 'undefined' && pricing.formatPrice) {
+            displayTotalPrice.textContent = pricing.formatPrice(price);
+        } else {
+            displayTotalPrice.textContent = `KES ${Math.round(price)}`;
         }
-    });
-}
+        
+        successOverlay.style.display = 'flex';
+        
+        // Log for debugging
+        console.log('HTML showSuccess called with:', {
+            codes: codes,
+            price: price,
+            displayed: {
+                parcel: displayParcelCode.textContent,
+                pickup: displayPickupCode.textContent,
+                delivery: displayDeliveryCode.textContent
+            }
+        });
+    }
 
     // Notification function (if not already defined)
     function showNotification(message, type = 'info') {
