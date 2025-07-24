@@ -1,1268 +1,906 @@
-<!-- Add this style block to your route.html file after the existing styles -->
-<style>
-/* Enhanced Map Legend */
-.map-legend {
-    background: var(--surface-elevated);
-    border-radius: 12px;
-    padding: 12px;
-    margin: 10px;
-    border: 1px solid var(--border);
-    backdrop-filter: blur(10px);
-}
+/**
+ * Enhanced Route Navigation Module
+ * Handles active route display, navigation, and verification
+ */
 
-.legend-content {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
+// Import utilities
+import { calculateStraightDistance } from './mapUtils.js';
 
-.legend-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 13px;
-}
+// State management
+const state = {
+    activeRoute: null,
+    currentLocation: null,
+    map: null,
+    markers: [],
+    routePolyline: null,
+    isTracking: false,
+    currentStopIndex: 0,
+    parcelsInPossession: []
+};
 
-.legend-icon {
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 14px;
-}
+// Supabase configuration (same as rider.js)
+const SUPABASE_URL = 'https://btxavqfoirdzwpfrvezp.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ0eGF2cWZvaXJkendwZnJ2ZXpwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE0ODcxMTcsImV4cCI6MjA2NzA2MzExN30.kQKpukFGx-cBl1zZRuXmex02ifkZ751WCUfQPogYutk';
 
-.legend-icon.pickup {
-    background: rgba(255, 159, 10, 0.2);
-}
-
-.legend-icon.delivery {
-    background: rgba(52, 199, 89, 0.2);
-}
-
-.legend-icon.completed {
-    background: rgba(102, 102, 102, 0.2);
-}
-
-/* Enhanced Stop Markers */
-.stop-marker-wrapper {
-    position: relative;
-    text-align: center;
-}
-
-.stop-marker {
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 3px 10px rgba(0,0,0,0.3);
-    border: 3px solid white;
-    position: relative;
-    transition: all 0.3s ease;
-}
-
-.stop-marker.pickup {
-    background: #FF9F0A;
-}
-
-.stop-marker.delivery {
-    background: #34C759;
-}
-
-.stop-marker-wrapper.completed .stop-marker {
-    background: #666;
-    opacity: 0.8;
-}
-
-.stop-marker-wrapper.active .stop-marker {
-    animation: bounce 1s ease-in-out infinite;
-    box-shadow: 0 5px 20px rgba(0,0,0,0.5);
-}
-
-.marker-number {
-    color: white;
-    font-weight: bold;
-    font-size: 18px;
-}
-
-.marker-label {
-    position: absolute;
-    top: 45px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: var(--surface-elevated);
-    padding: 4px 8px;
-    border-radius: 6px;
-    font-size: 11px;
-    font-weight: 600;
-    white-space: nowrap;
-    border: 1px solid var(--border);
-}
-
-.marker-pulse {
-    position: absolute;
-    top: -10px;
-    left: -10px;
-    right: -10px;
-    bottom: -10px;
-    border: 2px solid var(--primary);
-    border-radius: 50%;
-    animation: pulse 2s ease-out infinite;
-}
-
-@keyframes bounce {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-10px); }
-}
-
-@keyframes pulse {
-    0% {
-        transform: scale(1);
-        opacity: 1;
+// Initialize on DOM ready
+document.addEventListener('DOMContentLoaded', async () => {
+    console.log('Route.js initializing...');
+    
+    try {
+        // Load active route from localStorage
+        const storedRoute = localStorage.getItem('tuma_active_route');
+        console.log('Stored route data:', storedRoute);
+        
+        if (storedRoute) {
+            state.activeRoute = JSON.parse(storedRoute);
+            console.log('Parsed route:', state.activeRoute);
+            
+            // Initialize map
+            await initializeMap();
+            
+            // Display route information
+            displayRouteInfo();
+            
+            // Plot route on map
+            plotRoute();
+            
+            // Show route panel
+            showRoutePanel();
+            
+            // Start location tracking
+            startLocationTracking();
+        } else {
+            console.log('No active route found');
+            showEmptyState();
+        }
+    } catch (error) {
+        console.error('Error initializing route:', error);
+        showEmptyState();
     }
-    100% {
-        transform: scale(1.5);
-        opacity: 0;
-    }
-}
-
-/* Enhanced Popup Styles */
-.enhanced-popup .leaflet-popup-content-wrapper {
-    background: var(--surface-elevated);
-    border-radius: 16px;
-    padding: 0;
-    overflow: hidden;
-}
-
-.enhanced-popup .leaflet-popup-tip {
-    background: var(--surface-elevated);
-}
-
-.stop-popup {
-    min-width: 280px;
-}
-
-.popup-header {
-    padding: 12px 16px;
-    color: white;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-weight: 600;
-}
-
-.popup-header.pickup {
-    background: #FF9F0A;
-}
-
-.popup-header.delivery {
-    background: #34C759;
-}
-
-.popup-phase {
-    font-size: 12px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-.popup-code {
-    font-size: 14px;
-    font-family: monospace;
-}
-
-.popup-body {
-    padding: 16px;
-}
-
-.popup-body h3 {
-    margin: 0 0 12px 0;
-    font-size: 16px;
-    line-height: 1.3;
-}
-
-.popup-info {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    margin-bottom: 16px;
-}
-
-.info-row {
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
-    font-size: 14px;
-}
-
-.info-icon {
-    font-size: 16px;
-    flex-shrink: 0;
-}
-
-.phone-link {
-    color: var(--primary);
-    text-decoration: none;
-}
-
-.info-row.instructions {
-    background: rgba(255, 159, 10, 0.1);
-    padding: 8px;
-    border-radius: 8px;
-    font-size: 13px;
-}
-
-.popup-actions {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.popup-action-btn {
-    width: 100%;
-    padding: 12px;
-    border: none;
-    border-radius: 10px;
-    font-weight: 600;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    transition: all 0.2s;
-}
-
-.popup-action-btn.primary {
-    background: var(--primary);
-    color: white;
-}
-
-.popup-action-btn.secondary {
-    background: var(--surface-high);
-    color: var(--text-primary);
-}
-
-.popup-action-btn:active {
-    transform: scale(0.98);
-}
-
-.btn-icon {
-    font-size: 16px;
-}
-
-/* Enhanced Route Panel */
-.route-phases {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 16px;
-    padding: 20px;
-    background: var(--surface-high);
-    border-radius: 14px;
-    margin: 20px 0;
-}
-
-.phase {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 12px 20px;
-    background: var(--surface-elevated);
-    border-radius: 12px;
-    border: 2px solid var(--border);
-    transition: all 0.3s;
-}
-
-.phase.active {
-    border-color: var(--primary);
-    background: var(--surface);
-    transform: scale(1.05);
-}
-
-.phase.completed {
-    border-color: var(--success);
-    opacity: 0.8;
-}
-
-.phase-icon {
-    font-size: 32px;
-}
-
-.phase-info {
-    text-align: left;
-}
-
-.phase-title {
-    font-weight: 600;
-    font-size: 14px;
-    margin-bottom: 4px;
-}
-
-.phase-progress {
-    font-size: 20px;
-    font-weight: 700;
-    color: var(--primary);
-}
-
-.phase.completed .phase-progress {
-    color: var(--success);
-}
-
-/* Enhanced Stop Cards */
-.phase-section {
-    margin-bottom: 24px;
-}
-
-.phase-section.locked {
-    opacity: 0.6;
-    pointer-events: none;
-}
-
-.phase-title {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 16px;
-    font-weight: 600;
-    margin-bottom: 12px;
-    padding: 0 4px;
-}
-
-.phase-count {
-    margin-left: auto;
-    font-size: 14px;
-    color: var(--text-secondary);
-}
-
-.phase-stops {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-}
-
-.stop-card {
-    background: var(--surface-high);
-    border-radius: 14px;
-    padding: 16px;
-    display: flex;
-    align-items: stretch;
-    gap: 16px;
-    cursor: pointer;
-    transition: all 0.3s;
-    border: 2px solid transparent;
-}
-
-.stop-card:hover:not(.completed):not(.blocked) {
-    background: var(--surface-elevated);
-    border-color: var(--primary);
-    transform: translateX(4px);
-}
-
-.stop-card.active {
-    background: var(--surface);
-    border-color: var(--primary);
-    box-shadow: 0 4px 20px rgba(0, 102, 255, 0.2);
-}
-
-.stop-card.completed {
-    opacity: 0.6;
-    cursor: default;
-}
-
-.stop-card.blocked {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
-.stop-number-badge {
-    width: 48px;
-    height: 48px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: bold;
-    font-size: 20px;
-    color: white;
-    flex-shrink: 0;
-}
-
-.stop-number-badge.pickup {
-    background: #FF9F0A;
-}
-
-.stop-number-badge.delivery {
-    background: #34C759;
-}
-
-.stop-card.completed .stop-number-badge {
-    background: #666;
-}
-
-.stop-content {
-    flex: 1;
-}
-
-.stop-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    margin-bottom: 8px;
-}
-
-.stop-address {
-    font-size: 16px;
-    font-weight: 600;
-    margin: 0;
-    line-height: 1.3;
-}
-
-.stop-distance {
-    font-size: 13px;
-    color: var(--text-secondary);
-    flex-shrink: 0;
-}
-
-.stop-details {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-}
-
-.detail-row {
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
-    font-size: 14px;
-    color: var(--text-secondary);
-}
-
-.detail-icon {
-    font-size: 16px;
-    flex-shrink: 0;
-}
-
-.detail-row.instructions {
-    background: rgba(255, 159, 10, 0.1);
-    padding: 6px 8px;
-    border-radius: 6px;
-    margin-top: 4px;
-}
-
-.stop-status {
-    margin-top: 8px;
-    font-size: 13px;
-    font-weight: 600;
-    padding: 4px 8px;
-    border-radius: 6px;
-    display: inline-block;
-}
-
-.stop-status.active {
-    background: rgba(0, 102, 255, 0.1);
-    color: var(--primary);
-}
-
-.stop-status.completed {
-    background: rgba(52, 199, 89, 0.1);
-    color: var(--success);
-}
-
-.stop-status.blocked {
-    background: rgba(255, 159, 10, 0.1);
-    color: var(--warning);
-}
-
-.stop-actions {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-}
-
-.action-btn {
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    border: none;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    transition: all 0.2s;
-    text-decoration: none;
-    font-size: 18px;
-}
-
-.action-btn.navigate {
-    background: var(--primary);
-    color: white;
-}
-
-.action-btn.call {
-    background: var(--success);
-    color: white;
-}
-
-.action-btn:active {
-    transform: scale(0.9);
-}
-
-/* Enhanced Verification Modal */
-.verification-modal {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 9999;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 20px;
-}
-
-.modal-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0,0,0,0.8);
-    backdrop-filter: blur(10px);
-}
-
-.modal-content {
-    position: relative;
-    background: var(--surface-elevated);
-    border-radius: 20px;
-    max-width: 400px;
-    width: 100%;
-    overflow: hidden;
-    animation: modalSlideIn 0.3s ease-out;
-}
-
-.verification-modal.closing .modal-content {
-    animation: modalSlideOut 0.3s ease-out;
-}
-
-@keyframes modalSlideIn {
-    from {
-        transform: translateY(100px);
-        opacity: 0;
-    }
-    to {
-        transform: translateY(0);
-        opacity: 1;
-    }
-}
-
-@keyframes modalSlideOut {
-    from {
-        transform: translateY(0);
-        opacity: 1;
-    }
-    to {
-        transform: translateY(100px);
-        opacity: 0;
-    }
-}
-
-.modal-header {
-    padding: 20px;
-    text-align: center;
-    color: white;
-}
-
-.modal-header.pickup {
-    background: linear-gradient(135deg, #FF9F0A 0%, #FF7F00 100%);
-}
-
-.modal-header.delivery {
-    background: linear-gradient(135deg, #34C759 0%, #28A745 100%);
-}
-
-.modal-icon {
-    font-size: 48px;
-    display: block;
-    margin-bottom: 8px;
-}
-
-.modal-header h2 {
-    margin: 0;
-    font-size: 24px;
-}
-
-.modal-body {
-    padding: 24px;
-}
-
-.stop-summary {
-    background: var(--surface-high);
-    border-radius: 12px;
-    padding: 16px;
-    margin-bottom: 24px;
-}
-
-.stop-summary h3 {
-    margin: 0 0 12px 0;
-    font-size: 18px;
-}
-
-.summary-details {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.summary-row {
-    display: flex;
-    gap: 8px;
-    font-size: 14px;
-}
-
-.summary-label {
-    color: var(--text-secondary);
-    min-width: 80px;
-}
-
-.summary-value {
-    color: var(--text-primary);
-    font-weight: 500;
-}
-
-.summary-row.instructions {
-    background: rgba(255, 159, 10, 0.1);
-    padding: 8px;
-    border-radius: 8px;
-    margin-top: 4px;
-}
-
-.verification-section label {
-    display: block;
-    font-weight: 600;
-    margin-bottom: 8px;
-}
-
-.verification-input {
-    width: 100%;
-    padding: 16px;
-    border: 2px solid var(--border);
-    border-radius: 12px;
-    background: var(--surface-high);
-    color: white;
-    font-size: 24px;
-    text-align: center;
-    letter-spacing: 3px;
-    font-family: monospace;
-    transition: all 0.3s;
-}
-
-.verification-input:focus {
-    border-color: var(--primary);
-    outline: none;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 20px rgba(0, 102, 255, 0.2);
-}
-
-.verification-input.error {
-    border-color: var(--danger);
-    animation: shake 0.5s ease-in-out;
-}
-
-@keyframes shake {
-    0%, 100% { transform: translateX(0); }
-    25% { transform: translateX(-10px); }
-    75% { transform: translateX(10px); }
-}
-
-.code-hint {
-    font-size: 13px;
-    color: var(--text-secondary);
-    text-align: center;
-    margin-top: 8px;
-}
-
-.modal-actions {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    margin-top: 24px;
-}
-
-.modal-btn {
-    width: 100%;
-    padding: 16px;
-    border: none;
-    border-radius: 12px;
-    font-size: 16px;
-    font-weight: 600;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    transition: all 0.2s;
-}
-
-.modal-btn.primary {
-    background: var(--primary);
-    color: white;
-}
-
-.modal-btn.secondary {
-    background: var(--surface-high);
-    color: var(--text-primary);
-}
-
-.modal-btn:active {
-    transform: scale(0.98);
-}
-
-/* Success Animations */
-.success-animation {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: var(--success);
-    color: white;
-    padding: 40px;
-    border-radius: 20px;
-    text-align: center;
-    z-index: 10000;
-    animation: successPop 0.5s ease-out;
-}
-
-@keyframes successPop {
-    0% {
-        transform: translate(-50%, -50%) scale(0);
-        opacity: 0;
-    }
-    50% {
-        transform: translate(-50%, -50%) scale(1.1);
-    }
-    100% {
-        transform: translate(-50%, -50%) scale(1);
-        opacity: 1;
-    }
-}
-
-.success-icon {
-    font-size: 64px;
-    margin-bottom: 16px;
-}
-
-.success-text {
-    font-size: 24px;
-    font-weight: 700;
-}
-
-/* Phase Complete Animation */
-.phase-complete-animation {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0,0,0,0.9);
-    backdrop-filter: blur(10px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 10000;
-    animation: fadeIn 0.3s ease-out;
-}
-
-@keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
-}
-
-.phase-complete-content {
-    background: var(--surface-elevated);
-    border-radius: 24px;
-    padding: 48px;
-    text-align: center;
-    max-width: 400px;
-    animation: slideUp 0.5s ease-out;
-}
-
-@keyframes slideUp {
-    from {
-        transform: translateY(50px);
-        opacity: 0;
-    }
-    to {
-        transform: translateY(0);
-        opacity: 1;
-    }
-}
-
-.phase-complete-content .phase-icon {
-    font-size: 80px;
-    margin-bottom: 24px;
-    animation: bounce 1s ease-in-out;
-}
-
-.phase-complete-content h2 {
-    font-size: 32px;
-    margin-bottom: 16px;
-}
-
-.phase-complete-content p {
-    font-size: 18px;
-    color: var(--text-secondary);
-}
-
-/* Route Complete Animation */
-.route-complete-animation {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0,0,0,0.95);
-    backdrop-filter: blur(20px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 10000;
-    animation: fadeIn 0.3s ease-out;
-}
-
-.route-complete-content {
-    background: linear-gradient(135deg, var(--surface-elevated) 0%, var(--surface) 100%);
-    border-radius: 24px;
-    padding: 48px;
-    text-align: center;
-    max-width: 400px;
-    border: 2px solid var(--success);
-    animation: completePop 0.8s ease-out;
-}
-
-@keyframes completePop {
-    0% {
-        transform: scale(0) rotate(180deg);
-        opacity: 0;
-    }
-    50% {
-        transform: scale(1.1) rotate(-10deg);
-    }
-    100% {
-        transform: scale(1) rotate(0);
-        opacity: 1;
-    }
-}
-
-.complete-icon {
-    font-size: 100px;
-    margin-bottom: 24px;
-    animation: celebrate 2s ease-in-out infinite;
-}
-
-@keyframes celebrate {
-    0%, 100% { transform: scale(1) rotate(0); }
-    25% { transform: scale(1.1) rotate(-5deg); }
-    75% { transform: scale(1.1) rotate(5deg); }
-}
-
-.route-complete-content h1 {
-    font-size: 36px;
-    margin-bottom: 16px;
-    background: linear-gradient(135deg, var(--primary) 0%, var(--success) 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-}
-
-.route-complete-content p {
-    font-size: 18px;
-    color: var(--text-secondary);
-    margin-bottom: 32px;
-}
-
-.route-stats {
-    display: flex;
-    justify-content: center;
-    gap: 40px;
-    margin-bottom: 32px;
-}
-
-.route-stats .stat {
-    text-align: center;
-}
-
-.route-stats .stat-value {
-    font-size: 32px;
-    font-weight: 700;
-    color: var(--primary);
-    display: block;
-    margin-bottom: 4px;
-}
-
-.route-stats .stat-label {
-    font-size: 14px;
-    color: var(--text-secondary);
-}
-
-.complete-btn {
-    width: 100%;
-    padding: 18px;
-    background: var(--success);
-    color: white;
-    border: none;
-    border-radius: 14px;
-    font-size: 18px;
-    font-weight: 700;
-    cursor: pointer;
-    transition: all 0.3s;
-}
-
-.complete-btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(52, 199, 89, 0.4);
-}
-
-/* Enhanced Notifications */
-.notification {
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    padding: 16px 20px;
-    border-radius: 12px;
-    font-weight: 600;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    animation: notificationSlide 0.3s ease-out;
-    z-index: 10000;
-    max-width: 350px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.2);
-}
-
-@keyframes notificationSlide {
-    from {
-        transform: translateX(400px);
-        opacity: 0;
-    }
-    to {
-        transform: translateX(0);
-        opacity: 1;
-    }
-}
-
-.notification.hiding {
-    animation: notificationHide 0.3s ease-out;
-}
-
-@keyframes notificationHide {
-    from {
-        transform: translateX(0);
-        opacity: 1;
-    }
-    to {
-        transform: translateX(400px);
-        opacity: 0;
-    }
-}
-
-.notification-icon {
-    font-size: 20px;
-}
-
-.notification.success {
-    background: var(--success);
-    color: white;
-}
-
-.notification.error {
-    background: var(--danger);
-    color: white;
-}
-
-.notification.warning {
-    background: var(--warning);
-    color: black;
-}
-
-.notification.info {
-    background: var(--surface-elevated);
-    color: white;
-    border: 1px solid var(--border);
-}
-
-/* Animated Routes */
-.pickup-route {
-    stroke-dasharray: 10, 10;
-    animation: routeFlow 3s linear infinite;
-}
-
-.delivery-route {
-    stroke-dasharray: 10, 10;
-    animation: routeFlow 3s linear infinite reverse;
-}
-
-@keyframes routeFlow {
-    0% { stroke-dashoffset: 0; }
-    100% { stroke-dashoffset: -20; }
-}
-
-/* Location Button Enhancement */
-.location-button {
-    transition: all 0.3s;
-}
-
-.location-button:hover {
-    transform: scale(1.1);
-    box-shadow: 0 4px 20px rgba(0,0,0,0.2);
-}
-
-.location-button.active {
-    background: var(--primary);
-    color: white;
-    animation: locationPulse 1s ease-out;
-}
-
-@keyframes locationPulse {
-    0% {
-        box-shadow: 0 0 0 0 rgba(0, 102, 255, 0.7);
-    }
-    100% {
-        box-shadow: 0 0 0 20px rgba(0, 102, 255, 0);
-    }
-}
-
-/* Progress Bars */
-.phase-progress-bar {
-    height: 4px;
-    background: var(--surface-high);
-    border-radius: 2px;
-    overflow: hidden;
-    margin-top: 8px;
-}
-
-.phase-progress-fill {
-    height: 100%;
-    background: linear-gradient(90deg, var(--primary) 0%, var(--success) 100%);
-    transition: width 0.5s ease-out;
-}
-
-/* Carrying Banner Enhancement */
-.carrying-banner {
-    background: linear-gradient(135deg, rgba(255, 159, 10, 0.2) 0%, rgba(255, 159, 10, 0.1) 100%);
-    animation: subtle-pulse 2s ease-in-out infinite;
-}
-
-@keyframes subtle-pulse {
-    0%, 100% { transform: scale(1); }
-    50% { transform: scale(1.02); }
-}
-
-/* Parcels Widget */
-.parcels-possession-widget {
-    background: linear-gradient(135deg, var(--surface-elevated) 0%, var(--surface-high) 100%);
-    border: 1px solid var(--warning);
-}
-
-.parcel-card {
-    transition: all 0.3s;
-}
-
-.parcel-card:hover {
-    transform: translateX(4px);
-    border-left-color: var(--primary);
-}
-
-/* Quick Verify Button */
-.route-badge.verify-btn {
-    cursor: pointer;
-    padding: 8px 16px;
-    display: flex;
-    align-items: center;
-    transition: all 0.3s;
-    border: 2px solid transparent;
-}
-
-.route-badge.verify-btn:hover {
-    transform: scale(1.05);
-    border-color: rgba(255, 255, 255, 0.3);
-}
-
-.route-badge.verify-btn:active {
-    transform: scale(0.95);
-}
-
-.route-badge.verify-btn.pickup {
-    background: var(--warning);
-    color: black;
-}
-
-.route-badge.verify-btn.delivery {
-    background: var(--success);
-    color: white;
-}
-
-.route-badge.verify-btn.completed {
-    background: var(--surface-high);
-    color: var(--text-secondary);
-    cursor: not-allowed;
-    opacity: 0.6;
-}
-
-.route-badge.verify-btn:disabled {
-    cursor: not-allowed;
-    opacity: 0.6;
-}
-
-/* Quick Verification Modal */
-.verification-modal.quick-verify .modal-content {
-    max-width: 320px;
-}
-
-.verification-modal.quick-verify .modal-content.compact {
-    animation: quickModalSlide 0.2s ease-out;
-}
-
-@keyframes quickModalSlide {
-    from {
-        transform: translateY(50px) scale(0.9);
-        opacity: 0;
-    }
-    to {
-        transform: translateY(0) scale(1);
-        opacity: 1;
-    }
-}
-
-.quick-stop-info {
-    background: var(--surface-high);
-    border-radius: 12px;
-    padding: 12px;
-    margin-bottom: 16px;
-}
-
-.quick-stop-info h3 {
-    font-size: 16px;
-    margin: 0 0 4px 0;
-}
-
-.stop-meta {
-    font-size: 13px;
-    color: var(--text-secondary);
-    margin: 0;
-}
-
-.quick-actions {
-    display: grid;
-    grid-template-columns: 2fr 1fr;
-    gap: 8px;
-    margin-top: 16px;
-}
-
-.modal-btn.compact {
-    padding: 14px;
-}
-
-/* Mobile Quick Verify */
-@media (max-width: 428px) {
-    .verification-modal.quick-verify .modal-content {
-        margin: 10px;
-        max-width: calc(100vw - 20px);
+});
+
+// Initialize map
+async function initializeMap() {
+    console.log('Initializing map...');
+    
+    // Create map centered on Nairobi
+    state.map = L.map('map').setView([-1.2921, 36.8219], 13);
+    
+    // Add tile layer
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors',
+        maxZoom: 19
+    }).addTo(state.map);
+    
+    console.log('Map initialized');
+}
+
+// Display route information
+function displayRouteInfo() {
+    if (!state.activeRoute) return;
+    
+    // Update header
+    const routeTitle = document.getElementById('routeTitle');
+    const routeType = document.getElementById('routeType');
+    
+    if (routeTitle) {
+        routeTitle.textContent = state.activeRoute.name || 'Active Route';
     }
     
-    .quick-actions {
-        grid-template-columns: 1fr;
+    // Update route type badge - now as a verify button
+    if (routeType) {
+        const nextStop = getNextStop();
+        if (nextStop) {
+            routeType.className = `route-badge verify-btn ${nextStop.type}`;
+            routeType.innerHTML = `
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 4px;">
+                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                </svg>
+                <span>Verify ${nextStop.type === 'pickup' ? 'Pickup' : 'Delivery'}</span>
+            `;
+            routeType.onclick = () => openQuickVerification();
+        } else {
+            routeType.className = 'route-badge completed';
+            routeType.innerHTML = 'Route Complete';
+            routeType.onclick = null;
+        }
     }
+    
+    // Update stats
+    updateRouteStats();
+    
+    // Display stops
+    displayStops();
 }
+
+// Get next incomplete stop
+function getNextStop() {
+    if (!state.activeRoute || !state.activeRoute.stops) return null;
+    return state.activeRoute.stops.find(stop => !stop.completed);
+}
+
+// Update route statistics
+function updateRouteStats() {
+    const remainingStops = state.activeRoute.stops.filter(s => !s.completed).length;
+    const totalDistance = state.activeRoute.distance || 0;
+    const estimatedTime = Math.round(totalDistance * 2.5 + remainingStops * 5);
     
-    .phase {
-        width: 100%;
+    document.getElementById('remainingStops').textContent = remainingStops;
+    document.getElementById('totalDistance').textContent = totalDistance;
+    document.getElementById('estimatedTime').textContent = estimatedTime;
+}
+
+// Display stops list with enhanced UI
+function displayStops() {
+    const stopsList = document.getElementById('stopsList');
+    if (!stopsList || !state.activeRoute) return;
+    
+    // Group stops by phase
+    const pickupStops = state.activeRoute.stops.filter(s => s.type === 'pickup');
+    const deliveryStops = state.activeRoute.stops.filter(s => s.type === 'delivery');
+    
+    // Check parcels in possession
+    updateParcelsInPossession();
+    
+    let html = '';
+    
+    // Add phase progress widget
+    html += createPhaseProgressWidget(pickupStops, deliveryStops);
+    
+    // Add parcels in possession widget if any
+    if (state.parcelsInPossession.length > 0) {
+        html += createParcelsInPossessionWidget();
     }
     
-    .phase-arrow {
-        transform: rotate(90deg);
-        margin: 8px 0;
+    // Add pickup phase
+    html += `
+        <div class="phase-section ${allCompleted(pickupStops) ? 'completed' : ''}">
+            <h3 class="phase-title">
+                <span>📦 Pickup Phase</span>
+                <span class="phase-count">${pickupStops.filter(s => s.completed).length}/${pickupStops.length}</span>
+            </h3>
+            <div class="phase-stops">
+                ${pickupStops.map((stop, index) => createStopCard(stop, index + 1, 'pickup')).join('')}
+            </div>
+        </div>
+    `;
+    
+    // Add delivery phase
+    const deliveryLocked = !allCompleted(pickupStops);
+    html += `
+        <div class="phase-section ${deliveryLocked ? 'locked' : ''} ${allCompleted(deliveryStops) ? 'completed' : ''}">
+            <h3 class="phase-title">
+                <span>📍 Delivery Phase</span>
+                <span class="phase-count">${deliveryStops.filter(s => s.completed).length}/${deliveryStops.length}</span>
+            </h3>
+            <div class="phase-stops">
+                ${deliveryStops.map((stop, index) => createStopCard(stop, index + 1, 'delivery', deliveryLocked)).join('')}
+            </div>
+        </div>
+    `;
+    
+    stopsList.innerHTML = html;
+}
+
+// Create phase progress widget
+function createPhaseProgressWidget(pickupStops, deliveryStops) {
+    const pickupsComplete = pickupStops.filter(s => s.completed).length;
+    const deliveriesComplete = deliveryStops.filter(s => s.completed).length;
+    
+    return `
+        <div class="route-phases">
+            <div class="phase ${pickupsComplete === pickupStops.length ? 'completed' : pickupsComplete > 0 ? 'active' : ''}">
+                <div class="phase-icon">📦</div>
+                <div class="phase-info">
+                    <div class="phase-title">Pickups</div>
+                    <div class="phase-progress">${pickupsComplete}/${pickupStops.length}</div>
+                </div>
+            </div>
+            
+            <div class="phase-arrow">→</div>
+            
+            <div class="phase ${deliveriesComplete === deliveryStops.length ? 'completed' : deliveriesComplete > 0 ? 'active' : ''}">
+                <div class="phase-icon">📍</div>
+                <div class="phase-info">
+                    <div class="phase-title">Deliveries</div>
+                    <div class="phase-progress">${deliveriesComplete}/${deliveryStops.length}</div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// Create parcels in possession widget
+function createParcelsInPossessionWidget() {
+    return `
+        <div class="parcels-possession-widget">
+            <div class="carrying-banner">
+                <span class="carrying-icon">📦</span>
+                <span>Carrying ${state.parcelsInPossession.length} parcel${state.parcelsInPossession.length > 1 ? 's' : ''}</span>
+            </div>
+            <div class="parcel-cards">
+                ${state.parcelsInPossession.map(parcel => `
+                    <div class="parcel-card">
+                        <div class="parcel-code">${parcel.parcelCode}</div>
+                        <div class="parcel-destination">${parcel.destination}</div>
+                        <div class="parcel-time">Picked up ${formatTimeAgo(parcel.pickupTime)}</div>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+    `;
+}
+
+// Update parcels in possession
+function updateParcelsInPossession() {
+    state.parcelsInPossession = [];
+    
+    if (!state.activeRoute || !state.activeRoute.stops) return;
+    
+    state.activeRoute.stops.forEach(stop => {
+        if (stop.type === 'pickup' && stop.completed) {
+            const deliveryStop = state.activeRoute.stops.find(s => 
+                s.type === 'delivery' && s.parcelId === stop.parcelId
+            );
+            
+            if (deliveryStop && !deliveryStop.completed) {
+                state.parcelsInPossession.push({
+                    parcelId: stop.parcelId,
+                    parcelCode: stop.parcelCode,
+                    pickupTime: stop.timestamp,
+                    destination: deliveryStop.address
+                });
+            }
+        }
+    });
+}
+
+// Create enhanced stop card
+function createStopCard(stop, number, type, isLocked = false) {
+    const isActive = isNextStop(stop);
+    const canInteract = !stop.completed && !isLocked && (type === 'pickup' || canCompleteDelivery(stop));
+    
+    return `
+        <div class="stop-card ${stop.completed ? 'completed' : ''} ${isActive ? 'active' : ''} ${isLocked ? 'blocked' : ''}" 
+             onclick="${canInteract ? `selectStop('${stop.id}')` : ''}"
+             data-stop-id="${stop.id}">
+            <div class="stop-number-badge ${type}">
+                ${stop.completed ? '✓' : number}
+            </div>
+            <div class="stop-content">
+                <div class="stop-header">
+                    <h3 class="stop-address">${stop.address}</h3>
+                    ${stop.distance ? `<span class="stop-distance">${stop.distance} km</span>` : ''}
+                </div>
+                <div class="stop-details">
+                    <div class="detail-row">
+                        <span class="detail-icon">👤</span>
+                        <span>${stop.customerName} • ${stop.customerPhone}</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-icon">📋</span>
+                        <span>Code: ${stop.parcelCode}</span>
+                    </div>
+                    ${stop.specialInstructions ? `
+                        <div class="detail-row instructions">
+                            <span class="detail-icon">💬</span>
+                            <span>${stop.specialInstructions}</span>
+                        </div>
+                    ` : ''}
+                </div>
+                ${stop.completed ? `
+                    <div class="stop-status completed">
+                        ✓ Completed ${formatTimeAgo(stop.timestamp)}
+                    </div>
+                ` : isActive ? `
+                    <div class="stop-status active">
+                        → Current Stop
+                    </div>
+                ` : isLocked ? `
+                    <div class="stop-status blocked">
+                        🔒 Complete pickups first
+                    </div>
+                ` : ''}
+            </div>
+            <div class="stop-actions">
+                ${!stop.completed && canInteract ? `
+                    <button class="action-btn navigate" onclick="event.stopPropagation(); navigateToStop('${stop.id}')">
+                        🧭
+                    </button>
+                    <a href="tel:${stop.customerPhone}" class="action-btn call" onclick="event.stopPropagation();">
+                        📞
+                    </a>
+                ` : ''}
+            </div>
+        </div>
+    `;
+}
+
+// Check if stop is the next one
+function isNextStop(stop) {
+    const nextStop = getNextStop();
+    return nextStop && nextStop.id === stop.id;
+}
+
+// Check if can complete delivery
+function canCompleteDelivery(deliveryStop) {
+    if (!state.activeRoute || !state.activeRoute.stops) return false;
+    
+    // Find the corresponding pickup
+    const pickupStop = state.activeRoute.stops.find(s => 
+        s.type === 'pickup' && s.parcelId === deliveryStop.parcelId
+    );
+    
+    return pickupStop && pickupStop.completed;
+}
+
+// Check if all stops in array are completed
+function allCompleted(stops) {
+    return stops.every(s => s.completed);
+}
+
+// Format time ago
+function formatTimeAgo(timestamp) {
+    if (!timestamp) return '';
+    const minutes = Math.floor((Date.now() - new Date(timestamp)) / 60000);
+    if (minutes < 60) return `${minutes} min ago`;
+    const hours = Math.floor(minutes / 60);
+    return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+}
+
+// Plot route on map
+function plotRoute() {
+    if (!state.map || !state.activeRoute || !state.activeRoute.stops) return;
+    
+    // Clear existing markers
+    state.markers.forEach(marker => marker.remove());
+    state.markers = [];
+    
+    const bounds = [];
+    
+    // Add stop markers
+    state.activeRoute.stops.forEach((stop, index) => {
+        const icon = createCustomIcon(stop);
+        const marker = L.marker([stop.location.lat, stop.location.lng], { icon })
+            .addTo(state.map)
+            .bindPopup(createStopPopup(stop));
+        
+        state.markers.push(marker);
+        bounds.push([stop.location.lat, stop.location.lng]);
+    });
+    
+    // Fit map to show all markers
+    if (bounds.length > 0) {
+        state.map.fitBounds(bounds, { padding: [50, 50] });
     }
     
-    .stop-card {
-        flex-direction: column;
-        text-align: center;
+    // Draw route lines (simplified for now)
+    drawRouteLines();
+}
+
+// Create custom marker icon
+function createCustomIcon(stop) {
+    const color = stop.completed ? '#666' : stop.type === 'pickup' ? '#FF9F0A' : '#34C759';
+    const symbol = stop.completed ? '✓' : stop.type === 'pickup' ? 'P' : 'D';
+    
+    return L.divIcon({
+        className: 'custom-marker',
+        html: `
+            <div class="stop-marker-wrapper ${stop.completed ? 'completed' : ''} ${isNextStop(stop) ? 'active' : ''}">
+                <div class="stop-marker ${stop.type}">
+                    <span class="marker-number">${symbol}</span>
+                    ${isNextStop(stop) ? '<div class="marker-pulse"></div>' : ''}
+                </div>
+                <div class="marker-label">${stop.type === 'pickup' ? 'Pickup' : 'Delivery'}</div>
+            </div>
+        `,
+        iconSize: [40, 60],
+        iconAnchor: [20, 50],
+        popupAnchor: [0, -50]
+    });
+}
+
+// Create enhanced stop popup
+function createStopPopup(stop) {
+    return `
+        <div class="stop-popup">
+            <div class="popup-header ${stop.type}">
+                <span class="popup-phase">${stop.type.toUpperCase()}</span>
+                <span class="popup-code">${stop.parcelCode}</span>
+            </div>
+            <div class="popup-body">
+                <h3>${stop.address}</h3>
+                <div class="popup-info">
+                    <div class="info-row">
+                        <span class="info-icon">👤</span>
+                        <span>${stop.customerName}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-icon">📞</span>
+                        <a href="tel:${stop.customerPhone}" class="phone-link">${stop.customerPhone}</a>
+                    </div>
+                    ${stop.specialInstructions ? `
+                        <div class="info-row instructions">
+                            <span class="info-icon">💬</span>
+                            <span>${stop.specialInstructions}</span>
+                        </div>
+                    ` : ''}
+                </div>
+                ${!stop.completed && canCompleteStop(stop) ? `
+                    <div class="popup-actions">
+                        <button class="popup-action-btn primary" onclick="openVerificationModal('${stop.id}')">
+                            <span class="btn-icon">✓</span>
+                            <span>Verify ${stop.type}</span>
+                        </button>
+                        <button class="popup-action-btn secondary" onclick="navigateToStop('${stop.id}')">
+                            <span class="btn-icon">🧭</span>
+                            <span>Navigate</span>
+                        </button>
+                    </div>
+                ` : stop.completed ? `
+                    <div class="stop-status completed">
+                        ✓ Completed ${formatTimeAgo(stop.timestamp)}
+                    </div>
+                ` : ''}
+            </div>
+        </div>
+    `;
+}
+
+// Check if can complete stop
+function canCompleteStop(stop) {
+    if (stop.type === 'pickup') return true;
+    return canCompleteDelivery(stop);
+}
+
+// Draw route lines
+function drawRouteLines() {
+    if (!state.map || !state.activeRoute) return;
+    
+    // Remove existing route
+    if (state.routePolyline) {
+        state.routePolyline.remove();
     }
     
-    .stop-number-badge {
-        margin: 0 auto;
+    // Get coordinates for incomplete stops
+    const coordinates = [];
+    const nextStop = getNextStop();
+    
+    if (nextStop && state.currentLocation) {
+        // Add current location to next stop
+        coordinates.push([state.currentLocation.lat, state.currentLocation.lng]);
+        coordinates.push([nextStop.location.lat, nextStop.location.lng]);
     }
     
-    .stop-actions {
-        justify-content: center;
-        margin-top: 12px;
+    // Add remaining stops
+    const remainingStops = state.activeRoute.stops.filter(s => !s.completed);
+    for (let i = 0; i < remainingStops.length - 1; i++) {
+        coordinates.push([remainingStops[i].location.lat, remainingStops[i].location.lng]);
+        coordinates.push([remainingStops[i + 1].location.lat, remainingStops[i + 1].location.lng]);
     }
     
-    .modal-content {
-        margin: 20px;
-        max-width: calc(100vw - 40px);
+    if (coordinates.length > 1) {
+        state.routePolyline = L.polyline(coordinates, {
+            color: '#0066FF',
+            weight: 4,
+            opacity: 0.8,
+            dashArray: '10, 10',
+            className: 'animated-route'
+        }).addTo(state.map);
     }
 }
 
-/* Dark Mode Enhancements */
-@media (prefers-color-scheme: dark) {
-    .stop-marker {
-        box-shadow: 0 3px 15px rgba(0,0,0,0.5);
+// Show/hide UI elements
+function showRoutePanel() {
+    document.getElementById('routePanel').style.display = 'block';
+    document.getElementById('navControls').style.display = 'flex';
+    document.getElementById('emptyState').style.display = 'none';
+}
+
+function showEmptyState() {
+    document.getElementById('routePanel').style.display = 'none';
+    document.getElementById('navControls').style.display = 'none';
+    document.getElementById('emptyState').style.display = 'block';
+}
+
+// Location tracking
+function startLocationTracking() {
+    if (!navigator.geolocation) {
+        showNotification('Location services not available', 'warning');
+        return;
     }
     
-    .enhanced-popup .leaflet-popup-content-wrapper {
-        box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    // Get initial location
+    navigator.geolocation.getCurrentPosition(
+        position => {
+            updateCurrentLocation(position);
+            state.isTracking = true;
+            document.getElementById('trackingIndicator').style.display = 'flex';
+            document.getElementById('locationButton').classList.add('active');
+        },
+        error => {
+            console.error('Location error:', error);
+            showNotification('Please enable location services', 'warning');
+        },
+        { enableHighAccuracy: true }
+    );
+    
+    // Watch position
+    navigator.geolocation.watchPosition(
+        position => updateCurrentLocation(position),
+        error => console.error('Location update error:', error),
+        { enableHighAccuracy: true, maximumAge: 5000 }
+    );
+}
+
+// Update current location
+function updateCurrentLocation(position) {
+    state.currentLocation = {
+        lat: position.coords.latitude,
+        lng: position.coords.longitude
+    };
+    
+    // Update map
+    if (state.map) {
+        // Add or update current location marker
+        if (!state.currentLocationMarker) {
+            state.currentLocationMarker = L.circleMarker(
+                [state.currentLocation.lat, state.currentLocation.lng],
+                {
+                    radius: 8,
+                    fillColor: '#0066FF',
+                    color: 'white',
+                    weight: 3,
+                    opacity: 1,
+                    fillOpacity: 1
+                }
+            ).addTo(state.map);
+        } else {
+            state.currentLocationMarker.setLatLng([state.currentLocation.lat, state.currentLocation.lng]);
+        }
+        
+        // Redraw route from current location
+        drawRouteLines();
     }
 }
 
-/* Accessibility Enhancements */
-@media (prefers-reduced-motion: reduce) {
-    * {
-        animation-duration: 0.01ms !important;
-        animation-iteration-count: 1 !important;
-        transition-duration: 0.01ms !important;
+// Navigation functions
+window.centerOnLocation = function() {
+    if (state.currentLocation && state.map) {
+        state.map.setView([state.currentLocation.lat, state.currentLocation.lng], 16);
+        showNotification('Centered on your location', 'info');
+    } else {
+        showNotification('Getting your location...', 'info');
+        startLocationTracking();
+    }
+};
+
+window.optimizeRoute = function() {
+    showNotification('Route optimization coming soon!', 'info');
+};
+
+window.startNavigation = function() {
+    const nextStop = getNextStop();
+    if (nextStop) {
+        navigateToStop(nextStop.id);
+    }
+};
+
+window.navigateToStop = function(stopId) {
+    const stop = state.activeRoute.stops.find(s => s.id === stopId);
+    if (!stop) return;
+    
+    // Open in Google Maps
+    const url = `https://www.google.com/maps/dir/?api=1&destination=${stop.location.lat},${stop.location.lng}`;
+    window.open(url, '_blank');
+};
+
+window.selectStop = function(stopId) {
+    const stop = state.activeRoute.stops.find(s => s.id === stopId);
+    if (!stop || stop.completed) return;
+    
+    // Center map on stop
+    if (state.map) {
+        state.map.setView([stop.location.lat, stop.location.lng], 16);
     }
     
-    .animated-route {
-        animation: none !important;
+    // Open popup
+    const marker = state.markers.find(m => {
+        const latLng = m.getLatLng();
+        return latLng.lat === stop.location.lat && latLng.lng === stop.location.lng;
+    });
+    
+    if (marker) {
+        marker.openPopup();
+    }
+};
+
+// Quick verification from header button
+window.openQuickVerification = function() {
+    const nextStop = getNextStop();
+    if (nextStop) {
+        openVerificationModal(nextStop.id);
+    }
+};
+
+// Open verification modal
+window.openVerificationModal = function(stopId) {
+    const stop = state.activeRoute.stops.find(s => s.id === stopId);
+    if (!stop || stop.completed) return;
+    
+    const modal = document.createElement('div');
+    modal.className = 'verification-modal';
+    modal.innerHTML = `
+        <div class="modal-overlay" onclick="closeVerificationModal()"></div>
+        <div class="modal-content">
+            <div class="modal-header ${stop.type}">
+                <span class="modal-icon">${stop.type === 'pickup' ? '📦' : '📍'}</span>
+                <h2>Verify ${stop.type === 'pickup' ? 'Pickup' : 'Delivery'}</h2>
+            </div>
+            <div class="modal-body">
+                <div class="stop-summary">
+                    <h3>${stop.address}</h3>
+                    <div class="summary-details">
+                        <div class="summary-row">
+                            <span class="summary-label">Customer:</span>
+                            <span class="summary-value">${stop.customerName}</span>
+                        </div>
+                        <div class="summary-row">
+                            <span class="summary-label">Phone:</span>
+                            <span class="summary-value">${stop.customerPhone}</span>
+                        </div>
+                        <div class="summary-row">
+                            <span class="summary-label">Parcel Code:</span>
+                            <span class="summary-value">${stop.parcelCode}</span>
+                        </div>
+                        ${stop.specialInstructions ? `
+                            <div class="summary-row instructions">
+                                <span class="summary-label">Instructions:</span>
+                                <span class="summary-value">${stop.specialInstructions}</span>
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+                
+                <div class="verification-section">
+                    <label>Enter ${stop.type} verification code:</label>
+                    <input type="text" 
+                           class="verification-input" 
+                           id="verificationCode" 
+                           placeholder="XXX-XXXX"
+                           maxlength="8"
+                           autocomplete="off">
+                    <p class="code-hint">Ask the ${stop.type === 'pickup' ? 'sender' : 'recipient'} for their code</p>
+                </div>
+                
+                <div class="modal-actions">
+                    <button class="modal-btn primary" onclick="verifyCode('${stop.id}')">
+                        <span>✓</span>
+                        <span>Verify ${stop.type === 'pickup' ? 'Pickup' : 'Delivery'}</span>
+                    </button>
+                    <button class="modal-btn secondary" onclick="closeVerificationModal()">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Focus on input
+    setTimeout(() => {
+        document.getElementById('verificationCode').focus();
+    }, 100);
+    
+    // Add enter key handler
+    document.getElementById('verificationCode').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            verifyCode(stop.id);
+        }
+    });
+};
+
+// Close verification modal
+window.closeVerificationModal = function() {
+    const modal = document.querySelector('.verification-modal');
+    if (modal) {
+        modal.classList.add('closing');
+        setTimeout(() => modal.remove(), 300);
+    }
+};
+
+// Verify code
+window.verifyCode = async function(stopId) {
+    const stop = state.activeRoute.stops.find(s => s.id === stopId);
+    if (!stop) return;
+    
+    const codeInput = document.getElementById('verificationCode');
+    const code = codeInput.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    
+    if (!code || code.length < 6) {
+        codeInput.classList.add('error');
+        showNotification('Please enter a valid code', 'error');
+        return;
+    }
+    
+    // Check code
+    if (code !== stop.verificationCode.toUpperCase().replace(/[^A-Z0-9]/g, '')) {
+        codeInput.classList.add('error');
+        showNotification('Invalid code. Please try again.', 'error');
+        return;
+    }
+    
+    // Mark stop as completed
+    stop.completed = true;
+    stop.timestamp = new Date();
+    
+    // Update localStorage
+    localStorage.setItem('tuma_active_route', JSON.stringify(state.activeRoute));
+    
+    // Close modal
+    closeVerificationModal();
+    
+    // Show success animation
+    showSuccessAnimation(stop.type);
+    
+    // Update displays
+    displayRouteInfo();
+    plotRoute();
+    
+    // Check if phase complete
+    checkPhaseCompletion();
+    
+    // Check if route complete
+    if (state.activeRoute.stops.every(s => s.completed)) {
+        completeRoute();
+    }
+};
+
+// Show success animation
+function showSuccessAnimation(type) {
+    const animation = document.createElement('div');
+    animation.className = 'success-animation';
+    animation.innerHTML = `
+        <div class="success-icon">✓</div>
+        <div class="success-text">${type === 'pickup' ? 'Pickup' : 'Delivery'} Verified!</div>
+    `;
+    
+    document.body.appendChild(animation);
+    
+    setTimeout(() => animation.remove(), 2000);
+}
+
+// Check phase completion
+function checkPhaseCompletion() {
+    const pickupStops = state.activeRoute.stops.filter(s => s.type === 'pickup');
+    const allPickupsComplete = pickupStops.every(s => s.completed);
+    
+    if (allPickupsComplete && !state.pickupPhaseCompleted) {
+        state.pickupPhaseCompleted = true;
+        showPhaseCompleteAnimation();
     }
 }
 
-/* Focus States */
-.action-btn:focus,
-.modal-btn:focus,
-.popup-action-btn:focus {
-    outline: 2px solid var(--primary);
-    outline-offset: 2px;
+// Show phase complete animation
+function showPhaseCompleteAnimation() {
+    const animation = document.createElement('div');
+    animation.className = 'phase-complete-animation';
+    animation.innerHTML = `
+        <div class="phase-complete-content">
+            <div class="phase-icon">🎉</div>
+            <h2>All Pickups Complete!</h2>
+            <p>Time to deliver the parcels</p>
+        </div>
+    `;
+    
+    document.body.appendChild(animation);
+    
+    setTimeout(() => animation.remove(), 3000);
 }
 
-.verification-input:focus {
-    outline: none;
-    border-color: var(--primary);
+// Complete route
+function completeRoute() {
+    // Calculate earnings (70% of total)
+    const totalEarnings = state.activeRoute.total_earnings || 0;
+    const riderEarnings = Math.round(totalEarnings * 0.7);
+    
+    // Show completion animation
+    const animation = document.createElement('div');
+    animation.className = 'route-complete-animation';
+    animation.innerHTML = `
+        <div class="route-complete-content">
+            <div class="complete-icon">🏆</div>
+            <h1>Route Complete!</h1>
+            <p>Excellent work! All deliveries completed successfully.</p>
+            <div class="route-stats">
+                <div class="stat">
+                    <span class="stat-value">${state.activeRoute.stops.length}</span>
+                    <span class="stat-label">Stops</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-value">KES ${riderEarnings}</span>
+                    <span class="stat-label">Earned</span>
+                </div>
+            </div>
+            <button class="complete-btn" onclick="finishRoute()">
+                Back to Dashboard
+            </button>
+        </div>
+    `;
+    
+    document.body.appendChild(animation);
+    
+    // Store completion data for rider.js
+    localStorage.setItem('tuma_route_completion', JSON.stringify({
+        completed: true,
+        earnings: riderEarnings,
+        stops: state.activeRoute.stops.length,
+        timestamp: new Date()
+    }));
 }
 
-/* Loading States */
-.stop-card.loading {
-    pointer-events: none;
-    opacity: 0.6;
+// Finish route and return to dashboard
+window.finishRoute = function() {
+    // Clear active route
+    localStorage.removeItem('tuma_active_route');
+    
+    // Navigate back to rider dashboard
+    window.location.href = './rider.html';
+};
+
+// Go back function
+window.goBack = function() {
+    if (confirm('Are you sure you want to exit navigation?')) {
+        window.location.href = './rider.html';
+    }
+};
+
+// Notification function
+function showNotification(message, type = 'info') {
+    const notification = document.createElement('div');
+    notification.className = `notification ${type}`;
+    notification.innerHTML = `
+        <span class="notification-icon">
+            ${type === 'success' ? '✓' : type === 'error' ? '✗' : type === 'warning' ? '⚠' : 'ℹ'}
+        </span>
+        <span>${message}</span>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        notification.classList.add('hiding');
+        setTimeout(() => notification.remove(), 300);
+    }, 3000);
 }
 
-.stop-card.loading::after {
-    content: '';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 20px;
-    height: 20px;
-    margin: -10px 0 0 -10px;
-    border: 2px solid var(--primary);
-    border-top-color: transparent;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-}
+// Export for debugging
+window.routeDebug = {
+    state,
+    reloadRoute: () => {
+        const stored = localStorage.getItem('tuma_active_route');
+        if (stored) {
+            state.activeRoute = JSON.parse(stored);
+            displayRouteInfo();
+            plotRoute();
+        }
+    },
+    simulatePickup: () => {
+        const nextPickup = state.activeRoute.stops.find(s => s.type === 'pickup' && !s.completed);
+        if (nextPickup) {
+            nextPickup.completed = true;
+            nextPickup.timestamp = new Date();
+            localStorage.setItem('tuma_active_route', JSON.stringify(state.activeRoute));
+            displayRouteInfo();
+            plotRoute();
+        }
+    },
+    clearRoute: () => {
+        localStorage.removeItem('tuma_active_route');
+        window.location.reload();
+    }
+};
 
-@keyframes spin {
-    to { transform: rotate(360deg); }
-}
-</style>
+console.log('Route.js loaded successfully!');
+console.log('Debug commands available: routeDebug.reloadRoute(), routeDebug.simulatePickup(), routeDebug.clearRoute()');
