@@ -1,21 +1,4 @@
-function createRoutes(parcels) {
-    // Use the advanced clustering algorithm
-    const clustering = new AdvancedRouteClustering({
-        maxClusterSize: 8,
-        maxRouteDistance: 30,
-        maxDetourDistance: 2,
-        timeWindowSize: 3
-    });
-    
-    const routes = clustering.createOptimizedRoutes(parcels);
-    
-    console.log(`Advanced clustering created ${routes.length} optimized routes from ${parcels.length} parcels`);
-    routes.forEach(route => {
-        console.log(`${route.name}: ${route.pickups} parcels, ${route.distance}km, KES ${route.total_earnings}, optimization score: ${route.optimizationScore}`);
-    });
-    
-    return routes.length > 0 ? routes : createDemoRoutes();
-}/**
+/**
  * Complete Rider Dashboard with Multi-Pickup/Delivery Support
  * Includes commission tracking, route optimization, and enhanced features
  */
@@ -45,6 +28,19 @@ const BUSINESS_CONFIG = {
 // Supabase Configuration
 const SUPABASE_URL = 'https://btxavqfoirdzwpfrvezp.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ0eGF2cWZvaXJkendwZnJ2ZXpwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE0ODcxMTcsImV4cCI6MjA2NzA2MzExN30.kQKpukFGx-cBl1zZRuXmex02ifkZ751WCUfQPogYutk';
+
+// ─── Initialize Route Clustering ───────────────────────────────────────────
+
+// Initialize clustering instance (TumaRouteClustering should be available from clustering.js)
+const routeClusterer = new TumaRouteClustering({
+    maxRouteDistance: 25,
+    minClusterScore: 50,
+    maxPickupRadius: {
+        express: 2,
+        smart: 3,
+        eco: 4
+    }
+});
 
 // ─── Enhanced Route Manager ────────────────────────────────────────────────
 
@@ -975,58 +971,54 @@ function displayRoutes() {
         return;
     }
     
-    elements.routeList.innerHTML = filteredRoutes.map(route => `
-        <div class="route-card ${route.status !== 'available' || hasActiveRoute ? 'claimed' : ''}" 
-             onclick="${route.status === 'available' && !hasActiveRoute ? `claimRoute('${route.id}')` : ''}"
-             style="cursor: ${route.status === 'available' && !hasActiveRoute ? 'pointer' : 'not-allowed'}">
-            <div class="route-header">
-                <div class="route-cluster">${route.name}</div>
-                <div class="route-type ${route.type}">${route.type.toUpperCase()}</div>
-            </div>
-            
-            <div class="route-details">
-                <div class="route-detail">
-                    <div class="route-detail-value">${route.pickups}</div>
-                    <div class="route-detail-label">Pickups</div>
+    elements.routeList.innerHTML = filteredRoutes.map(route => {
+        // Show quality indicator for high/low scoring routes
+        const qualityBadge = route.qualityScore >= 80 ? '⭐' : 
+                           route.qualityScore <= 50 ? '⚠️' : '';
+        
+        return `
+            <div class="route-card ${route.status !== 'available' || hasActiveRoute ? 'claimed' : ''}" 
+                 onclick="${route.status === 'available' && !hasActiveRoute ? `claimRoute('${route.id}')` : ''}"
+                 style="cursor: ${route.status === 'available' && !hasActiveRoute ? 'pointer' : 'not-allowed'}">
+                <div class="route-header">
+                    <div class="route-name">
+                        ${route.name} ${qualityBadge}
+                    </div>
+                    <div class="route-type ${route.type}">${route.type.toUpperCase()}</div>
                 </div>
-                <div class="route-detail">
-                    <div class="route-detail-value">${route.deliveries}</div>
-                    <div class="route-detail-label">Deliveries</div>
+                
+                <div class="route-stats">
+                    <div>${route.pickups} parcels</div>
+                    <div>${route.distance} km</div>
+                    <div>KES ${Math.round(route.total_earnings).toLocaleString()}</div>
                 </div>
-                <div class="route-detail">
-                    <div class="route-detail-value">KES ${Math.round(route.total_earnings)}</div>
-                    <div class="route-detail-label">Earnings</div>
+                
+                <div class="route-meta">
+                    <span class="time-estimate">~${route.estimatedTime} min</span>
+                    ${route.earnings_per_km > 150 ? `
+                        <span class="earnings-indicator high">
+                            KES ${route.earnings_per_km}/km
+                        </span>
+                    ` : ''}
                 </div>
-            </div>
-            
-            <div class="route-info-bar">
-                <span class="route-distance">📍 ${Math.round(route.distance)} km total</span>
-                <span class="route-time">⏱️ ~${route.estimatedTime || Math.round(route.distance * 2 + route.deliveries * 5)} min</span>
-                ${route.earnings_per_km ? `
-                    <span class="earnings-km">KES ${route.earnings_per_km}/km</span>
+                
+                ${route.metadata?.hasReturnTrip ? `
+                    <div class="route-badges">
+                        <span class="return-available">
+                            🔄 Return trip available
+                        </span>
+                    </div>
                 ` : ''}
+                
+                <button class="claim-button" type="button" 
+                        ${route.status !== 'available' || hasActiveRoute ? 'disabled' : ''}
+                        onclick="event.stopPropagation()">
+                    ${hasActiveRoute ? 'Route Active' : 
+                      route.status === 'available' ? 'Claim Route' : 'Already Claimed'}
+                </button>
             </div>
-            
-            ${route.timeWindow && route.timeWindow !== 'flexible' ? `
-                <div class="time-constraint">
-                    <span class="time-icon">🕐</span>
-                    <span>${route.timeWindow} delivery preferred</span>
-                </div>
-            ` : ''}
-            
-            ${route.returnTripPossible ? `
-                <div class="return-trip-indicator">
-                    <span class="return-icon">🔄</span>
-                    <span>Return trips available from endpoint</span>
-                </div>
-            ` : ''}
-            
-            <button class="claim-button" type="button" ${route.status !== 'available' || hasActiveRoute ? 'disabled' : ''}
-                    onclick="event.stopPropagation()">
-                ${hasActiveRoute ? 'Route Active' : (route.status === 'available' ? 'Claim Route' : 'Already Claimed')}
-            </button>
-        </div>
-    `).join('');
+        `;
+    }).join('');
 }
 
 function displayCommissionStatus() {
@@ -1209,6 +1201,8 @@ async function createTemporaryRider() {
     
     console.log('Created temporary rider:', state.rider.id);
 }
+
+async function loadEarnings() {
     try {
         if (!state.rider) return;
         
@@ -1278,32 +1272,59 @@ async function loadStats() {
     }
 }
 
+// ─── UPDATED ROUTE CREATION WITH CLUSTERING ───────────────────────────────
+
+function createRoutes(parcels) {
+    console.log(`Creating routes from ${parcels.length} parcels using advanced clustering...`);
+    
+    try {
+        // Use the clustering algorithm
+        const routes = routeClusterer.createOptimizedRoutes(parcels);
+        
+        // Log results for debugging
+        console.log(`Created ${routes.length} optimized routes:`);
+        routes.forEach(route => {
+            console.log(`- ${route.name}: ${route.pickups} parcels, ${route.distance}km, ` +
+                       `KES ${route.total_earnings} (Score: ${route.qualityScore})`);
+        });
+        
+        // Return routes or demo routes if none created
+        return routes.length > 0 ? routes : createDemoRoutes();
+        
+    } catch (error) {
+        console.error('Error creating routes:', error);
+        return createDemoRoutes();
+    }
+}
+
 async function loadAvailableRoutes() {
     try {
         console.log('Loading available routes...');
         
+        // Show loading state
+        if (elements.routeList) {
+            elements.routeList.innerHTML = `
+                <div class="loading-routes">
+                    <div class="loading-spinner"></div>
+                    <p>Finding best routes for you...</p>
+                </div>
+            `;
+        }
+        
+        // Fetch unclaimed parcels
         const unclaimedParcels = await supabaseAPI.query('parcels', {
             filter: 'status=eq.submitted&rider_id=is.null',
-            limit: 50,
+            limit: 100,
             order: 'created_at.asc'
         });
         
         console.log('Unclaimed parcels found:', unclaimedParcels.length);
-        console.log('Parcels data:', unclaimedParcels);
         
-        // If no parcels found, let's check what parcels exist
         if (unclaimedParcels.length === 0) {
-            console.log('No unclaimed parcels found. Checking all parcels...');
-            
-            // Debug: Check all parcels
-            const allParcels = await supabaseAPI.query('parcels', {
-                limit: 10
-            });
-            console.log('All parcels (first 10):', allParcels);
-            
-            // Create some demo routes for testing
+            console.log('No unclaimed parcels found');
             state.availableRoutes = createDemoRoutes();
         } else {
+            // Create optimized routes using clustering
             state.availableRoutes = createRoutes(unclaimedParcels);
         }
         
@@ -1311,7 +1332,6 @@ async function loadAvailableRoutes() {
         
     } catch (error) {
         console.error('Error loading routes:', error);
-        // Create demo routes on error
         state.availableRoutes = createDemoRoutes();
         displayRoutes();
     }
@@ -1322,141 +1342,62 @@ function createDemoRoutes() {
     return [
         {
             id: 'demo-route-001',
-            name: 'Westlands Morning Route',
+            name: 'Westlands → North',
             type: 'smart',
             deliveries: 5,
             pickups: 5,
             distance: 12,
             total_earnings: 1750,
             status: 'available',
-            parcels: []
+            parcels: [],
+            qualityScore: 75,
+            estimatedTime: 45,
+            earnings_per_km: 146,
+            metadata: {
+                pickupAreas: ['Westlands'],
+                deliveryCorridors: ['north'],
+                hasReturnTrip: false
+            }
         },
         {
             id: 'demo-route-002',
-            name: 'CBD Express Route',
+            name: 'CBD → Eastlands',
             type: 'express',
             deliveries: 3,
             pickups: 3,
             distance: 8,
             total_earnings: 1200,
             status: 'available',
-            parcels: []
+            parcels: [],
+            qualityScore: 82,
+            estimatedTime: 35,
+            earnings_per_km: 150,
+            metadata: {
+                pickupAreas: ['CBD'],
+                deliveryCorridors: ['east'],
+                hasReturnTrip: false
+            }
         },
         {
             id: 'demo-route-003',
-            name: 'Karen Eco Route',
+            name: 'Karen Local',
             type: 'eco',
             deliveries: 8,
             pickups: 8,
             distance: 25,
             total_earnings: 2400,
             status: 'available',
-            parcels: []
+            parcels: [],
+            qualityScore: 68,
+            estimatedTime: 90,
+            earnings_per_km: 96,
+            metadata: {
+                pickupAreas: ['Karen'],
+                deliveryCorridors: ['south'],
+                hasReturnTrip: true
+            }
         }
     ];
-}
-
-function createRoutes(parcels) {
-    const groups = {};
-    
-    // Filter out parcels without essential data
-    const validParcels = parcels.filter(parcel => {
-        // Check if parcel has minimum required data
-        const hasBasicInfo = parcel.id && parcel.status;
-        if (!hasBasicInfo) {
-            console.warn('Parcel missing basic info:', parcel);
-            return false;
-        }
-        return true;
-    });
-    
-    if (validParcels.length === 0) {
-        console.log('No valid parcels found, returning demo routes');
-        return createDemoRoutes();
-    }
-    
-    validParcels.forEach(parcel => {
-        // Handle location data - check if it's JSONB or separate columns
-        let pickupAddress = 'General Area';
-        
-        if (parcel.pickup_location) {
-            // JSONB format
-            let location = parcel.pickup_location;
-            if (typeof location === 'string') {
-                try {
-                    location = JSON.parse(location);
-                } catch (e) {
-                    console.error('Error parsing location:', e);
-                }
-            }
-            pickupAddress = location?.address || 'General Area';
-        } else if (parcel.pickup_lat && parcel.pickup_lng) {
-            // Separate columns - use coordinates to determine area
-            // For now, default to General Area
-            pickupAddress = 'General Area';
-        }
-        
-        const area = getAreaFromAddress(pickupAddress);
-        if (!groups[area]) groups[area] = [];
-        groups[area].push(parcel);
-    });
-    
-    const routes = Object.entries(groups).map(([area, parcels]) => ({
-        id: `route-${area.toLowerCase().replace(/\s+/g, '-')}`,
-        name: `${area} Route`,
-        type: parcels[0]?.customer_choice || determineRouteType(parcels),
-        deliveries: parcels.length,
-        pickups: parcels.length,
-        distance: parcels.reduce((sum, p) => sum + (p.distance_km || 5), 0),
-        total_earnings: calculateRouteEarnings(parcels),
-        status: 'available',
-        parcels: parcels.map(p => p.id)
-    }));
-    
-    console.log('Created routes:', routes);
-    
-    // If no routes created, return demo routes
-    if (routes.length === 0) {
-        console.log('No routes created from parcels, returning demo routes');
-        return createDemoRoutes();
-    }
-    
-    return routes;
-}
-
-function determineRouteType(parcels) {
-    if (parcels.length <= 3) return 'express';
-    if (parcels.length <= 6) return 'smart';
-    return 'eco';
-}
-
-function getAreaFromAddress(address) {
-    if (!address) return 'General';
-    
-    // Handle JSONB or string addresses
-    let addressStr = address;
-    if (typeof address === 'object' && address.address) {
-        addressStr = address.address;
-    }
-    
-    const areas = ['Westlands', 'CBD', 'Karen', 'Kilimani', 'Parklands', 'Lavington', 'Kileleshwa'];
-    const lowerAddr = addressStr.toLowerCase();
-    
-    for (const area of areas) {
-        if (lowerAddr.includes(area.toLowerCase())) {
-            return area;
-        }
-    }
-    
-    return 'General';
-}
-
-function calculateRouteEarnings(parcels) {
-    return parcels.reduce((sum, parcel) => {
-        // Use the rider_payout field directly - it's already calculated
-        const payout = parcel.rider_payout || 350; // Default to 350 if missing
-        return sum + payout;
-    }, 0);
 }
 
 async function checkActiveDeliveries() {
@@ -1749,22 +1690,11 @@ window.claimRoute = async function(routeId) {
     state.isLoading = true;
     
     try {
-        if (route.parcels && route.parcels.length > 0) {
-            // Load full parcel details
-            const parcels = await Promise.all(
-                route.parcels.map(parcelId => 
-                    supabaseAPI.query('parcels', {
-                        filter: `id=eq.${parcelId}`,
-                        limit: 1
-                    })
-                )
-            );
-            
-            const flatParcels = parcels.flat();
-            
-            // Update parcels to assign to this rider (skip for temporary riders)
+        // The route now includes parcelDetails with full parcel data
+        if (route.parcelDetails && route.parcelDetails.length > 0) {
+            // Update parcels in database (skip for temporary riders)
             if (!state.rider.id.startsWith('temp-')) {
-                for (const parcel of flatParcels) {
+                for (const parcel of route.parcelDetails) {
                     await supabaseAPI.update('parcels', 
                         `id=eq.${parcel.id}`,
                         { 
@@ -1779,31 +1709,91 @@ window.claimRoute = async function(routeId) {
             // Create route with sequenced stops
             state.claimedRoute = {
                 ...route,
-                parcels: flatParcels,
-                stops: EnhancedRouteManager.sequenceStops(flatParcels)
+                parcels: route.parcelDetails,
+                stops: EnhancedRouteManager.sequenceStops(route.parcelDetails)
             };
             
-            // Store the claimed route for the route page
-            localStorage.setItem('tuma_active_route', JSON.stringify(state.claimedRoute));
+            // Use the optimized pickup sequence from metadata
+            if (route.metadata?.pickupSequence) {
+                // Reorder stops according to optimized sequence
+                const optimizedStops = [];
+                const deliveryStops = [];
+                
+                // First add pickups in optimized order
+                route.metadata.pickupSequence.forEach(parcelId => {
+                    const pickupStop = state.claimedRoute.stops.find(s => 
+                        s.parcelId === parcelId && s.type === 'pickup'
+                    );
+                    if (pickupStop) optimizedStops.push(pickupStop);
+                });
+                
+                // Then add all deliveries
+                state.claimedRoute.stops.forEach(stop => {
+                    if (stop.type === 'delivery') {
+                        deliveryStops.push(stop);
+                    }
+                });
+                
+                // Optimize delivery order
+                state.claimedRoute.stops = [...optimizedStops, ...deliveryStops];
+            }
             
+            localStorage.setItem('tuma_active_route', JSON.stringify(state.claimedRoute));
             showActiveRoute();
             
             // Show navigation button
             const navButton = document.getElementById('navButton');
             if (navButton) navButton.style.display = 'flex';
+        } else if (route.parcels && route.parcels.length > 0) {
+            // Fallback for routes without parcelDetails
+            const parcels = await Promise.all(
+                route.parcels.map(parcelId => 
+                    supabaseAPI.query('parcels', {
+                        filter: `id=eq.${parcelId}`,
+                        limit: 1
+                    })
+                )
+            );
+            
+            const flatParcels = parcels.flat();
+            
+            // Update parcels to assign to this rider
+            if (!state.rider.id.startsWith('temp-')) {
+                for (const parcel of flatParcels) {
+                    await supabaseAPI.update('parcels', 
+                        `id=eq.${parcel.id}`,
+                        { 
+                            rider_id: state.rider.id,
+                            status: 'assigned',
+                            assigned_at: new Date().toISOString()
+                        }
+                    );
+                }
+            }
+            
+            state.claimedRoute = {
+                ...route,
+                parcels: flatParcels,
+                stops: EnhancedRouteManager.sequenceStops(flatParcels)
+            };
+            
+            localStorage.setItem('tuma_active_route', JSON.stringify(state.claimedRoute));
+            showActiveRoute();
+            
+            const navButton = document.getElementById('navButton');
+            if (navButton) navButton.style.display = 'flex';
         }
         
-        // After successful claim, mark ALL routes as unavailable
-        state.availableRoutes.forEach(r => {
-            r.status = 'claimed';
-        });
-        
+        // Mark all routes as unavailable
+        state.availableRoutes.forEach(r => r.status = 'claimed');
         displayRoutes();
         
+        const pickupAreas = route.metadata?.pickupAreas?.join(', ') || 'Multiple areas';
         showNotification(
-            `Route claimed! ${route.pickups} pickups, then ${route.deliveries} deliveries to complete.`, 
+            `Route claimed! ${route.pickups} pickups in ${pickupAreas}`, 
             'success'
         );
+        
         haptic('success');
         
     } catch (error) {
@@ -1854,7 +1844,7 @@ window.verifyCode = async function(type) {
                 await supabaseAPI.update('parcels',
                     `id=eq.${activeStop.parcelId}`,
                     {
-                        status: type === 'pickup' ? 'pickup' : 'delivery',
+                        status: type === 'pickup' ? 'picked' : 'delivered',
                         [`${type}_timestamp`]: activeStop.timestamp.toISOString()
                     }
                 );
@@ -1918,7 +1908,7 @@ window.verifyCode = async function(type) {
             localStorage.setItem('tuma_active_route', JSON.stringify(state.claimedRoute));
             
             elements.codeInput.value = '';
-            showNotification(`${type} verified successfully!`, 'success');
+            showNotification(`${type.charAt(0).toUpperCase() + type.slice(1)} verified successfully!`, 'success');
             
             // Update UI
             showActiveRoute();
@@ -2134,10 +2124,113 @@ function addCustomStyles() {
     if (!existingStyle && state.commissionTracker) {
         const style = document.createElement('style');
         style.id = 'custom-styles';
-        style.textContent = state.commissionTracker.getCommissionStyles();
+        style.textContent = state.commissionTracker.getCommissionStyles() + `
+            /* Additional styles for route cards */
+            .route-stats {
+                display: grid;
+                grid-template-columns: repeat(3, 1fr);
+                gap: 12px;
+                margin-bottom: 12px;
+                padding: 12px;
+                background: var(--surface-high);
+                border-radius: 10px;
+                text-align: center;
+            }
+            
+            .route-stats > div {
+                font-size: 14px;
+                font-weight: 600;
+            }
+            
+            .route-meta {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 12px;
+                font-size: 13px;
+                color: var(--text-secondary);
+            }
+            
+            .earnings-indicator {
+                padding: 4px 8px;
+                border-radius: 6px;
+                font-weight: 600;
+            }
+            
+            .earnings-indicator.high {
+                background: rgba(52, 199, 89, 0.1);
+                color: var(--success);
+            }
+            
+            .route-badges {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 8px;
+                margin-bottom: 12px;
+            }
+            
+            .route-badges > span {
+                display: inline-flex;
+                align-items: center;
+                gap: 4px;
+                padding: 4px 10px;
+                background: rgba(52, 199, 89, 0.1);
+                color: var(--success);
+                border-radius: 20px;
+                font-size: 12px;
+                font-weight: 500;
+            }
+            
+            .loading-routes {
+                text-align: center;
+                padding: 60px 20px;
+            }
+            
+            .loading-spinner {
+                width: 40px;
+                height: 40px;
+                border: 3px solid var(--surface-high);
+                border-top-color: var(--primary);
+                border-radius: 50%;
+                margin: 0 auto 20px;
+                animation: spin 1s linear infinite;
+            }
+            
+            @keyframes spin {
+                to { transform: rotate(360deg); }
+            }
+        `;
         document.head.appendChild(style);
     }
 }
+
+// ─── Debug and Testing Functions ───────────────────────────────────────────
+
+window.testClustering = async function() {
+    // Fetch some parcels
+    const parcels = await supabaseAPI.query('parcels', {
+        filter: 'status=eq.submitted&rider_id=is.null',
+        limit: 20
+    });
+    
+    console.log('Test parcels:', parcels);
+    
+    // Test clustering
+    const routes = routeClusterer.createOptimizedRoutes(parcels);
+    
+    console.log('Generated routes:', routes);
+    
+    // Analyze quality
+    routes.forEach(route => {
+        console.log(`\nRoute: ${route.name}`);
+        console.log(`Quality Score: ${route.qualityScore}`);
+        console.log(`Pickup Areas: ${route.metadata.pickupAreas.join(', ')}`);
+        console.log(`Delivery Corridors: ${route.metadata.deliveryCorridors.join(', ')}`);
+        console.log(`Distance: ${route.distance}km`);
+        console.log(`Earnings: KES ${route.total_earnings}`);
+        console.log(`Has Return Trip: ${route.metadata.hasReturnTrip}`);
+    });
+};
 
 // ─── Initialize on DOM Ready ───────────────────────────────────────────────
 
@@ -2152,6 +2245,7 @@ if (document.readyState === 'loading') {
 window.tumaDebug = {
     state,
     supabaseAPI,
+    routeClusterer,
     checkParcels: async () => {
         const parcels = await supabaseAPI.query('parcels', {
             filter: 'status=eq.submitted&rider_id=is.null',
@@ -2190,7 +2284,8 @@ window.tumaDebug = {
             expires_at: new Date(Date.now() + 86400000).toISOString()
         });
         displayIncentiveProgress();
-    }
+    },
+    testClustering
 };
 
 // Override window.haptic if not already defined
@@ -2201,4 +2296,4 @@ if (!window.haptic) {
 // Make showNotification globally available
 window.showNotification = showNotification;
 
-console.log('✅ rider.js loaded successfully!');
+console.log('✅ rider.js loaded successfully with clustering integration!');
