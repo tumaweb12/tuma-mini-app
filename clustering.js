@@ -875,7 +875,7 @@ class TumaRouteClustering {
 // ============================================================================
 
 // For ES6 modules
-export default TumaRouteClustering;
+window.TumaRouteClustering = TumaRouteClustering;
 
 // For CommonJS
 if (typeof module !== 'undefined' && module.exports) {
