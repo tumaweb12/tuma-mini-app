@@ -1074,12 +1074,107 @@
     border-left-color: var(--primary);
 }
 
-/* Mobile Optimizations */
-@media (max-width: 428px) {
-    .route-phases {
-        flex-direction: column;
-        gap: 12px;
+/* Quick Verify Button */
+.route-badge.verify-btn {
+    cursor: pointer;
+    padding: 8px 16px;
+    display: flex;
+    align-items: center;
+    transition: all 0.3s;
+    border: 2px solid transparent;
+}
+
+.route-badge.verify-btn:hover {
+    transform: scale(1.05);
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+.route-badge.verify-btn:active {
+    transform: scale(0.95);
+}
+
+.route-badge.verify-btn.pickup {
+    background: var(--warning);
+    color: black;
+}
+
+.route-badge.verify-btn.delivery {
+    background: var(--success);
+    color: white;
+}
+
+.route-badge.verify-btn.completed {
+    background: var(--surface-high);
+    color: var(--text-secondary);
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.route-badge.verify-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+/* Quick Verification Modal */
+.verification-modal.quick-verify .modal-content {
+    max-width: 320px;
+}
+
+.verification-modal.quick-verify .modal-content.compact {
+    animation: quickModalSlide 0.2s ease-out;
+}
+
+@keyframes quickModalSlide {
+    from {
+        transform: translateY(50px) scale(0.9);
+        opacity: 0;
     }
+    to {
+        transform: translateY(0) scale(1);
+        opacity: 1;
+    }
+}
+
+.quick-stop-info {
+    background: var(--surface-high);
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 16px;
+}
+
+.quick-stop-info h3 {
+    font-size: 16px;
+    margin: 0 0 4px 0;
+}
+
+.stop-meta {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+.quick-actions {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 8px;
+    margin-top: 16px;
+}
+
+.modal-btn.compact {
+    padding: 14px;
+}
+
+/* Mobile Quick Verify */
+@media (max-width: 428px) {
+    .verification-modal.quick-verify .modal-content {
+        margin: 10px;
+        max-width: calc(100vw - 20px);
+    }
+    
+    .quick-actions {
+        grid-template-columns: 1fr;
+    }
+}
     
     .phase {
         width: 100%;
