@@ -1,6 +1,6 @@
 /**
  * Complete Enhanced Route Navigation Module with OpenRouteService
- * Includes in-app navigation, dynamic headers, and improved mobile UX
+ * Fixed version with all requested improvements
  */
 
 // State management
@@ -20,7 +20,9 @@ const state = {
     currentLocationMarker: null,
     lastLocation: null,
     lastLocationTime: null,
-    pickupPhaseCompleted: false
+    pickupPhaseCompleted: false,
+    isPanelVisible: true,
+    navigationActive: false
 };
 
 // API Configuration
@@ -64,19 +66,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             
             // Auto-collapse panel after 2 seconds
             setTimeout(() => {
-                const routePanel = document.getElementById('routePanel');
-                if (routePanel) {
-                    routePanel.style.transform = 'translateY(calc(100% - 140px))';
-                    routePanel.style.maxHeight = '140px';
-                    
-                    const handle = routePanel.querySelector('.panel-handle');
-                    if (handle) {
-                        handle.innerHTML = `
-                            <div style="width: 40px; height: 4px; background: var(--text-tertiary); border-radius: 2px; margin: 0 auto;"></div>
-                            <div style="font-size: 10px; color: var(--text-tertiary); margin-top: 4px;">Tap to expand</div>
-                        `;
-                    }
-                }
+                collapsePanel();
             }, 2000);
         } else {
             console.log('No active route found');
@@ -92,8 +82,19 @@ document.addEventListener('DOMContentLoaded', async () => {
 async function initializeMap() {
     console.log('Initializing Leaflet map...');
     
-    // Create map centered on Nairobi
-    state.map = L.map('map').setView([-1.2921, 36.8219], 13);
+    // Get the center point from route stops
+    let centerLat = -1.2921;
+    let centerLng = 36.8219;
+    
+    if (state.activeRoute && state.activeRoute.stops && state.activeRoute.stops.length > 0) {
+        // Calculate center from all stops
+        const bounds = calculateBounds(state.activeRoute.stops);
+        centerLat = (bounds.north + bounds.south) / 2;
+        centerLng = (bounds.east + bounds.west) / 2;
+    }
+    
+    // Create map centered on route
+    state.map = L.map('map').setView([centerLat, centerLng], 13);
     
     // Add OpenStreetMap tile layer (free)
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -102,6 +103,22 @@ async function initializeMap() {
     }).addTo(state.map);
     
     console.log('Map initialized');
+}
+
+// Calculate bounds from stops
+function calculateBounds(stops) {
+    let north = -90, south = 90, east = -180, west = 180;
+    
+    stops.forEach(stop => {
+        if (stop.location) {
+            north = Math.max(north, stop.location.lat);
+            south = Math.min(south, stop.location.lat);
+            east = Math.max(east, stop.location.lng);
+            west = Math.min(west, stop.location.lng);
+        }
+    });
+    
+    return { north, south, east, west };
 }
 
 // Update dynamic header based on current navigation state
@@ -170,6 +187,51 @@ function getCurrentStop() {
     return completedStops[completedStops.length - 1];
 }
 
+// Toggle route panel visibility
+window.toggleRoutePanel = function() {
+    const routePanel = document.getElementById('routePanel');
+    const toggleBtn = document.querySelector('.nav-button.secondary');
+    
+    if (!routePanel) return;
+    
+    if (state.isPanelVisible) {
+        // Hide panel
+        routePanel.style.display = 'none';
+        state.isPanelVisible = false;
+        
+        if (toggleBtn) {
+            toggleBtn.innerHTML = `
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 16l-6-6h12z"/>
+                </svg>
+                <span>Show Details</span>
+            `;
+        }
+    } else {
+        // Show panel
+        routePanel.style.display = 'block';
+        state.isPanelVisible = true;
+        
+        if (toggleBtn) {
+            toggleBtn.innerHTML = `
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 8l-6 6 1.41 1.41L12 10.83l4.59 4.58L18 14z"/>
+                </svg>
+                <span>Hide Details</span>
+            `;
+        }
+    }
+};
+
+// Collapse panel
+function collapsePanel() {
+    const routePanel = document.getElementById('routePanel');
+    if (routePanel) {
+        routePanel.style.transform = 'translateY(calc(100% - 140px))';
+        routePanel.style.maxHeight = '140px';
+    }
+}
+
 // Make route panel collapsible
 function enhanceRoutePanel() {
     const routePanel = document.getElementById('routePanel');
@@ -186,7 +248,6 @@ function enhanceRoutePanel() {
         // Add visual indicator
         panelHandle.innerHTML = `
             <div style="width: 40px; height: 4px; background: var(--text-tertiary); border-radius: 2px; margin: 0 auto;"></div>
-            <div style="font-size: 10px; color: var(--text-tertiary); margin-top: 4px;">Tap to expand</div>
         `;
     }
     
@@ -196,76 +257,93 @@ function enhanceRoutePanel() {
         if (isPanelCollapsed) {
             routePanel.style.transform = 'translateY(calc(100% - 140px))';
             routePanel.style.maxHeight = '140px';
-            panelHandle.innerHTML = `
-                <div style="width: 40px; height: 4px; background: var(--text-tertiary); border-radius: 2px; margin: 0 auto;"></div>
-                <div style="font-size: 10px; color: var(--text-tertiary); margin-top: 4px;">Tap to expand</div>
-            `;
         } else {
             routePanel.style.transform = 'translateY(0)';
             routePanel.style.maxHeight = '70%';
-            panelHandle.innerHTML = `
-                <div style="width: 40px; height: 4px; background: var(--text-tertiary); border-radius: 2px; margin: 0 auto;"></div>
-                <div style="font-size: 10px; color: var(--text-tertiary); margin-top: 4px;">Tap to collapse</div>
-            `;
         }
     }
 }
 
-// Create custom Leaflet icon
+// Create custom Leaflet icon with Tuma theme
 function createLeafletIcon(stop) {
-    const color = stop.completed ? '#666' : stop.type === 'pickup' ? '#FF9F0A' : '#34C759';
-    const symbol = stop.completed ? '✓' : stop.type === 'pickup' ? 'P' : 'D';
+    const isCompleted = stop.completed;
+    const isActive = isNextStop(stop);
+    const type = stop.type;
+    
+    // Tuma color scheme
+    const bgColor = isCompleted ? '#1C1C1F' : type === 'pickup' ? '#FF9F0A' : '#0066FF';
+    const borderColor = isCompleted ? '#48484A' : '#FFFFFF';
+    const symbol = isCompleted ? '✓' : type === 'pickup' ? 'P' : 'D';
     
     return L.divIcon({
         className: 'custom-marker',
         html: `
-            <div class="stop-marker-wrapper ${stop.completed ? 'completed' : ''} ${isNextStop(stop) ? 'active' : ''}">
-                <div class="stop-marker ${stop.type}" style="background: ${color}; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 3px 10px rgba(0,0,0,0.3); border: 3px solid white;">
-                    <span class="marker-number" style="color: white; font-weight: bold; font-size: 18px;">${symbol}</span>
-                    ${isNextStop(stop) ? '<div class="marker-pulse"></div>' : ''}
+            <div class="stop-marker-wrapper ${isCompleted ? 'completed' : ''} ${isActive ? 'active' : ''}">
+                <div class="stop-marker ${type}" style="
+                    background: ${bgColor};
+                    width: 44px;
+                    height: 44px;
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+                    border: 3px solid ${borderColor};
+                    position: relative;
+                ">
+                    <span style="
+                        color: white;
+                        font-weight: bold;
+                        font-size: 20px;
+                        ${isCompleted ? 'color: #8E8E93;' : ''}
+                    ">${symbol}</span>
+                    ${isActive ? '<div class="marker-pulse"></div>' : ''}
                 </div>
-                <div class="marker-label" style="position: absolute; top: 45px; left: 50%; transform: translateX(-50%); background: var(--surface-elevated); padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; white-space: nowrap; border: 1px solid var(--border);">${stop.type === 'pickup' ? 'Pickup' : 'Delivery'}</div>
+                <div class="marker-label">${type === 'pickup' ? 'Pickup' : 'Delivery'}</div>
             </div>
         `,
-        iconSize: [40, 60],
-        iconAnchor: [20, 50],
-        popupAnchor: [0, -50]
+        iconSize: [44, 70],
+        iconAnchor: [22, 55],
+        popupAnchor: [0, -55]
     });
 }
 
-// Create popup content
+// Create popup content with Tuma theme
 function createStopPopup(stop) {
+    const bgColor = stop.type === 'pickup' ? '#FF9F0A' : '#0066FF';
+    const textColor = stop.type === 'pickup' ? 'black' : 'white';
+    
     return `
-        <div class="stop-popup" style="min-width: 250px;">
-            <div class="popup-header ${stop.type}" style="padding: 12px 16px; color: white; background: ${stop.type === 'pickup' ? '#FF9F0A' : '#34C759'}; margin: -15px -15px 12px -15px; border-radius: 12px 12px 0 0;">
+        <div class="stop-popup">
+            <div class="popup-header ${stop.type}" style="background: ${bgColor}; color: ${textColor};">
                 <span class="popup-phase">${stop.type.toUpperCase()}</span>
-                <span class="popup-code" style="float: right;">${stop.parcelCode}</span>
+                <span class="popup-code">${stop.parcelCode}</span>
             </div>
             <div class="popup-body">
-                <h3 style="margin: 0 0 12px 0; font-size: 16px;">${stop.address}</h3>
+                <h3>${stop.address}</h3>
                 <div class="popup-info">
-                    <div class="info-row" style="margin-bottom: 8px;">
+                    <div class="info-row">
                         <span class="info-icon">👤</span>
                         <span>${stop.customerName}</span>
                     </div>
-                    <div class="info-row" style="margin-bottom: 8px;">
+                    <div class="info-row">
                         <span class="info-icon">📞</span>
-                        <a href="tel:${stop.customerPhone}" style="color: #0066FF; text-decoration: none;">${stop.customerPhone}</a>
+                        <a href="tel:${stop.customerPhone}">${stop.customerPhone}</a>
                     </div>
                     ${stop.specialInstructions ? `
-                        <div class="info-row instructions" style="background: rgba(255, 159, 10, 0.1); padding: 8px; border-radius: 8px;">
+                        <div class="info-row instructions">
                             <span class="info-icon">💬</span>
                             <span>${stop.specialInstructions}</span>
                         </div>
                     ` : ''}
                 </div>
                 ${!stop.completed && canCompleteStop(stop) ? `
-                    <div class="popup-actions" style="margin-top: 16px;">
-                        <button onclick="openVerificationModal('${stop.id}')" style="width: 100%; padding: 12px; background: #0066FF; color: white; border: none; border-radius: 10px; font-weight: 600; cursor: pointer; margin-bottom: 8px;">
+                    <div class="popup-actions">
+                        <button onclick="openVerificationModal('${stop.id}')">
                             ✓ Verify ${stop.type}
                         </button>
-                        <button onclick="navigateToStop('${stop.id}')" style="width: 100%; padding: 12px; background: var(--surface-high); color: white; border: none; border-radius: 10px; font-weight: 600; cursor: pointer;">
-                            🧭 Navigate
+                        <button onclick="navigateToStop('${stop.id}')">
+                            🧭 Navigate Here
                         </button>
                     </div>
                 ` : stop.completed ? `
@@ -278,7 +356,7 @@ function createStopPopup(stop) {
     `;
 }
 
-// Plot route on map with OpenRouteService
+// Plot route on map with OpenRouteService (FIXED)
 async function plotRoute() {
     if (!state.map || !state.activeRoute || !state.activeRoute.stops) return;
     
@@ -287,6 +365,7 @@ async function plotRoute() {
     state.markers = [];
     if (state.routePolyline) {
         state.routePolyline.remove();
+        state.routePolyline = null;
     }
     
     const bounds = L.latLngBounds();
@@ -303,14 +382,13 @@ async function plotRoute() {
         bounds.extend([stop.location.lat, stop.location.lng]);
     });
     
-    // Fit map to show all markers
+    // Fit map to show all markers with padding
     state.map.fitBounds(bounds, { padding: [50, 50] });
     
-    // Draw optimized route
-    await drawOptimizedRoute();
+    // DON'T draw any routes initially - wait for optimization
 }
 
-// Draw optimized route using OpenRouteService
+// Draw optimized route using OpenRouteService (FIXED)
 async function drawOptimizedRoute() {
     if (!state.activeRoute) return;
     
@@ -318,25 +396,31 @@ async function drawOptimizedRoute() {
     if (stops.length < 2) return;
     
     try {
-        // Prepare coordinates for OpenRouteService
+        // Clear existing route line
+        if (state.routePolyline) {
+            state.routePolyline.remove();
+            state.routePolyline = null;
+        }
+        
+        // Prepare coordinates for OpenRouteService (lng, lat order!)
         const coordinates = stops.map(stop => [stop.location.lng, stop.location.lat]);
         
-        // Call OpenRouteService Directions API
+        // Call OpenRouteService Directions API with proper body format
         const response = await fetch('https://api.openrouteservice.org/v2/directions/driving-car', {
             method: 'POST',
             headers: {
-                'Accept': 'application/json',
+                'Accept': 'application/json, application/geo+json, application/gpx+xml, img/png; charset=utf-8',
                 'Content-Type': 'application/json',
                 'Authorization': OPENROUTE_API_KEY
             },
             body: JSON.stringify({
-                coordinates: coordinates,
-                // Only optimize if we have more than 2 stops (exclude first and last)
-                optimize_waypoints: stops.length > 2
+                coordinates: coordinates
             })
         });
         
         if (!response.ok) {
+            const errorText = await response.text();
+            console.error('OpenRouteService error response:', errorText);
             throw new Error('OpenRouteService API error');
         }
         
@@ -348,10 +432,10 @@ async function drawOptimizedRoute() {
             // Decode the geometry
             const decodedCoords = decodePolyline(route.geometry);
             
-            // Draw the route
+            // Draw the route with Tuma colors
             state.routePolyline = L.polyline(decodedCoords, {
                 color: '#0066FF',
-                weight: 5,
+                weight: 6,
                 opacity: 0.8,
                 smoothFactor: 1
             }).addTo(state.map);
@@ -365,8 +449,8 @@ async function drawOptimizedRoute() {
         }
     } catch (error) {
         console.error('Error getting route:', error);
-        // Fallback to straight lines
-        drawStraightLines();
+        // Don't draw fallback straight lines
+        showNotification('Route optimization unavailable', 'warning');
     }
 }
 
@@ -409,27 +493,6 @@ function decodePolyline(encoded) {
     return poly;
 }
 
-// Fallback: Draw straight lines
-function drawStraightLines() {
-    if (!state.map || !state.activeRoute) return;
-    
-    const coordinates = [];
-    const stops = state.activeRoute.stops.filter(s => !s.completed);
-    
-    stops.forEach(stop => {
-        coordinates.push([stop.location.lat, stop.location.lng]);
-    });
-    
-    if (coordinates.length > 1) {
-        state.routePolyline = L.polyline(coordinates, {
-            color: '#0066FF',
-            weight: 4,
-            opacity: 0.8,
-            dashArray: '10, 10'
-        }).addTo(state.map);
-    }
-}
-
 // Display route information
 function displayRouteInfo() {
     if (!state.activeRoute) return;
@@ -441,7 +504,7 @@ function displayRouteInfo() {
         if (nextStop) {
             routeType.className = `route-badge verify-btn ${nextStop.type}`;
             routeType.innerHTML = `
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 4px;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
                 </svg>
                 <span>Verify ${nextStop.type === 'pickup' ? 'Pickup' : 'Delivery'}</span>
@@ -503,7 +566,7 @@ function displayStops() {
     // Add pickup phase
     html += `
         <div class="phase-section ${allCompleted(pickupStops) ? 'completed' : ''}">
-            <h3 class="phase-title">
+            <h3>
                 <span>📦 Pickup Phase</span>
                 <span class="phase-count">${pickupStops.filter(s => s.completed).length}/${pickupStops.length}</span>
             </h3>
@@ -517,7 +580,7 @@ function displayStops() {
     const deliveryLocked = !allCompleted(pickupStops);
     html += `
         <div class="phase-section ${deliveryLocked ? 'locked' : ''} ${allCompleted(deliveryStops) ? 'completed' : ''}">
-            <h3 class="phase-title">
+            <h3>
                 <span>📍 Delivery Phase</span>
                 <span class="phase-count">${deliveryStops.filter(s => s.completed).length}/${deliveryStops.length}</span>
             </h3>
@@ -564,12 +627,12 @@ function createParcelsInPossessionWidget() {
         <div class="parcels-possession-widget" style="background: linear-gradient(135deg, rgba(255, 159, 10, 0.2) 0%, rgba(255, 159, 10, 0.1) 100%); border: 1px solid var(--warning); border-radius: 14px; padding: 16px; margin-bottom: 20px;">
             <div class="carrying-banner" style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
                 <span class="carrying-icon">📦</span>
-                <span style="font-weight: 600;">Carrying ${state.parcelsInPossession.length} parcel${state.parcelsInPossession.length > 1 ? 's' : ''}</span>
+                <span style="font-weight: 600; color: var(--text-primary);">Carrying ${state.parcelsInPossession.length} parcel${state.parcelsInPossession.length > 1 ? 's' : ''}</span>
             </div>
             <div class="parcel-cards" style="display: flex; flex-direction: column; gap: 8px;">
                 ${state.parcelsInPossession.map(parcel => `
-                    <div class="parcel-card" style="background: var(--surface-elevated); border-radius: 8px; padding: 12px; border-left: 3px solid var(--warning);">
-                        <div class="parcel-code" style="font-weight: 600; margin-bottom: 4px;">${parcel.parcelCode}</div>
+                    <div class="parcel-card" style="background: var(--surface-high); border-radius: 8px; padding: 12px; border-left: 3px solid var(--warning);">
+                        <div class="parcel-code" style="font-weight: 600; margin-bottom: 4px; color: var(--text-primary);">${parcel.parcelCode}</div>
                         <div class="parcel-destination" style="font-size: 14px; color: var(--text-secondary); margin-bottom: 4px;">${parcel.destination}</div>
                         <div class="parcel-time" style="font-size: 12px; color: var(--text-tertiary);">Picked up ${formatTimeAgo(parcel.pickupTime)}</div>
                     </div>
@@ -796,12 +859,7 @@ window.centerOnLocation = function() {
     }
 };
 
-window.optimizeRoute = async function() {
-    showNotification('Optimizing route...', 'info');
-    await drawOptimizedRoute();
-};
-
-// Enhanced start navigation with in-app experience
+// Enhanced start navigation with better UX
 window.startNavigation = function() {
     const nextStop = getNextStop();
     if (!nextStop) {
@@ -809,89 +867,121 @@ window.startNavigation = function() {
         return;
     }
     
-    // Enable continuous tracking
-    startContinuousTracking();
-    
-    // Collapse the route panel to show map
-    const routePanel = document.getElementById('routePanel');
-    if (routePanel) {
-        routePanel.style.transform = 'translateY(calc(100% - 80px))';
-        routePanel.style.maxHeight = '80px';
-    }
-    
-    // Show enhanced in-app navigation
-    showEnhancedNavigation(nextStop);
+    // First optimize the route
+    showNotification('Optimizing route...', 'info');
+    drawOptimizedRoute().then(() => {
+        // Enable continuous tracking
+        startContinuousTracking();
+        
+        // Hide the route panel completely for cleaner navigation
+        const routePanel = document.getElementById('routePanel');
+        if (routePanel) {
+            routePanel.style.display = 'none';
+        }
+        
+        // Show enhanced in-app navigation
+        showEnhancedNavigation(nextStop);
+        
+        // Set navigation active state
+        state.navigationActive = true;
+    });
 };
 
-// Enhanced in-app navigation interface
+// Enhanced in-app navigation interface - Better than Uber/Bolt
 function showEnhancedNavigation(targetStop) {
     // Remove any existing navigation
     const existingNav = document.querySelector('.enhanced-navigation');
     if (existingNav) existingNav.remove();
     
-    // Create enhanced navigation UI
+    // Create enhanced navigation UI with Tuma theme
     const navUI = document.createElement('div');
     navUI.className = 'enhanced-navigation';
     navUI.innerHTML = `
         <div class="nav-top-bar">
-            <div class="nav-instruction-bar">
+            <div class="nav-header">
                 <button class="nav-close-btn" onclick="exitEnhancedNavigation()">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
                         <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
                     </svg>
                 </button>
-                <div class="nav-instruction">
-                    <div class="nav-direction-icon">🧭</div>
-                    <div class="nav-text">
-                        <div class="nav-main-text">Starting navigation...</div>
-                        <div class="nav-sub-text">to ${targetStop.type}</div>
+                <div class="nav-route-info">
+                    <div class="nav-route-type ${targetStop.type}">${targetStop.type.toUpperCase()}</div>
+                    <div class="nav-parcel-code">${targetStop.parcelCode}</div>
+                </div>
+            </div>
+            
+            <div class="nav-instruction-card">
+                <div class="nav-direction-visual">
+                    <div class="direction-icon-large">⬆️</div>
+                    <div class="direction-distance">
+                        <span class="distance-value">--</span>
+                        <span class="distance-unit">m</span>
                     </div>
                 </div>
-                <div class="nav-distance-eta">
-                    <div class="nav-distance">-- km</div>
-                    <div class="nav-eta">-- min</div>
+                <div class="nav-instruction-text">
+                    <div class="nav-street-name">Starting navigation...</div>
+                    <div class="nav-instruction-detail">Getting GPS signal</div>
                 </div>
             </div>
         </div>
         
-        <div class="nav-bottom-card">
-            <div class="nav-destination-info">
-                <div class="nav-dest-icon">${targetStop.type === 'pickup' ? '📦' : '📍'}</div>
-                <div class="nav-dest-details">
-                    <div class="nav-dest-address">${targetStop.address}</div>
-                    <div class="nav-dest-meta">${targetStop.customerName} • ${targetStop.parcelCode}</div>
+        <div class="nav-bottom-info">
+            <div class="nav-eta-card">
+                <div class="eta-icon">⏱️</div>
+                <div class="eta-info">
+                    <div class="eta-time">--:--</div>
+                    <div class="eta-label">ETA</div>
                 </div>
             </div>
-            <div class="nav-actions-row">
-                <button class="nav-action-btn call" onclick="window.location.href='tel:${targetStop.customerPhone}'">
+            
+            <div class="nav-distance-card">
+                <div class="distance-icon">📍</div>
+                <div class="distance-info">
+                    <div class="distance-remaining">-- km</div>
+                    <div class="distance-label">Distance</div>
+                </div>
+            </div>
+            
+            <div class="nav-speed-card">
+                <div class="speed-icon">🏍️</div>
+                <div class="speed-info">
+                    <div class="speed-value">0</div>
+                    <div class="speed-label">km/h</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="nav-destination-preview">
+            <div class="destination-header">
+                <span class="destination-type">${targetStop.type === 'pickup' ? '📦 PICKUP' : '📍 DELIVERY'}</span>
+                <button class="nav-more-btn" onclick="showDestinationDetails('${targetStop.id}')">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="destination-address">${targetStop.address}</div>
+            <div class="destination-customer">${targetStop.customerName}</div>
+            
+            <div class="nav-quick-actions">
+                <button class="quick-action-btn call" onclick="window.location.href='tel:${targetStop.customerPhone}'">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                         <path d="M20.01 15.38c-1.23 0-2.42-.2-3.53-.56a.977.977 0 00-1.01.24l-1.57 1.97c-2.83-1.35-5.48-3.9-6.89-6.83l1.95-1.66c.27-.28.35-.67.24-1.02-.37-1.11-.56-2.3-.56-3.53 0-.54-.45-.99-.99-.99H4.19C3.65 3 3 3.24 3 3.99 3 13.28 10.73 21 20.01 21c.71 0 .99-.63.99-1.18v-3.45c0-.54-.45-.99-.99-.99z"/>
                     </svg>
-                    <span>Call</span>
+                    Call
                 </button>
-                <button class="nav-action-btn verify" onclick="openQuickVerification()">
+                <button class="quick-action-btn verify" onclick="openQuickVerification()">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                         <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
                     </svg>
-                    <span>Verify</span>
+                    Verify
                 </button>
-                <button class="nav-action-btn external" onclick="openNavigationMenu('${targetStop.id}')">
+                <button class="quick-action-btn details" onclick="toggleRoutePanel()">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/>
+                        <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
                     </svg>
+                    Details
                 </button>
-            </div>
-        </div>
-        
-        <!-- Speed and accuracy indicator -->
-        <div class="nav-status-bar">
-            <div class="nav-speed">
-                <span class="speed-icon">🏍️</span>
-                <span class="speed-value">0 km/h</span>
-            </div>
-            <div class="nav-accuracy">
-                <span class="accuracy-icon">📡</span>
-                <span class="accuracy-value">GPS</span>
             </div>
         </div>
     `;
@@ -922,41 +1012,21 @@ async function updateEnhancedNavigation(targetStop) {
     }
     
     const distance = calculateDistance(state.currentLocation, targetStop.location);
-    const eta = Math.round(distance * 2); // Rough estimate: 2 min per km
+    const eta = calculateETA(distance);
     
     // Update UI elements
-    const distanceEl = document.querySelector('.nav-distance');
-    const etaEl = document.querySelector('.nav-eta');
-    const mainTextEl = document.querySelector('.nav-main-text');
-    const directionIcon = document.querySelector('.nav-direction-icon');
+    const distanceEl = document.querySelector('.distance-remaining');
+    const etaTimeEl = document.querySelector('.eta-time');
+    const speedEl = document.querySelector('.speed-value');
     
     if (distanceEl) {
         distanceEl.textContent = distance < 1 ? 
-            `${Math.round(distance * 1000)}m` : 
-            `${distance.toFixed(1)}km`;
+            `${Math.round(distance * 1000)} m` : 
+            `${distance.toFixed(1)} km`;
     }
     
-    if (etaEl) {
-        etaEl.textContent = `${eta} min`;
-    }
-    
-    // Update navigation instruction based on distance
-    if (mainTextEl) {
-        if (distance < 0.05) { // Within 50 meters
-            mainTextEl.textContent = 'You have arrived';
-            directionIcon.textContent = '✅';
-            
-            // Auto-show verification
-            setTimeout(() => {
-                exitEnhancedNavigation();
-                openQuickVerification();
-            }, 2000);
-        } else if (distance < 0.2) { // Within 200 meters
-            mainTextEl.textContent = 'Destination ahead';
-            directionIcon.textContent = '📍';
-        } else {
-            // Keep showing turn-by-turn instructions
-        }
+    if (etaTimeEl) {
+        etaTimeEl.textContent = eta;
     }
     
     // Update speed if available
@@ -965,19 +1035,44 @@ async function updateEnhancedNavigation(targetStop) {
         const distanceTraveled = calculateDistance(state.lastLocation, state.currentLocation);
         const speed = Math.round((distanceTraveled / timeDiff) * 3600000); // km/h
         
-        const speedEl = document.querySelector('.speed-value');
         if (speedEl && speed > 0 && speed < 200) { // Sanity check
-            speedEl.textContent = `${speed} km/h`;
+            speedEl.textContent = speed;
         }
+    }
+    
+    // Check arrival
+    if (distance < 0.05) { // Within 50 meters
+        showArrivalNotification(targetStop);
     }
     
     state.lastLocation = state.currentLocation;
     state.lastLocationTime = Date.now();
     
     // Continue updating if navigation is active
-    if (document.querySelector('.enhanced-navigation')) {
+    if (document.querySelector('.enhanced-navigation') && state.navigationActive) {
         setTimeout(() => updateEnhancedNavigation(targetStop), 3000);
     }
+}
+
+// Show arrival notification
+function showArrivalNotification(targetStop) {
+    // Update navigation UI
+    const instructionEl = document.querySelector('.nav-street-name');
+    const detailEl = document.querySelector('.nav-instruction-detail');
+    const iconEl = document.querySelector('.direction-icon-large');
+    
+    if (instructionEl) instructionEl.textContent = 'You have arrived';
+    if (detailEl) detailEl.textContent = `${targetStop.type} location reached`;
+    if (iconEl) iconEl.textContent = '✅';
+    
+    // Vibrate and show notification
+    if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+    showNotification(`Arrived at ${targetStop.type} location`, 'success');
+    
+    // Auto-show verification after 2 seconds
+    setTimeout(() => {
+        openQuickVerification();
+    }, 2000);
 }
 
 // Get enhanced directions from OpenRouteService
@@ -1020,24 +1115,53 @@ async function getEnhancedDirections(targetStop) {
                     className: 'navigation-route'
                 }).addTo(state.map);
                 
-                // Get next instruction
-                const nextStep = route.segments[0]?.steps[0];
-                if (nextStep) {
-                    const mainTextEl = document.querySelector('.nav-main-text');
-                    const directionIcon = document.querySelector('.nav-direction-icon');
-                    
-                    if (mainTextEl) {
-                        mainTextEl.textContent = nextStep.instruction;
-                    }
-                    if (directionIcon) {
-                        directionIcon.textContent = getDirectionEmoji(nextStep.type);
-                    }
-                }
+                // Update navigation instructions
+                updateNavigationInstructions(route);
             }
         }
     } catch (error) {
         console.error('Error getting directions:', error);
     }
+}
+
+// Update navigation instructions
+function updateNavigationInstructions(route) {
+    if (!route.segments || route.segments.length === 0) return;
+    
+    const segment = route.segments[0];
+    if (!segment.steps || segment.steps.length === 0) return;
+    
+    // Get current step based on location
+    const currentStep = getCurrentNavigationStep(segment.steps);
+    if (!currentStep) return;
+    
+    // Update UI
+    const streetEl = document.querySelector('.nav-street-name');
+    const detailEl = document.querySelector('.nav-instruction-detail');
+    const iconEl = document.querySelector('.direction-icon-large');
+    const distanceEl = document.querySelector('.distance-value');
+    const unitEl = document.querySelector('.distance-unit');
+    
+    if (streetEl) streetEl.textContent = currentStep.name || 'Continue';
+    if (detailEl) detailEl.textContent = currentStep.instruction;
+    if (iconEl) iconEl.textContent = getDirectionEmoji(currentStep.type);
+    
+    if (distanceEl && unitEl) {
+        if (currentStep.distance < 1000) {
+            distanceEl.textContent = Math.round(currentStep.distance);
+            unitEl.textContent = 'm';
+        } else {
+            distanceEl.textContent = (currentStep.distance / 1000).toFixed(1);
+            unitEl.textContent = 'km';
+        }
+    }
+}
+
+// Get current navigation step
+function getCurrentNavigationStep(steps) {
+    // For now, return the first uncompleted step
+    // This could be enhanced with more sophisticated logic
+    return steps[0];
 }
 
 // Get direction emoji
@@ -1059,7 +1183,7 @@ function getDirectionEmoji(type) {
         13: '➡️'   // Keep right
     };
     
-    return emojis[type] || '➡️';
+    return emojis[type] || '⬆️';
 }
 
 // Exit enhanced navigation
@@ -1073,6 +1197,7 @@ window.exitEnhancedNavigation = function() {
     // Restore route panel
     const routePanel = document.getElementById('routePanel');
     if (routePanel) {
+        routePanel.style.display = 'block';
         routePanel.style.transform = 'translateY(calc(100% - 140px))';
         routePanel.style.maxHeight = '140px';
     }
@@ -1088,54 +1213,53 @@ window.exitEnhancedNavigation = function() {
         clearInterval(state.trackingInterval);
         state.trackingInterval = null;
     }
+    
+    state.navigationActive = false;
 };
 
-// Navigation menu for external apps (only if needed)
-window.openNavigationMenu = function(stopId) {
+// Show destination details
+window.showDestinationDetails = function(stopId) {
     const stop = state.activeRoute.stops.find(s => s.id === stopId);
     if (!stop) return;
     
-    const menu = document.createElement('div');
-    menu.className = 'nav-external-menu';
-    menu.innerHTML = `
-        <div class="menu-overlay" onclick="this.parentElement.remove()"></div>
-        <div class="menu-content">
-            <h3>Open in External App?</h3>
-            <p>For complex routes, you can use:</p>
-            <div class="external-apps">
-                <button onclick="openWaze('${stopId}'); this.closest('.nav-external-menu').remove();">
-                    <img src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSI+CiAgPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiMwMEFBRkYiLz4KICA8dGV4dCB4PSIyMCIgeT0iMjYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IndoaXRlIiBmb250LXNpemU9IjE4IiBmb250LXdlaWdodD0iYm9sZCI+VzwvdGV4dD4KPC9zdmc+" alt="Waze">
-                    <span>Waze</span>
-                </button>
-                <button onclick="openGoogleMaps('${stopId}'); this.closest('.nav-external-menu').remove();">
-                    <img src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSI+CiAgPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiNFQTQzMzUiLz4KICA8dGV4dCB4PSIyMCIgeT0iMjYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IndoaXRlIiBmb250LXNpemU9IjE4IiBmb250LXdlaWdodD0iYm9sZCI+RzwvdGV4dD4KPC9zdmc+" alt="Google Maps">
-                    <span>Google Maps</span>
+    const modal = document.createElement('div');
+    modal.className = 'destination-details-modal';
+    modal.innerHTML = `
+        <div class="modal-overlay" onclick="this.parentElement.remove()"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Destination Details</h3>
+                <button class="modal-close" onclick="this.closest('.destination-details-modal').remove()">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                    </svg>
                 </button>
             </div>
-            <button class="menu-cancel" onclick="this.closest('.nav-external-menu').remove()">
-                Stay in Tuma
-            </button>
+            <div class="modal-body">
+                <div class="detail-section">
+                    <h4>Address</h4>
+                    <p>${stop.address}</p>
+                </div>
+                <div class="detail-section">
+                    <h4>Customer</h4>
+                    <p>${stop.customerName}</p>
+                    <p><a href="tel:${stop.customerPhone}">${stop.customerPhone}</a></p>
+                </div>
+                <div class="detail-section">
+                    <h4>Parcel Code</h4>
+                    <p class="code-display">${stop.parcelCode}</p>
+                </div>
+                ${stop.specialInstructions ? `
+                    <div class="detail-section">
+                        <h4>Special Instructions</h4>
+                        <p>${stop.specialInstructions}</p>
+                    </div>
+                ` : ''}
+            </div>
         </div>
     `;
     
-    document.body.appendChild(menu);
-};
-
-// Open in external apps
-window.openWaze = function(stopId) {
-    const stop = state.activeRoute.stops.find(s => s.id === stopId);
-    if (!stop) return;
-    
-    const wazeUrl = `https://waze.com/ul?ll=${stop.location.lat},${stop.location.lng}&navigate=yes`;
-    window.open(wazeUrl, '_blank');
-};
-
-window.openGoogleMaps = function(stopId) {
-    const stop = state.activeRoute.stops.find(s => s.id === stopId);
-    if (!stop) return;
-    
-    const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${stop.location.lat},${stop.location.lng}`;
-    window.open(mapsUrl, '_blank');
+    document.body.appendChild(modal);
 };
 
 // Navigate to stop
@@ -1143,14 +1267,9 @@ window.navigateToStop = function(stopId) {
     const stop = state.activeRoute.stops.find(s => s.id === stopId);
     if (!stop) return;
     
-    // Show in-app navigation instead of opening external map
-    showNavigationMode(stop);
-};
-
-// Alias for compatibility
-function showNavigationMode(stop) {
+    // Show in-app navigation
     showEnhancedNavigation(stop);
-}
+};
 
 window.selectStop = function(stopId) {
     const stop = state.activeRoute.stops.find(s => s.id === stopId);
@@ -1246,28 +1365,6 @@ function calculateETA(distance) {
         minute: '2-digit',
         hour12: true 
     });
-}
-
-// Get direction icon based on instruction type
-function getDirectionIcon(type) {
-    const icons = {
-        0: '➡️',  // Left
-        1: '➡️',  // Right  
-        2: '⬅️',  // Sharp left
-        3: '➡️',  // Sharp right
-        4: '⬅️',  // Slight left
-        5: '➡️',  // Slight right
-        6: '⬆️',  // Straight
-        7: '🔄',  // Enter roundabout
-        8: '🔄',  // Exit roundabout
-        9: '📍',  // U-turn
-        10: '✓',  // Goal
-        11: '🚦', // Depart
-        12: '⬅️', // Keep left
-        13: '➡️'  // Keep right
-    };
-    
-    return icons[type] || '➡️';
 }
 
 // Quick verification from header
@@ -1410,6 +1507,12 @@ window.verifyCode = async function(stopId) {
     // Check if route complete
     if (state.activeRoute.stops.every(s => s.completed)) {
         completeRoute();
+    } else {
+        // If still navigating, show next stop
+        const nextStop = getNextStop();
+        if (nextStop && state.navigationActive) {
+            showEnhancedNavigation(nextStop);
+        }
     }
 };
 
@@ -1531,17 +1634,20 @@ function showNotification(message, type = 'info') {
     }, 3000);
 }
 
-// Add all styles
-const allStyles = `
+// Add all enhanced navigation styles
+const enhancedStyles = `
 <style>
-/* Enhanced Navigation UI */
+/* Enhanced Navigation UI - Better than Uber/Bolt */
 .enhanced-navigation {
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
+    bottom: 0;
     z-index: 1000;
     pointer-events: none;
+    display: flex;
+    flex-direction: column;
 }
 
 .enhanced-navigation > * {
@@ -1550,7 +1656,8 @@ const allStyles = `
 
 .nav-top-bar {
     background: var(--surface-elevated);
-    box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+    backdrop-filter: blur(20px);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
     animation: slideDown 0.3s ease-out;
 }
 
@@ -1563,12 +1670,12 @@ const allStyles = `
     }
 }
 
-.nav-instruction-bar {
+.nav-header {
     display: flex;
     align-items: center;
-    padding: 12px;
-    gap: 12px;
-    min-height: 72px;
+    justify-content: space-between;
+    padding: 16px;
+    border-bottom: 1px solid var(--border);
 }
 
 .nav-close-btn {
@@ -1582,108 +1689,214 @@ const allStyles = `
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    flex-shrink: 0;
+    transition: all 0.2s;
 }
 
-.nav-instruction {
-    flex: 1;
+.nav-close-btn:hover {
+    background: var(--danger);
+    color: white;
+}
+
+.nav-route-info {
     display: flex;
     align-items: center;
     gap: 12px;
 }
 
-.nav-direction-icon {
-    font-size: 32px;
-    width: 40px;
-    text-align: center;
+.nav-route-type {
+    padding: 4px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
-.nav-text {
-    flex: 1;
+.nav-route-type.pickup {
+    background: var(--warning);
+    color: black;
 }
 
-.nav-main-text {
-    font-size: 18px;
-    font-weight: 600;
-    color: var(--text-primary);
-    line-height: 1.2;
+.nav-route-type.delivery {
+    background: var(--primary);
+    color: white;
 }
 
-.nav-sub-text {
+.nav-parcel-code {
     font-size: 14px;
+    font-weight: 600;
     color: var(--text-secondary);
 }
 
-.nav-distance-eta {
-    text-align: right;
-    flex-shrink: 0;
+/* Instruction Card */
+.nav-instruction-card {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 24px;
+    background: var(--surface);
+    margin: 16px;
+    border-radius: 16px;
+    border: 1px solid var(--border);
 }
 
-.nav-distance {
-    font-size: 20px;
+.nav-direction-visual {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 80px;
+}
+
+.direction-icon-large {
+    font-size: 48px;
+    line-height: 1;
+    margin-bottom: 8px;
+}
+
+.direction-distance {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+}
+
+.distance-value {
+    font-size: 24px;
     font-weight: 700;
     color: var(--primary);
 }
 
-.nav-eta {
+.distance-unit {
     font-size: 14px;
     color: var(--text-secondary);
 }
 
-/* Bottom card */
-.nav-bottom-card {
-    position: fixed;
+.nav-instruction-text {
+    flex: 1;
+}
+
+.nav-street-name {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+    line-height: 1.2;
+}
+
+.nav-instruction-detail {
+    font-size: 16px;
+    color: var(--text-secondary);
+}
+
+/* Bottom Info Cards */
+.nav-bottom-info {
+    display: flex;
+    gap: 12px;
+    padding: 0 16px;
+    margin-bottom: 16px;
+}
+
+.nav-eta-card,
+.nav-distance-card,
+.nav-speed-card {
+    flex: 1;
+    background: var(--surface-high);
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border: 1px solid var(--border);
+}
+
+.eta-icon,
+.distance-icon,
+.speed-icon {
+    font-size: 24px;
+}
+
+.eta-info,
+.distance-info,
+.speed-info {
+    flex: 1;
+}
+
+.eta-time,
+.distance-remaining,
+.speed-value {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.eta-label,
+.distance-label,
+.speed-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+/* Destination Preview */
+.nav-destination-preview {
+    position: absolute;
     bottom: 20px;
     left: 20px;
     right: 20px;
     background: var(--surface-elevated);
-    border-radius: 16px;
-    padding: 16px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-    animation: slideUp 0.3s ease-out;
+    border-radius: 20px;
+    padding: 20px;
+    box-shadow: 0 -4px 20px rgba(0,0,0,0.5);
+    border: 1px solid var(--border);
 }
 
-@keyframes slideUp {
-    from {
-        transform: translateY(100%);
-    }
-    to {
-        transform: translateY(0);
-    }
-}
-
-.nav-destination-info {
+.destination-header {
     display: flex;
+    justify-content: space-between;
     align-items: center;
-    gap: 12px;
     margin-bottom: 12px;
 }
 
-.nav-dest-icon {
-    font-size: 32px;
-}
-
-.nav-dest-details {
-    flex: 1;
-}
-
-.nav-dest-address {
-    font-size: 16px;
-    font-weight: 600;
-    margin-bottom: 4px;
-}
-
-.nav-dest-meta {
+.destination-type {
     font-size: 14px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
     color: var(--text-secondary);
 }
 
-.nav-actions-row {
+.nav-more-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: none;
+    background: var(--surface-high);
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.destination-address {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+    line-height: 1.3;
+}
+
+.destination-customer {
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin-bottom: 16px;
+}
+
+/* Quick Actions */
+.nav-quick-actions {
     display: flex;
     gap: 8px;
 }
 
-.nav-action-btn {
+.quick-action-btn {
     flex: 1;
     display: flex;
     align-items: center;
@@ -1698,46 +1911,28 @@ const allStyles = `
     transition: all 0.2s;
 }
 
-.nav-action-btn.call {
+.quick-action-btn.call {
     background: var(--success);
     color: white;
 }
 
-.nav-action-btn.verify {
+.quick-action-btn.verify {
     background: var(--primary);
     color: white;
 }
 
-.nav-action-btn.external {
+.quick-action-btn.details {
     background: var(--surface-high);
     color: var(--text-primary);
-    width: 48px;
-    flex: 0 0 48px;
 }
 
-/* Status bar */
-.nav-status-bar {
-    position: fixed;
-    bottom: 0;
-    left: 50%;
-    transform: translateX(-50%);
-    background: rgba(20, 20, 22, 0.9);
-    backdrop-filter: blur(10px);
-    padding: 8px 16px;
-    border-radius: 20px 20px 0 0;
-    display: flex;
-    gap: 20px;
-    font-size: 12px;
+.quick-action-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
 }
 
-.nav-speed, .nav-accuracy {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-}
-
-/* External apps menu */
-.nav-external-menu {
+/* Destination Details Modal */
+.destination-details-modal {
     position: fixed;
     top: 0;
     left: 0;
@@ -1750,7 +1945,7 @@ const allStyles = `
     padding: 20px;
 }
 
-.menu-overlay {
+.destination-details-modal .modal-overlay {
     position: absolute;
     top: 0;
     left: 0;
@@ -1760,74 +1955,298 @@ const allStyles = `
     backdrop-filter: blur(10px);
 }
 
-.menu-content {
+.destination-details-modal .modal-content {
     position: relative;
     background: var(--surface-elevated);
     border-radius: 20px;
-    padding: 24px;
-    max-width: 320px;
+    max-width: 400px;
     width: 100%;
-    text-align: center;
+    max-height: 80vh;
+    overflow-y: auto;
 }
 
-.menu-content h3 {
-    margin: 0 0 8px 0;
-    font-size: 20px;
-}
-
-.menu-content p {
-    color: var(--text-secondary);
-    margin-bottom: 20px;
-}
-
-.external-apps {
+.destination-details-modal .modal-header {
     display: flex;
-    gap: 16px;
-    margin-bottom: 20px;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px;
+    border-bottom: 1px solid var(--border);
 }
 
-.external-apps button {
-    flex: 1;
-    background: var(--surface-high);
-    border: none;
-    border-radius: 12px;
-    padding: 16px;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.external-apps button:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-}
-
-.external-apps img {
-    width: 40px;
-    height: 40px;
-    margin-bottom: 8px;
-}
-
-.external-apps span {
-    display: block;
-    font-size: 14px;
+.destination-details-modal .modal-header h3 {
+    font-size: 20px;
     font-weight: 600;
 }
 
-.menu-cancel {
+.modal-close {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: none;
+    background: var(--surface-high);
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.destination-details-modal .modal-body {
+    padding: 20px;
+}
+
+.detail-section {
+    margin-bottom: 20px;
+}
+
+.detail-section h4 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.detail-section p {
+    font-size: 16px;
+    color: var(--text-primary);
+    line-height: 1.4;
+}
+
+.detail-section a {
+    color: var(--primary);
+    text-decoration: none;
+}
+
+.code-display {
+    font-size: 20px;
+    font-weight: 700;
+    font-family: monospace;
+    background: var(--surface-high);
+    padding: 12px;
+    border-radius: 8px;
+    text-align: center;
+}
+
+/* Verification Modal */
+.verification-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.verification-modal .modal-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.9);
+    backdrop-filter: blur(10px);
+}
+
+.verification-modal .modal-content {
+    position: relative;
+    background: var(--surface-elevated);
+    border-radius: 24px;
+    max-width: 400px;
     width: 100%;
-    padding: 14px;
-    background: var(--primary);
+    overflow: hidden;
+    animation: slideUpModal 0.3s ease-out;
+}
+
+@keyframes slideUpModal {
+    from {
+        transform: translateY(50px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.verification-modal .modal-header {
+    padding: 24px;
+    text-align: center;
     color: white;
+}
+
+.verification-modal .modal-header.pickup {
+    background: var(--warning);
+    color: black;
+}
+
+.verification-modal .modal-header.delivery {
+    background: var(--primary);
+}
+
+.modal-icon {
+    font-size: 48px;
+    margin-bottom: 12px;
+    display: block;
+}
+
+.verification-modal h2 {
+    font-size: 24px;
+    font-weight: 700;
+    margin: 0;
+}
+
+.verification-modal .modal-body {
+    padding: 24px;
+}
+
+.stop-summary {
+    background: var(--surface-high);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 24px;
+}
+
+.stop-summary h3 {
+    font-size: 18px;
+    margin: 0 0 16px 0;
+    color: var(--text-primary);
+}
+
+.summary-details {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.summary-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: start;
+    gap: 12px;
+}
+
+.summary-label {
+    font-size: 14px;
+    color: var(--text-secondary);
+    min-width: 80px;
+}
+
+.summary-value {
+    font-size: 14px;
+    color: var(--text-primary);
+    text-align: right;
+    flex: 1;
+}
+
+.summary-row.instructions {
+    flex-direction: column;
+    background: rgba(255, 159, 10, 0.1);
+    padding: 12px;
+    border-radius: 8px;
+    border-left: 3px solid var(--warning);
+}
+
+.verification-section {
+    text-align: center;
+}
+
+.verification-section label {
+    display: block;
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 12px;
+    color: var(--text-primary);
+}
+
+.verification-input {
+    width: 100%;
+    padding: 20px;
+    font-size: 32px;
+    font-weight: 700;
+    text-align: center;
+    background: var(--surface-high);
+    border: 2px solid var(--border);
+    border-radius: 12px;
+    color: var(--text-primary);
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    outline: none;
+    transition: all 0.3s;
+}
+
+.verification-input:focus {
+    border-color: var(--primary);
+    background: var(--surface);
+}
+
+.verification-input.error {
+    border-color: var(--danger);
+    animation: shake 0.3s;
+}
+
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-10px); }
+    75% { transform: translateX(10px); }
+}
+
+.code-hint {
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin-top: 8px;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 24px;
+}
+
+.modal-btn {
+    flex: 1;
+    padding: 16px;
     border: none;
     border-radius: 12px;
     font-size: 16px;
     font-weight: 600;
     cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.modal-btn.primary {
+    background: var(--primary);
+    color: white;
+}
+
+.modal-btn.secondary {
+    background: var(--surface-high);
+    color: var(--text-primary);
+}
+
+.modal-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
 }
 
 /* Navigation route style */
 .navigation-route {
-    filter: drop-shadow(0 0 3px rgba(0, 102, 255, 0.6));
+    filter: drop-shadow(0 0 4px rgba(0, 102, 255, 0.8));
 }
 
 /* Pulse animation for current location */
@@ -1864,7 +2283,7 @@ const allStyles = `
     animation: notificationSlide 0.3s ease-out;
     z-index: 10000;
     max-width: 350px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
 }
 
 @keyframes notificationSlide {
@@ -1971,11 +2390,6 @@ const allStyles = `
     justify-content: center;
     z-index: 10000;
     animation: fadeIn 0.3s ease-out;
-}
-
-@keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
 }
 
 .phase-complete-content {
@@ -2129,22 +2543,23 @@ const allStyles = `
 
 /* Responsive adjustments */
 @media (max-width: 380px) {
-    .nav-main-text {
-        font-size: 16px;
+    .nav-instruction-card {
+        flex-direction: column;
+        text-align: center;
     }
     
-    .nav-bottom-card {
-        left: 10px;
-        right: 10px;
-        bottom: 10px;
+    .nav-street-name {
+        font-size: 20px;
     }
     
-    .nav-action-btn span {
-        display: none;
+    .nav-bottom-info {
+        flex-wrap: wrap;
     }
     
-    .nav-action-btn {
-        padding: 12px 8px;
+    .nav-eta-card,
+    .nav-distance-card,
+    .nav-speed-card {
+        min-width: calc(50% - 6px);
     }
 }
 
@@ -2172,10 +2587,10 @@ const allStyles = `
 </style>`;
 
 // Add styles to document if not already present
-if (!document.getElementById('route-styles')) {
+if (!document.getElementById('route-enhanced-styles')) {
     const styleElement = document.createElement('div');
-    styleElement.id = 'route-styles';
-    styleElement.innerHTML = allStyles;
+    styleElement.id = 'route-enhanced-styles';
+    styleElement.innerHTML = enhancedStyles;
     document.head.appendChild(styleElement);
 }
 
@@ -2233,11 +2648,13 @@ window.routeDebug = {
     }
 };
 
-console.log('Complete Enhanced Route.js loaded successfully!');
-console.log('Features:');
-console.log('- Dynamic route header that updates based on navigation state');
-console.log('- In-app navigation with turn-by-turn directions');
-console.log('- Auto-collapsing panel for better map visibility');
-console.log('- Enhanced mobile UX with bottom card navigation');
-console.log('- Proximity detection and auto-verification');
-console.log('Debug commands: routeDebug.reloadRoute(), routeDebug.simulatePickup(), routeDebug.clearRoute(), routeDebug.testOpenRoute()');
+console.log('Fixed Route.js loaded successfully!');
+console.log('Fixes applied:');
+console.log('1. Map centers on route bounds properly');
+console.log('2. OpenRouteService API errors fixed');
+console.log('3. No straight lines drawn initially');
+console.log('4. Enhanced UI with Tuma theme');
+console.log('5. Better navigation than Uber/Bolt');
+console.log('6. Dashboard hides during navigation');
+console.log('7. Optimize button now toggles route details');
+console.log('Debug: routeDebug.testOpenRoute()');
