@@ -2,7 +2,129 @@
  * Complete Rider Dashboard with Multi-Pickup/Delivery Support
  * Includes commission tracking, route optimization, and enhanced features
  */
+// Add this configuration section at the top of your rider.js file:
 
+// Development Configuration
+const DEV_CONFIG = {
+    // Set to true when testing locally without Telegram
+    isDevelopment: window.location.hostname === 'localhost' || 
+                   window.location.hostname === '127.0.0.1' ||
+                   window.location.hostname.includes('github.io'),
+    
+    // Test rider configuration (only used in development)
+    testRider: {
+        id: 'ef5438ef-0cc0-4e35-8d1b-be18dbce7fe4', // Bobby G's test ID
+        name: 'Bobby G',
+        phone: '0725046880'
+    },
+    
+    // Whether to show detailed console logs
+    verboseLogging: true,
+    
+    // Whether to ignore API errors for missing riders
+    ignoreRiderNotFound: true
+};
+
+// Then update the rider ID initialization (around line 1315):
+document.addEventListener('DOMContentLoaded', async () => {
+    console.log('✅ rider.js loaded successfully with clustering integration!');
+    
+    // Initialize Telegram WebApp
+    const tg = window.Telegram?.WebApp;
+    const telegramUser = tg?.initDataUnsafe?.user;
+    
+    // Determine rider ID based on environment
+    let riderId;
+    let riderName;
+    
+    if (telegramUser?.id) {
+        // Running in Telegram - use real user
+        riderId = telegramUser.id;
+        riderName = telegramUser.first_name || 'Rider';
+        if (DEV_CONFIG.verboseLogging) {
+            console.log('Using Telegram user:', riderId);
+        }
+    } else if (DEV_CONFIG.isDevelopment && DEV_CONFIG.testRider) {
+        // Development mode - use test rider
+        riderId = DEV_CONFIG.testRider.id;
+        riderName = DEV_CONFIG.testRider.name;
+        if (DEV_CONFIG.verboseLogging) {
+            console.log('Development mode: Using test rider', riderId);
+        }
+    } else {
+        // Fallback - generate temporary ID
+        riderId = `temp-${Date.now()}`;
+        riderName = 'Guest Rider';
+        if (DEV_CONFIG.verboseLogging) {
+            console.log('Generated temporary rider:', riderId);
+        }
+    }
+    
+    // Update the CommissionTracker error handling:
+    class CommissionTracker {
+        constructor(api) {
+            this.api = api;
+            this.earnings = { today: 0, week: 0, month: 0, total: 0 };
+        }
+
+        async initialize() {
+            try {
+                const rider = await this.api.query('riders', {
+                    select: '*',
+                    filter: { id: riderId },
+                    limit: 1
+                });
+                
+                if (rider.length === 0 && DEV_CONFIG.ignoreRiderNotFound) {
+                    console.log('Rider not found in database - using default values');
+                    return;
+                }
+                
+                this.updateDisplay();
+            } catch (error) {
+                if (error.message.includes('400') && DEV_CONFIG.ignoreRiderNotFound) {
+                    console.log('Rider API error (expected in dev mode)');
+                } else {
+                    console.error('Error initializing commission tracker:', error);
+                    throw error;
+                }
+            }
+        }
+        
+        // ... rest of the class remains the same
+    }
+    
+    // Similarly update the loadEarnings function to handle errors gracefully:
+    async function loadEarnings() {
+        console.log(`Loading earnings for rider: ${riderId}`);
+        
+        try {
+            const parcels = await api.query('parcels', {
+                select: 'rider_payout',
+                filter: {
+                    rider_id: riderId,
+                    status: 'delivered',
+                    delivery_timestamp: `gte.${startOfDay}`
+                }
+            });
+            
+            // ... rest of the function
+        } catch (error) {
+            if (error.message.includes('400') && DEV_CONFIG.ignoreRiderNotFound) {
+                console.log('Earnings API error (expected in dev mode)');
+                // Use default values
+                updateEarningsDisplay({
+                    today: 0,
+                    week: 0,
+                    month: 0,
+                    total: 0
+                });
+            } else {
+                console.error('Error loading earnings:', error);
+            }
+        }
+    }
+});
 // ─── Configuration ─────────────────────────────────────────────────────────
 
 const BUSINESS_CONFIG = {
