@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Tuma - Rider Dashboard</title>
@@ -726,7 +727,7 @@
             margin-bottom: 12px;
         }
 
-        .route-cluster {
+        .route-name {
             font-size: 16px;
             font-weight: 600;
         }
@@ -756,34 +757,28 @@
             color: white;
         }
 
-        .route-details {
+        .route-stats {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
             gap: 12px;
             margin-bottom: 12px;
-        }
-
-        .route-detail {
+            padding: 12px;
+            background: var(--surface-high);
+            border-radius: 10px;
             text-align: center;
         }
 
-        .route-detail-value {
-            font-size: 18px;
+        .route-stats > div {
+            font-size: 14px;
             font-weight: 600;
-            color: var(--text-primary);
         }
 
-        .route-detail-label {
-            font-size: 11px;
-            color: var(--text-secondary);
-            margin-top: 2px;
-        }
-
-        .route-info-bar {
+        .route-meta {
             display: flex;
             justify-content: space-between;
-            margin: 12px 0;
-            font-size: 12px;
+            align-items: center;
+            margin-bottom: 12px;
+            font-size: 13px;
             color: var(--text-secondary);
         }
 
@@ -1113,6 +1108,26 @@
             color: var(--text-tertiary);
         }
 
+        /* Loading Spinner */
+        .loading-routes {
+            text-align: center;
+            padding: 60px 20px;
+        }
+        
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--surface-high);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            margin: 0 auto 20px;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
         /* Responsive */
         @media (min-width: 428px) {
             .app {
@@ -1258,33 +1273,6 @@
                     
                     <div class="route-list" id="routeList">
                         <!-- Routes will be populated by JS -->
-                        <div class="route-card">
-                            <div class="route-header">
-                                <div class="route-cluster">Loading Routes...</div>
-                                <div class="route-type smart">SMART</div>
-                            </div>
-                            <div class="route-details">
-                                <div class="route-detail">
-                                    <div class="route-detail-value">0</div>
-                                    <div class="route-detail-label">Pickups</div>
-                                </div>
-                                <div class="route-detail">
-                                    <div class="route-detail-value">0</div>
-                                    <div class="route-detail-label">Deliveries</div>
-                                </div>
-                                <div class="route-detail">
-                                    <div class="route-detail-value">KES 0</div>
-                                    <div class="route-detail-label">Earnings</div>
-                                </div>
-                            </div>
-                            <div class="route-info-bar">
-                                <span class="route-distance">📍 0 km total</span>
-                                <span class="route-time">⏱️ ~0 min</span>
-                            </div>
-                            <button class="claim-button" disabled>
-                                Loading...
-                            </button>
-                        </div>
                     </div>
                 </div>
             </form>
@@ -1453,25 +1441,21 @@
         window.navigateToEarnings = function() {
             closeMenu();
             console.log('Navigate to earnings - will be implemented');
-            // window.location.href = './earnings.html';
         };
         
         window.navigateToProfile = function() {
             closeMenu();
             console.log('Navigate to profile - will be implemented');
-            // window.location.href = './profile.html';
         };
         
         window.navigateToVehicle = function() {
             closeMenu();
             console.log('Navigate to vehicle - will be implemented');
-            // window.location.href = './vehicle.html';
         };
         
         window.navigateToDocuments = function() {
             closeMenu();
             console.log('Navigate to documents - will be implemented');
-            // window.location.href = './documents.html';
         };
         
         window.navigateToSupport = function() {
@@ -1482,19 +1466,16 @@
         window.navigateToFAQ = function() {
             closeMenu();
             console.log('Navigate to FAQ - will be implemented');
-            // window.location.href = './faq.html';
         };
         
         window.navigateToTraining = function() {
             closeMenu();
             console.log('Navigate to training - will be implemented');
-            // window.location.href = './training.html';
         };
         
         window.navigateToSettings = function() {
             closeMenu();
             console.log('Navigate to settings - will be implemented');
-            // window.location.href = './settings.html';
         };
         
         window.showAbout = function() {
@@ -1511,7 +1492,7 @@
             }
         };
         
-        // Other placeholder functions
+        // Placeholder functions that will be overridden by rider.js
         window.toggleBreakMode = function() {
             console.log('Break mode - will be overridden by rider.js');
         };
@@ -1558,48 +1539,22 @@
                 modal.remove();
             }
         };
-        
-        // Helper function for custom styles
-        window.addCustomStyles = function() {
-            const existingStyle = document.getElementById('custom-styles');
-            if (!existingStyle) {
-                const style = document.createElement('style');
-                style.id = 'custom-styles';
-                document.head.appendChild(style);
-            }
-        };
     </script>
 
     <!-- Clustering Algorithm -->
     <script src="./clustering.js"></script>
 
-    <!-- Load the external JavaScript file after DOM is ready -->
-    <script type="module">
-        // Wait for DOM to be fully loaded before importing rider.js
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', async () => {
-                try {
-                    // Check if clustering is loaded
-                    if (typeof TumaRouteClustering === 'undefined') {
-                        console.error('Clustering.js not loaded properly');
-                    }
-                    await import('./rider.js');
-                    console.log('Rider.js loaded successfully');
-                } catch (error) {
-                    console.error('Error loading rider.js:', error);
-                }
-            });
+    <!-- Load rider.js after clustering.js -->
+    <script>
+        // Verify clustering loaded before loading rider.js
+        if (typeof TumaRouteClustering === 'undefined') {
+            console.error('Clustering.js not loaded properly - TumaRouteClustering is not defined');
         } else {
-            // DOM is already loaded
-            if (typeof TumaRouteClustering === 'undefined') {
-                console.error('Clustering.js not loaded properly');
-            }
-            import('./rider.js').then(() => {
-                console.log('Rider.js loaded successfully');
-            }).catch(error => {
-                console.error('Error loading rider.js:', error);
-            });
+            console.log('Clustering.js loaded successfully');
         }
     </script>
+    
+    <!-- Main rider logic -->
+    <script src="./rider.js"></script>
 </body>
 </html>
