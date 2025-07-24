@@ -1570,12 +1570,19 @@
         };
     </script>
 
+    <!-- Clustering Algorithm -->
+    <script src="./clustering.js"></script>
+
     <!-- Load the external JavaScript file after DOM is ready -->
     <script type="module">
         // Wait for DOM to be fully loaded before importing rider.js
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', async () => {
                 try {
+                    // Check if clustering is loaded
+                    if (typeof TumaRouteClustering === 'undefined') {
+                        console.error('Clustering.js not loaded properly');
+                    }
                     await import('./rider.js');
                     console.log('Rider.js loaded successfully');
                 } catch (error) {
@@ -1584,6 +1591,9 @@
             });
         } else {
             // DOM is already loaded
+            if (typeof TumaRouteClustering === 'undefined') {
+                console.error('Clustering.js not loaded properly');
+            }
             import('./rider.js').then(() => {
                 console.log('Rider.js loaded successfully');
             }).catch(error => {
