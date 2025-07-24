@@ -500,60 +500,95 @@ class CommissionTracker {
                 z-index: 2;
             }
             
-            /* Route score bar */
-            .route-score-bar {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                margin: 12px 0;
-                padding: 8px 12px;
-                background: var(--surface-high);
-                border-radius: 8px;
-            }
-            
-            .score-indicator {
+            /* Urgent payment warning */
+            .urgent-payment-warning {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0, 0, 0, 0.95);
+                backdrop-filter: blur(20px);
+                z-index: 9998;
                 display: flex;
                 align-items: center;
-                gap: 8px;
-                padding: 4px 10px;
-                border-radius: 20px;
-                font-size: 13px;
-                font-weight: 600;
-                color: black;
+                justify-content: center;
+                padding: 20px;
+                animation: fadeIn 0.3s ease-out;
             }
             
-            .score-label {
-                opacity: 0.8;
+            @keyframes fadeIn {
+                from { opacity: 0; }
+                to { opacity: 1; }
             }
             
-            .earnings-per-km {
-                font-size: 14px;
-                font-weight: 600;
-                color: var(--success);
+            .warning-content {
+                background: var(--surface-elevated);
+                border-radius: 24px;
+                padding: 32px;
+                max-width: 400px;
+                width: 100%;
+                text-align: center;
+                border: 2px solid var(--warning);
             }
             
-            .time-constraint {
-                display: flex;
-                align-items: center;
-                gap: 6px;
-                margin: 8px 0;
-                padding: 6px 12px;
-                background: rgba(255, 159, 10, 0.1);
-                border-radius: 20px;
-                font-size: 13px;
+            .warning-icon {
+                font-size: 64px;
+                margin-bottom: 20px;
+            }
+            
+            .warning-content h2 {
+                font-size: 28px;
+                margin-bottom: 16px;
+            }
+            
+            .warning-amount {
+                font-size: 24px;
+                font-weight: 700;
                 color: var(--warning);
+                margin-bottom: 12px;
             }
             
-            .return-trip-indicator {
-                display: flex;
-                align-items: center;
-                gap: 6px;
-                margin: 8px 0;
-                padding: 6px 12px;
-                background: rgba(52, 199, 89, 0.1);
-                border-radius: 20px;
-                font-size: 13px;
-                color: var(--success);
+            .warning-message {
+                font-size: 16px;
+                color: var(--text-secondary);
+                margin-bottom: 24px;
+            }
+            
+            .timer {
+                font-size: 20px;
+                font-weight: 700;
+                color: var(--danger);
+                font-family: monospace;
+            }
+            
+            .warning-actions {
+                display: grid;
+                gap: 12px;
+            }
+            
+            .pay-now-btn {
+                width: 100%;
+                padding: 16px;
+                background: var(--success);
+                color: white;
+                border: none;
+                border-radius: 12px;
+                font-size: 18px;
+                font-weight: 700;
+                cursor: pointer;
+            }
+            
+            .later-btn {
+                width: 100%;
+                padding: 16px;
+                background: var(--surface-high);
+                color: var(--text-primary);
+                border: none;
+                border-radius: 12px;
+                font-size: 16px;
+                font-weight: 600;
+                cursor: pointer;
             }
         `;
     }
@@ -936,6 +971,97 @@ function addQuickActions() {
     }
 }
 
+// ─── Route Completion Handling ─────────────────────────────────────────────
+
+async function checkRouteCompletionStatus() {
+    const completionData = localStorage.getItem('tuma_route_completion');
+    if (!completionData) return;
+    
+    try {
+        const data = JSON.parse(completionData);
+        localStorage.removeItem('tuma_route_completion');
+        
+        if (data.completed && state.commissionTracker) {
+            // Add the commission from the completed route
+            const commissionResult = await state.commissionTracker.addDeliveryCommission(
+                'route-' + Date.now(),
+                data.earnings / 0.7 // Convert rider earnings back to total price
+            );
+            
+            // Update display
+            displayCommissionStatus();
+            
+            // Show appropriate notification based on commission status
+            if (commissionResult.isBlocked) {
+                showBlockedOverlay();
+            } else if (commissionResult.totalUnpaid >= 300) {
+                // Show urgent payment warning with timer
+                showUrgentPaymentWarning();
+            } else if (commissionResult.warningShown) {
+                showNotification(
+                    `Commission balance: KES ${commissionResult.totalUnpaid}. Please pay soon to avoid restrictions.`,
+                    'warning'
+                );
+            }
+            
+            // Update earnings display
+            await loadEarnings();
+            updateEarningsDisplay();
+        }
+    } catch (error) {
+        console.error('Error processing route completion:', error);
+    }
+}
+
+// Show urgent payment warning
+function showUrgentPaymentWarning() {
+    const warning = document.createElement('div');
+    warning.className = 'urgent-payment-warning';
+    warning.innerHTML = `
+        <div class="warning-content">
+            <div class="warning-icon">⚠️</div>
+            <h2>Payment Required</h2>
+            <p class="warning-amount">Unpaid Commission: KES ${state.commissionTracker.state.unpaidCommission}</p>
+            <p class="warning-message">You have <span class="timer">60:00</span> to pay or your account will be restricted</p>
+            <div class="warning-actions">
+                <button class="pay-now-btn" onclick="openPaymentModal()">
+                    Pay Now
+                </button>
+                <button class="later-btn" onclick="dismissWarning()">
+                    Later
+                </button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(warning);
+    
+    // Start countdown timer
+    let timeLeft = 3600; // 60 minutes in seconds
+    const timerElement = warning.querySelector('.timer');
+    
+    const countdown = setInterval(() => {
+        timeLeft--;
+        const minutes = Math.floor(timeLeft / 60);
+        const seconds = timeLeft % 60;
+        timerElement.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        
+        if (timeLeft <= 0) {
+            clearInterval(countdown);
+            warning.remove();
+            showBlockedOverlay();
+        }
+    }, 1000);
+    
+    // Store countdown reference
+    window.commissionCountdown = countdown;
+}
+
+window.dismissWarning = function() {
+    document.querySelector('.urgent-payment-warning')?.remove();
+    // Countdown continues in background
+};
+
 // ─── Display Functions ─────────────────────────────────────────────────────
 
 function updateEarningsDisplay() {
@@ -972,43 +1098,27 @@ function displayRoutes() {
     }
     
     elements.routeList.innerHTML = filteredRoutes.map(route => {
-        // Show quality indicator for high/low scoring routes
-        const qualityBadge = route.qualityScore >= 80 ? '⭐' : 
-                           route.qualityScore <= 50 ? '⚠️' : '';
+        // Calculate rider earnings (70% of total)
+        const riderEarnings = Math.round(route.total_earnings * BUSINESS_CONFIG.commission.rider);
         
         return `
             <div class="route-card ${route.status !== 'available' || hasActiveRoute ? 'claimed' : ''}" 
                  onclick="${route.status === 'available' && !hasActiveRoute ? `claimRoute('${route.id}')` : ''}"
                  style="cursor: ${route.status === 'available' && !hasActiveRoute ? 'pointer' : 'not-allowed'}">
                 <div class="route-header">
-                    <div class="route-name">
-                        ${route.name} ${qualityBadge}
-                    </div>
+                    <div class="route-name">${route.name}</div>
                     <div class="route-type ${route.type}">${route.type.toUpperCase()}</div>
                 </div>
                 
                 <div class="route-stats">
                     <div>${route.pickups} parcels</div>
                     <div>${route.distance} km</div>
-                    <div>KES ${Math.round(route.total_earnings).toLocaleString()}</div>
+                    <div>KES ${riderEarnings.toLocaleString()}</div>
                 </div>
                 
                 <div class="route-meta">
                     <span class="time-estimate">~${route.estimatedTime} min</span>
-                    ${route.earnings_per_km > 150 ? `
-                        <span class="earnings-indicator high">
-                            KES ${route.earnings_per_km}/km
-                        </span>
-                    ` : ''}
                 </div>
-                
-                ${route.metadata?.hasReturnTrip ? `
-                    <div class="route-badges">
-                        <span class="return-available">
-                            🔄 Return trip available
-                        </span>
-                    </div>
-                ` : ''}
                 
                 <button class="claim-button" type="button" 
                         ${route.status !== 'available' || hasActiveRoute ? 'disabled' : ''}
@@ -1104,6 +1214,9 @@ async function initialize() {
             console.error('Error initializing commission tracker:', error);
         }
     }
+    
+    // Check for route completion
+    await checkRouteCompletionStatus();
     
     // Get current location
     getCurrentLocation();
@@ -1339,6 +1452,8 @@ async function loadAvailableRoutes() {
 
 function createDemoRoutes() {
     console.log('Creating demo routes for testing...');
+    const demoTotalEarnings = [2500, 1714, 3429]; // These are total earnings
+    
     return [
         {
             id: 'demo-route-001',
@@ -1347,12 +1462,11 @@ function createDemoRoutes() {
             deliveries: 5,
             pickups: 5,
             distance: 12,
-            total_earnings: 1750,
+            total_earnings: demoTotalEarnings[0], // Will show as KES 1,750 (70%)
             status: 'available',
             parcels: [],
             qualityScore: 75,
             estimatedTime: 45,
-            earnings_per_km: 146,
             metadata: {
                 pickupAreas: ['Westlands'],
                 deliveryCorridors: ['north'],
@@ -1366,12 +1480,11 @@ function createDemoRoutes() {
             deliveries: 3,
             pickups: 3,
             distance: 8,
-            total_earnings: 1200,
+            total_earnings: demoTotalEarnings[1], // Will show as KES 1,200 (70%)
             status: 'available',
             parcels: [],
             qualityScore: 82,
             estimatedTime: 35,
-            earnings_per_km: 150,
             metadata: {
                 pickupAreas: ['CBD'],
                 deliveryCorridors: ['east'],
@@ -1385,12 +1498,11 @@ function createDemoRoutes() {
             deliveries: 8,
             pickups: 8,
             distance: 25,
-            total_earnings: 2400,
+            total_earnings: demoTotalEarnings[2], // Will show as KES 2,400 (70%)
             status: 'available',
             parcels: [],
             qualityScore: 68,
             estimatedTime: 90,
-            earnings_per_km: 96,
             metadata: {
                 pickupAreas: ['Karen'],
                 deliveryCorridors: ['south'],
@@ -2149,36 +2261,6 @@ function addCustomStyles() {
                 margin-bottom: 12px;
                 font-size: 13px;
                 color: var(--text-secondary);
-            }
-            
-            .earnings-indicator {
-                padding: 4px 8px;
-                border-radius: 6px;
-                font-weight: 600;
-            }
-            
-            .earnings-indicator.high {
-                background: rgba(52, 199, 89, 0.1);
-                color: var(--success);
-            }
-            
-            .route-badges {
-                display: flex;
-                flex-wrap: wrap;
-                gap: 8px;
-                margin-bottom: 12px;
-            }
-            
-            .route-badges > span {
-                display: inline-flex;
-                align-items: center;
-                gap: 4px;
-                padding: 4px 10px;
-                background: rgba(52, 199, 89, 0.1);
-                color: var(--success);
-                border-radius: 20px;
-                font-size: 12px;
-                font-weight: 500;
             }
             
             .loading-routes {
