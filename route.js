@@ -1,6 +1,6 @@
 /**
- * Enhanced Route Navigation Module with OpenRouteService
- * Free routing solution using OpenStreetMap and OpenRouteService
+ * Complete Enhanced Route Navigation Module with OpenRouteService
+ * Includes in-app navigation, dynamic headers, and improved mobile UX
  */
 
 // State management
@@ -10,12 +10,17 @@ const state = {
     map: null,
     markers: [],
     routePolyline: null,
+    directionsPolyline: null,
     isTracking: false,
     currentStopIndex: 0,
     parcelsInPossession: [],
     trackingInterval: null,
     proximityNotified: false,
-    routeControl: null
+    routeControl: null,
+    currentLocationMarker: null,
+    lastLocation: null,
+    lastLocationTime: null,
+    pickupPhaseCompleted: false
 };
 
 // API Configuration
@@ -42,6 +47,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             // Display route information
             displayRouteInfo();
             
+            // Update dynamic header
+            updateDynamicHeader();
+            
             // Plot route on map
             await plotRoute();
             
@@ -53,6 +61,23 @@ document.addEventListener('DOMContentLoaded', async () => {
             
             // Start location tracking
             startLocationTracking();
+            
+            // Auto-collapse panel after 2 seconds
+            setTimeout(() => {
+                const routePanel = document.getElementById('routePanel');
+                if (routePanel) {
+                    routePanel.style.transform = 'translateY(calc(100% - 140px))';
+                    routePanel.style.maxHeight = '140px';
+                    
+                    const handle = routePanel.querySelector('.panel-handle');
+                    if (handle) {
+                        handle.innerHTML = `
+                            <div style="width: 40px; height: 4px; background: var(--text-tertiary); border-radius: 2px; margin: 0 auto;"></div>
+                            <div style="font-size: 10px; color: var(--text-tertiary); margin-top: 4px;">Tap to expand</div>
+                        `;
+                    }
+                }
+            }, 2000);
         } else {
             console.log('No active route found');
             showEmptyState();
@@ -77,6 +102,72 @@ async function initializeMap() {
     }).addTo(state.map);
     
     console.log('Map initialized');
+}
+
+// Update dynamic header based on current navigation state
+function updateDynamicHeader() {
+    const routeTitle = document.getElementById('routeTitle');
+    if (!routeTitle || !state.activeRoute) return;
+    
+    const nextStop = getNextStop();
+    const currentStop = getCurrentStop();
+    
+    if (!nextStop) {
+        routeTitle.textContent = 'Route Complete';
+        return;
+    }
+    
+    // Determine header text based on navigation state
+    let headerText = '';
+    
+    if (currentStop && state.currentLocation) {
+        // Currently navigating from current location to next stop
+        headerText = `Your Location → ${getStopShortName(nextStop)}`;
+    } else if (currentStop) {
+        // Show from current stop to next stop
+        headerText = `${getStopShortName(currentStop)} → ${getStopShortName(nextStop)}`;
+    } else {
+        // Starting navigation
+        const firstStop = state.activeRoute.stops[0];
+        headerText = `Starting → ${getStopShortName(firstStop)}`;
+    }
+    
+    routeTitle.textContent = headerText;
+}
+
+// Get short name for a stop
+function getStopShortName(stop) {
+    if (!stop) return '';
+    
+    // Try to extract key location name from address
+    const address = stop.address;
+    
+    // Common patterns to extract location names
+    const patterns = [
+        /^([^,]+),/, // First part before comma
+        /^(.+?)(?:\s+Road|\s+Street|\s+Avenue|\s+Drive|\s+Centre|\s+Center)/i // Location before road type
+    ];
+    
+    for (const pattern of patterns) {
+        const match = address.match(pattern);
+        if (match) {
+            return match[1].trim();
+        }
+    }
+    
+    // Fallback to first 20 characters
+    return address.length > 20 ? address.substring(0, 20) + '...' : address;
+}
+
+// Get current stop (last completed pickup if in delivery phase)
+function getCurrentStop() {
+    if (!state.activeRoute) return null;
+    
+    const completedStops = state.activeRoute.stops.filter(s => s.completed);
+    if (completedStops.length === 0) return null;
+    
+    // Return last completed stop
+    return completedStops[completedStops.length - 1];
 }
 
 // Make route panel collapsible
@@ -118,13 +209,6 @@ function enhanceRoutePanel() {
             `;
         }
     }
-    
-    // Start with panel partially collapsed to show map
-    setTimeout(() => {
-        isPanelCollapsed = true;
-        routePanel.style.transform = 'translateY(calc(100% - 140px))';
-        routePanel.style.maxHeight = '140px';
-    }, 1000);
 }
 
 // Create custom Leaflet icon
@@ -350,15 +434,8 @@ function drawStraightLines() {
 function displayRouteInfo() {
     if (!state.activeRoute) return;
     
-    // Update header
-    const routeTitle = document.getElementById('routeTitle');
-    const routeType = document.getElementById('routeType');
-    
-    if (routeTitle) {
-        routeTitle.textContent = state.activeRoute.name || 'Active Route';
-    }
-    
     // Update route type badge - now as a verify button
+    const routeType = document.getElementById('routeType');
     if (routeType) {
         const nextStop = getNextStop();
         if (nextStop) {
@@ -703,6 +780,9 @@ function updateCurrentLocation(position) {
             state.currentLocationMarker.setLatLng([state.currentLocation.lat, state.currentLocation.lng]);
         }
     }
+    
+    // Update dynamic header when location changes
+    updateDynamicHeader();
 }
 
 // Navigation functions
@@ -721,6 +801,7 @@ window.optimizeRoute = async function() {
     await drawOptimizedRoute();
 };
 
+// Enhanced start navigation with in-app experience
 window.startNavigation = function() {
     const nextStop = getNextStop();
     if (!nextStop) {
@@ -731,57 +812,176 @@ window.startNavigation = function() {
     // Enable continuous tracking
     startContinuousTracking();
     
-    // Show navigation mode
-    showNavigationMode(nextStop);
+    // Collapse the route panel to show map
+    const routePanel = document.getElementById('routePanel');
+    if (routePanel) {
+        routePanel.style.transform = 'translateY(calc(100% - 80px))';
+        routePanel.style.maxHeight = '80px';
+    }
+    
+    // Show enhanced in-app navigation
+    showEnhancedNavigation(nextStop);
 };
 
-// In-app navigation mode
-function showNavigationMode(targetStop) {
-    // Create navigation overlay
-    const navOverlay = document.createElement('div');
-    navOverlay.className = 'navigation-overlay';
-    navOverlay.innerHTML = `
-        <div class="nav-header">
-            <button class="nav-close" onclick="exitNavigationMode()">✕</button>
-            <div class="nav-title">Navigating to ${targetStop.type === 'pickup' ? 'Pickup' : 'Delivery'}</div>
-        </div>
-        <div class="nav-instructions">
-            <div class="nav-direction-icon">➡️</div>
-            <div class="nav-instruction-text">Calculating route...</div>
-            <div class="nav-distance">-- m</div>
-        </div>
-        <div class="nav-eta">
-            <span class="eta-label">ETA:</span>
-            <span class="eta-time">--:--</span>
-        </div>
-        <div class="nav-destination">
-            <div class="destination-icon">${targetStop.type === 'pickup' ? '📦' : '📍'}</div>
-            <div class="destination-info">
-                <div class="destination-address">${targetStop.address}</div>
-                <div class="destination-name">${targetStop.customerName} • ${targetStop.parcelCode}</div>
+// Enhanced in-app navigation interface
+function showEnhancedNavigation(targetStop) {
+    // Remove any existing navigation
+    const existingNav = document.querySelector('.enhanced-navigation');
+    if (existingNav) existingNav.remove();
+    
+    // Create enhanced navigation UI
+    const navUI = document.createElement('div');
+    navUI.className = 'enhanced-navigation';
+    navUI.innerHTML = `
+        <div class="nav-top-bar">
+            <div class="nav-instruction-bar">
+                <button class="nav-close-btn" onclick="exitEnhancedNavigation()">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                    </svg>
+                </button>
+                <div class="nav-instruction">
+                    <div class="nav-direction-icon">🧭</div>
+                    <div class="nav-text">
+                        <div class="nav-main-text">Starting navigation...</div>
+                        <div class="nav-sub-text">to ${targetStop.type}</div>
+                    </div>
+                </div>
+                <div class="nav-distance-eta">
+                    <div class="nav-distance">-- km</div>
+                    <div class="nav-eta">-- min</div>
+                </div>
             </div>
         </div>
-        <div class="nav-actions">
-            <button class="nav-action-btn" onclick="openWaze('${targetStop.id}')">
-                <span>Open in Waze</span>
-            </button>
-            <button class="nav-action-btn" onclick="openGoogleMaps('${targetStop.id}')">
-                <span>Open in Google Maps</span>
-            </button>
+        
+        <div class="nav-bottom-card">
+            <div class="nav-destination-info">
+                <div class="nav-dest-icon">${targetStop.type === 'pickup' ? '📦' : '📍'}</div>
+                <div class="nav-dest-details">
+                    <div class="nav-dest-address">${targetStop.address}</div>
+                    <div class="nav-dest-meta">${targetStop.customerName} • ${targetStop.parcelCode}</div>
+                </div>
+            </div>
+            <div class="nav-actions-row">
+                <button class="nav-action-btn call" onclick="window.location.href='tel:${targetStop.customerPhone}'">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M20.01 15.38c-1.23 0-2.42-.2-3.53-.56a.977.977 0 00-1.01.24l-1.57 1.97c-2.83-1.35-5.48-3.9-6.89-6.83l1.95-1.66c.27-.28.35-.67.24-1.02-.37-1.11-.56-2.3-.56-3.53 0-.54-.45-.99-.99-.99H4.19C3.65 3 3 3.24 3 3.99 3 13.28 10.73 21 20.01 21c.71 0 .99-.63.99-1.18v-3.45c0-.54-.45-.99-.99-.99z"/>
+                    </svg>
+                    <span>Call</span>
+                </button>
+                <button class="nav-action-btn verify" onclick="openQuickVerification()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                    </svg>
+                    <span>Verify</span>
+                </button>
+                <button class="nav-action-btn external" onclick="openNavigationMenu('${targetStop.id}')">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+        
+        <!-- Speed and accuracy indicator -->
+        <div class="nav-status-bar">
+            <div class="nav-speed">
+                <span class="speed-icon">🏍️</span>
+                <span class="speed-value">0 km/h</span>
+            </div>
+            <div class="nav-accuracy">
+                <span class="accuracy-icon">📡</span>
+                <span class="accuracy-value">GPS</span>
+            </div>
         </div>
     `;
     
-    document.body.appendChild(navOverlay);
+    document.body.appendChild(navUI);
     
     // Start navigation updates
-    updateNavigation(targetStop);
+    updateEnhancedNavigation(targetStop);
     
     // Get turn-by-turn directions
-    getDirectionsToStop(targetStop);
+    getEnhancedDirections(targetStop);
+    
+    // Focus map on route
+    if (state.map && state.currentLocation) {
+        const bounds = L.latLngBounds([
+            [state.currentLocation.lat, state.currentLocation.lng],
+            [targetStop.location.lat, targetStop.location.lng]
+        ]);
+        state.map.fitBounds(bounds, { padding: [100, 50] });
+    }
 }
 
-// Get directions using OpenRouteService
-async function getDirectionsToStop(targetStop) {
+// Update navigation with real-time data
+async function updateEnhancedNavigation(targetStop) {
+    if (!state.currentLocation) {
+        setTimeout(() => updateEnhancedNavigation(targetStop), 1000);
+        return;
+    }
+    
+    const distance = calculateDistance(state.currentLocation, targetStop.location);
+    const eta = Math.round(distance * 2); // Rough estimate: 2 min per km
+    
+    // Update UI elements
+    const distanceEl = document.querySelector('.nav-distance');
+    const etaEl = document.querySelector('.nav-eta');
+    const mainTextEl = document.querySelector('.nav-main-text');
+    const directionIcon = document.querySelector('.nav-direction-icon');
+    
+    if (distanceEl) {
+        distanceEl.textContent = distance < 1 ? 
+            `${Math.round(distance * 1000)}m` : 
+            `${distance.toFixed(1)}km`;
+    }
+    
+    if (etaEl) {
+        etaEl.textContent = `${eta} min`;
+    }
+    
+    // Update navigation instruction based on distance
+    if (mainTextEl) {
+        if (distance < 0.05) { // Within 50 meters
+            mainTextEl.textContent = 'You have arrived';
+            directionIcon.textContent = '✅';
+            
+            // Auto-show verification
+            setTimeout(() => {
+                exitEnhancedNavigation();
+                openQuickVerification();
+            }, 2000);
+        } else if (distance < 0.2) { // Within 200 meters
+            mainTextEl.textContent = 'Destination ahead';
+            directionIcon.textContent = '📍';
+        } else {
+            // Keep showing turn-by-turn instructions
+        }
+    }
+    
+    // Update speed if available
+    if (navigator.geolocation && state.lastLocation) {
+        const timeDiff = Date.now() - state.lastLocationTime;
+        const distanceTraveled = calculateDistance(state.lastLocation, state.currentLocation);
+        const speed = Math.round((distanceTraveled / timeDiff) * 3600000); // km/h
+        
+        const speedEl = document.querySelector('.speed-value');
+        if (speedEl && speed > 0 && speed < 200) { // Sanity check
+            speedEl.textContent = `${speed} km/h`;
+        }
+    }
+    
+    state.lastLocation = state.currentLocation;
+    state.lastLocationTime = Date.now();
+    
+    // Continue updating if navigation is active
+    if (document.querySelector('.enhanced-navigation')) {
+        setTimeout(() => updateEnhancedNavigation(targetStop), 3000);
+    }
+}
+
+// Get enhanced directions from OpenRouteService
+async function getEnhancedDirections(targetStop) {
     if (!state.currentLocation) return;
     
     try {
@@ -806,18 +1006,31 @@ async function getDirectionsToStop(targetStop) {
             const data = await response.json();
             if (data.routes && data.routes.length > 0) {
                 const route = data.routes[0];
-                const nextInstruction = route.segments[0]?.steps[0];
                 
-                if (nextInstruction) {
-                    const instructionText = document.querySelector('.nav-instruction-text');
-                    if (instructionText) {
-                        instructionText.textContent = nextInstruction.instruction;
-                    }
-                    
-                    // Update direction icon based on instruction type
+                // Draw route on map
+                if (state.directionsPolyline) {
+                    state.directionsPolyline.remove();
+                }
+                
+                const decodedCoords = decodePolyline(route.geometry);
+                state.directionsPolyline = L.polyline(decodedCoords, {
+                    color: '#0066FF',
+                    weight: 6,
+                    opacity: 0.9,
+                    className: 'navigation-route'
+                }).addTo(state.map);
+                
+                // Get next instruction
+                const nextStep = route.segments[0]?.steps[0];
+                if (nextStep) {
+                    const mainTextEl = document.querySelector('.nav-main-text');
                     const directionIcon = document.querySelector('.nav-direction-icon');
+                    
+                    if (mainTextEl) {
+                        mainTextEl.textContent = nextStep.instruction;
+                    }
                     if (directionIcon) {
-                        directionIcon.textContent = getDirectionIcon(nextInstruction.type);
+                        directionIcon.textContent = getDirectionEmoji(nextStep.type);
                     }
                 }
             }
@@ -827,119 +1040,47 @@ async function getDirectionsToStop(targetStop) {
     }
 }
 
-// Get direction icon based on instruction type
-function getDirectionIcon(type) {
-    const icons = {
-        0: '➡️',  // Left
-        1: '➡️',  // Right  
-        2: '⬅️',  // Sharp left
-        3: '➡️',  // Sharp right
-        4: '⬅️',  // Slight left
-        5: '➡️',  // Slight right
-        6: '⬆️',  // Straight
-        7: '🔄',  // Enter roundabout
-        8: '🔄',  // Exit roundabout
-        9: '📍',  // U-turn
-        10: '✓',  // Goal
-        11: '🚦', // Depart
-        12: '⬅️', // Keep left
-        13: '➡️'  // Keep right
+// Get direction emoji
+function getDirectionEmoji(type) {
+    const emojis = {
+        0: '⬅️',   // Left
+        1: '➡️',   // Right  
+        2: '↩️',   // Sharp left
+        3: '↪️',   // Sharp right
+        4: '↖️',   // Slight left
+        5: '↗️',   // Slight right
+        6: '⬆️',   // Straight
+        7: '🔄',   // Enter roundabout
+        8: '🔄',   // Exit roundabout
+        9: '⤴️',   // U-turn
+        10: '🏁',  // Goal
+        11: '🚦',  // Depart
+        12: '⬅️',  // Keep left
+        13: '➡️'   // Keep right
     };
     
-    return icons[type] || '➡️';
+    return emojis[type] || '➡️';
 }
 
-// Update navigation in real-time
-function updateNavigation(targetStop) {
-    if (!state.currentLocation) {
-        setTimeout(() => updateNavigation(targetStop), 1000);
-        return;
+// Exit enhanced navigation
+window.exitEnhancedNavigation = function() {
+    const navUI = document.querySelector('.enhanced-navigation');
+    if (navUI) {
+        navUI.classList.add('nav-closing');
+        setTimeout(() => navUI.remove(), 300);
     }
     
-    const distance = calculateDistance(
-        state.currentLocation,
-        targetStop.location
-    );
-    
-    const eta = calculateETA(distance);
-    
-    // Update UI
-    const instructionText = document.querySelector('.nav-instruction-text');
-    const distanceText = document.querySelector('.nav-distance');
-    const etaTime = document.querySelector('.eta-time');
-    
-    if (instructionText) {
-        if (distance < 0.05) { // Within 50 meters
-            instructionText.textContent = 'You have arrived!';
-            document.querySelector('.nav-direction-icon').textContent = '✓';
-            
-            // Auto-open verification after arrival
-            setTimeout(() => {
-                exitNavigationMode();
-                openVerificationModal(targetStop.id);
-            }, 2000);
-        } else if (distance < 0.2) { // Within 200 meters
-            instructionText.textContent = 'Destination is nearby';
-            document.querySelector('.nav-direction-icon').textContent = '📍';
-        }
+    // Restore route panel
+    const routePanel = document.getElementById('routePanel');
+    if (routePanel) {
+        routePanel.style.transform = 'translateY(calc(100% - 140px))';
+        routePanel.style.maxHeight = '140px';
     }
     
-    if (distanceText) {
-        distanceText.textContent = distance < 1 ? 
-            `${Math.round(distance * 1000)} m` : 
-            `${distance.toFixed(1)} km`;
-    }
-    
-    if (etaTime) {
-        etaTime.textContent = eta;
-    }
-    
-    // Continue updating if navigation is active
-    if (document.querySelector('.navigation-overlay')) {
-        setTimeout(() => updateNavigation(targetStop), 3000);
-        
-        // Update directions every 10 seconds
-        if (!state.lastDirectionUpdate || Date.now() - state.lastDirectionUpdate > 10000) {
-            getDirectionsToStop(targetStop);
-            state.lastDirectionUpdate = Date.now();
-        }
-    }
-}
-
-// Calculate distance between two points
-function calculateDistance(point1, point2) {
-    const R = 6371; // Earth's radius in km
-    const dLat = (point2.lat - point1.lat) * Math.PI / 180;
-    const dLon = (point2.lng - point1.lng) * Math.PI / 180;
-    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-            Math.cos(point1.lat * Math.PI / 180) * Math.cos(point2.lat * Math.PI / 180) *
-            Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    return R * c;
-}
-
-// Calculate ETA
-function calculateETA(distance) {
-    // Assume average speed of 30 km/h in city
-    const avgSpeed = 30;
-    const timeInHours = distance / avgSpeed;
-    const timeInMinutes = Math.round(timeInHours * 60);
-    
-    const now = new Date();
-    const eta = new Date(now.getTime() + timeInMinutes * 60000);
-    
-    return eta.toLocaleTimeString('en-US', { 
-        hour: 'numeric', 
-        minute: '2-digit',
-        hour12: true 
-    });
-}
-
-// Exit navigation mode
-window.exitNavigationMode = function() {
-    const overlay = document.querySelector('.navigation-overlay');
-    if (overlay) {
-        overlay.remove();
+    // Remove navigation route
+    if (state.directionsPolyline) {
+        state.directionsPolyline.remove();
+        state.directionsPolyline = null;
     }
     
     // Stop continuous tracking
@@ -947,6 +1088,37 @@ window.exitNavigationMode = function() {
         clearInterval(state.trackingInterval);
         state.trackingInterval = null;
     }
+};
+
+// Navigation menu for external apps (only if needed)
+window.openNavigationMenu = function(stopId) {
+    const stop = state.activeRoute.stops.find(s => s.id === stopId);
+    if (!stop) return;
+    
+    const menu = document.createElement('div');
+    menu.className = 'nav-external-menu';
+    menu.innerHTML = `
+        <div class="menu-overlay" onclick="this.parentElement.remove()"></div>
+        <div class="menu-content">
+            <h3>Open in External App?</h3>
+            <p>For complex routes, you can use:</p>
+            <div class="external-apps">
+                <button onclick="openWaze('${stopId}'); this.closest('.nav-external-menu').remove();">
+                    <img src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSI+CiAgPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiMwMEFBRkYiLz4KICA8dGV4dCB4PSIyMCIgeT0iMjYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IndoaXRlIiBmb250LXNpemU9IjE4IiBmb250LXdlaWdodD0iYm9sZCI+VzwvdGV4dD4KPC9zdmc+" alt="Waze">
+                    <span>Waze</span>
+                </button>
+                <button onclick="openGoogleMaps('${stopId}'); this.closest('.nav-external-menu').remove();">
+                    <img src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSI+CiAgPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiNFQTQzMzUiLz4KICA8dGV4dCB4PSIyMCIgeT0iMjYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IndoaXRlIiBmb250LXNpemU9IjE4IiBmb250LXdlaWdodD0iYm9sZCI+RzwvdGV4dD4KPC9zdmc+" alt="Google Maps">
+                    <span>Google Maps</span>
+                </button>
+            </div>
+            <button class="menu-cancel" onclick="this.closest('.nav-external-menu').remove()">
+                Stay in Tuma
+            </button>
+        </div>
+    `;
+    
+    document.body.appendChild(menu);
 };
 
 // Open in external apps
@@ -974,6 +1146,11 @@ window.navigateToStop = function(stopId) {
     // Show in-app navigation instead of opening external map
     showNavigationMode(stop);
 };
+
+// Alias for compatibility
+function showNavigationMode(stop) {
+    showEnhancedNavigation(stop);
+}
 
 window.selectStop = function(stopId) {
     const stop = state.activeRoute.stops.find(s => s.id === stopId);
@@ -1040,6 +1217,57 @@ function checkStopProximity() {
             state.proximityNotified = false;
         }, 300000);
     }
+}
+
+// Calculate distance between two points
+function calculateDistance(point1, point2) {
+    const R = 6371; // Earth's radius in km
+    const dLat = (point2.lat - point1.lat) * Math.PI / 180;
+    const dLon = (point2.lng - point1.lng) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+            Math.cos(point1.lat * Math.PI / 180) * Math.cos(point2.lat * Math.PI / 180) *
+            Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+}
+
+// Calculate ETA
+function calculateETA(distance) {
+    // Assume average speed of 30 km/h in city
+    const avgSpeed = 30;
+    const timeInHours = distance / avgSpeed;
+    const timeInMinutes = Math.round(timeInHours * 60);
+    
+    const now = new Date();
+    const eta = new Date(now.getTime() + timeInMinutes * 60000);
+    
+    return eta.toLocaleTimeString('en-US', { 
+        hour: 'numeric', 
+        minute: '2-digit',
+        hour12: true 
+    });
+}
+
+// Get direction icon based on instruction type
+function getDirectionIcon(type) {
+    const icons = {
+        0: '➡️',  // Left
+        1: '➡️',  // Right  
+        2: '⬅️',  // Sharp left
+        3: '➡️',  // Sharp right
+        4: '⬅️',  // Slight left
+        5: '➡️',  // Slight right
+        6: '⬆️',  // Straight
+        7: '🔄',  // Enter roundabout
+        8: '🔄',  // Exit roundabout
+        9: '📍',  // U-turn
+        10: '✓',  // Goal
+        11: '🚦', // Depart
+        12: '⬅️', // Keep left
+        13: '➡️'  // Keep right
+    };
+    
+    return icons[type] || '➡️';
 }
 
 // Quick verification from header
@@ -1173,6 +1401,7 @@ window.verifyCode = async function(stopId) {
     
     // Update displays
     displayRouteInfo();
+    updateDynamicHeader();
     plotRoute();
     
     // Check if phase complete
@@ -1302,152 +1531,303 @@ function showNotification(message, type = 'info') {
     }, 3000);
 }
 
-// Add navigation styles
-const navStyles = `
+// Add all styles
+const allStyles = `
 <style>
-.navigation-overlay {
+/* Enhanced Navigation UI */
+.enhanced-navigation {
     position: fixed;
-    top: 80px;
-    left: 20px;
-    right: 20px;
-    background: var(--surface-elevated);
-    border-radius: 20px;
-    padding: 20px;
+    top: 0;
+    left: 0;
+    right: 0;
     z-index: 1000;
-    box-shadow: 0 10px 40px rgba(0,0,0,0.5);
-    max-width: 400px;
-    margin: 0 auto;
+    pointer-events: none;
 }
 
-.nav-header {
+.enhanced-navigation > * {
+    pointer-events: auto;
+}
+
+.nav-top-bar {
+    background: var(--surface-elevated);
+    box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+    animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+    from {
+        transform: translateY(-100%);
+    }
+    to {
+        transform: translateY(0);
+    }
+}
+
+.nav-instruction-bar {
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    margin-bottom: 20px;
+    padding: 12px;
+    gap: 12px;
+    min-height: 72px;
 }
 
-.nav-close {
-    width: 32px;
-    height: 32px;
+.nav-close-btn {
+    width: 40px;
+    height: 40px;
     border-radius: 50%;
     border: none;
     background: var(--surface-high);
-    color: white;
-    font-size: 20px;
-    cursor: pointer;
+    color: var(--text-primary);
     display: flex;
     align-items: center;
     justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
 }
 
-.nav-title {
-    font-size: 16px;
-    font-weight: 600;
+.nav-instruction {
     flex: 1;
-    text-align: center;
-}
-
-.nav-instructions {
     display: flex;
     align-items: center;
-    gap: 16px;
-    padding: 20px;
-    background: var(--surface-high);
-    border-radius: 16px;
-    margin-bottom: 16px;
+    gap: 12px;
 }
 
 .nav-direction-icon {
     font-size: 32px;
+    width: 40px;
+    text-align: center;
 }
 
-.nav-instruction-text {
+.nav-text {
     flex: 1;
+}
+
+.nav-main-text {
     font-size: 18px;
     font-weight: 600;
+    color: var(--text-primary);
+    line-height: 1.2;
+}
+
+.nav-sub-text {
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+
+.nav-distance-eta {
+    text-align: right;
+    flex-shrink: 0;
 }
 
 .nav-distance {
-    font-size: 16px;
-    color: var(--text-secondary);
-}
-
-.nav-eta {
-    display: flex;
-    justify-content: center;
-    gap: 8px;
-    margin-bottom: 20px;
-    font-size: 14px;
-}
-
-.eta-label {
-    color: var(--text-secondary);
-}
-
-.eta-time {
-    font-weight: 600;
+    font-size: 20px;
+    font-weight: 700;
     color: var(--primary);
 }
 
-.nav-destination {
+.nav-eta {
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+
+/* Bottom card */
+.nav-bottom-card {
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    right: 20px;
+    background: var(--surface-elevated);
+    border-radius: 16px;
+    padding: 16px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+    from {
+        transform: translateY(100%);
+    }
+    to {
+        transform: translateY(0);
+    }
+}
+
+.nav-destination-info {
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 16px;
-    background: var(--surface-high);
-    border-radius: 12px;
-    margin-bottom: 20px;
+    margin-bottom: 12px;
 }
 
-.destination-icon {
-    font-size: 24px;
+.nav-dest-icon {
+    font-size: 32px;
 }
 
-.destination-info {
+.nav-dest-details {
     flex: 1;
 }
 
-.destination-address {
+.nav-dest-address {
+    font-size: 16px;
     font-weight: 600;
     margin-bottom: 4px;
 }
 
-.destination-name {
+.nav-dest-meta {
     font-size: 14px;
     color: var(--text-secondary);
 }
 
-.nav-actions {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
+.nav-actions-row {
+    display: flex;
+    gap: 8px;
 }
 
 .nav-action-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
     padding: 12px;
     border: none;
-    border-radius: 10px;
-    background: var(--surface-high);
-    color: white;
+    border-radius: 12px;
     font-size: 14px;
     font-weight: 600;
     cursor: pointer;
-    text-align: center;
+    transition: all 0.2s;
 }
 
-.nav-action-btn:hover {
+.nav-action-btn.call {
+    background: var(--success);
+    color: white;
+}
+
+.nav-action-btn.verify {
     background: var(--primary);
+    color: white;
 }
 
-/* Make route panel more mobile friendly */
-.route-panel {
-    transition: transform 0.3s ease, max-height 0.3s ease;
-    box-shadow: 0 -5px 20px rgba(0,0,0,0.3);
+.nav-action-btn.external {
+    background: var(--surface-high);
+    color: var(--text-primary);
+    width: 48px;
+    flex: 0 0 48px;
 }
 
-.panel-handle {
-    padding: 8px;
+/* Status bar */
+.nav-status-bar {
+    position: fixed;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(20, 20, 22, 0.9);
+    backdrop-filter: blur(10px);
+    padding: 8px 16px;
+    border-radius: 20px 20px 0 0;
+    display: flex;
+    gap: 20px;
+    font-size: 12px;
+}
+
+.nav-speed, .nav-accuracy {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* External apps menu */
+.nav-external-menu {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.menu-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.8);
+    backdrop-filter: blur(10px);
+}
+
+.menu-content {
+    position: relative;
+    background: var(--surface-elevated);
+    border-radius: 20px;
+    padding: 24px;
+    max-width: 320px;
+    width: 100%;
     text-align: center;
+}
+
+.menu-content h3 {
+    margin: 0 0 8px 0;
+    font-size: 20px;
+}
+
+.menu-content p {
+    color: var(--text-secondary);
+    margin-bottom: 20px;
+}
+
+.external-apps {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+.external-apps button {
+    flex: 1;
+    background: var(--surface-high);
+    border: none;
+    border-radius: 12px;
+    padding: 16px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.external-apps button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+
+.external-apps img {
+    width: 40px;
+    height: 40px;
+    margin-bottom: 8px;
+}
+
+.external-apps span {
+    display: block;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.menu-cancel {
+    width: 100%;
+    padding: 14px;
+    background: var(--primary);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+/* Navigation route style */
+.navigation-route {
+    filter: drop-shadow(0 0 3px rgba(0, 102, 255, 0.6));
 }
 
 /* Pulse animation for current location */
@@ -1470,20 +1850,332 @@ const navStyles = `
     animation: pulse-animation 2s ease-out infinite;
 }
 
-@media (max-width: 428px) {
-    .navigation-overlay {
-        top: 70px;
+/* Notifications */
+.notification {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    padding: 16px 20px;
+    border-radius: 12px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    animation: notificationSlide 0.3s ease-out;
+    z-index: 10000;
+    max-width: 350px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+}
+
+@keyframes notificationSlide {
+    from {
+        transform: translateX(400px);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+.notification.hiding {
+    animation: notificationHide 0.3s ease-out;
+}
+
+@keyframes notificationHide {
+    from {
+        transform: translateX(0);
+        opacity: 1;
+    }
+    to {
+        transform: translateX(400px);
+        opacity: 0;
+    }
+}
+
+.notification-icon {
+    font-size: 20px;
+}
+
+.notification.success {
+    background: var(--success);
+    color: white;
+}
+
+.notification.error {
+    background: var(--danger);
+    color: white;
+}
+
+.notification.warning {
+    background: var(--warning);
+    color: black;
+}
+
+.notification.info {
+    background: var(--surface-elevated);
+    color: white;
+    border: 1px solid var(--border);
+}
+
+/* Success Animation */
+.success-animation {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: var(--success);
+    color: white;
+    padding: 40px;
+    border-radius: 20px;
+    text-align: center;
+    z-index: 10000;
+    animation: successPop 0.5s ease-out;
+}
+
+@keyframes successPop {
+    0% {
+        transform: translate(-50%, -50%) scale(0);
+        opacity: 0;
+    }
+    50% {
+        transform: translate(-50%, -50%) scale(1.1);
+    }
+    100% {
+        transform: translate(-50%, -50%) scale(1);
+        opacity: 1;
+    }
+}
+
+.success-icon {
+    font-size: 64px;
+    margin-bottom: 16px;
+}
+
+.success-text {
+    font-size: 24px;
+    font-weight: 700;
+}
+
+/* Phase Complete Animation */
+.phase-complete-animation {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.9);
+    backdrop-filter: blur(10px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.phase-complete-content {
+    background: var(--surface-elevated);
+    border-radius: 24px;
+    padding: 48px;
+    text-align: center;
+    max-width: 400px;
+    animation: slideUpAnimation 0.5s ease-out;
+}
+
+@keyframes slideUpAnimation {
+    from {
+        transform: translateY(50px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.phase-complete-content .phase-icon {
+    font-size: 80px;
+    margin-bottom: 24px;
+    animation: bounce 1s ease-in-out;
+}
+
+@keyframes bounce {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.2); }
+}
+
+.phase-complete-content h2 {
+    font-size: 32px;
+    margin-bottom: 16px;
+}
+
+.phase-complete-content p {
+    font-size: 18px;
+    color: var(--text-secondary);
+}
+
+/* Route Complete Animation */
+.route-complete-animation {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.95);
+    backdrop-filter: blur(20px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    animation: fadeIn 0.3s ease-out;
+}
+
+.route-complete-content {
+    background: linear-gradient(135deg, var(--surface-elevated) 0%, var(--surface) 100%);
+    border-radius: 24px;
+    padding: 48px;
+    text-align: center;
+    max-width: 400px;
+    border: 2px solid var(--success);
+    animation: completePop 0.8s ease-out;
+}
+
+@keyframes completePop {
+    0% {
+        transform: scale(0) rotate(180deg);
+        opacity: 0;
+    }
+    50% {
+        transform: scale(1.1) rotate(-10deg);
+    }
+    100% {
+        transform: scale(1) rotate(0);
+        opacity: 1;
+    }
+}
+
+.complete-icon {
+    font-size: 100px;
+    margin-bottom: 24px;
+    animation: celebrate 2s ease-in-out infinite;
+}
+
+@keyframes celebrate {
+    0%, 100% { transform: scale(1) rotate(0); }
+    25% { transform: scale(1.1) rotate(-5deg); }
+    75% { transform: scale(1.1) rotate(5deg); }
+}
+
+.route-complete-content h1 {
+    font-size: 36px;
+    margin-bottom: 16px;
+    background: linear-gradient(135deg, var(--primary) 0%, var(--success) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.route-complete-content p {
+    font-size: 18px;
+    color: var(--text-secondary);
+    margin-bottom: 32px;
+}
+
+.route-stats {
+    display: flex;
+    justify-content: center;
+    gap: 40px;
+    margin-bottom: 32px;
+}
+
+.route-stats .stat {
+    text-align: center;
+}
+
+.route-stats .stat-value {
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--primary);
+    display: block;
+    margin-bottom: 4px;
+}
+
+.route-stats .stat-label {
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+
+.complete-btn {
+    width: 100%;
+    padding: 18px;
+    background: var(--success);
+    color: white;
+    border: none;
+    border-radius: 14px;
+    font-size: 18px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.complete-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(52, 199, 89, 0.4);
+}
+
+/* Responsive adjustments */
+@media (max-width: 380px) {
+    .nav-main-text {
+        font-size: 16px;
+    }
+    
+    .nav-bottom-card {
         left: 10px;
         right: 10px;
+        bottom: 10px;
+    }
+    
+    .nav-action-btn span {
+        display: none;
+    }
+    
+    .nav-action-btn {
+        padding: 12px 8px;
+    }
+}
+
+/* Animation for closing */
+.nav-closing {
+    animation: fadeOut 0.3s ease-out;
+}
+
+@keyframes fadeOut {
+    to {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+}
+
+.verification-modal.closing {
+    animation: modalFadeOut 0.3s ease-out;
+}
+
+@keyframes modalFadeOut {
+    to {
+        opacity: 0;
     }
 }
 </style>`;
 
-// Add styles to document
-if (!document.getElementById('navigation-styles')) {
+// Add styles to document if not already present
+if (!document.getElementById('route-styles')) {
     const styleElement = document.createElement('div');
-    styleElement.id = 'navigation-styles';
-    styleElement.innerHTML = navStyles;
+    styleElement.id = 'route-styles';
+    styleElement.innerHTML = allStyles;
     document.head.appendChild(styleElement);
 }
 
@@ -1495,6 +2187,7 @@ window.routeDebug = {
         if (stored) {
             state.activeRoute = JSON.parse(stored);
             displayRouteInfo();
+            updateDynamicHeader();
             plotRoute();
         }
     },
@@ -1505,6 +2198,7 @@ window.routeDebug = {
             nextPickup.timestamp = new Date();
             localStorage.setItem('tuma_active_route', JSON.stringify(state.activeRoute));
             displayRouteInfo();
+            updateDynamicHeader();
             plotRoute();
         }
     },
@@ -1539,5 +2233,11 @@ window.routeDebug = {
     }
 };
 
-console.log('Route.js with OpenRouteService loaded successfully!');
+console.log('Complete Enhanced Route.js loaded successfully!');
+console.log('Features:');
+console.log('- Dynamic route header that updates based on navigation state');
+console.log('- In-app navigation with turn-by-turn directions');
+console.log('- Auto-collapsing panel for better map visibility');
+console.log('- Enhanced mobile UX with bottom card navigation');
+console.log('- Proximity detection and auto-verification');
 console.log('Debug commands: routeDebug.reloadRoute(), routeDebug.simulatePickup(), routeDebug.clearRoute(), routeDebug.testOpenRoute()');
