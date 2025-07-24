@@ -1,3 +1,114 @@
+/ Add this at the top of your rider.js file, replacing the existing DEV_CONFIG section:
+
+// Development Configuration
+const DEV_CONFIG = {
+    // Set to true when testing locally without Telegram
+    isDevelopment: window.location.hostname === 'localhost' || 
+                   window.location.hostname === '127.0.0.1' ||
+                   window.location.hostname.includes('github.io'),
+    
+    // Test rider configuration (only used in development)
+    testRider: {
+        id: 'ef5438ef-0cc0-4e35-8d1b-be18dbce7fe4', // Bobby G's test ID
+        name: 'Bobby G',
+        phone: '0725046880'
+    },
+    
+    // Whether to show detailed console logs
+    verboseLogging: true,
+    
+    // Whether to ignore API errors for missing riders
+    ignoreRiderNotFound: true
+};
+
+// Also update the API query function to handle temporary riders better:
+const supabaseAPI = {
+    async query(table, options = {}) {
+        const { select = '*', filter = '', order = '', limit } = options;
+        
+        // Don't make API calls for temporary riders
+        if (filter && filter.includes('temp-')) {
+            console.log('Skipping API call for temporary rider');
+            return [];
+        }
+        
+        let url = `${SUPABASE_URL}/rest/v1/${table}?select=${select}`;
+        if (filter) url += `&${filter}`;
+        if (order) url += `&order=${order}`;
+        if (limit) url += `&limit=${limit}`;
+        
+        const response = await fetch(url, {
+            headers: {
+                'apikey': SUPABASE_ANON_KEY,
+                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (!response.ok) {
+            // Log error but don't throw for development
+            if (DEV_CONFIG.isDevelopment && DEV_CONFIG.ignoreRiderNotFound) {
+                console.log(`API Error (ignored in dev): ${response.status}`);
+                return [];
+            }
+            throw new Error(`API Error: ${response.status} ${response.statusText}`);
+        }
+        
+        return await response.json();
+    },
+    
+    async insert(table, data) {
+        // Skip for temporary riders
+        if (data.rider_id && data.rider_id.includes('temp-')) {
+            console.log('Skipping insert for temporary rider');
+            return [data];
+        }
+        
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+            method: 'POST',
+            headers: {
+                'apikey': SUPABASE_ANON_KEY,
+                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                'Content-Type': 'application/json',
+                'Prefer': 'return=representation'
+            },
+            body: JSON.stringify(data)
+        });
+        
+        if (!response.ok) {
+            const error = await response.text();
+            throw new Error(`Insert Error: ${response.status} ${error}`);
+        }
+        
+        return await response.json();
+    },
+    
+    async update(table, filter, data) {
+        // Skip for temporary riders
+        if (filter && filter.includes('temp-')) {
+            console.log('Skipping update for temporary rider');
+            return [data];
+        }
+        
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${filter}`, {
+            method: 'PATCH',
+            headers: {
+                'apikey': SUPABASE_ANON_KEY,
+                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                'Content-Type': 'application/json',
+                'Prefer': 'return=representation'
+            },
+            body: JSON.stringify(data)
+        });
+        
+        if (!response.ok) {
+            const error = await response.text();
+            throw new Error(`Update Error: ${response.status} ${error}`);
+        }
+        
+        return await response.json();
+    }
+};
 /**
  * Complete Enhanced Route Navigation Module with OpenRouteService
  * Fixed version with all requested improvements
@@ -195,8 +306,9 @@ window.toggleRoutePanel = function() {
     if (!routePanel) return;
     
     if (state.isPanelVisible) {
-        // Hide panel
-        routePanel.style.display = 'none';
+        // Collapse panel to minimal height
+        routePanel.style.transform = 'translateY(calc(100% - 100px))';
+        routePanel.style.maxHeight = '100px';
         state.isPanelVisible = false;
         
         if (toggleBtn) {
@@ -208,7 +320,9 @@ window.toggleRoutePanel = function() {
             `;
         }
     } else {
-        // Show panel
+        // Expand panel to at least half screen
+        routePanel.style.transform = 'translateY(0)';
+        routePanel.style.maxHeight = '60%';
         routePanel.style.display = 'block';
         state.isPanelVisible = true;
         
@@ -243,7 +357,7 @@ function enhanceRoutePanel() {
     const panelHandle = routePanel.querySelector('.panel-handle');
     if (panelHandle) {
         panelHandle.style.cursor = 'pointer';
-        panelHandle.addEventListener('click', togglePanel);
+        panelHandle.addEventListener('click', togglePanelHeight);
         
         // Add visual indicator
         panelHandle.innerHTML = `
@@ -251,7 +365,7 @@ function enhanceRoutePanel() {
         `;
     }
     
-    function togglePanel() {
+    function togglePanelHeight() {
         isPanelCollapsed = !isPanelCollapsed;
         
         if (isPanelCollapsed) {
@@ -259,7 +373,7 @@ function enhanceRoutePanel() {
             routePanel.style.maxHeight = '140px';
         } else {
             routePanel.style.transform = 'translateY(0)';
-            routePanel.style.maxHeight = '70%';
+            routePanel.style.maxHeight = '60%'; // Changed to 60% for better visibility
         }
     }
 }
@@ -1186,36 +1300,8 @@ function getDirectionEmoji(type) {
     return emojis[type] || '⬆️';
 }
 
-// Exit enhanced navigation
-window.exitEnhancedNavigation = function() {
-    const navUI = document.querySelector('.enhanced-navigation');
-    if (navUI) {
-        navUI.classList.add('nav-closing');
-        setTimeout(() => navUI.remove(), 300);
-    }
-    
-    // Restore route panel
-    const routePanel = document.getElementById('routePanel');
-    if (routePanel) {
-        routePanel.style.display = 'block';
-        routePanel.style.transform = 'translateY(calc(100% - 140px))';
-        routePanel.style.maxHeight = '140px';
-    }
-    
-    // Remove navigation route
-    if (state.directionsPolyline) {
-        state.directionsPolyline.remove();
-        state.directionsPolyline = null;
-    }
-    
-    // Stop continuous tracking
-    if (state.trackingInterval) {
-        clearInterval(state.trackingInterval);
-        state.trackingInterval = null;
-    }
-    
-    state.navigationActive = false;
-};
+// Exit minimal navigation (renamed from exitEnhancedNavigation)
+window.exitEnhancedNavigation = window.exitMinimalNavigation;
 
 // Show destination details
 window.showDestinationDetails = function(stopId) {
@@ -1637,6 +1723,196 @@ function showNotification(message, type = 'info') {
 // Add all enhanced navigation styles
 const enhancedStyles = `
 <style>
+/* Minimal Navigation UI - Clean and Map-Focused */
+.minimal-navigation {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 500;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.minimal-navigation > * {
+    pointer-events: auto;
+}
+
+/* Top navigation bar - minimal */
+.min-nav-top {
+    background: rgba(10, 10, 11, 0.9);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border);
+    padding: 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    animation: slideDown 0.3s ease-out;
+}
+
+.min-nav-instruction {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.min-nav-direction {
+    font-size: 36px;
+    line-height: 1;
+}
+
+.min-nav-text {
+    display: flex;
+    flex-direction: column;
+}
+
+.min-nav-distance {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--primary);
+}
+
+.min-nav-street {
+    font-size: 16px;
+    color: var(--text-secondary);
+}
+
+.min-nav-close {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.min-nav-close:hover {
+    background: var(--danger);
+}
+
+/* Bottom destination card - minimal */
+.min-nav-bottom {
+    background: rgba(10, 10, 11, 0.95);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-top: 1px solid var(--border);
+    padding: 16px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    animation: slideUp 0.3s ease-out;
+}
+
+.min-nav-eta {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 60px;
+}
+
+.eta-value {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--primary);
+}
+
+.eta-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.min-nav-destination {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.dest-type {
+    font-size: 24px;
+}
+
+.dest-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.dest-address {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.dest-code {
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+
+.min-nav-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.min-action-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: none;
+    background: var(--surface-elevated);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.min-action-btn:hover {
+    transform: scale(1.1);
+}
+
+.min-action-btn.primary {
+    background: var(--primary);
+}
+
+/* Speed indicator */
+.min-nav-speed {
+    position: fixed;
+    bottom: 100px;
+    right: 20px;
+    background: rgba(10, 10, 11, 0.9);
+    backdrop-filter: blur(10px);
+    border-radius: 20px;
+    padding: 8px 16px;
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+    font-size: 14px;
+    border: 1px solid var(--border);
+}
+
+.speed-value {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.speed-unit {
+    color: var(--text-secondary);
+}
+
 /* Enhanced Navigation UI - Better than Uber/Bolt */
 .enhanced-navigation {
     position: fixed;
@@ -1664,6 +1940,15 @@ const enhancedStyles = `
 @keyframes slideDown {
     from {
         transform: translateY(-100%);
+    }
+    to {
+        transform: translateY(0);
+    }
+}
+
+@keyframes slideUp {
+    from {
+        transform: translateY(100%);
     }
     to {
         transform: translateY(0);
@@ -1734,6 +2019,877 @@ const enhancedStyles = `
     align-items: center;
     gap: 20px;
     padding: 24px;
+    background: var(--surface);
+    margin: 16px;
+    border-radius: 16px;
+    border: 1px solid var(--border);
+}
+
+.nav-direction-visual {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 80px;
+}
+
+.direction-icon-large {
+    font-size: 48px;
+    line-height: 1;
+    margin-bottom: 8px;
+}
+
+.direction-distance {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+}
+
+.distance-value {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--primary);
+}
+
+.distance-unit {
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+
+.nav-instruction-text {
+    flex: 1;
+}
+
+.nav-street-name {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+    line-height: 1.2;
+}
+
+.nav-instruction-detail {
+    font-size: 16px;
+    color: var(--text-secondary);
+}
+
+/* Bottom Info Cards */
+.nav-bottom-info {
+    display: flex;
+    gap: 12px;
+    padding: 0 16px;
+    margin-bottom: 16px;
+}
+
+.nav-eta-card,
+.nav-distance-card,
+.nav-speed-card {
+    flex: 1;
+    background: var(--surface-high);
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border: 1px solid var(--border);
+}
+
+.eta-icon,
+.distance-icon,
+.speed-icon {
+    font-size: 24px;
+}
+
+.eta-info,
+.distance-info,
+.speed-info {
+    flex: 1;
+}
+
+.eta-time,
+.distance-remaining,
+.speed-value {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.eta-label,
+.distance-label,
+.speed-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+/* Destination Preview */
+.nav-destination-preview {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+    right: 20px;
+    background: var(--surface-elevated);
+    border-radius: 20px;
+    padding: 20px;
+    box-shadow: 0 -4px 20px rgba(0,0,0,0.5);
+    border: 1px solid var(--border);
+}
+
+.destination-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.destination-type {
+    font-size: 14px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+}
+
+.nav-more-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: none;
+    background: var(--surface-high);
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.destination-address {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+    line-height: 1.3;
+}
+
+.destination-customer {
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin-bottom: 16px;
+}
+
+/* Quick Actions */
+.nav-quick-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.quick-action-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 12px;
+    border: none;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.quick-action-btn.call {
+    background: var(--success);
+    color: white;
+}
+
+.quick-action-btn.verify {
+    background: var(--primary);
+    color: white;
+}
+
+.quick-action-btn.details {
+    background: var(--surface-high);
+    color: var(--text-primary);
+}
+
+.quick-action-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+/* Destination Details Modal */
+.destination-details-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.destination-details-modal .modal-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.8);
+    backdrop-filter: blur(10px);
+}
+
+.destination-details-modal .modal-content {
+    position: relative;
+    background: var(--surface-elevated);
+    border-radius: 20px;
+    max-width: 400px;
+    width: 100%;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.destination-details-modal .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px;
+    border-bottom: 1px solid var(--border);
+}
+
+.destination-details-modal .modal-header h3 {
+    font-size: 20px;
+    font-weight: 600;
+}
+
+.modal-close {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: none;
+    background: var(--surface-high);
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.destination-details-modal .modal-body {
+    padding: 20px;
+}
+
+.detail-section {
+    margin-bottom: 20px;
+}
+
+.detail-section h4 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.detail-section p {
+    font-size: 16px;
+    color: var(--text-primary);
+    line-height: 1.4;
+}
+
+.detail-section a {
+    color: var(--primary);
+    text-decoration: none;
+}
+
+.code-display {
+    font-size: 20px;
+    font-weight: 700;
+    font-family: monospace;
+    background: var(--surface-high);
+    padding: 12px;
+    border-radius: 8px;
+    text-align: center;
+}
+
+/* Verification Modal */
+.verification-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.verification-modal .modal-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.9);
+    backdrop-filter: blur(10px);
+}
+
+.verification-modal .modal-content {
+    position: relative;
+    background: var(--surface-elevated);
+    border-radius: 24px;
+    max-width: 400px;
+    width: 100%;
+    overflow: hidden;
+    animation: slideUpModal 0.3s ease-out;
+}
+
+@keyframes slideUpModal {
+    from {
+        transform: translateY(50px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.verification-modal .modal-header {
+    padding: 24px;
+    text-align: center;
+    color: white;
+}
+
+.verification-modal .modal-header.pickup {
+    background: var(--warning);
+    color: black;
+}
+
+.verification-modal .modal-header.delivery {
+    background: var(--primary);
+}
+
+.modal-icon {
+    font-size: 48px;
+    margin-bottom: 12px;
+    display: block;
+}
+
+.verification-modal h2 {
+    font-size: 24px;
+    font-weight: 700;
+    margin: 0;
+}
+
+.verification-modal .modal-body {
+    padding: 24px;
+}
+
+.stop-summary {
+    background: var(--surface-high);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 24px;
+}
+
+.stop-summary h3 {
+    font-size: 18px;
+    margin: 0 0 16px 0;
+    color: var(--text-primary);
+}
+
+.summary-details {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.summary-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: start;
+    gap: 12px;
+}
+
+.summary-label {
+    font-size: 14px;
+    color: var(--text-secondary);
+    min-width: 80px;
+}
+
+.summary-value {
+    font-size: 14px;
+    color: var(--text-primary);
+    text-align: right;
+    flex: 1;
+}
+
+.summary-row.instructions {
+    flex-direction: column;
+    background: rgba(255, 159, 10, 0.1);
+    padding: 12px;
+    border-radius: 8px;
+    border-left: 3px solid var(--warning);
+}
+
+.verification-section {
+    text-align: center;
+}
+
+.verification-section label {
+    display: block;
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 12px;
+    color: var(--text-primary);
+}
+
+.verification-input {
+    width: 100%;
+    padding: 20px;
+    font-size: 32px;
+    font-weight: 700;
+    text-align: center;
+    background: var(--surface-high);
+    border: 2px solid var(--border);
+    border-radius: 12px;
+    color: var(--text-primary);
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    outline: none;
+    transition: all 0.3s;
+}
+
+.verification-input:focus {
+    border-color: var(--primary);
+    background: var(--surface);
+}
+
+.verification-input.error {
+    border-color: var(--danger);
+    animation: shake 0.3s;
+}
+
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-10px); }
+    75% { transform: translateX(10px); }
+}
+
+.code-hint {
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin-top: 8px;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 24px;
+}
+
+.modal-btn {
+    flex: 1;
+    padding: 16px;
+    border: none;
+    border-radius: 12px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.modal-btn.primary {
+    background: var(--primary);
+    color: white;
+}
+
+.modal-btn.secondary {
+    background: var(--surface-high);
+    color: var(--text-primary);
+}
+
+.modal-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+/* Navigation route style */
+.navigation-route {
+    filter: drop-shadow(0 0 4px rgba(0, 102, 255, 0.8));
+}
+
+/* Pulse animation for current location */
+@keyframes pulse-animation {
+    0% {
+        transform: scale(1);
+        opacity: 0.7;
+    }
+    50% {
+        transform: scale(1.5);
+        opacity: 0.3;
+    }
+    100% {
+        transform: scale(2);
+        opacity: 0;
+    }
+}
+
+.pulse-circle {
+    animation: pulse-animation 2s ease-out infinite;
+}
+
+/* Notifications */
+.notification {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    padding: 16px 20px;
+    border-radius: 12px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    animation: notificationSlide 0.3s ease-out;
+    z-index: 10000;
+    max-width: 350px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+}
+
+@keyframes notificationSlide {
+    from {
+        transform: translateX(400px);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+.notification.hiding {
+    animation: notificationHide 0.3s ease-out;
+}
+
+@keyframes notificationHide {
+    from {
+        transform: translateX(0);
+        opacity: 1;
+    }
+    to {
+        transform: translateX(400px);
+        opacity: 0;
+    }
+}
+
+.notification-icon {
+    font-size: 20px;
+}
+
+.notification.success {
+    background: var(--success);
+    color: white;
+}
+
+.notification.error {
+    background: var(--danger);
+    color: white;
+}
+
+.notification.warning {
+    background: var(--warning);
+    color: black;
+}
+
+.notification.info {
+    background: var(--surface-elevated);
+    color: white;
+    border: 1px solid var(--border);
+}
+
+/* Success Animation */
+.success-animation {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: var(--success);
+    color: white;
+    padding: 40px;
+    border-radius: 20px;
+    text-align: center;
+    z-index: 10000;
+    animation: successPop 0.5s ease-out;
+}
+
+@keyframes successPop {
+    0% {
+        transform: translate(-50%, -50%) scale(0);
+        opacity: 0;
+    }
+    50% {
+        transform: translate(-50%, -50%) scale(1.1);
+    }
+    100% {
+        transform: translate(-50%, -50%) scale(1);
+        opacity: 1;
+    }
+}
+
+.success-icon {
+    font-size: 64px;
+    margin-bottom: 16px;
+}
+
+.success-text {
+    font-size: 24px;
+    font-weight: 700;
+}
+
+/* Phase Complete Animation */
+.phase-complete-animation {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.9);
+    backdrop-filter: blur(10px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    animation: fadeIn 0.3s ease-out;
+}
+
+.phase-complete-content {
+    background: var(--surface-elevated);
+    border-radius: 24px;
+    padding: 48px;
+    text-align: center;
+    max-width: 400px;
+    animation: slideUpAnimation 0.5s ease-out;
+}
+
+@keyframes slideUpAnimation {
+    from {
+        transform: translateY(50px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.phase-complete-content .phase-icon {
+    font-size: 80px;
+    margin-bottom: 24px;
+    animation: bounce 1s ease-in-out;
+}
+
+@keyframes bounce {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.2); }
+}
+
+.phase-complete-content h2 {
+    font-size: 32px;
+    margin-bottom: 16px;
+}
+
+.phase-complete-content p {
+    font-size: 18px;
+    color: var(--text-secondary);
+}
+
+/* Route Complete Animation */
+.route-complete-animation {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.95);
+    backdrop-filter: blur(20px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    animation: fadeIn 0.3s ease-out;
+}
+
+.route-complete-content {
+    background: linear-gradient(135deg, var(--surface-elevated) 0%, var(--surface) 100%);
+    border-radius: 24px;
+    padding: 48px;
+    text-align: center;
+    max-width: 400px;
+    border: 2px solid var(--success);
+    animation: completePop 0.8s ease-out;
+}
+
+@keyframes completePop {
+    0% {
+        transform: scale(0) rotate(180deg);
+        opacity: 0;
+    }
+    50% {
+        transform: scale(1.1) rotate(-10deg);
+    }
+    100% {
+        transform: scale(1) rotate(0);
+        opacity: 1;
+    }
+}
+
+.complete-icon {
+    font-size: 100px;
+    margin-bottom: 24px;
+    animation: celebrate 2s ease-in-out infinite;
+}
+
+@keyframes celebrate {
+    0%, 100% { transform: scale(1) rotate(0); }
+    25% { transform: scale(1.1) rotate(-5deg); }
+    75% { transform: scale(1.1) rotate(5deg); }
+}
+
+.route-complete-content h1 {
+    font-size: 36px;
+    margin-bottom: 16px;
+    background: linear-gradient(135deg, var(--primary) 0%, var(--success) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.route-complete-content p {
+    font-size: 18px;
+    color: var(--text-secondary);
+    margin-bottom: 32px;
+}
+
+.route-stats {
+    display: flex;
+    justify-content: center;
+    gap: 40px;
+    margin-bottom: 32px;
+}
+
+.route-stats .stat {
+    text-align: center;
+}
+
+.route-stats .stat-value {
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--primary);
+    display: block;
+    margin-bottom: 4px;
+}
+
+.route-stats .stat-label {
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+
+.complete-btn {
+    width: 100%;
+    padding: 18px;
+    background: var(--success);
+    color: white;
+    border: none;
+    border-radius: 14px;
+    font-size: 18px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.complete-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(52, 199, 89, 0.4);
+}
+
+/* Responsive adjustments */
+@media (max-width: 380px) {
+    .nav-instruction-card {
+        flex-direction: column;
+        text-align: center;
+    }
+    
+    .nav-street-name {
+        font-size: 20px;
+    }
+    
+    .nav-bottom-info {
+        flex-wrap: wrap;
+    }
+    
+    .nav-eta-card,
+    .nav-distance-card,
+    .nav-speed-card {
+        min-width: calc(50% - 6px);
+    }
+    
+    .min-nav-instruction {
+        gap: 12px;
+    }
+    
+    .min-nav-direction {
+        font-size: 28px;
+    }
+    
+    .min-nav-distance {
+        font-size: 20px;
+    }
+}
+
+/* Animation for closing */
+.nav-closing {
+    animation: fadeOut 0.3s ease-out;
+}
+
+@keyframes fadeOut {
+    to {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+}
+
+.verification-modal.closing {
+    animation: modalFadeOut 0.3s ease-out;
+}
+
+@keyframes modalFadeOut {
+    to {
+        opacity: 0;
+    }
+}
+</style>`;
+
+// Add styles to document if not already present
+if (!document.getElementById('route-enhanced-styles')) {
+    const styleElement = document.createElement('div');
+    styleElement.id = 'route-enhanced-styles';
+    styleElement.innerHTML = enhancedStyles;
+    document.head.appendChild(styleElement);
+}
     background: var(--surface);
     margin: 16px;
     border-radius: 16px;
