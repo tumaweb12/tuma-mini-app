@@ -1424,27 +1424,124 @@ async function loadAvailableRoutes() {
             `;
         }
         
-        // Fetch unclaimed parcels
+        // Fetch unclaimed parcels with detailed logging
+        console.log('Fetching parcels with filter: status=eq.submitted&rider_id=is.null');
+        
         const unclaimedParcels = await supabaseAPI.query('parcels', {
             filter: 'status=eq.submitted&rider_id=is.null',
             limit: 100,
             order: 'created_at.asc'
         });
         
+        console.log('=== PARCELS DEBUG ===');
         console.log('Unclaimed parcels found:', unclaimedParcels.length);
+        console.log('Parcels data:', unclaimedParcels);
         
+        // If no parcels found, let's check what parcels exist
         if (unclaimedParcels.length === 0) {
-            console.log('No unclaimed parcels found');
+            console.log('No unclaimed parcels found. Checking all parcels...');
+            
+            // Debug: Check all parcels regardless of status
+            const allParcels = await supabaseAPI.query('parcels', {
+                limit: 20
+            });
+            
+            console.log('Total parcels in database:', allParcels.length);
+            console.log('Parcel statuses:', allParcels.map(p => ({
+                id: p.id,
+                status: p.status,
+                rider_id: p.rider_id,
+                created_at: p.created_at
+            })));
+            
+            // Show demo routes
             state.availableRoutes = createDemoRoutes();
         } else {
-            // Create optimized routes using clustering
-            state.availableRoutes = createRoutes(unclaimedParcels);
+            // Check if parcels have required location data
+            console.log('Validating parcel location data...');
+            
+            const validParcels = unclaimedParcels.filter(p => {
+                // Log each parcel's structure
+                console.log(`Parcel ${p.id} structure:`, {
+                    pickup_location: p.pickup_location,
+                    delivery_location: p.delivery_location,
+                    pickup_lat: p.pickup_lat,
+                    pickup_lng: p.pickup_lng,
+                    delivery_lat: p.delivery_lat,
+                    delivery_lng: p.delivery_lng
+                });
+                
+                // Check for JSONB location format
+                let hasJSONBLocation = false;
+                if (p.pickup_location && p.delivery_location) {
+                    if (typeof p.pickup_location === 'object' && typeof p.delivery_location === 'object') {
+                        hasJSONBLocation = true;
+                        console.log(`Parcel ${p.id} has JSONB location data`);
+                    } else if (typeof p.pickup_location === 'string' && typeof p.delivery_location === 'string') {
+                        try {
+                            JSON.parse(p.pickup_location);
+                            JSON.parse(p.delivery_location);
+                            hasJSONBLocation = true;
+                            console.log(`Parcel ${p.id} has string JSONB location data`);
+                        } catch (e) {
+                            console.log(`Parcel ${p.id} has invalid JSONB strings`);
+                        }
+                    }
+                }
+                
+                // Check for separate lat/lng columns
+                const hasLatLng = (p.pickup_lat && p.pickup_lng && p.delivery_lat && p.delivery_lng);
+                if (hasLatLng) {
+                    console.log(`Parcel ${p.id} has lat/lng location data`);
+                }
+                
+                const hasLocation = hasJSONBLocation || hasLatLng;
+                
+                if (!hasLocation) {
+                    console.warn(`Parcel ${p.id} missing location data`);
+                }
+                
+                return hasLocation;
+            });
+            
+            console.log('Valid parcels with location data:', validParcels.length);
+            
+            if (validParcels.length === 0) {
+                console.log('No parcels with valid location data found');
+                state.availableRoutes = createDemoRoutes();
+            } else {
+                console.log('Creating routes from valid parcels...');
+                
+                // Create optimized routes using clustering
+                try {
+                    state.availableRoutes = createRoutes(validParcels);
+                    console.log('Routes created successfully:', state.availableRoutes.length);
+                    console.log('Route details:', state.availableRoutes);
+                } catch (clusterError) {
+                    console.error('Error in clustering algorithm:', clusterError);
+                    console.error('Stack trace:', clusterError.stack);
+                    state.availableRoutes = createDemoRoutes();
+                }
+            }
         }
+        
+        console.log('=== END PARCELS DEBUG ===');
+        console.log('Final routes to display:', state.availableRoutes);
         
         displayRoutes();
         
     } catch (error) {
         console.error('Error loading routes:', error);
+        console.error('Error details:', error.message);
+        console.error('Stack trace:', error.stack);
+        
+        // Check if it's a network error
+        if (error.message.includes('fetch')) {
+            console.error('Network error - check Supabase connection');
+            console.log('SUPABASE_URL:', SUPABASE_URL);
+            console.log('Using demo routes due to network error');
+        }
+        
         state.availableRoutes = createDemoRoutes();
         displayRoutes();
     }
