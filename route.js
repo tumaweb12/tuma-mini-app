@@ -1,6 +1,6 @@
 /**
  * Complete Enhanced Route Navigation Module with OpenRouteService
- * Fixed version with all requested improvements
+ * Fixed version with all requested improvements including Waze-style navigation
  */
 
 // Development Configuration (same as in rider.js)
@@ -43,7 +43,8 @@ const state = {
     lastLocationTime: null,
     pickupPhaseCompleted: false,
     isPanelVisible: true,
-    navigationActive: false
+    navigationActive: false,
+    currentSpeed: 0
 };
 
 // API Configuration
@@ -54,6 +55,9 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 // Initialize on DOM ready
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('Route.js initializing with OpenRouteService...');
+    
+    // Add Waze navigation styles
+    addWazeNavigationStyles();
     
     try {
         // Load active route from localStorage
@@ -208,40 +212,50 @@ function getCurrentStop() {
     return completedStops[completedStops.length - 1];
 }
 
-// Toggle route panel visibility
+// Toggle route panel visibility - UPDATED with complete hide functionality
 window.toggleRoutePanel = function() {
     const routePanel = document.getElementById('routePanel');
     const toggleBtn = document.querySelector('.nav-button.secondary');
+    const navControls = document.getElementById('navControls');
     
     if (!routePanel) return;
     
     if (state.isPanelVisible) {
-        // Collapse panel to minimal height
-        routePanel.style.transform = 'translateY(calc(100% - 100px))';
-        routePanel.style.maxHeight = '100px';
+        // Completely hide the panel
+        routePanel.style.display = 'none';
         state.isPanelVisible = false;
+        
+        // Move nav controls to bottom when panel is hidden
+        if (navControls) {
+            navControls.style.bottom = 'calc(20px + var(--safe-area-bottom))';
+        }
         
         if (toggleBtn) {
             toggleBtn.innerHTML = `
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 16l-6-6h12z"/>
+                    <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
                 </svg>
-                <span>Show Details</span>
+                <span>Details</span>
             `;
         }
     } else {
-        // Expand panel to at least half screen
+        // Show the panel
+        routePanel.style.display = 'block';
         routePanel.style.transform = 'translateY(0)';
         routePanel.style.maxHeight = '60%';
-        routePanel.style.display = 'block';
         state.isPanelVisible = true;
+        
+        // Adjust nav controls position when panel is visible
+        if (navControls) {
+            navControls.style.bottom = 'calc(200px + var(--safe-area-bottom))';
+        }
         
         if (toggleBtn) {
             toggleBtn.innerHTML = `
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 8l-6 6 1.41 1.41L12 10.83l4.59 4.58L18 14z"/>
+                    <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
                 </svg>
-                <span>Hide Details</span>
+                <span>Hide</span>
             `;
         }
     }
@@ -897,12 +911,6 @@ window.startNavigation = function() {
         // Enable continuous tracking
         startContinuousTracking();
         
-        // Hide the route panel completely for cleaner navigation
-        const routePanel = document.getElementById('routePanel');
-        if (routePanel) {
-            routePanel.style.display = 'none';
-        }
-        
         // Show enhanced in-app navigation
         showEnhancedNavigation(nextStop);
         
@@ -911,156 +919,167 @@ window.startNavigation = function() {
     });
 };
 
-// Enhanced in-app navigation interface - Better than Uber/Bolt
+// Enhanced Waze-like navigation interface - UPDATED
 function showEnhancedNavigation(targetStop) {
     // Remove any existing navigation
     const existingNav = document.querySelector('.enhanced-navigation');
     if (existingNav) existingNav.remove();
     
-    // Create enhanced navigation UI with Tuma theme
+    // Hide the route panel completely when starting navigation
+    const routePanel = document.getElementById('routePanel');
+    if (routePanel) {
+        routePanel.style.display = 'none';
+        state.isPanelVisible = false;
+    }
+    
+    // Create minimalist Waze-like navigation UI
     const navUI = document.createElement('div');
-    navUI.className = 'enhanced-navigation';
+    navUI.className = 'enhanced-navigation waze-style';
     navUI.innerHTML = `
-        <div class="nav-top-bar">
-            <div class="nav-header">
-                <button class="nav-close-btn" onclick="exitEnhancedNavigation()">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+        <!-- Minimal top instruction bar -->
+        <div class="waze-nav-top">
+            <div class="waze-instruction-bar">
+                <button class="waze-close-btn" onclick="exitEnhancedNavigation()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                         <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
                     </svg>
                 </button>
-                <div class="nav-route-info">
-                    <div class="nav-route-type ${targetStop.type}">${targetStop.type.toUpperCase()}</div>
-                    <div class="nav-parcel-code">${targetStop.parcelCode}</div>
+                
+                <div class="waze-direction-icon">
+                    <span class="direction-arrow">⬆️</span>
                 </div>
-            </div>
-            
-            <div class="nav-instruction-card">
-                <div class="nav-direction-visual">
-                    <div class="direction-icon-large">⬆️</div>
-                    <div class="direction-distance">
-                        <span class="distance-value">--</span>
-                        <span class="distance-unit">m</span>
-                    </div>
+                
+                <div class="waze-instruction-text">
+                    <div class="waze-distance">-- m</div>
+                    <div class="waze-street">Starting navigation...</div>
                 </div>
-                <div class="nav-instruction-text">
-                    <div class="nav-street-name">Starting navigation...</div>
-                    <div class="nav-instruction-detail">Getting GPS signal</div>
-                </div>
-            </div>
-        </div>
-        
-        <div class="nav-bottom-info">
-            <div class="nav-eta-card">
-                <div class="eta-icon">⏱️</div>
-                <div class="eta-info">
-                    <div class="eta-time">--:--</div>
-                    <div class="eta-label">ETA</div>
-                </div>
-            </div>
-            
-            <div class="nav-distance-card">
-                <div class="distance-icon">📍</div>
-                <div class="distance-info">
-                    <div class="distance-remaining">-- km</div>
-                    <div class="distance-label">Distance</div>
-                </div>
-            </div>
-            
-            <div class="nav-speed-card">
-                <div class="speed-icon">🏍️</div>
-                <div class="speed-info">
-                    <div class="speed-value">0</div>
-                    <div class="speed-label">km/h</div>
-                </div>
-            </div>
-        </div>
-        
-        <div class="nav-destination-preview">
-            <div class="destination-header">
-                <span class="destination-type">${targetStop.type === 'pickup' ? '📦 PICKUP' : '📍 DELIVERY'}</span>
-                <button class="nav-more-btn" onclick="showDestinationDetails('${targetStop.id}')">
+                
+                <button class="waze-menu-btn" onclick="toggleNavigationMenu()">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                         <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
                     </svg>
                 </button>
             </div>
-            <div class="destination-address">${targetStop.address}</div>
-            <div class="destination-customer">${targetStop.customerName}</div>
-            
-            <div class="nav-quick-actions">
-                <button class="quick-action-btn call" onclick="window.location.href='tel:${targetStop.customerPhone}'">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M20.01 15.38c-1.23 0-2.42-.2-3.53-.56a.977.977 0 00-1.01.24l-1.57 1.97c-2.83-1.35-5.48-3.9-6.89-6.83l1.95-1.66c.27-.28.35-.67.24-1.02-.37-1.11-.56-2.3-.56-3.53 0-.54-.45-.99-.99-.99H4.19C3.65 3 3 3.24 3 3.99 3 13.28 10.73 21 20.01 21c.71 0 .99-.63.99-1.18v-3.45c0-.54-.45-.99-.99-.99z"/>
-                    </svg>
-                    Call
-                </button>
-                <button class="quick-action-btn verify" onclick="openQuickVerification()">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
-                    </svg>
-                    Verify
-                </button>
-                <button class="quick-action-btn details" onclick="toggleRoutePanel()">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
-                    </svg>
-                    Details
-                </button>
+        </div>
+        
+        <!-- Floating bottom info pills -->
+        <div class="waze-bottom-pills">
+            <div class="waze-pill eta-pill">
+                <span class="pill-icon">⏱</span>
+                <span class="pill-value">--:--</span>
+                <span class="pill-label">ETA</span>
             </div>
+            
+            <div class="waze-pill distance-pill">
+                <span class="pill-icon">📍</span>
+                <span class="pill-value">-- km</span>
+                <span class="pill-label">left</span>
+            </div>
+            
+            <div class="waze-pill speed-pill">
+                <span class="pill-value">0</span>
+                <span class="pill-label">km/h</span>
+            </div>
+        </div>
+        
+        <!-- Floating action button for details/verify -->
+        <button class="waze-fab" onclick="showNavigationActions()">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/>
+            </svg>
+        </button>
+        
+        <!-- Collapsible navigation menu -->
+        <div class="waze-nav-menu" id="navMenu" style="display: none;">
+            <button class="nav-menu-item" onclick="toggleRoutePanel()">
+                <span class="menu-icon">📋</span>
+                <span>Route Details</span>
+            </button>
+            <button class="nav-menu-item" onclick="openQuickVerification()">
+                <span class="menu-icon">✓</span>
+                <span>Verify Stop</span>
+            </button>
+            <button class="nav-menu-item" onclick="window.location.href='tel:${targetStop.customerPhone}'">
+                <span class="menu-icon">📞</span>
+                <span>Call Customer</span>
+            </button>
+            <button class="nav-menu-item" onclick="showDestinationDetails('${targetStop.id}')">
+                <span class="menu-icon">📍</span>
+                <span>Stop Info</span>
+            </button>
         </div>
     `;
     
     document.body.appendChild(navUI);
     
+    // Set up the map for drone-like following view
+    setTimeout(() => {
+        if (state.map && state.currentLocation) {
+            // Set zoom level for following view (closer zoom like Waze)
+            state.map.setView([state.currentLocation.lat, state.currentLocation.lng], 17);
+            
+            // Enable map rotation if using Mapbox (for heading-up view)
+            if (state.map.setBearing) {
+                state.map.setBearing(0); // Will be updated with device heading
+            }
+        }
+    }, 100);
+    
     // Start navigation updates
-    updateEnhancedNavigation(targetStop);
+    updateWazeNavigation(targetStop);
     
     // Get turn-by-turn directions
     getEnhancedDirections(targetStop);
-    
-    // Focus map on route
-    if (state.map && state.currentLocation) {
-        const bounds = L.latLngBounds([
-            [state.currentLocation.lat, state.currentLocation.lng],
-            [targetStop.location.lat, targetStop.location.lng]
-        ]);
-        state.map.fitBounds(bounds, { padding: [100, 50] });
-    }
 }
 
-// Update navigation with real-time data
-async function updateEnhancedNavigation(targetStop) {
+// Update navigation with Waze-style minimal info - UPDATED
+async function updateWazeNavigation(targetStop) {
     if (!state.currentLocation) {
-        setTimeout(() => updateEnhancedNavigation(targetStop), 1000);
+        setTimeout(() => updateWazeNavigation(targetStop), 1000);
         return;
     }
     
     const distance = calculateDistance(state.currentLocation, targetStop.location);
     const eta = calculateETA(distance);
     
-    // Update UI elements
-    const distanceEl = document.querySelector('.distance-remaining');
-    const etaTimeEl = document.querySelector('.eta-time');
-    const speedEl = document.querySelector('.speed-value');
+    // Update minimal UI elements
+    const etaPill = document.querySelector('.eta-pill .pill-value');
+    const distancePill = document.querySelector('.distance-pill .pill-value');
+    const speedPill = document.querySelector('.speed-pill .pill-value');
     
-    if (distanceEl) {
-        distanceEl.textContent = distance < 1 ? 
+    if (etaPill) etaPill.textContent = eta;
+    
+    if (distancePill) {
+        distancePill.textContent = distance < 1 ? 
             `${Math.round(distance * 1000)} m` : 
             `${distance.toFixed(1)} km`;
     }
     
-    if (etaTimeEl) {
-        etaTimeEl.textContent = eta;
-    }
-    
     // Update speed if available
-    if (navigator.geolocation && state.lastLocation) {
+    if (speedPill && state.lastLocation) {
         const timeDiff = Date.now() - state.lastLocationTime;
         const distanceTraveled = calculateDistance(state.lastLocation, state.currentLocation);
         const speed = Math.round((distanceTraveled / timeDiff) * 3600000); // km/h
         
-        if (speedEl && speed > 0 && speed < 200) { // Sanity check
-            speedEl.textContent = speed;
+        if (speed > 0 && speed < 200) { // Sanity check
+            speedPill.textContent = speed;
+            state.currentSpeed = speed;
+        }
+    }
+    
+    // Follow the user with drone-like view
+    if (state.map && state.currentLocation) {
+        // Smooth pan to current location
+        state.map.panTo([state.currentLocation.lat, state.currentLocation.lng], {
+            animate: true,
+            duration: 1
+        });
+        
+        // Adjust zoom based on speed (zoom out when moving fast)
+        const currentZoom = state.map.getZoom();
+        const targetZoom = state.currentSpeed > 50 ? 15 : state.currentSpeed > 30 ? 16 : 17;
+        if (Math.abs(currentZoom - targetZoom) > 0.5) {
+            state.map.setZoom(targetZoom, { animate: true });
         }
     }
     
@@ -1074,20 +1093,20 @@ async function updateEnhancedNavigation(targetStop) {
     
     // Continue updating if navigation is active
     if (document.querySelector('.enhanced-navigation') && state.navigationActive) {
-        setTimeout(() => updateEnhancedNavigation(targetStop), 3000);
+        setTimeout(() => updateWazeNavigation(targetStop), 2000); // Update every 2 seconds
     }
 }
 
 // Show arrival notification
 function showArrivalNotification(targetStop) {
     // Update navigation UI
-    const instructionEl = document.querySelector('.nav-street-name');
-    const detailEl = document.querySelector('.nav-instruction-detail');
-    const iconEl = document.querySelector('.direction-icon-large');
+    const distanceEl = document.querySelector('.waze-distance');
+    const streetEl = document.querySelector('.waze-street');
+    const arrowEl = document.querySelector('.direction-arrow');
     
-    if (instructionEl) instructionEl.textContent = 'You have arrived';
-    if (detailEl) detailEl.textContent = `${targetStop.type} location reached`;
-    if (iconEl) iconEl.textContent = '✅';
+    if (distanceEl) distanceEl.textContent = 'Arrived';
+    if (streetEl) streetEl.textContent = `${targetStop.type} location reached`;
+    if (arrowEl) arrowEl.textContent = '✅';
     
     // Vibrate and show notification
     if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
@@ -1148,7 +1167,7 @@ async function getEnhancedDirections(targetStop) {
     }
 }
 
-// Update navigation instructions
+// Update navigation instructions for minimal display - UPDATED
 function updateNavigationInstructions(route) {
     if (!route.segments || route.segments.length === 0) return;
     
@@ -1159,25 +1178,28 @@ function updateNavigationInstructions(route) {
     const currentStep = getCurrentNavigationStep(segment.steps);
     if (!currentStep) return;
     
-    // Update UI
-    const streetEl = document.querySelector('.nav-street-name');
-    const detailEl = document.querySelector('.nav-instruction-detail');
-    const iconEl = document.querySelector('.direction-icon-large');
-    const distanceEl = document.querySelector('.distance-value');
-    const unitEl = document.querySelector('.distance-unit');
+    // Update minimal UI
+    const distanceEl = document.querySelector('.waze-distance');
+    const streetEl = document.querySelector('.waze-street');
+    const arrowEl = document.querySelector('.direction-arrow');
     
-    if (streetEl) streetEl.textContent = currentStep.name || 'Continue';
-    if (detailEl) detailEl.textContent = currentStep.instruction;
-    if (iconEl) iconEl.textContent = getDirectionEmoji(currentStep.type);
+    if (distanceEl) {
+        const dist = currentStep.distance;
+        distanceEl.textContent = dist < 1000 ? 
+            `${Math.round(dist)} m` : 
+            `${(dist / 1000).toFixed(1)} km`;
+    }
     
-    if (distanceEl && unitEl) {
-        if (currentStep.distance < 1000) {
-            distanceEl.textContent = Math.round(currentStep.distance);
-            unitEl.textContent = 'm';
-        } else {
-            distanceEl.textContent = (currentStep.distance / 1000).toFixed(1);
-            unitEl.textContent = 'km';
-        }
+    if (streetEl) {
+        // Keep instruction short for minimal UI
+        const instruction = currentStep.instruction.replace(/Continue straight on|Continue on|Drive along/, '');
+        streetEl.textContent = instruction.length > 30 ? 
+            instruction.substring(0, 30) + '...' : 
+            instruction;
+    }
+    
+    if (arrowEl) {
+        arrowEl.textContent = getDirectionEmoji(currentStep.type);
     }
 }
 
@@ -1210,13 +1232,26 @@ function getDirectionEmoji(type) {
     return emojis[type] || '⬆️';
 }
 
-// Exit enhanced navigation
+// Toggle navigation menu - NEW
+window.toggleNavigationMenu = function() {
+    const menu = document.getElementById('navMenu');
+    if (menu) {
+        menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+    }
+};
+
+// Show navigation actions (FAB menu) - NEW
+window.showNavigationActions = function() {
+    const menu = document.getElementById('navMenu');
+    if (menu) {
+        menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+    }
+};
+
+// Exit enhanced navigation and restore normal view - UPDATED
 window.exitEnhancedNavigation = function() {
     const nav = document.querySelector('.enhanced-navigation');
-    if (nav) {
-        nav.classList.add('nav-closing');
-        setTimeout(() => nav.remove(), 300);
-    }
+    if (nav) nav.remove();
     
     state.navigationActive = false;
     
@@ -1224,6 +1259,12 @@ window.exitEnhancedNavigation = function() {
     const routePanel = document.getElementById('routePanel');
     if (routePanel) {
         routePanel.style.display = 'block';
+        state.isPanelVisible = true;
+    }
+    
+    // Reset map view
+    if (state.map) {
+        state.map.setZoom(14);
     }
 };
 
@@ -1517,807 +1558,1029 @@ window.verifyCode = async function(stopId) {
     // Check if route complete
     if (state.activeRoute.stops.every(s => s.completed)) {
         completeRoute();
-    } else {
-        // If still navigating, show next stop
-        const nextStop = getNextStop();
-        if (nextStop && state.navigationActive) {
-            showEnhancedNavigation(nextStop);
-        }
-    }
+        } else {
+       // If still navigating, show next stop
+       const nextStop = getNextStop();
+       if (nextStop && state.navigationActive) {
+           showEnhancedNavigation(nextStop);
+       }
+   }
 };
 
 // Show success animation
 function showSuccessAnimation(type) {
-    const animation = document.createElement('div');
-    animation.className = 'success-animation';
-    animation.innerHTML = `
-        <div class="success-icon">✓</div>
-        <div class="success-text">${type === 'pickup' ? 'Pickup' : 'Delivery'} Verified!</div>
-    `;
-    
-    document.body.appendChild(animation);
-    
-    setTimeout(() => animation.remove(), 2000);
+   const animation = document.createElement('div');
+   animation.className = 'success-animation';
+   animation.innerHTML = `
+       <div class="success-icon">✓</div>
+       <div class="success-text">${type === 'pickup' ? 'Pickup' : 'Delivery'} Verified!</div>
+   `;
+   
+   document.body.appendChild(animation);
+   
+   setTimeout(() => animation.remove(), 2000);
 }
 
 // Check phase completion
 function checkPhaseCompletion() {
-    const pickupStops = state.activeRoute.stops.filter(s => s.type === 'pickup');
-    const allPickupsComplete = pickupStops.every(s => s.completed);
-    
-    if (allPickupsComplete && !state.pickupPhaseCompleted) {
-        state.pickupPhaseCompleted = true;
-        showPhaseCompleteAnimation();
-    }
+   const pickupStops = state.activeRoute.stops.filter(s => s.type === 'pickup');
+   const allPickupsComplete = pickupStops.every(s => s.completed);
+   
+   if (allPickupsComplete && !state.pickupPhaseCompleted) {
+       state.pickupPhaseCompleted = true;
+       showPhaseCompleteAnimation();
+   }
 }
 
 // Show phase complete animation
 function showPhaseCompleteAnimation() {
-    const animation = document.createElement('div');
-    animation.className = 'phase-complete-animation';
-    animation.innerHTML = `
-        <div class="phase-complete-content">
-            <div class="phase-icon">🎉</div>
-            <h2>All Pickups Complete!</h2>
-            <p>Time to deliver the parcels</p>
-        </div>
-    `;
-    
-    document.body.appendChild(animation);
-    
-    setTimeout(() => animation.remove(), 3000);
+   const animation = document.createElement('div');
+   animation.className = 'phase-complete-animation';
+   animation.innerHTML = `
+       <div class="phase-complete-content">
+           <div class="phase-icon">🎉</div>
+           <h2>All Pickups Complete!</h2>
+           <p>Time to deliver the parcels</p>
+       </div>
+   `;
+   
+   document.body.appendChild(animation);
+   
+   setTimeout(() => animation.remove(), 3000);
 }
 
 // Complete route
 function completeRoute() {
-    // Calculate earnings (70% of total)
-    const totalEarnings = state.activeRoute.total_earnings || 0;
-    const riderEarnings = Math.round(totalEarnings * 0.7);
-    
-    // Show completion animation
-    const animation = document.createElement('div');
-    animation.className = 'route-complete-animation';
-    animation.innerHTML = `
-        <div class="route-complete-content">
-            <div class="complete-icon">🏆</div>
-            <h1>Route Complete!</h1>
-            <p>Excellent work! All deliveries completed successfully.</p>
-            <div class="route-stats">
-                <div class="stat">
-                    <span class="stat-value">${state.activeRoute.stops.length}</span>
-                    <span class="stat-label">Stops</span>
-                </div>
-                <div class="stat">
-                    <span class="stat-value">KES ${riderEarnings}</span>
-                    <span class="stat-label">Earned</span>
-                </div>
-            </div>
-            <button class="complete-btn" onclick="finishRoute()">
-                Back to Dashboard
-            </button>
-        </div>
-    `;
-    
-    document.body.appendChild(animation);
-    
-    // Store completion data for rider.js
-    localStorage.setItem('tuma_route_completion', JSON.stringify({
-        completed: true,
-        earnings: riderEarnings,
-        stops: state.activeRoute.stops.length,
-        timestamp: new Date()
-    }));
+   // Calculate earnings (70% of total)
+   const totalEarnings = state.activeRoute.total_earnings || 0;
+   const riderEarnings = Math.round(totalEarnings * 0.7);
+   
+   // Show completion animation
+   const animation = document.createElement('div');
+   animation.className = 'route-complete-animation';
+   animation.innerHTML = `
+       <div class="route-complete-content">
+           <div class="complete-icon">🏆</div>
+           <h1>Route Complete!</h1>
+           <p>Excellent work! All deliveries completed successfully.</p>
+           <div class="route-stats">
+               <div class="stat">
+                   <span class="stat-value">${state.activeRoute.stops.length}</span>
+                   <span class="stat-label">Stops</span>
+               </div>
+               <div class="stat">
+                   <span class="stat-value">KES ${riderEarnings}</span>
+                   <span class="stat-label">Earned</span>
+               </div>
+           </div>
+           <button class="complete-btn" onclick="finishRoute()">
+               Back to Dashboard
+           </button>
+       </div>
+   `;
+   
+   document.body.appendChild(animation);
+   
+   // Store completion data for rider.js
+   localStorage.setItem('tuma_route_completion', JSON.stringify({
+       completed: true,
+       earnings: riderEarnings,
+       stops: state.activeRoute.stops.length,
+       timestamp: new Date()
+   }));
 }
 
 // Finish route
 window.finishRoute = function() {
-    // Clear active route
-    localStorage.removeItem('tuma_active_route');
-    
-    // Navigate back to rider dashboard
-    window.location.href = './rider.html';
+   // Clear active route
+   localStorage.removeItem('tuma_active_route');
+   
+   // Navigate back to rider dashboard
+   window.location.href = './rider.html';
 };
 
 // Go back
 window.goBack = function() {
-    if (confirm('Are you sure you want to exit navigation?')) {
-        window.location.href = './rider.html';
-    }
+   if (confirm('Are you sure you want to exit navigation?')) {
+       window.location.href = './rider.html';
+   }
 };
 
 // Notification function
 function showNotification(message, type = 'info') {
-    const notification = document.createElement('div');
-    notification.className = `notification ${type}`;
-    notification.innerHTML = `
-        <span class="notification-icon">
-            ${type === 'success' ? '✓' : type === 'error' ? '✗' : type === 'warning' ? '⚠' : 'ℹ'}
-        </span>
-        <span>${message}</span>
-    `;
-    
-    document.body.appendChild(notification);
-    
-    setTimeout(() => {
-        notification.classList.add('hiding');
-        setTimeout(() => notification.remove(), 300);
-    }, 3000);
+   const notification = document.createElement('div');
+   notification.className = `notification ${type}`;
+   notification.innerHTML = `
+       <span class="notification-icon">
+           ${type === 'success' ? '✓' : type === 'error' ? '✗' : type === 'warning' ? '⚠' : 'ℹ'}
+       </span>
+       <span>${message}</span>
+   `;
+   
+   document.body.appendChild(notification);
+   
+   setTimeout(() => {
+       notification.classList.add('hiding');
+       setTimeout(() => notification.remove(), 300);
+   }, 3000);
+}
+
+// Add Waze-style navigation CSS
+function addWazeNavigationStyles() {
+   const wazeNavigationStyles = `
+       /* Waze-style Navigation */
+       .enhanced-navigation.waze-style {
+           pointer-events: none;
+       }
+       
+       .waze-nav-top {
+           position: fixed;
+           top: 0;
+           left: 0;
+           right: 0;
+           z-index: 1000;
+           pointer-events: auto;
+       }
+       
+       .waze-instruction-bar {
+           background: linear-gradient(to bottom, rgba(10, 10, 11, 0.95), rgba(10, 10, 11, 0.85));
+           backdrop-filter: blur(20px);
+           padding: 12px;
+           display: flex;
+           align-items: center;
+           gap: 12px;
+           border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+       }
+       
+       .waze-close-btn,
+       .waze-menu-btn {
+           width: 36px;
+           height: 36px;
+           border-radius: 50%;
+           background: rgba(255, 255, 255, 0.1);
+           border: none;
+           display: flex;
+           align-items: center;
+           justify-content: center;
+           color: white;
+           cursor: pointer;
+           transition: all 0.2s;
+       }
+       
+       .waze-close-btn:active,
+       .waze-menu-btn:active {
+           background: rgba(255, 255, 255, 0.2);
+           transform: scale(0.95);
+       }
+       
+       .waze-direction-icon {
+           width: 40px;
+           height: 40px;
+           background: var(--primary);
+           border-radius: 50%;
+           display: flex;
+           align-items: center;
+           justify-content: center;
+           flex-shrink: 0;
+       }
+       
+       .direction-arrow {
+           font-size: 24px;
+       }
+       
+       .waze-instruction-text {
+           flex: 1;
+           min-width: 0;
+       }
+       
+       .waze-distance {
+           font-size: 20px;
+           font-weight: 700;
+           color: white;
+           margin-bottom: 2px;
+       }
+       
+       .waze-street {
+           font-size: 14px;
+           color: rgba(255, 255, 255, 0.8);
+           white-space: nowrap;
+           overflow: hidden;
+           text-overflow: ellipsis;
+       }
+       
+       /* Floating bottom pills */
+       .waze-bottom-pills {
+           position: fixed;
+           bottom: calc(30px + var(--safe-area-bottom));
+           left: 20px;
+           right: 20px;
+           display: flex;
+           gap: 10px;
+           z-index: 999;
+           pointer-events: auto;
+       }
+       
+       .waze-pill {
+           background: rgba(10, 10, 11, 0.9);
+           backdrop-filter: blur(10px);
+           border: 1px solid rgba(255, 255, 255, 0.1);
+           border-radius: 25px;
+           padding: 8px 16px;
+           display: flex;
+           align-items: center;
+           gap: 6px;
+           color: white;
+           font-size: 14px;
+       }
+       
+       .pill-icon {
+           font-size: 16px;
+       }
+       
+       .pill-value {
+           font-weight: 600;
+       }
+       
+       .pill-label {
+           color: rgba(255, 255, 255, 0.7);
+           font-size: 12px;
+       }
+       
+       .speed-pill {
+           margin-left: auto;
+           flex-direction: column;
+           align-items: center;
+           padding: 8px 12px;
+       }
+       
+       .speed-pill .pill-value {
+           font-size: 18px;
+           line-height: 1;
+       }
+       
+       /* Floating Action Button */
+       .waze-fab {
+           position: fixed;
+           bottom: calc(100px + var(--safe-area-bottom));
+           right: 20px;
+           width: 56px;
+           height: 56px;
+           background: var(--primary);
+           border-radius: 50%;
+           border: none;
+           display: flex;
+           align-items: center;
+           justify-content: center;
+           box-shadow: 0 4px 12px rgba(0, 102, 255, 0.4);
+           cursor: pointer;
+           z-index: 998;
+           pointer-events: auto;
+           transition: all 0.3s;
+       }
+       
+       .waze-fab:active {
+           transform: scale(0.9);
+       }
+       
+       /* Navigation Menu */
+       .waze-nav-menu {
+           position: fixed;
+           bottom: calc(170px + var(--safe-area-bottom));
+           right: 20px;
+           background: var(--surface-elevated);
+           border-radius: 12px;
+           padding: 8px;
+           box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+           z-index: 997;
+           pointer-events: auto;
+           min-width: 200px;
+       }
+       
+       .nav-menu-item {
+           display: flex;
+           align-items: center;
+           gap: 12px;
+           width: 100%;
+           padding: 12px;
+           background: transparent;
+           border: none;
+           color: var(--text-primary);
+           font-size: 14px;
+           font-weight: 500;
+           cursor: pointer;
+           border-radius: 8px;
+           transition: all 0.2s;
+           text-align: left;
+       }
+       
+       .nav-menu-item:hover {
+           background: var(--surface-high);
+       }
+       
+       .nav-menu-item:active {
+           transform: scale(0.98);
+       }
+       
+       .menu-icon {
+           font-size: 18px;
+           width: 24px;
+           text-align: center;
+       }
+       
+       /* Make sure nav controls are properly positioned */
+       .nav-controls {
+           transition: bottom 0.3s ease;
+       }
+       
+       /* Ensure map is fully visible */
+       .enhanced-navigation.waze-style + .map-container {
+           top: 0 !important;
+       }
+   `;
+   
+   const existingStyle = document.getElementById('waze-nav-styles');
+   if (!existingStyle) {
+       const style = document.createElement('style');
+       style.id = 'waze-nav-styles';
+       style.textContent = wazeNavigationStyles;
+       document.head.appendChild(style);
+   }
 }
 
 // Add CSS for navigation UI
 const navStyles = document.createElement('style');
 navStyles.textContent = `
-    .enhanced-navigation {
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: var(--surface);
-        z-index: 1000;
-        display: flex;
-        flex-direction: column;
-    }
-    
-    .nav-top-bar {
-        background: var(--surface-elevated);
-        border-bottom: 1px solid var(--border);
-        padding: 16px;
-        padding-top: calc(16px + var(--safe-area-top));
-    }
-    
-    .nav-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        margin-bottom: 16px;
-    }
-    
-    .nav-close-btn {
-        width: 40px;
-        height: 40px;
-        border-radius: 50%;
-        background: var(--surface-high);
-        border: none;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        color: var(--text-primary);
-    }
-    
-    .nav-route-info {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-    }
-    
-    .nav-route-type {
-        padding: 6px 12px;
-        border-radius: 8px;
-        font-size: 12px;
-        font-weight: 600;
-        background: var(--primary);
-        color: white;
-    }
-    
-    .nav-route-type.pickup {
-        background: var(--warning);
-        color: black;
-    }
-    
-    .nav-parcel-code {
-        font-size: 14px;
-        font-weight: 600;
-        color: var(--text-secondary);
-    }
-    
-    .nav-instruction-card {
-        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-        border-radius: 16px;
-        padding: 24px;
-        color: white;
-        display: flex;
-        gap: 20px;
-        align-items: center;
-    }
-    
-    .nav-direction-visual {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        min-width: 80px;
-    }
-    
-    .direction-icon-large {
-        font-size: 48px;
-        margin-bottom: 8px;
-    }
-    
-    .direction-distance {
-        display: flex;
-        align-items: baseline;
-        gap: 4px;
-    }
-    
-    .distance-value {
-        font-size: 24px;
-        font-weight: 700;
-    }
-    
-    .distance-unit {
-        font-size: 16px;
-        opacity: 0.9;
-    }
-    
-    .nav-instruction-text {
-        flex: 1;
-    }
-    
-    .nav-street-name {
-        font-size: 24px;
-        font-weight: 700;
-        margin-bottom: 4px;
-    }
-    
-    .nav-instruction-detail {
-        font-size: 16px;
-        opacity: 0.9;
-    }
-    
-    .nav-bottom-info {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 12px;
-        padding: 16px;
-        background: var(--surface);
-    }
-    
-    .nav-eta-card,
-    .nav-distance-card,
-    .nav-speed-card {
-        background: var(--surface-elevated);
-        border-radius: 12px;
-        padding: 16px;
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        border: 1px solid var(--border);
-    }
-    
-    .eta-icon,
-    .distance-icon,
-    .speed-icon {
-        font-size: 24px;
-    }
-    
-    .eta-info,
-    .distance-info,
-    .speed-info {
-        flex: 1;
-    }
-    
-    .eta-time,
-    .distance-remaining,
-    .speed-value {
-        font-size: 18px;
-        font-weight: 700;
-        color: var(--primary);
-    }
-    
-    .eta-label,
-    .distance-label,
-    .speed-label {
-        font-size: 12px;
-        color: var(--text-secondary);
-    }
-    
-    .nav-destination-preview {
-        position: absolute;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        background: var(--surface-elevated);
-        border-radius: 20px 20px 0 0;
-        padding: 20px;
-        padding-bottom: calc(20px + var(--safe-area-bottom));
-        box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
-    }
-    
-    .destination-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 12px;
-    }
-    
-    .destination-type {
-        font-size: 14px;
-        font-weight: 600;
-        color: var(--text-secondary);
-    }
-    
-    .nav-more-btn {
-        width: 32px;
-        height: 32px;
-        border-radius: 50%;
-        background: var(--surface-high);
-        border: none;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        color: var(--text-primary);
-    }
-    
-    .destination-address {
-        font-size: 18px;
-        font-weight: 600;
-        margin-bottom: 8px;
-    }
-    
-    .destination-customer {
-        font-size: 16px;
-        color: var(--text-secondary);
-        margin-bottom: 16px;
-    }
-    
-    .nav-quick-actions {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 12px;
-    }
-    
-    .quick-action-btn {
-        background: var(--surface-high);
-        border: none;
-        border-radius: 12px;
-        padding: 12px;
-        color: var(--text-primary);
-        font-size: 14px;
-        font-weight: 600;
-        cursor: pointer;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 4px;
-        transition: all 0.2s;
-    }
-    
-    .quick-action-btn:active {
-        scale: 0.95;
-    }
-    
-    .quick-action-btn.call {
-        background: var(--success);
-        color: white;
-    }
-    
-    .quick-action-btn.verify {
-        background: var(--primary);
-        color: white;
-    }
-    
-    .nav-closing {
-        animation: slideOut 0.3s ease-out;
-    }
-    
-    @keyframes slideOut {
-        to {
-            transform: translateY(100%);
-        }
-    }
-    
-    .destination-details-modal,
-    .verification-modal {
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        z-index: 2000;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 20px;
-    }
-    
-    .modal-overlay {
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: rgba(0, 0, 0, 0.8);
-        backdrop-filter: blur(10px);
-    }
-    
-    .modal-content {
-        position: relative;
-        background: var(--surface-elevated);
-        border-radius: 20px;
-        max-width: 400px;
-        width: 100%;
-        overflow: hidden;
-        z-index: 1;
-    }
-    
-    .modal-header {
-        padding: 20px;
-        background: var(--surface-high);
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-    }
-    
-    .modal-header.pickup {
-        background: var(--warning);
-        color: black;
-    }
-    
-    .modal-header.delivery {
-        background: var(--success);
-        color: white;
-    }
-    
-    .modal-close {
-        width: 32px;
-        height: 32px;
-        border-radius: 50%;
-        background: rgba(255, 255, 255, 0.2);
-        border: none;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        color: inherit;
-    }
-    
-    .modal-body {
-        padding: 20px;
-    }
-    
-    .detail-section {
-        margin-bottom: 20px;
-    }
-    
-    .detail-section h4 {
-        font-size: 14px;
-        color: var(--text-secondary);
-        margin-bottom: 8px;
-    }
-    
-    .detail-section p {
-        font-size: 16px;
-        line-height: 1.5;
-    }
-    
-    .code-display {
-        font-family: monospace;
-        font-size: 20px;
-        font-weight: 700;
-        color: var(--primary);
-    }
-    
-    .verification-section {
-        margin: 20px 0;
-    }
-    
-    .verification-section label {
-        display: block;
-        font-size: 16px;
-        margin-bottom: 12px;
-    }
-    
-    .verification-input {
-        width: 100%;
-        background: var(--surface-high);
-        border: 2px solid var(--border);
-        border-radius: 12px;
-        padding: 16px;
-        font-size: 24px;
-        font-weight: 700;
-        text-align: center;
-        color: var(--text-primary);
-        letter-spacing: 4px;
-        text-transform: uppercase;
-        outline: none;
-        transition: all 0.3s;
-    }
-    
-    .verification-input:focus {
-        border-color: var(--primary);
-        transform: translateY(-2px);
-        box-shadow: 0 4px 20px rgba(0, 102, 255, 0.2);
-    }
-    
-    .verification-input.error {
-        border-color: var(--danger);
-        animation: shake 0.3s;
-    }
-    
-    @keyframes shake {
-        0%, 100% { transform: translateX(0); }
-        25% { transform: translateX(-10px); }
-        75% { transform: translateX(10px); }
-    }
-    
-    .code-hint {
-        font-size: 14px;
-        color: var(--text-secondary);
-        text-align: center;
-        margin-top: 8px;
-    }
-    
-    .modal-actions {
-        display: flex;
-        gap: 12px;
-        margin-top: 24px;
-    }
-    
-    .modal-btn {
-        flex: 1;
-        padding: 16px;
-        border: none;
-        border-radius: 12px;
-        font-size: 16px;
-        font-weight: 600;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-        transition: all 0.2s;
-    }
-    
-    .modal-btn.primary {
-        background: var(--primary);
-        color: white;
-    }
-    
-    .modal-btn.secondary {
-        background: var(--surface-high);
-        color: var(--text-primary);
-    }
-    
-    .modal-btn:active {
-        scale: 0.95;
-    }
-    
-    .success-animation,
-    .phase-complete-animation,
-    .route-complete-animation {
-        position: fixed;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        background: var(--surface-elevated);
-        border-radius: 20px;
-        padding: 40px;
-        text-align: center;
-        z-index: 3000;
-        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
-        animation: popIn 0.3s ease-out;
-    }
-    
-    @keyframes popIn {
-        from {
-            scale: 0.8;
-            opacity: 0;
-        }
-        to {
-            scale: 1;
-            opacity: 1;
-        }
-    }
-    
-    .success-icon {
-        width: 80px;
-        height: 80px;
-        background: var(--success);
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        margin: 0 auto 20px;
-        font-size: 48px;
-        color: white;
-    }
-    
-    .success-text {
-        font-size: 24px;
-        font-weight: 700;
-    }
-    
-    .phase-complete-content,
-    .route-complete-content {
-        max-width: 360px;
-    }
-    
-    .phase-icon,
-    .complete-icon {
-        font-size: 64px;
-        margin-bottom: 20px;
-    }
-    
-    .route-complete-content h1 {
-        font-size: 28px;
-        margin-bottom: 12px;
-    }
-    
-    .route-complete-content p {
-        font-size: 16px;
-        color: var(--text-secondary);
-        margin-bottom: 24px;
-    }
-    
-    .route-stats {
-        display: flex;
-        justify-content: center;
-        gap: 40px;
-        margin-bottom: 32px;
-    }
-    
-    .route-stats .stat {
-        text-align: center;
-    }
-    
-    .route-stats .stat-value {
-        display: block;
-        font-size: 32px;
-        font-weight: 700;
-        color: var(--primary);
-        margin-bottom: 4px;
-    }
-    
-    .route-stats .stat-label {
-        font-size: 14px;
-        color: var(--text-secondary);
-    }
-    
-    .complete-btn {
-        width: 100%;
-        background: var(--primary);
-        color: white;
-        border: none;
-        border-radius: 14px;
-        padding: 16px;
-        font-size: 18px;
-        font-weight: 700;
-        cursor: pointer;
-    }
-    
-    .notification {
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        background: var(--surface-elevated);
-        color: var(--text-primary);
-        padding: 16px 20px;
-        border-radius: 12px;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        z-index: 4000;
-        animation: slideIn 0.3s ease-out;
-        max-width: 350px;
-        border: 1px solid var(--border);
-    }
-    
-    .notification.success {
-        background: var(--success);
-        color: white;
-        border-color: var(--success);
-    }
-    
-    .notification.error {
-        background: var(--danger);
-        color: white;
-        border-color: var(--danger);
-    }
-    
-    .notification.warning {
-        background: var(--warning);
-        color: black;
-        border-color: var(--warning);
-    }
-    
-    .notification-icon {
-        font-size: 20px;
-    }
-    
-    .notification.hiding {
-        animation: slideOut 0.3s ease-out;
-    }
-    
-    @keyframes slideIn {
-        from {
-            transform: translateX(100%);
-            opacity: 0;
-        }
-        to {
-            transform: translateX(0);
-            opacity: 1;
-        }
-    }
-    
-    @keyframes slideOut {
-        from {
-            transform: translateX(0);
-            opacity: 1;
-        }
-        to {
-            transform: translateX(100%);
-            opacity: 0;
-        }
-    }
-    
-    .modal-closing {
-        animation: fadeOut 0.3s ease-out;
-    }
-    
-    @keyframes fadeOut {
-        to {
-            opacity: 0;
-        }
-    }
+   .enhanced-navigation {
+       position: fixed;
+       top: 0;
+       left: 0;
+       right: 0;
+       bottom: 0;
+       background: var(--surface);
+       z-index: 1000;
+       display: flex;
+       flex-direction: column;
+   }
+   
+   .nav-top-bar {
+       background: var(--surface-elevated);
+       border-bottom: 1px solid var(--border);
+       padding: 16px;
+       padding-top: calc(16px + var(--safe-area-top));
+   }
+   
+   .nav-header {
+       display: flex;
+       align-items: center;
+       justify-content: space-between;
+       margin-bottom: 16px;
+   }
+   
+   .nav-close-btn {
+       width: 40px;
+       height: 40px;
+       border-radius: 50%;
+       background: var(--surface-high);
+       border: none;
+       display: flex;
+       align-items: center;
+       justify-content: center;
+       cursor: pointer;
+       color: var(--text-primary);
+   }
+   
+   .nav-route-info {
+       display: flex;
+       align-items: center;
+       gap: 12px;
+   }
+   
+   .nav-route-type {
+       padding: 6px 12px;
+       border-radius: 8px;
+       font-size: 12px;
+       font-weight: 600;
+       background: var(--primary);
+       color: white;
+   }
+   
+   .nav-route-type.pickup {
+       background: var(--warning);
+       color: black;
+   }
+   
+   .nav-parcel-code {
+       font-size: 14px;
+       font-weight: 600;
+       color: var(--text-secondary);
+   }
+   
+   .nav-instruction-card {
+       background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+       border-radius: 16px;
+       padding: 24px;
+       color: white;
+       display: flex;
+       gap: 20px;
+       align-items: center;
+   }
+   
+   .nav-direction-visual {
+       display: flex;
+       flex-direction: column;
+       align-items: center;
+       min-width: 80px;
+   }
+   
+   .direction-icon-large {
+       font-size: 48px;
+       margin-bottom: 8px;
+   }
+   
+   .direction-distance {
+       display: flex;
+       align-items: baseline;
+       gap: 4px;
+   }
+   
+   .distance-value {
+       font-size: 24px;
+       font-weight: 700;
+   }
+   
+   .distance-unit {
+       font-size: 16px;
+       opacity: 0.9;
+   }
+   
+   .nav-instruction-text {
+       flex: 1;
+   }
+   
+   .nav-street-name {
+       font-size: 24px;
+       font-weight: 700;
+       margin-bottom: 4px;
+   }
+   
+   .nav-instruction-detail {
+       font-size: 16px;
+       opacity: 0.9;
+   }
+   
+   .nav-bottom-info {
+       display: grid;
+       grid-template-columns: repeat(3, 1fr);
+       gap: 12px;
+       padding: 16px;
+       background: var(--surface);
+   }
+   
+   .nav-eta-card,
+   .nav-distance-card,
+   .nav-speed-card {
+       background: var(--surface-elevated);
+       border-radius: 12px;
+       padding: 16px;
+       display: flex;
+       align-items: center;
+       gap: 12px;
+       border: 1px solid var(--border);
+   }
+   
+   .eta-icon,
+   .distance-icon,
+   .speed-icon {
+       font-size: 24px;
+   }
+   
+   .eta-info,
+   .distance-info,
+   .speed-info {
+       flex: 1;
+   }
+   
+   .eta-time,
+   .distance-remaining,
+   .speed-value {
+       font-size: 18px;
+       font-weight: 700;
+       color: var(--primary);
+   }
+   
+   .eta-label,
+   .distance-label,
+   .speed-label {
+       font-size: 12px;
+       color: var(--text-secondary);
+   }
+   
+   .nav-destination-preview {
+       position: absolute;
+       bottom: 0;
+       left: 0;
+       right: 0;
+       background: var(--surface-elevated);
+       border-radius: 20px 20px 0 0;
+       padding: 20px;
+       padding-bottom: calc(20px + var(--safe-area-bottom));
+       box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
+   }
+   
+   .destination-header {
+       display: flex;
+       justify-content: space-between;
+       align-items: center;
+       margin-bottom: 12px;
+   }
+   
+   .destination-type {
+       font-size: 14px;
+       font-weight: 600;
+       color: var(--text-secondary);
+   }
+   
+   .nav-more-btn {
+       width: 32px;
+       height: 32px;
+       border-radius: 50%;
+       background: var(--surface-high);
+       border: none;
+       display: flex;
+       align-items: center;
+       justify-content: center;
+       cursor: pointer;
+       color: var(--text-primary);
+   }
+   
+   .destination-address {
+       font-size: 18px;
+       font-weight: 600;
+       margin-bottom: 8px;
+   }
+   
+   .destination-customer {
+       font-size: 16px;
+       color: var(--text-secondary);
+       margin-bottom: 16px;
+   }
+   
+   .nav-quick-actions {
+       display: grid;
+       grid-template-columns: repeat(3, 1fr);
+       gap: 12px;
+   }
+   
+   .quick-action-btn {
+       background: var(--surface-high);
+       border: none;
+       border-radius: 12px;
+       padding: 12px;
+       color: var(--text-primary);
+       font-size: 14px;
+       font-weight: 600;
+       cursor: pointer;
+       display: flex;
+       flex-direction: column;
+       align-items: center;
+       gap: 4px;
+       transition: all 0.2s;
+   }
+   
+   .quick-action-btn:active {
+       scale: 0.95;
+   }
+   
+   .quick-action-btn.call {
+       background: var(--success);
+       color: white;
+   }
+   
+   .quick-action-btn.verify {
+       background: var(--primary);
+       color: white;
+   }
+   
+   .nav-closing {
+       animation: slideOut 0.3s ease-out;
+   }
+   
+   @keyframes slideOut {
+       to {
+           transform: translateY(100%);
+       }
+   }
+   
+   .destination-details-modal,
+   .verification-modal {
+       position: fixed;
+       top: 0;
+       left: 0;
+       right: 0;
+       bottom: 0;
+       z-index: 2000;
+       display: flex;
+       align-items: center;
+       justify-content: center;
+       padding: 20px;
+   }
+   
+   .modal-overlay {
+       position: absolute;
+       top: 0;
+       left: 0;
+       right: 0;
+       bottom: 0;
+       background: rgba(0, 0, 0, 0.8);
+       backdrop-filter: blur(10px);
+   }
+   
+   .modal-content {
+       position: relative;
+       background: var(--surface-elevated);
+       border-radius: 20px;
+       max-width: 400px;
+       width: 100%;
+       overflow: hidden;
+       z-index: 1;
+   }
+   
+   .modal-header {
+       padding: 20px;
+       background: var(--surface-high);
+       display: flex;
+       align-items: center;
+       justify-content: space-between;
+   }
+   
+   .modal-header.pickup {
+       background: var(--warning);
+       color: black;
+   }
+   
+   .modal-header.delivery {
+       background: var(--success);
+       color: white;
+   }
+   
+   .modal-close {
+       width: 32px;
+       height: 32px;
+       border-radius: 50%;
+       background: rgba(255, 255, 255, 0.2);
+       border: none;
+       display: flex;
+       align-items: center;
+       justify-content: center;
+       cursor: pointer;
+       color: inherit;
+   }
+   
+   .modal-body {
+       padding: 20px;
+   }
+   
+   .detail-section {
+       margin-bottom: 20px;
+   }
+   
+   .detail-section h4 {
+       font-size: 14px;
+       color: var(--text-secondary);
+       margin-bottom: 8px;
+   }
+   
+   .detail-section p {
+       font-size: 16px;
+       line-height: 1.5;
+   }
+   
+   .code-display {
+       font-family: monospace;
+       font-size: 20px;
+       font-weight: 700;
+       color: var(--primary);
+   }
+   
+   .verification-section {
+       margin: 20px 0;
+   }
+   
+   .verification-section label {
+       display: block;
+       font-size: 16px;
+       margin-bottom: 12px;
+   }
+   
+   .verification-input {
+       width: 100%;
+       background: var(--surface-high);
+       border: 2px solid var(--border);
+       border-radius: 12px;
+       padding: 16px;
+       font-size: 24px;
+       font-weight: 700;
+       text-align: center;
+       color: var(--text-primary);
+       letter-spacing: 4px;
+       text-transform: uppercase;
+       outline: none;
+       transition: all 0.3s;
+   }
+   
+   .verification-input:focus {
+       border-color: var(--primary);
+       transform: translateY(-2px);
+       box-shadow: 0 4px 20px rgba(0, 102, 255, 0.2);
+   }
+   
+   .verification-input.error {
+       border-color: var(--danger);
+       animation: shake 0.3s;
+   }
+   
+   @keyframes shake {
+       0%, 100% { transform: translateX(0); }
+       25% { transform: translateX(-10px); }
+       75% { transform: translateX(10px); }
+   }
+   
+   .code-hint {
+       font-size: 14px;
+       color: var(--text-secondary);
+       text-align: center;
+       margin-top: 8px;
+   }
+   
+   .modal-actions {
+       display: flex;
+       gap: 12px;
+       margin-top: 24px;
+   }
+   
+   .modal-btn {
+       flex: 1;
+       padding: 16px;
+       border: none;
+       border-radius: 12px;
+       font-size: 16px;
+       font-weight: 600;
+       cursor: pointer;
+       display: flex;
+       align-items: center;
+       justify-content: center;
+       gap: 8px;
+       transition: all 0.2s;
+   }
+   
+   .modal-btn.primary {
+       background: var(--primary);
+       color: white;
+   }
+   
+   .modal-btn.secondary {
+       background: var(--surface-high);
+       color: var(--text-primary);
+   }
+   
+   .modal-btn:active {
+       scale: 0.95;
+   }
+   
+   .success-animation,
+   .phase-complete-animation,
+   .route-complete-animation {
+       position: fixed;
+       top: 50%;
+       left: 50%;
+       transform: translate(-50%, -50%);
+       background: var(--surface-elevated);
+       border-radius: 20px;
+       padding: 40px;
+       text-align: center;
+       z-index: 3000;
+       box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+       animation: popIn 0.3s ease-out;
+   }
+   
+   @keyframes popIn {
+       from {
+           scale: 0.8;
+           opacity: 0;
+       }
+       to {
+           scale: 1;
+           opacity: 1;
+       }
+   }
+   
+   .success-icon {
+       width: 80px;
+       height: 80px;
+       background: var(--success);
+       border-radius: 50%;
+       display: flex;
+       align-items: center;
+       justify-content: center;
+       margin: 0 auto 20px;
+       font-size: 48px;
+       color: white;
+   }
+   
+   .success-text {
+       font-size: 24px;
+       font-weight: 700;
+   }
+   
+   .phase-complete-content,
+   .route-complete-content {
+       max-width: 360px;
+   }
+   
+   .phase-icon,
+   .complete-icon {
+       font-size: 64px;
+       margin-bottom: 20px;
+   }
+   
+   .route-complete-content h1 {
+       font-size: 28px;
+       margin-bottom: 12px;
+   }
+   
+   .route-complete-content p {
+       font-size: 16px;
+       color: var(--text-secondary);
+       margin-bottom: 24px;
+   }
+   
+   .route-stats {
+       display: flex;
+       justify-content: center;
+       gap: 40px;
+       margin-bottom: 32px;
+   }
+   
+   .route-stats .stat {
+       text-align: center;
+   }
+   
+   .route-stats .stat-value {
+       display: block;
+       font-size: 32px;
+       font-weight: 700;
+       color: var(--primary);
+       margin-bottom: 4px;
+   }
+   
+   .route-stats .stat-label {
+       font-size: 14px;
+       color: var(--text-secondary);
+   }
+   
+   .complete-btn {
+       width: 100%;
+       background: var(--primary);
+       color: white;
+       border: none;
+       border-radius: 14px;
+       padding: 16px;
+       font-size: 18px;
+       font-weight: 700;
+       cursor: pointer;
+   }
+   
+   .notification {
+       position: fixed;
+       top: 20px;
+       right: 20px;
+       background: var(--surface-elevated);
+       color: var(--text-primary);
+       padding: 16px 20px;
+       border-radius: 12px;
+       box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+       display: flex;
+       align-items: center;
+       gap: 12px;
+       z-index: 4000;
+       animation: slideIn 0.3s ease-out;
+       max-width: 350px;
+       border: 1px solid var(--border);
+   }
+   
+   .notification.success {
+       background: var(--success);
+       color: white;
+       border-color: var(--success);
+   }
+   
+   .notification.error {
+       background: var(--danger);
+       color: white;
+       border-color: var(--danger);
+   }
+   
+   .notification.warning {
+       background: var(--warning);
+       color: black;
+       border-color: var(--warning);
+   }
+   
+   .notification-icon {
+       font-size: 20px;
+   }
+   
+   .notification.hiding {
+       animation: slideOut 0.3s ease-out;
+   }
+   
+   @keyframes slideIn {
+       from {
+           transform: translateX(100%);
+           opacity: 0;
+       }
+       to {
+           transform: translateX(0);
+           opacity: 1;
+       }
+   }
+   
+   @keyframes slideOut {
+       from {
+           transform: translateX(0);
+           opacity: 1;
+       }
+       to {
+           transform: translateX(100%);
+           opacity: 0;
+       }
+   }
+   
+   .modal-closing {
+       animation: fadeOut 0.3s ease-out;
+   }
+   
+   @keyframes fadeOut {
+       to {
+           opacity: 0;
+       }
+   }
 `;
 document.head.appendChild(navStyles);
 
 // Export for debugging
 window.routeDebug = {
-    state,
-    reloadRoute: () => {
-        const stored = localStorage.getItem('tuma_active_route');
-        if (stored) {
-            state.activeRoute = JSON.parse(stored);
-            displayRouteInfo();
-            updateDynamicHeader();
-            plotRoute();
-        }
-    },
-    simulatePickup: () => {
-        const nextPickup = state.activeRoute.stops.find(s => s.type === 'pickup' && !s.completed);
-        if (nextPickup) {
-            nextPickup.completed = true;
-            nextPickup.timestamp = new Date();
-            localStorage.setItem('tuma_active_route', JSON.stringify(state.activeRoute));
-            displayRouteInfo();
-            updateDynamicHeader();
-            plotRoute();
-        }
-    },
-    clearRoute: () => {
-        localStorage.removeItem('tuma_active_route');
-        window.location.reload();
-    },
-    testOpenRoute: async () => {
-        // Test OpenRouteService API
-        const testCoords = [
-            [36.8219, -1.2921], // Nairobi CBD
-            [36.7853, -1.2906]  // Kilimani
-        ];
-        
-        try {
-            const response = await fetch('https://api.openrouteservice.org/v2/directions/driving-car', {
-                method: 'POST',
-                headers: {
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/json',
-                    'Authorization': OPENROUTE_API_KEY
-                },
-                body: JSON.stringify({ coordinates: testCoords })
-            });
-            
-            const data = await response.json();
-            console.log('OpenRouteService test:', data);
-            return data;
-        } catch (error) {
-            console.error('OpenRouteService test failed:', error);
-        }
-    }
+   state,
+   reloadRoute: () => {
+       const stored = localStorage.getItem('tuma_active_route');
+       if (stored) {
+           state.activeRoute = JSON.parse(stored);
+           displayRouteInfo();
+           updateDynamicHeader();
+           plotRoute();
+       }
+   },
+   simulatePickup: () => {
+       const nextPickup = state.activeRoute.stops.find(s => s.type === 'pickup' && !s.completed);
+       if (nextPickup) {
+           nextPickup.completed = true;
+           nextPickup.timestamp = new Date();
+           localStorage.setItem('tuma_active_route', JSON.stringify(state.activeRoute));
+           displayRouteInfo();
+           updateDynamicHeader();
+           plotRoute();
+       }
+   },
+   clearRoute: () => {
+       localStorage.removeItem('tuma_active_route');
+       window.location.reload();
+   },
+   testOpenRoute: async () => {
+       // Test OpenRouteService API
+       const testCoords = [
+           [36.8219, -1.2921], // Nairobi CBD
+           [36.7853, -1.2906]  // Kilimani
+       ];
+       
+       try {
+           const response = await fetch('https://api.openrouteservice.org/v2/directions/driving-car', {
+               method: 'POST',
+               headers: {
+                   'Accept': 'application/json',
+                   'Content-Type': 'application/json',
+                   'Authorization': OPENROUTE_API_KEY
+               },
+               body: JSON.stringify({ coordinates: testCoords })
+           });
+           
+           const data = await response.json();
+           console.log('OpenRouteService test:', data);
+           return data;
+       } catch (error) {
+           console.error('OpenRouteService test failed:', error);
+       }
+   }
 };
 
-console.log('Fixed Route.js loaded successfully!');
+console.log('Enhanced Route.js with Waze-style navigation loaded successfully!');
 console.log('Debug: window.routeDebug.testOpenRoute()');
