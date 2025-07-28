@@ -103,9 +103,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 });
 
-// Initialize Leaflet Map with OpenStreetMap
+// Initialize Leaflet Map with Simplistic Style (like Google Maps Transit)
 async function initializeMap() {
-    console.log('Initializing Leaflet map...');
+    console.log('Initializing Leaflet map with simplistic style...');
     
     // Get the center point from route stops
     let centerLat = -1.2921;
@@ -119,15 +119,31 @@ async function initializeMap() {
     }
     
     // Create map centered on route
-    state.map = L.map('map').setView([centerLat, centerLng], 13);
+    state.map = L.map('map', {
+        zoomControl: false // Remove default zoom control for cleaner look
+    }).setView([centerLat, centerLng], 13);
     
-    // Add OpenStreetMap tile layer (free)
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors',
+    // Use CartoDB Positron for a clean, minimal map style (similar to Google Maps transit)
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+        attribution: '© OpenStreetMap contributors © CARTO',
+        subdomains: 'abcd',
         maxZoom: 19
     }).addTo(state.map);
     
-    console.log('Map initialized');
+    // Alternative: Use Stamen Toner-Lite for even more minimal style
+    // L.tileLayer('https://stamen-tiles-{s}.a.ssl.fastly.net/toner-lite/{z}/{x}/{y}{r}.png', {
+    //     attribution: 'Map tiles by Stamen Design, CC BY 3.0 — Map data © OpenStreetMap contributors',
+    //     subdomains: 'abcd',
+    //     maxZoom: 20,
+    //     minZoom: 0
+    // }).addTo(state.map);
+    
+    // Add custom zoom control in bottom left
+    L.control.zoom({
+        position: 'bottomleft'
+    }).addTo(state.map);
+    
+    console.log('Map initialized with simplistic style');
 }
 
 // Calculate bounds from stops
@@ -258,6 +274,13 @@ window.toggleRoutePanel = function() {
                 <span>Hide</span>
             `;
         }
+    }
+    
+    // Force map resize when toggling panel
+    if (state.map) {
+        setTimeout(() => {
+            state.map.invalidateSize();
+        }, 300);
     }
 };
 
@@ -919,7 +942,7 @@ window.startNavigation = function() {
     });
 };
 
-// Enhanced Waze-like navigation interface - UPDATED
+// Enhanced Waze-like navigation interface - FIXED
 function showEnhancedNavigation(targetStop) {
     // Remove any existing navigation
     const existingNav = document.querySelector('.enhanced-navigation');
@@ -1012,15 +1035,18 @@ function showEnhancedNavigation(targetStop) {
     
     document.body.appendChild(navUI);
     
-    // Set up the map for drone-like following view
+    // IMPORTANT: Force map resize after UI changes
     setTimeout(() => {
-        if (state.map && state.currentLocation) {
-            // Set zoom level for following view (closer zoom like Waze)
-            state.map.setView([state.currentLocation.lat, state.currentLocation.lng], 17);
+        if (state.map) {
+            // Invalidate size to force map to recalculate its dimensions
+            state.map.invalidateSize();
             
-            // Enable map rotation if using Mapbox (for heading-up view)
-            if (state.map.setBearing) {
-                state.map.setBearing(0); // Will be updated with device heading
+            // Then set view to current location
+            if (state.currentLocation) {
+                state.map.setView([state.currentLocation.lat, state.currentLocation.lng], 17);
+            } else if (targetStop && targetStop.location) {
+                // Fallback to target stop location if current location not available
+                state.map.setView([targetStop.location.lat, targetStop.location.lng], 15);
             }
         }
     }, 100);
@@ -1248,7 +1274,7 @@ window.showNavigationActions = function() {
     }
 };
 
-// Exit enhanced navigation and restore normal view - UPDATED
+// Exit enhanced navigation and restore normal view - FIXED
 window.exitEnhancedNavigation = function() {
     const nav = document.querySelector('.enhanced-navigation');
     if (nav) nav.remove();
@@ -1262,9 +1288,21 @@ window.exitEnhancedNavigation = function() {
         state.isPanelVisible = true;
     }
     
-    // Reset map view
+    // Reset map view and invalidate size
     if (state.map) {
+        state.map.invalidateSize();
         state.map.setZoom(14);
+        
+        // Re-fit bounds to show all stops
+        if (state.activeRoute && state.activeRoute.stops) {
+            const bounds = L.latLngBounds();
+            state.activeRoute.stops.forEach(stop => {
+                if (stop.location) {
+                    bounds.extend([stop.location.lat, stop.location.lng]);
+                }
+            });
+            state.map.fitBounds(bounds, { padding: [50, 50] });
+        }
     }
 };
 
@@ -1558,1028 +1596,1069 @@ window.verifyCode = async function(stopId) {
     // Check if route complete
     if (state.activeRoute.stops.every(s => s.completed)) {
         completeRoute();
-        } else {
-       // If still navigating, show next stop
-       const nextStop = getNextStop();
-       if (nextStop && state.navigationActive) {
-           showEnhancedNavigation(nextStop);
-       }
-   }
+    } else {
+        // If still navigating, show next stop
+        const nextStop = getNextStop();
+        if (nextStop && state.navigationActive) {
+            showEnhancedNavigation(nextStop);
+        }
+    }
 };
 
 // Show success animation
 function showSuccessAnimation(type) {
-   const animation = document.createElement('div');
-   animation.className = 'success-animation';
-   animation.innerHTML = `
-       <div class="success-icon">✓</div>
-       <div class="success-text">${type === 'pickup' ? 'Pickup' : 'Delivery'} Verified!</div>
-   `;
-   
-   document.body.appendChild(animation);
-   
-   setTimeout(() => animation.remove(), 2000);
+    const animation = document.createElement('div');
+    animation.className = 'success-animation';
+    animation.innerHTML = `
+        <div class="success-icon">✓</div>
+        <div class="success-text">${type === 'pickup' ? 'Pickup' : 'Delivery'} Verified!</div>
+    `;
+    
+    document.body.appendChild(animation);
+    
+    setTimeout(() => animation.remove(), 2000);
 }
 
 // Check phase completion
 function checkPhaseCompletion() {
-   const pickupStops = state.activeRoute.stops.filter(s => s.type === 'pickup');
-   const allPickupsComplete = pickupStops.every(s => s.completed);
-   
-   if (allPickupsComplete && !state.pickupPhaseCompleted) {
-       state.pickupPhaseCompleted = true;
-       showPhaseCompleteAnimation();
-   }
+    const pickupStops = state.activeRoute.stops.filter(s => s.type === 'pickup');
+    const allPickupsComplete = pickupStops.every(s => s.completed);
+    
+    if (allPickupsComplete && !state.pickupPhaseCompleted) {
+        state.pickupPhaseCompleted = true;
+        showPhaseCompleteAnimation();
+    }
 }
 
 // Show phase complete animation
 function showPhaseCompleteAnimation() {
-   const animation = document.createElement('div');
-   animation.className = 'phase-complete-animation';
-   animation.innerHTML = `
-       <div class="phase-complete-content">
-           <div class="phase-icon">🎉</div>
-           <h2>All Pickups Complete!</h2>
-           <p>Time to deliver the parcels</p>
-       </div>
-   `;
-   
-   document.body.appendChild(animation);
-   
-   setTimeout(() => animation.remove(), 3000);
+    const animation = document.createElement('div');
+    animation.className = 'phase-complete-animation';
+    animation.innerHTML = `
+        <div class="phase-complete-content">
+            <div class="phase-icon">🎉</div>
+            <h2>All Pickups Complete!</h2>
+            <p>Time to deliver the parcels</p>
+        </div>
+    `;
+    
+    document.body.appendChild(animation);
+    
+    setTimeout(() => animation.remove(), 3000);
 }
 
 // Complete route
 function completeRoute() {
-   // Calculate earnings (70% of total)
-   const totalEarnings = state.activeRoute.total_earnings || 0;
-   const riderEarnings = Math.round(totalEarnings * 0.7);
-   
-   // Show completion animation
-   const animation = document.createElement('div');
-   animation.className = 'route-complete-animation';
-   animation.innerHTML = `
-       <div class="route-complete-content">
-           <div class="complete-icon">🏆</div>
-           <h1>Route Complete!</h1>
-           <p>Excellent work! All deliveries completed successfully.</p>
-           <div class="route-stats">
-               <div class="stat">
-                   <span class="stat-value">${state.activeRoute.stops.length}</span>
-                   <span class="stat-label">Stops</span>
-               </div>
-               <div class="stat">
-                   <span class="stat-value">KES ${riderEarnings}</span>
-                   <span class="stat-label">Earned</span>
-               </div>
-           </div>
-           <button class="complete-btn" onclick="finishRoute()">
-               Back to Dashboard
-           </button>
-       </div>
-   `;
-   
-   document.body.appendChild(animation);
-   
-   // Store completion data for rider.js
-   localStorage.setItem('tuma_route_completion', JSON.stringify({
-       completed: true,
-       earnings: riderEarnings,
-       stops: state.activeRoute.stops.length,
-       timestamp: new Date()
-   }));
+    // Calculate earnings (70% of total)
+    const totalEarnings = state.activeRoute.total_earnings || 0;
+    const riderEarnings = Math.round(totalEarnings * 0.7);
+    
+    // Show completion animation
+    const animation = document.createElement('div');
+    animation.className = 'route-complete-animation';
+    animation.innerHTML = `
+        <div class="route-complete-content">
+            <div class="complete-icon">🏆</div>
+            <h1>Route Complete!</h1>
+            <p>Excellent work! All deliveries completed successfully.</p>
+            <div class="route-stats">
+                <div class="stat">
+                    <span class="stat-value">${state.activeRoute.stops.length}</span>
+                    <span class="stat-label">Stops</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-value">KES ${riderEarnings}</span>
+                    <span class="stat-label">Earned</span>
+                </div>
+            </div>
+            <button class="complete-btn" onclick="finishRoute()">
+                Back to Dashboard
+            </button>
+        </div>
+    `;
+    
+    document.body.appendChild(animation);
+    
+    // Store completion data for rider.js
+    localStorage.setItem('tuma_route_completion', JSON.stringify({
+        completed: true,
+        earnings: riderEarnings,
+        stops: state.activeRoute.stops.length,
+        timestamp: new Date()
+    }));
 }
 
 // Finish route
 window.finishRoute = function() {
-   // Clear active route
-   localStorage.removeItem('tuma_active_route');
-   
-   // Navigate back to rider dashboard
-   window.location.href = './rider.html';
+    // Clear active route
+    localStorage.removeItem('tuma_active_route');
+    
+    // Navigate back to rider dashboard
+    window.location.href = './rider.html';
 };
 
 // Go back
 window.goBack = function() {
-   if (confirm('Are you sure you want to exit navigation?')) {
-       window.location.href = './rider.html';
-   }
+    if (confirm('Are you sure you want to exit navigation?')) {
+        window.location.href = './rider.html';
+    }
 };
 
 // Notification function
 function showNotification(message, type = 'info') {
-   const notification = document.createElement('div');
-   notification.className = `notification ${type}`;
-   notification.innerHTML = `
-       <span class="notification-icon">
-           ${type === 'success' ? '✓' : type === 'error' ? '✗' : type === 'warning' ? '⚠' : 'ℹ'}
-       </span>
-       <span>${message}</span>
-   `;
-   
-   document.body.appendChild(notification);
-   
-   setTimeout(() => {
-       notification.classList.add('hiding');
-       setTimeout(() => notification.remove(), 300);
-   }, 3000);
+    const notification = document.createElement('div');
+    notification.className = `notification ${type}`;
+    notification.innerHTML = `
+        <span class="notification-icon">
+            ${type === 'success' ? '✓' : type === 'error' ? '✗' : type === 'warning' ? '⚠' : 'ℹ'}
+        </span>
+        <span>${message}</span>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        notification.classList.add('hiding');
+        setTimeout(() => notification.remove(), 300);
+    }, 3000);
 }
 
 // Add Waze-style navigation CSS
 function addWazeNavigationStyles() {
-   const wazeNavigationStyles = `
-       /* Waze-style Navigation */
-       .enhanced-navigation.waze-style {
-           pointer-events: none;
-       }
-       
-       .waze-nav-top {
-           position: fixed;
-           top: 0;
-           left: 0;
-           right: 0;
-           z-index: 1000;
-           pointer-events: auto;
-       }
-       
-       .waze-instruction-bar {
-           background: linear-gradient(to bottom, rgba(10, 10, 11, 0.95), rgba(10, 10, 11, 0.85));
-           backdrop-filter: blur(20px);
-           padding: 12px;
-           display: flex;
-           align-items: center;
-           gap: 12px;
-           border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-       }
-       
-       .waze-close-btn,
-       .waze-menu-btn {
-           width: 36px;
-           height: 36px;
-           border-radius: 50%;
-           background: rgba(255, 255, 255, 0.1);
-           border: none;
-           display: flex;
-           align-items: center;
-           justify-content: center;
-           color: white;
-           cursor: pointer;
-           transition: all 0.2s;
-       }
-       
-       .waze-close-btn:active,
-       .waze-menu-btn:active {
-           background: rgba(255, 255, 255, 0.2);
-           transform: scale(0.95);
-       }
-       
-       .waze-direction-icon {
-           width: 40px;
-           height: 40px;
-           background: var(--primary);
-           border-radius: 50%;
-           display: flex;
-           align-items: center;
-           justify-content: center;
-           flex-shrink: 0;
-       }
-       
-       .direction-arrow {
-           font-size: 24px;
-       }
-       
-       .waze-instruction-text {
-           flex: 1;
-           min-width: 0;
-       }
-       
-       .waze-distance {
-           font-size: 20px;
-           font-weight: 700;
-           color: white;
-           margin-bottom: 2px;
-       }
-       
-       .waze-street {
-           font-size: 14px;
-           color: rgba(255, 255, 255, 0.8);
-           white-space: nowrap;
-           overflow: hidden;
-           text-overflow: ellipsis;
-       }
-       
-       /* Floating bottom pills */
-       .waze-bottom-pills {
-           position: fixed;
-           bottom: calc(30px + var(--safe-area-bottom));
-           left: 20px;
-           right: 20px;
-           display: flex;
-           gap: 10px;
-           z-index: 999;
-           pointer-events: auto;
-       }
-       
-       .waze-pill {
-           background: rgba(10, 10, 11, 0.9);
-           backdrop-filter: blur(10px);
-           border: 1px solid rgba(255, 255, 255, 0.1);
-           border-radius: 25px;
-           padding: 8px 16px;
-           display: flex;
-           align-items: center;
-           gap: 6px;
-           color: white;
-           font-size: 14px;
-       }
-       
-       .pill-icon {
-           font-size: 16px;
-       }
-       
-       .pill-value {
-           font-weight: 600;
-       }
-       
-       .pill-label {
-           color: rgba(255, 255, 255, 0.7);
-           font-size: 12px;
-       }
-       
-       .speed-pill {
-           margin-left: auto;
-           flex-direction: column;
-           align-items: center;
-           padding: 8px 12px;
-       }
-       
-       .speed-pill .pill-value {
-           font-size: 18px;
-           line-height: 1;
-       }
-       
-       /* Floating Action Button */
-       .waze-fab {
-           position: fixed;
-           bottom: calc(100px + var(--safe-area-bottom));
-           right: 20px;
-           width: 56px;
-           height: 56px;
-           background: var(--primary);
-           border-radius: 50%;
-           border: none;
-           display: flex;
-           align-items: center;
-           justify-content: center;
-           box-shadow: 0 4px 12px rgba(0, 102, 255, 0.4);
-           cursor: pointer;
-           z-index: 998;
-           pointer-events: auto;
-           transition: all 0.3s;
-       }
-       
-       .waze-fab:active {
-           transform: scale(0.9);
-       }
-       
-       /* Navigation Menu */
-       .waze-nav-menu {
-           position: fixed;
-           bottom: calc(170px + var(--safe-area-bottom));
-           right: 20px;
-           background: var(--surface-elevated);
-           border-radius: 12px;
-           padding: 8px;
-           box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-           z-index: 997;
-           pointer-events: auto;
-           min-width: 200px;
-       }
-       
-       .nav-menu-item {
-           display: flex;
-           align-items: center;
-           gap: 12px;
-           width: 100%;
-           padding: 12px;
-           background: transparent;
-           border: none;
-           color: var(--text-primary);
-           font-size: 14px;
-           font-weight: 500;
-           cursor: pointer;
-           border-radius: 8px;
-           transition: all 0.2s;
-           text-align: left;
-       }
-       
-       .nav-menu-item:hover {
-           background: var(--surface-high);
-       }
-       
-       .nav-menu-item:active {
-           transform: scale(0.98);
-       }
-       
-       .menu-icon {
-           font-size: 18px;
-           width: 24px;
-           text-align: center;
-       }
-       
-       /* Make sure nav controls are properly positioned */
-       .nav-controls {
-           transition: bottom 0.3s ease;
-       }
-       
-       /* Ensure map is fully visible */
-       .enhanced-navigation.waze-style + .map-container {
-           top: 0 !important;
-       }
-   `;
-   
-   const existingStyle = document.getElementById('waze-nav-styles');
-   if (!existingStyle) {
-       const style = document.createElement('style');
-       style.id = 'waze-nav-styles';
-       style.textContent = wazeNavigationStyles;
-       document.head.appendChild(style);
-   }
+    const wazeNavigationStyles = `
+        /* Waze-style Navigation */
+        .enhanced-navigation.waze-style {
+            pointer-events: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 900; /* Lower than navigation elements */
+        }
+        
+        /* Ensure map container is visible */
+        .map-container {
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            z-index: 1 !important;
+        }
+        
+        #map {
+            width: 100% !important;
+            height: 100% !important;
+        }
+        
+        .waze-nav-top {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            pointer-events: auto;
+        }
+        
+        .waze-instruction-bar {
+            background: linear-gradient(to bottom, rgba(10, 10, 11, 0.95), rgba(10, 10, 11, 0.85));
+            backdrop-filter: blur(20px);
+            padding: 12px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .waze-close-btn,
+        .waze-menu-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .waze-close-btn:active,
+        .waze-menu-btn:active {
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(0.95);
+        }
+        
+        .waze-direction-icon {
+            width: 40px;
+            height: 40px;
+            background: var(--primary);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        
+        .direction-arrow {
+            font-size: 24px;
+        }
+        
+        .waze-instruction-text {
+            flex: 1;
+            min-width: 0;
+        }
+        
+        .waze-distance {
+            font-size: 20px;
+            font-weight: 700;
+            color: white;
+            margin-bottom: 2px;
+        }
+        
+        .waze-street {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.8);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        /* Floating bottom pills */
+        .waze-bottom-pills {
+            position: fixed;
+            bottom: calc(30px + var(--safe-area-bottom));
+            left: 20px;
+            right: 20px;
+            display: flex;
+            gap: 10px;
+            z-index: 999;
+            pointer-events: auto;
+        }
+        
+        .waze-pill {
+            background: rgba(10, 10, 11, 0.9);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 25px;
+            padding: 8px 16px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: white;
+            font-size: 14px;
+        }
+        
+        .pill-icon {
+            font-size: 16px;
+        }
+        
+        .pill-value {
+            font-weight: 600;
+        }
+        
+        .pill-label {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 12px;
+        }
+        
+        .speed-pill {
+            margin-left: auto;
+            flex-direction: column;
+            align-items: center;
+            padding: 8px 12px;
+        }
+        
+        .speed-pill .pill-value {
+            font-size: 18px;
+            line-height: 1;
+        }
+        
+        /* Floating Action Button */
+        .waze-fab {
+            position: fixed;
+            bottom: calc(100px + var(--safe-area-bottom));
+            right: 20px;
+            width: 56px;
+            height: 56px;
+            background: var(--primary);
+            border-radius: 50%;
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 12px rgba(0, 102, 255, 0.4);
+            cursor: pointer;
+            z-index: 998;
+            pointer-events: auto;
+            transition: all 0.3s;
+        }
+        
+        .waze-fab:active {
+            transform: scale(0.9);
+        }
+        
+        /* Navigation Menu */
+        .waze-nav-menu {
+            position: fixed;
+            bottom: calc(170px + var(--safe-area-bottom));
+            right: 20px;
+            background: var(--surface-elevated);
+            border-radius: 12px;
+            padding: 8px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+            z-index: 997;
+            pointer-events: auto;
+            min-width: 200px;
+        }
+        
+        .nav-menu-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            width: 100%;
+            padding: 12px;
+            background: transparent;
+            border: none;
+            color: var(--text-primary);
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: all 0.2s;
+            text-align: left;
+        }
+        
+        .nav-menu-item:hover {
+            background: var(--surface-high);
+        }
+        
+        .nav-menu-item:active {
+            transform: scale(0.98);
+        }
+        
+        .menu-icon {
+            font-size: 18px;
+            width: 24px;
+            text-align: center;
+        }
+        
+        /* Make sure nav controls are properly positioned */
+        .nav-controls {
+            transition: bottom 0.3s ease;
+        }
+        
+        /* Ensure map is fully visible */
+        .enhanced-navigation.waze-style + .map-container {
+            top: 0 !important;
+        }
+    `;
+    
+    const existingStyle = document.getElementById('waze-nav-styles');
+    if (!existingStyle) {
+        const style = document.createElement('style');
+        style.id = 'waze-nav-styles';
+        style.textContent = wazeNavigationStyles;
+        document.head.appendChild(style);
+    }
 }
 
 // Add CSS for navigation UI
 const navStyles = document.createElement('style');
 navStyles.textContent = `
-   .enhanced-navigation {
-       position: fixed;
-       top: 0;
-       left: 0;
-       right: 0;
-       bottom: 0;
-       background: var(--surface);
-       z-index: 1000;
-       display: flex;
-       flex-direction: column;
-   }
-   
-   .nav-top-bar {
-       background: var(--surface-elevated);
-       border-bottom: 1px solid var(--border);
-       padding: 16px;
-       padding-top: calc(16px + var(--safe-area-top));
-   }
-   
-   .nav-header {
-       display: flex;
-       align-items: center;
-       justify-content: space-between;
-       margin-bottom: 16px;
-   }
-   
-   .nav-close-btn {
-       width: 40px;
-       height: 40px;
-       border-radius: 50%;
-       background: var(--surface-high);
-       border: none;
-       display: flex;
-       align-items: center;
-       justify-content: center;
-       cursor: pointer;
-       color: var(--text-primary);
-   }
-   
-   .nav-route-info {
-       display: flex;
-       align-items: center;
-       gap: 12px;
-   }
-   
-   .nav-route-type {
-       padding: 6px 12px;
-       border-radius: 8px;
-       font-size: 12px;
-       font-weight: 600;
-       background: var(--primary);
-       color: white;
-   }
-   
-   .nav-route-type.pickup {
-       background: var(--warning);
-       color: black;
-   }
-   
-   .nav-parcel-code {
-       font-size: 14px;
-       font-weight: 600;
-       color: var(--text-secondary);
-   }
-   
-   .nav-instruction-card {
-       background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-       border-radius: 16px;
-       padding: 24px;
-       color: white;
-       display: flex;
-       gap: 20px;
-       align-items: center;
-   }
-   
-   .nav-direction-visual {
-       display: flex;
-       flex-direction: column;
-       align-items: center;
-       min-width: 80px;
-   }
-   
-   .direction-icon-large {
-       font-size: 48px;
-       margin-bottom: 8px;
-   }
-   
-   .direction-distance {
-       display: flex;
-       align-items: baseline;
-       gap: 4px;
-   }
-   
-   .distance-value {
-       font-size: 24px;
-       font-weight: 700;
-   }
-   
-   .distance-unit {
-       font-size: 16px;
-       opacity: 0.9;
-   }
-   
-   .nav-instruction-text {
-       flex: 1;
-   }
-   
-   .nav-street-name {
-       font-size: 24px;
-       font-weight: 700;
-       margin-bottom: 4px;
-   }
-   
-   .nav-instruction-detail {
-       font-size: 16px;
-       opacity: 0.9;
-   }
-   
-   .nav-bottom-info {
-       display: grid;
-       grid-template-columns: repeat(3, 1fr);
-       gap: 12px;
-       padding: 16px;
-       background: var(--surface);
-   }
-   
-   .nav-eta-card,
-   .nav-distance-card,
-   .nav-speed-card {
-       background: var(--surface-elevated);
-       border-radius: 12px;
-       padding: 16px;
-       display: flex;
-       align-items: center;
-       gap: 12px;
-       border: 1px solid var(--border);
-   }
-   
-   .eta-icon,
-   .distance-icon,
-   .speed-icon {
-       font-size: 24px;
-   }
-   
-   .eta-info,
-   .distance-info,
-   .speed-info {
-       flex: 1;
-   }
-   
-   .eta-time,
-   .distance-remaining,
-   .speed-value {
-       font-size: 18px;
-       font-weight: 700;
-       color: var(--primary);
-   }
-   
-   .eta-label,
-   .distance-label,
-   .speed-label {
-       font-size: 12px;
-       color: var(--text-secondary);
-   }
-   
-   .nav-destination-preview {
-       position: absolute;
-       bottom: 0;
-       left: 0;
-       right: 0;
-       background: var(--surface-elevated);
-       border-radius: 20px 20px 0 0;
-       padding: 20px;
-       padding-bottom: calc(20px + var(--safe-area-bottom));
-       box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
-   }
-   
-   .destination-header {
-       display: flex;
-       justify-content: space-between;
-       align-items: center;
-       margin-bottom: 12px;
-   }
-   
-   .destination-type {
-       font-size: 14px;
-       font-weight: 600;
-       color: var(--text-secondary);
-   }
-   
-   .nav-more-btn {
-       width: 32px;
-       height: 32px;
-       border-radius: 50%;
-       background: var(--surface-high);
-       border: none;
-       display: flex;
-       align-items: center;
-       justify-content: center;
-       cursor: pointer;
-       color: var(--text-primary);
-   }
-   
-   .destination-address {
-       font-size: 18px;
-       font-weight: 600;
-       margin-bottom: 8px;
-   }
-   
-   .destination-customer {
-       font-size: 16px;
-       color: var(--text-secondary);
-       margin-bottom: 16px;
-   }
-   
-   .nav-quick-actions {
-       display: grid;
-       grid-template-columns: repeat(3, 1fr);
-       gap: 12px;
-   }
-   
-   .quick-action-btn {
-       background: var(--surface-high);
-       border: none;
-       border-radius: 12px;
-       padding: 12px;
-       color: var(--text-primary);
-       font-size: 14px;
-       font-weight: 600;
-       cursor: pointer;
-       display: flex;
-       flex-direction: column;
-       align-items: center;
-       gap: 4px;
-       transition: all 0.2s;
-   }
-   
-   .quick-action-btn:active {
-       scale: 0.95;
-   }
-   
-   .quick-action-btn.call {
-       background: var(--success);
-       color: white;
-   }
-   
-   .quick-action-btn.verify {
-       background: var(--primary);
-       color: white;
-   }
-   
-   .nav-closing {
-       animation: slideOut 0.3s ease-out;
-   }
-   
-   @keyframes slideOut {
-       to {
-           transform: translateY(100%);
-       }
-   }
-   
-   .destination-details-modal,
-   .verification-modal {
-       position: fixed;
-       top: 0;
-       left: 0;
-       right: 0;
-       bottom: 0;
-       z-index: 2000;
-       display: flex;
-       align-items: center;
-       justify-content: center;
-       padding: 20px;
-   }
-   
-   .modal-overlay {
-       position: absolute;
-       top: 0;
-       left: 0;
-       right: 0;
-       bottom: 0;
-       background: rgba(0, 0, 0, 0.8);
-       backdrop-filter: blur(10px);
-   }
-   
-   .modal-content {
-       position: relative;
-       background: var(--surface-elevated);
-       border-radius: 20px;
-       max-width: 400px;
-       width: 100%;
-       overflow: hidden;
-       z-index: 1;
-   }
-   
-   .modal-header {
-       padding: 20px;
-       background: var(--surface-high);
-       display: flex;
-       align-items: center;
-       justify-content: space-between;
-   }
-   
-   .modal-header.pickup {
-       background: var(--warning);
-       color: black;
-   }
-   
-   .modal-header.delivery {
-       background: var(--success);
-       color: white;
-   }
-   
-   .modal-close {
-       width: 32px;
-       height: 32px;
-       border-radius: 50%;
-       background: rgba(255, 255, 255, 0.2);
-       border: none;
-       display: flex;
-       align-items: center;
-       justify-content: center;
-       cursor: pointer;
-       color: inherit;
-   }
-   
-   .modal-body {
-       padding: 20px;
-   }
-   
-   .detail-section {
-       margin-bottom: 20px;
-   }
-   
-   .detail-section h4 {
-       font-size: 14px;
-       color: var(--text-secondary);
-       margin-bottom: 8px;
-   }
-   
-   .detail-section p {
-       font-size: 16px;
-       line-height: 1.5;
-   }
-   
-   .code-display {
-       font-family: monospace;
-       font-size: 20px;
-       font-weight: 700;
-       color: var(--primary);
-   }
-   
-   .verification-section {
-       margin: 20px 0;
-   }
-   
-   .verification-section label {
-       display: block;
-       font-size: 16px;
-       margin-bottom: 12px;
-   }
-   
-   .verification-input {
-       width: 100%;
-       background: var(--surface-high);
-       border: 2px solid var(--border);
-       border-radius: 12px;
-       padding: 16px;
-       font-size: 24px;
-       font-weight: 700;
-       text-align: center;
-       color: var(--text-primary);
-       letter-spacing: 4px;
-       text-transform: uppercase;
-       outline: none;
-       transition: all 0.3s;
-   }
-   
-   .verification-input:focus {
-       border-color: var(--primary);
-       transform: translateY(-2px);
-       box-shadow: 0 4px 20px rgba(0, 102, 255, 0.2);
-   }
-   
-   .verification-input.error {
-       border-color: var(--danger);
-       animation: shake 0.3s;
-   }
-   
-   @keyframes shake {
-       0%, 100% { transform: translateX(0); }
-       25% { transform: translateX(-10px); }
-       75% { transform: translateX(10px); }
-   }
-   
-   .code-hint {
-       font-size: 14px;
-       color: var(--text-secondary);
-       text-align: center;
-       margin-top: 8px;
-   }
-   
-   .modal-actions {
-       display: flex;
-       gap: 12px;
-       margin-top: 24px;
-   }
-   
-   .modal-btn {
-       flex: 1;
-       padding: 16px;
-       border: none;
-       border-radius: 12px;
-       font-size: 16px;
-       font-weight: 600;
-       cursor: pointer;
-       display: flex;
-       align-items: center;
-       justify-content: center;
-       gap: 8px;
-       transition: all 0.2s;
-   }
-   
-   .modal-btn.primary {
-       background: var(--primary);
-       color: white;
-   }
-   
-   .modal-btn.secondary {
-       background: var(--surface-high);
-       color: var(--text-primary);
-   }
-   
-   .modal-btn:active {
-       scale: 0.95;
-   }
-   
-   .success-animation,
-   .phase-complete-animation,
-   .route-complete-animation {
-       position: fixed;
-       top: 50%;
-       left: 50%;
-       transform: translate(-50%, -50%);
-       background: var(--surface-elevated);
-       border-radius: 20px;
-       padding: 40px;
-       text-align: center;
-       z-index: 3000;
-       box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
-       animation: popIn 0.3s ease-out;
-   }
-   
-   @keyframes popIn {
-       from {
-           scale: 0.8;
-           opacity: 0;
-       }
-       to {
-           scale: 1;
-           opacity: 1;
-       }
-   }
-   
-   .success-icon {
-       width: 80px;
-       height: 80px;
-       background: var(--success);
-       border-radius: 50%;
-       display: flex;
-       align-items: center;
-       justify-content: center;
-       margin: 0 auto 20px;
-       font-size: 48px;
-       color: white;
-   }
-   
-   .success-text {
-       font-size: 24px;
-       font-weight: 700;
-   }
-   
-   .phase-complete-content,
-   .route-complete-content {
-       max-width: 360px;
-   }
-   
-   .phase-icon,
-   .complete-icon {
-       font-size: 64px;
-       margin-bottom: 20px;
-   }
-   
-   .route-complete-content h1 {
-       font-size: 28px;
-       margin-bottom: 12px;
-   }
-   
-   .route-complete-content p {
-       font-size: 16px;
-       color: var(--text-secondary);
-       margin-bottom: 24px;
-   }
-   
-   .route-stats {
-       display: flex;
-       justify-content: center;
-       gap: 40px;
-       margin-bottom: 32px;
-   }
-   
-   .route-stats .stat {
-       text-align: center;
-   }
-   
-   .route-stats .stat-value {
-       display: block;
-       font-size: 32px;
-       font-weight: 700;
-       color: var(--primary);
-       margin-bottom: 4px;
-   }
-   
-   .route-stats .stat-label {
-       font-size: 14px;
-       color: var(--text-secondary);
-   }
-   
-   .complete-btn {
-       width: 100%;
-       background: var(--primary);
-       color: white;
-       border: none;
-       border-radius: 14px;
-       padding: 16px;
-       font-size: 18px;
-       font-weight: 700;
-       cursor: pointer;
-   }
-   
-   .notification {
-       position: fixed;
-       top: 20px;
-       right: 20px;
-       background: var(--surface-elevated);
-       color: var(--text-primary);
-       padding: 16px 20px;
-       border-radius: 12px;
-       box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-       display: flex;
-       align-items: center;
-       gap: 12px;
-       z-index: 4000;
-       animation: slideIn 0.3s ease-out;
-       max-width: 350px;
-       border: 1px solid var(--border);
-   }
-   
-   .notification.success {
-       background: var(--success);
-       color: white;
-       border-color: var(--success);
-   }
-   
-   .notification.error {
-       background: var(--danger);
-       color: white;
-       border-color: var(--danger);
-   }
-   
-   .notification.warning {
-       background: var(--warning);
-       color: black;
-       border-color: var(--warning);
-   }
-   
-   .notification-icon {
-       font-size: 20px;
-   }
-   
-   .notification.hiding {
-       animation: slideOut 0.3s ease-out;
-   }
-   
-   @keyframes slideIn {
-       from {
-           transform: translateX(100%);
-           opacity: 0;
-       }
-       to {
-           transform: translateX(0);
-           opacity: 1;
-       }
-   }
-   
-   @keyframes slideOut {
-       from {
-           transform: translateX(0);
-           opacity: 1;
-       }
-       to {
-           transform: translateX(100%);
-           opacity: 0;
-       }
-   }
-   
-   .modal-closing {
-       animation: fadeOut 0.3s ease-out;
-   }
-   
-   @keyframes fadeOut {
-       to {
-           opacity: 0;
-       }
-   }
+    .enhanced-navigation {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: var(--surface);
+        z-index: 1000;
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .nav-top-bar {
+        background: var(--surface-elevated);
+        border-bottom: 1px solid var(--border);
+        padding: 16px;
+        padding-top: calc(16px + var(--safe-area-top));
+    }
+    
+    .nav-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 16px;
+    }
+    
+    .nav-close-btn {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: var(--surface-high);
+        border: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        color: var(--text-primary);
+    }
+    
+    .nav-route-info {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+    
+    .nav-route-type {
+        padding: 6px 12px;
+        border-radius: 8px;
+        font-size: 12px;
+        font-weight: 600;
+        background: var(--primary);
+        color: white;
+    }
+    
+    .nav-route-type.pickup {
+        background: var(--warning);
+        color: black;
+    }
+    
+    .nav-parcel-code {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-secondary);
+    }
+    
+    .nav-instruction-card {
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+        border-radius: 16px;
+        padding: 24px;
+        color: white;
+        display: flex;
+        gap: 20px;
+        align-items: center;
+    }
+    
+    .nav-direction-visual {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        min-width: 80px;
+    }
+    
+    .direction-icon-large {
+        font-size: 48px;
+        margin-bottom: 8px;
+    }
+    
+    .direction-distance {
+        display: flex;
+        align-items: baseline;
+        gap: 4px;
+    }
+    
+    .distance-value {
+        font-size: 24px;
+        font-weight: 700;
+    }
+    
+    .distance-unit {
+        font-size: 16px;
+        opacity: 0.9;
+    }
+    
+    .nav-instruction-text {
+        flex: 1;
+    }
+    
+    .nav-street-name {
+        font-size: 24px;
+        font-weight: 700;
+        margin-bottom: 4px;
+    }
+    
+    .nav-instruction-detail {
+        font-size: 16px;
+        opacity: 0.9;
+    }
+    
+    .nav-bottom-info {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+        padding: 16px;
+        background: var(--surface);
+    }
+    
+    .nav-eta-card,
+    .nav-distance-card,
+    .nav-speed-card {
+        background: var(--surface-elevated);
+        border-radius: 12px;
+        padding: 16px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        border: 1px solid var(--border);
+    }
+    
+    .eta-icon,
+    .distance-icon,
+    .speed-icon {
+        font-size: 24px;
+    }
+    
+    .eta-info,
+    .distance-info,
+    .speed-info {
+        flex: 1;
+    }
+    
+    .eta-time,
+    .distance-remaining,
+    .speed-value {
+        font-size: 18px;
+        font-weight: 700;
+        color: var(--primary);
+    }
+    
+    .eta-label,
+    .distance-label,
+    .speed-label {
+        font-size: 12px;
+        color: var(--text-secondary);
+    }
+    
+    .nav-destination-preview {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: var(--surface-elevated);
+        border-radius: 20px 20px 0 0;
+        padding: 20px;
+        padding-bottom: calc(20px + var(--safe-area-bottom));
+        box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
+    }
+    
+    .destination-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+    }
+    
+    .destination-type {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-secondary);
+    }
+    
+    .nav-more-btn {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: var(--surface-high);
+        border: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        color: var(--text-primary);
+    }
+    
+    .destination-address {
+        font-size: 18px;
+        font-weight: 600;
+        margin-bottom: 8px;
+    }
+    
+    .destination-customer {
+        font-size: 16px;
+        color: var(--text-secondary);
+        margin-bottom: 16px;
+    }
+    
+    .nav-quick-actions {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+    }
+    
+    .quick-action-btn {
+        background: var(--surface-high);
+        border: none;
+        border-radius: 12px;
+        padding: 12px;
+        color: var(--text-primary);
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        transition: all 0.2s;
+    }
+    
+    .quick-action-btn:active {
+        scale: 0.95;
+    }
+    
+    .quick-action-btn.call {
+        background: var(--success);
+        color: white;
+    }
+    
+    .quick-action-btn.verify {
+        background: var(--primary);
+        color: white;
+    }
+    
+    .nav-closing {
+        animation: slideOut 0.3s ease-out;
+    }
+    
+    @keyframes slideOut {
+        to {
+            transform: translateY(100%);
+        }
+    }
+    
+    .destination-details-modal,
+    .verification-modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 2000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+    }
+    
+    .modal-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.8);
+        backdrop-filter: blur(10px);
+    }
+    
+    .modal-content {
+        position: relative;
+        background: var(--surface-elevated);
+        border-radius: 20px;
+        max-width: 400px;
+        width: 100%;
+        overflow: hidden;
+        z-index: 1;
+    }
+    
+    .modal-header {
+        padding: 20px;
+        background: var(--surface-high);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    
+    .modal-header.pickup {
+        background: var(--warning);
+        color: black;
+    }
+    
+    .modal-header.delivery {
+        background: var(--success);
+        color: white;
+    }
+    
+    .modal-close {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.2);
+        border: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        color: inherit;
+    }
+    
+    .modal-body {
+        padding: 20px;
+    }
+    
+    .detail-section {
+        margin-bottom: 20px;
+    }
+    
+    .detail-section h4 {
+        font-size: 14px;
+        color: var(--text-secondary);
+        margin-bottom: 8px;
+    }
+    
+    .detail-section p {
+        font-size: 16px;
+        line-height: 1.5;
+    }
+    
+    .code-display {
+        font-family: monospace;
+        font-size: 20px;
+        font-weight: 700;
+        color: var(--primary);
+    }
+    
+    .verification-section {
+        margin: 20px 0;
+    }
+    
+    .verification-section label {
+        display: block;
+        font-size: 16px;
+        margin-bottom: 12px;
+    }
+    
+    .verification-input {
+        width: 100%;
+        background: var(--surface-high);
+        border: 2px solid var(--border);
+        border-radius: 12px;
+        padding: 16px;
+        font-size: 24px;
+        font-weight: 700;
+        text-align: center;
+        color: var(--text-primary);
+        letter-spacing: 4px;
+        text-transform: uppercase;
+        outline: none;
+        transition: all 0.3s;
+    }
+    
+    .verification-input:focus {
+        border-color: var(--primary);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 20px rgba(0, 102, 255, 0.2);
+    }
+    
+    .verification-input.error {
+        border-color: var(--danger);
+        animation: shake 0.3s;
+    }
+    
+    @keyframes shake {
+        0%, 100% { transform: translateX(0); }
+        25% { transform: translateX(-10px); }
+        75% { transform: translateX(10px); }
+    }
+    
+    .code-hint {
+        font-size: 14px;
+        color: var(--text-secondary);
+        text-align: center;
+        margin-top: 8px;
+    }
+    
+    .modal-actions {
+        display: flex;
+        gap: 12px;
+        margin-top: 24px;
+    }
+    
+    .modal-btn {
+        flex: 1;
+        padding: 16px;
+        border: none;
+        border-radius: 12px;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        transition: all 0.2s;
+    }
+    
+    .modal-btn.primary {
+        background: var(--primary);
+        color: white;
+    }
+    
+    .modal-btn.secondary {
+        background: var(--surface-high);
+        color: var(--text-primary);
+    }
+    
+    .modal-btn:active {
+        scale: 0.95;
+    }
+    
+    .success-animation,
+    .phase-complete-animation,
+    .route-complete-animation {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: var(--surface-elevated);
+        border-radius: 20px;
+        padding: 40px;
+        text-align: center;
+        z-index: 3000;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        animation: popIn 0.3s ease-out;
+    }
+    
+    @keyframes popIn {
+        from {
+            scale: 0.8;
+            opacity: 0;
+        }
+        to {
+            scale: 1;
+            opacity: 1;
+        }
+    }
+    
+    .success-icon {
+        width: 80px;
+        height: 80px;
+        background: var(--success);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 20px;
+        font-size: 48px;
+        color: white;
+    }
+    
+    .success-text {
+        font-size: 24px;
+        font-weight: 700;
+    }
+    
+    .phase-complete-content,
+    .route-complete-content {
+        max-width: 360px;
+    }
+    
+    .phase-icon,
+    .complete-icon {
+        font-size: 64px;
+        margin-bottom: 20px;
+    }
+    
+    .route-complete-content h1 {
+        font-size: 28px;
+        margin-bottom: 12px;
+    }
+    
+    .route-complete-content p {
+        font-size: 16px;
+        color: var(--text-secondary);
+        margin-bottom: 24px;
+    }
+    
+    .route-stats {
+        display: flex;
+        justify-content: center;
+        gap: 40px;
+        margin-bottom: 32px;
+    }
+    
+    .route-stats .stat {
+        text-align: center;
+    }
+    
+    .route-stats .stat-value {
+        display: block;
+        font-size: 32px;
+        font-weight: 700;
+        color: var(--primary);
+        margin-bottom: 4px;
+    }
+    
+    .route-stats .stat-label {
+        font-size: 14px;
+        color: var(--text-secondary);
+    }
+    
+    .complete-btn {
+        width: 100%;
+        background: var(--primary);
+        color: white;
+        border: none;
+        border-radius: 14px;
+        padding: 16px;
+        font-size: 18px;
+        font-weight: 700;
+        cursor: pointer;
+    }
+    
+    .notification {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: var(--surface-elevated);
+        color: var(--text-primary);
+        padding: 16px 20px;
+        border-radius: 12px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        z-index: 4000;
+        animation: slideIn 0.3s ease-out;
+        max-width: 350px;
+        border: 1px solid var(--border);
+    }
+    
+    .notification.success {
+        background: var(--success);
+        color: white;
+        border-color: var(--success);
+    }
+    
+    .notification.error {
+        background: var(--danger);
+        color: white;
+        border-color: var(--danger);
+    }
+    
+    .notification.warning {
+        background: var(--warning);
+        color: black;
+        border-color: var(--warning);
+    }
+    
+    .notification-icon {
+        font-size: 20px;
+    }
+    
+    .notification.hiding {
+        animation: slideOut 0.3s ease-out;
+    }
+    
+    @keyframes slideIn {
+        from {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+        to {
+            transform: translateX(0);
+            opacity: 1;
+        }
+    }
+    
+    @keyframes slideOut {
+        from {
+            transform: translateX(0);
+            opacity: 1;
+        }
+        to {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+    }
+    
+    .modal-closing {
+        animation: fadeOut 0.3s ease-out;
+    }
+    
+    @keyframes fadeOut {
+        to {
+            opacity: 0;
+        }
+    }
+    
+    /* Pulse effect for current location */
+    @keyframes pulse {
+        0% {
+            transform: scale(0.95);
+            opacity: 0.7;
+        }
+        70% {
+            transform: scale(1.3);
+            opacity: 0.3;
+        }
+        100% {
+            transform: scale(0.95);
+            opacity: 0.7;
+        }
+    }
+    
+    .pulse-circle {
+        animation: pulse 2s infinite;
+    }
 `;
 document.head.appendChild(navStyles);
 
 // Export for debugging
 window.routeDebug = {
-   state,
-   reloadRoute: () => {
-       const stored = localStorage.getItem('tuma_active_route');
-       if (stored) {
-           state.activeRoute = JSON.parse(stored);
-           displayRouteInfo();
-           updateDynamicHeader();
-           plotRoute();
-       }
-   },
-   simulatePickup: () => {
-       const nextPickup = state.activeRoute.stops.find(s => s.type === 'pickup' && !s.completed);
-       if (nextPickup) {
-           nextPickup.completed = true;
-           nextPickup.timestamp = new Date();
-           localStorage.setItem('tuma_active_route', JSON.stringify(state.activeRoute));
-           displayRouteInfo();
-           updateDynamicHeader();
-           plotRoute();
-       }
-   },
-   clearRoute: () => {
-       localStorage.removeItem('tuma_active_route');
-       window.location.reload();
-   },
-   testOpenRoute: async () => {
-       // Test OpenRouteService API
-       const testCoords = [
-           [36.8219, -1.2921], // Nairobi CBD
-           [36.7853, -1.2906]  // Kilimani
-       ];
-       
-       try {
-           const response = await fetch('https://api.openrouteservice.org/v2/directions/driving-car', {
-               method: 'POST',
-               headers: {
-                   'Accept': 'application/json',
-                   'Content-Type': 'application/json',
-                   'Authorization': OPENROUTE_API_KEY
-               },
-               body: JSON.stringify({ coordinates: testCoords })
-           });
-           
-           const data = await response.json();
-           console.log('OpenRouteService test:', data);
-           return data;
-       } catch (error) {
-           console.error('OpenRouteService test failed:', error);
-       }
-   }
+    state,
+    reloadRoute: () => {
+        const stored = localStorage.getItem('tuma_active_route');
+        if (stored) {
+            state.activeRoute = JSON.parse(stored);
+            displayRouteInfo();
+            updateDynamicHeader();
+            plotRoute();
+        }
+    },
+    simulatePickup: () => {
+        const nextPickup = state.activeRoute.stops.find(s => s.type === 'pickup' && !s.completed);
+        if (nextPickup) {
+            nextPickup.completed = true;
+            nextPickup.timestamp = new Date();
+            localStorage.setItem('tuma_active_route', JSON.stringify(state.activeRoute));
+            displayRouteInfo();
+            updateDynamicHeader();
+            plotRoute();
+        }
+    },
+    clearRoute: () => {
+        localStorage.removeItem('tuma_active_route');
+        window.location.reload();
+    },
+    testOpenRoute: async () => {
+        // Test OpenRouteService API
+        const testCoords = [
+            [36.8219, -1.2921], // Nairobi CBD
+            [36.7853, -1.2906]  // Kilimani
+        ];
+        
+        try {
+            const response = await fetch('https://api.openrouteservice.org/v2/directions/driving-car', {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'Authorization': OPENROUTE_API_KEY
+                },
+                body: JSON.stringify({ coordinates: testCoords })
+            });
+            
+            const data = await response.json();
+            console.log('OpenRouteService test:', data);
+            return data;
+        } catch (error) {
+            console.error('OpenRouteService test failed:', error);
+        }
+    }
 };
 
 console.log('Enhanced Route.js with Waze-style navigation loaded successfully!');
