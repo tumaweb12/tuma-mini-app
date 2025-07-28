@@ -80,6 +80,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             // Plot route on map
             await plotRoute();
             
+            // Draw optimized route line on initial load
+            await drawOptimizedRoute();
+            
             // Show route panel
             showRoutePanel();
             
@@ -454,7 +457,10 @@ async function drawOptimizedRoute() {
     if (!state.activeRoute) return;
     
     const stops = state.activeRoute.stops.filter(s => !s.completed);
-    if (stops.length < 2) return;
+    if (stops.length < 2) {
+        console.log('Not enough stops to draw route');
+        return;
+    }
     
     try {
         // Clear existing route line
@@ -463,8 +469,16 @@ async function drawOptimizedRoute() {
             state.routePolyline = null;
         }
         
-        // Prepare coordinates for OpenRouteService (lng, lat order!)
-        const coordinates = stops.map(stop => [stop.location.lng, stop.location.lat]);
+        // Add current location if available and we're in navigation mode
+        let coordinates = [];
+        if (state.currentLocation && state.navigationActive) {
+            coordinates.push([state.currentLocation.lng, state.currentLocation.lat]);
+        }
+        
+        // Add stop coordinates
+        coordinates = coordinates.concat(stops.map(stop => [stop.location.lng, stop.location.lat]));
+        
+        console.log('Drawing route with coordinates:', coordinates);
         
         // Call OpenRouteService Directions API with proper body format
         const response = await fetch('https://api.openrouteservice.org/v2/directions/driving-car', {
@@ -475,7 +489,14 @@ async function drawOptimizedRoute() {
                 'Authorization': OPENROUTE_API_KEY
             },
             body: JSON.stringify({
-                coordinates: coordinates
+                coordinates: coordinates,
+                continue_straight: false,
+                elevation: false,
+                extra_info: [],
+                geometry: true,
+                instructions: false,
+                preference: 'recommended',
+                units: 'km'
             })
         });
         
@@ -486,6 +507,7 @@ async function drawOptimizedRoute() {
         }
         
         const data = await response.json();
+        console.log('Route response:', data);
         
         if (data.routes && data.routes.length > 0) {
             const route = data.routes[0];
@@ -505,14 +527,38 @@ async function drawOptimizedRoute() {
             const distance = (route.summary.distance / 1000).toFixed(1);
             const duration = Math.round(route.summary.duration / 60);
             
-            document.getElementById('totalDistance').textContent = distance;
-            document.getElementById('estimatedTime').textContent = duration;
+            if (document.getElementById('totalDistance')) {
+                document.getElementById('totalDistance').textContent = distance;
+            }
+            if (document.getElementById('estimatedTime')) {
+                document.getElementById('estimatedTime').textContent = duration;
+            }
+            
+            console.log('Route drawn successfully');
         }
     } catch (error) {
         console.error('Error getting route:', error);
-        // Don't draw fallback straight lines
-        showNotification('Route optimization unavailable', 'warning');
+        // Draw fallback straight lines between stops
+        drawFallbackRoute(stops);
     }
+}
+
+// Fallback route drawing
+function drawFallbackRoute(stops) {
+    console.log('Drawing fallback route');
+    const coords = stops.map(stop => [stop.location.lat, stop.location.lng]);
+    
+    if (state.currentLocation && state.navigationActive) {
+        coords.unshift([state.currentLocation.lat, state.currentLocation.lng]);
+    }
+    
+    state.routePolyline = L.polyline(coords, {
+        color: '#0066FF',
+        weight: 4,
+        opacity: 0.6,
+        dashArray: '10, 10',
+        smoothFactor: 1
+    }).addTo(state.map);
 }
 
 // Decode polyline from OpenRouteService
@@ -928,19 +974,28 @@ window.startNavigation = function() {
         return;
     }
     
-    // First optimize the route
-    showNotification('Optimizing route...', 'info');
-    drawOptimizedRoute().then(() => {
-        // Enable continuous tracking
-        startContinuousTracking();
-        
-        // Show enhanced in-app navigation
-        showEnhancedNavigation(nextStop);
-        
-        // Set navigation active state
-        state.navigationActive = true;
-    });
+    // Don't need to optimize route again if it's already drawn
+    if (!state.routePolyline) {
+        showNotification('Optimizing route...', 'info');
+        drawOptimizedRoute().then(() => {
+            proceedWithNavigation(nextStop);
+        });
+    } else {
+        proceedWithNavigation(nextStop);
+    }
 };
+
+// Helper function to proceed with navigation
+function proceedWithNavigation(nextStop) {
+    // Enable continuous tracking
+    startContinuousTracking();
+    
+    // Show enhanced in-app navigation
+    showEnhancedNavigation(nextStop);
+    
+    // Set navigation active state
+    state.navigationActive = true;
+}
 
 // Enhanced Waze-like navigation interface - FIXED
 function showEnhancedNavigation(targetStop) {
@@ -1590,6 +1645,9 @@ window.verifyCode = async function(stopId) {
     updateDynamicHeader();
     plotRoute();
     
+    // Redraw the route line to reflect completed stops
+    drawOptimizedRoute();
+    
     // Check if phase complete
     checkPhaseCompletion();
     
@@ -1737,7 +1795,7 @@ function addWazeNavigationStyles() {
             z-index: 900; /* Lower than navigation elements */
         }
         
-        /* Ensure map container is visible */
+        /* Ensure map container is always visible and full screen */
         .map-container {
             position: absolute !important;
             top: 0 !important;
@@ -1750,6 +1808,19 @@ function addWazeNavigationStyles() {
         #map {
             width: 100% !important;
             height: 100% !important;
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+        }
+        
+        /* Hide route panel when navigation is active */
+        .enhanced-navigation.waze-style ~ #routePanel {
+            display: none !important;
+        }
+        
+        /* Hide nav controls when navigation is active */
+        .enhanced-navigation.waze-style ~ #navControls {
+            display: none !important;
         }
         
         .waze-nav-top {
