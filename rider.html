@@ -702,22 +702,19 @@
             border-radius: 14px;
             padding: 16px;
             border: 1px solid var(--border);
-            cursor: pointer;
             transition: all 0.3s;
             position: relative;
             overflow: hidden;
+            cursor: default;
         }
 
-        .route-card:hover:not(.claimed) {
-            transform: translateY(-2px);
-            border-color: var(--primary);
-            box-shadow: 0 4px 20px rgba(0, 102, 255, 0.2);
+        .route-card:not(.claimed) {
+            transition: all 0.3s ease;
         }
 
         .route-card.claimed {
             opacity: 0.6;
             background: var(--surface-dim);
-            cursor: not-allowed;
         }
 
         .route-header {
@@ -797,9 +794,15 @@
             z-index: 2;
         }
 
-        .claim-button:active {
-            scale: 0.98;
+        .claim-button:hover:not(:disabled) {
             background: var(--primary-dark);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 102, 255, 0.3);
+        }
+
+        .claim-button:active:not(:disabled) {
+            scale: 0.98;
+            transform: translateY(0);
         }
 
         .claim-button:disabled {
@@ -1168,7 +1171,7 @@
                             <p class="app-subtitle">Rider Dashboard</p>
                         </div>
                     </div>
-                    <button class="menu-button" onclick="showMenu()" aria-label="Menu">
+                    <button type="button" class="menu-button" onclick="showMenu()" aria-label="Menu">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
                             <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
                         </svg>
@@ -1178,8 +1181,8 @@
 
             <!-- Quick Actions Bar will be added by JS -->
 
-            <!-- Form Container -->
-            <form class="form-container">
+            <!-- Form Container - Changed from form to div to prevent submission -->
+            <div class="form-container">
                 <!-- Hero Section -->
                 <div class="hero-section">
                     <h2 class="hero-title">Welcome, <span id="riderName">Rider</span></h2>
@@ -1275,11 +1278,11 @@
                         <!-- Routes will be populated by JS -->
                     </div>
                 </div>
-            </form>
+            </div>
         </div>
 
         <!-- Navigation Button (shows when route is active) -->
-        <button class="nav-button" id="navButton" onclick="navigateToRoute()" style="display: none;">
+        <button type="button" class="nav-button" id="navButton" onclick="navigateToRoute()" style="display: none;">
             <svg viewBox="0 0 24 24" fill="white">
                 <path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/>
             </svg>
@@ -1334,7 +1337,7 @@
                             </div>
                         </div>
                     </div>
-                    <button class="menu-close" onclick="closeMenu()">
+                    <button type="button" class="menu-close" onclick="closeMenu()">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
                             <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
                         </svg>
