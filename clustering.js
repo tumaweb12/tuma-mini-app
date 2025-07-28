@@ -536,20 +536,69 @@ class TumaRouteClustering {
      * Generate descriptive route name
      */
     generateRouteName(cluster) {
-        const pickupAreas = [...new Set(cluster.map(p => p._pickupArea))];
-        const deliveryAreas = [...new Set(cluster.map(p => p._deliveryArea))];
-        
-        if (pickupAreas.length === 1 && deliveryAreas.length === 1) {
-            if (pickupAreas[0] === deliveryAreas[0]) {
-                return `${pickupAreas[0]} Local`;
+        // Extract actual place names from addresses
+        const getPlaceName = (address) => {
+            if (!address) return '';
+            
+            // Common patterns to extract place names
+            const patterns = [
+                // Matches "Place Name, Area" format
+                /^([^,]+),/,
+                // Matches "Building/Place Name" before road/street
+                /^(.+?)(?:\s+Road|\s+Street|\s+Avenue|\s+Drive|\s+Lane|\s+Way|\s+Close)/i,
+                // Matches landmarks
+                /^(.+?)(?:\s+Mall|\s+Centre|\s+Center|\s+Plaza|\s+Building|\s+House|\s+Court)/i
+            ];
+            
+            for (const pattern of patterns) {
+                const match = address.match(pattern);
+                if (match) {
+                    return match[1].trim();
+                }
             }
-            return `${pickupAreas[0]} → ${deliveryAreas[0]}`;
-        } else if (pickupAreas.length === 1) {
-            const corridor = cluster[0]._deliveryCorridor;
-            return `${pickupAreas[0]} → ${this.formatCorridorName(corridor)}`;
-        }
+            
+            // Fallback to first part of address
+            return address.split(',')[0].trim();
+        };
         
-        return 'Mixed Route';
+        // Get unique pickup places
+        const pickupPlaces = [...new Set(cluster.map(p => {
+            const pickup = this.getPickupLocation(p);
+            const address = p.pickup_address || pickup.address || '';
+            return getPlaceName(address);
+        }))].filter(p => p);
+        
+        // Get unique delivery places
+        const deliveryPlaces = [...new Set(cluster.map(p => {
+            const delivery = this.getDeliveryLocation(p);
+            const address = p.delivery_address || delivery.address || '';
+            return getPlaceName(address);
+        }))].filter(p => p);
+        
+        // Generate name based on actual places
+        if (pickupPlaces.length === 1 && deliveryPlaces.length === 1) {
+            if (pickupPlaces[0] === deliveryPlaces[0]) {
+                return `${pickupPlaces[0]} Local`;
+            }
+            return `${pickupPlaces[0]} → ${deliveryPlaces[0]}`;
+        } else if (pickupPlaces.length === 1) {
+            // One pickup, multiple deliveries
+            if (deliveryPlaces.length <= 2) {
+                return `${pickupPlaces[0]} → ${deliveryPlaces.join(' & ')}`;
+            } else {
+                return `${pickupPlaces[0]} → Multiple`;
+            }
+        } else if (deliveryPlaces.length === 1) {
+            // Multiple pickups, one delivery
+            if (pickupPlaces.length <= 2) {
+                return `${pickupPlaces.join(' & ')} → ${deliveryPlaces[0]}`;
+            } else {
+                return `Multiple → ${deliveryPlaces[0]}`;
+            }
+        } else {
+            // Multiple pickups and deliveries - show first of each
+            return `${pickupPlaces[0]} → ${deliveryPlaces[0]} +${cluster.length - 1}`;
+        }
     }
     
     /**
@@ -620,7 +669,8 @@ class TumaRouteClustering {
         if (parcel.pickup_lat && parcel.pickup_lng) {
             return {
                 lat: parseFloat(parcel.pickup_lat),
-                lng: parseFloat(parcel.pickup_lng)
+                lng: parseFloat(parcel.pickup_lng),
+                address: parcel.pickup_address || 'Pickup location'
             };
         }
         
@@ -630,7 +680,11 @@ class TumaRouteClustering {
                 const loc = typeof parcel.pickup_location === 'string' 
                     ? JSON.parse(parcel.pickup_location) 
                     : parcel.pickup_location;
-                return { lat: loc.lat, lng: loc.lng };
+                return { 
+                    lat: loc.lat, 
+                    lng: loc.lng,
+                    address: loc.address || parcel.pickup_address || 'Pickup location'
+                };
             } catch (e) {
                 console.error('[Clustering] Error parsing pickup location:', e);
             }
@@ -648,7 +702,8 @@ class TumaRouteClustering {
         if (parcel.delivery_lat && parcel.delivery_lng) {
             return {
                 lat: parseFloat(parcel.delivery_lat),
-                lng: parseFloat(parcel.delivery_lng)
+                lng: parseFloat(parcel.delivery_lng),
+                address: parcel.delivery_address || 'Delivery location'
             };
         }
         
@@ -658,7 +713,11 @@ class TumaRouteClustering {
                 const loc = typeof parcel.delivery_location === 'string' 
                     ? JSON.parse(parcel.delivery_location) 
                     : parcel.delivery_location;
-                return { lat: loc.lat, lng: loc.lng };
+                return { 
+                    lat: loc.lat, 
+                    lng: loc.lng,
+                    address: loc.address || parcel.delivery_address || 'Delivery location'
+                };
             } catch (e) {
                 console.error('[Clustering] Error parsing delivery location:', e);
             }
