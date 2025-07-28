@@ -1644,6 +1644,627 @@ function showNotification(message, type = 'info') {
     }, 3000);
 }
 
+// Add CSS for navigation UI
+const navStyles = document.createElement('style');
+navStyles.textContent = `
+    .enhanced-navigation {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: var(--surface);
+        z-index: 1000;
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .nav-top-bar {
+        background: var(--surface-elevated);
+        border-bottom: 1px solid var(--border);
+        padding: 16px;
+        padding-top: calc(16px + var(--safe-area-top));
+    }
+    
+    .nav-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 16px;
+    }
+    
+    .nav-close-btn {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: var(--surface-high);
+        border: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        color: var(--text-primary);
+    }
+    
+    .nav-route-info {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+    
+    .nav-route-type {
+        padding: 6px 12px;
+        border-radius: 8px;
+        font-size: 12px;
+        font-weight: 600;
+        background: var(--primary);
+        color: white;
+    }
+    
+    .nav-route-type.pickup {
+        background: var(--warning);
+        color: black;
+    }
+    
+    .nav-parcel-code {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-secondary);
+    }
+    
+    .nav-instruction-card {
+        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+        border-radius: 16px;
+        padding: 24px;
+        color: white;
+        display: flex;
+        gap: 20px;
+        align-items: center;
+    }
+    
+    .nav-direction-visual {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        min-width: 80px;
+    }
+    
+    .direction-icon-large {
+        font-size: 48px;
+        margin-bottom: 8px;
+    }
+    
+    .direction-distance {
+        display: flex;
+        align-items: baseline;
+        gap: 4px;
+    }
+    
+    .distance-value {
+        font-size: 24px;
+        font-weight: 700;
+    }
+    
+    .distance-unit {
+        font-size: 16px;
+        opacity: 0.9;
+    }
+    
+    .nav-instruction-text {
+        flex: 1;
+    }
+    
+    .nav-street-name {
+        font-size: 24px;
+        font-weight: 700;
+        margin-bottom: 4px;
+    }
+    
+    .nav-instruction-detail {
+        font-size: 16px;
+        opacity: 0.9;
+    }
+    
+    .nav-bottom-info {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+        padding: 16px;
+        background: var(--surface);
+    }
+    
+    .nav-eta-card,
+    .nav-distance-card,
+    .nav-speed-card {
+        background: var(--surface-elevated);
+        border-radius: 12px;
+        padding: 16px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        border: 1px solid var(--border);
+    }
+    
+    .eta-icon,
+    .distance-icon,
+    .speed-icon {
+        font-size: 24px;
+    }
+    
+    .eta-info,
+    .distance-info,
+    .speed-info {
+        flex: 1;
+    }
+    
+    .eta-time,
+    .distance-remaining,
+    .speed-value {
+        font-size: 18px;
+        font-weight: 700;
+        color: var(--primary);
+    }
+    
+    .eta-label,
+    .distance-label,
+    .speed-label {
+        font-size: 12px;
+        color: var(--text-secondary);
+    }
+    
+    .nav-destination-preview {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: var(--surface-elevated);
+        border-radius: 20px 20px 0 0;
+        padding: 20px;
+        padding-bottom: calc(20px + var(--safe-area-bottom));
+        box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
+    }
+    
+    .destination-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+    }
+    
+    .destination-type {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-secondary);
+    }
+    
+    .nav-more-btn {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: var(--surface-high);
+        border: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        color: var(--text-primary);
+    }
+    
+    .destination-address {
+        font-size: 18px;
+        font-weight: 600;
+        margin-bottom: 8px;
+    }
+    
+    .destination-customer {
+        font-size: 16px;
+        color: var(--text-secondary);
+        margin-bottom: 16px;
+    }
+    
+    .nav-quick-actions {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+    }
+    
+    .quick-action-btn {
+        background: var(--surface-high);
+        border: none;
+        border-radius: 12px;
+        padding: 12px;
+        color: var(--text-primary);
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        transition: all 0.2s;
+    }
+    
+    .quick-action-btn:active {
+        scale: 0.95;
+    }
+    
+    .quick-action-btn.call {
+        background: var(--success);
+        color: white;
+    }
+    
+    .quick-action-btn.verify {
+        background: var(--primary);
+        color: white;
+    }
+    
+    .nav-closing {
+        animation: slideOut 0.3s ease-out;
+    }
+    
+    @keyframes slideOut {
+        to {
+            transform: translateY(100%);
+        }
+    }
+    
+    .destination-details-modal,
+    .verification-modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 2000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+    }
+    
+    .modal-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.8);
+        backdrop-filter: blur(10px);
+    }
+    
+    .modal-content {
+        position: relative;
+        background: var(--surface-elevated);
+        border-radius: 20px;
+        max-width: 400px;
+        width: 100%;
+        overflow: hidden;
+        z-index: 1;
+    }
+    
+    .modal-header {
+        padding: 20px;
+        background: var(--surface-high);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    
+    .modal-header.pickup {
+        background: var(--warning);
+        color: black;
+    }
+    
+    .modal-header.delivery {
+        background: var(--success);
+        color: white;
+    }
+    
+    .modal-close {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.2);
+        border: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        color: inherit;
+    }
+    
+    .modal-body {
+        padding: 20px;
+    }
+    
+    .detail-section {
+        margin-bottom: 20px;
+    }
+    
+    .detail-section h4 {
+        font-size: 14px;
+        color: var(--text-secondary);
+        margin-bottom: 8px;
+    }
+    
+    .detail-section p {
+        font-size: 16px;
+        line-height: 1.5;
+    }
+    
+    .code-display {
+        font-family: monospace;
+        font-size: 20px;
+        font-weight: 700;
+        color: var(--primary);
+    }
+    
+    .verification-section {
+        margin: 20px 0;
+    }
+    
+    .verification-section label {
+        display: block;
+        font-size: 16px;
+        margin-bottom: 12px;
+    }
+    
+    .verification-input {
+        width: 100%;
+        background: var(--surface-high);
+        border: 2px solid var(--border);
+        border-radius: 12px;
+        padding: 16px;
+        font-size: 24px;
+        font-weight: 700;
+        text-align: center;
+        color: var(--text-primary);
+        letter-spacing: 4px;
+        text-transform: uppercase;
+        outline: none;
+        transition: all 0.3s;
+    }
+    
+    .verification-input:focus {
+        border-color: var(--primary);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 20px rgba(0, 102, 255, 0.2);
+    }
+    
+    .verification-input.error {
+        border-color: var(--danger);
+        animation: shake 0.3s;
+    }
+    
+    @keyframes shake {
+        0%, 100% { transform: translateX(0); }
+        25% { transform: translateX(-10px); }
+        75% { transform: translateX(10px); }
+    }
+    
+    .code-hint {
+        font-size: 14px;
+        color: var(--text-secondary);
+        text-align: center;
+        margin-top: 8px;
+    }
+    
+    .modal-actions {
+        display: flex;
+        gap: 12px;
+        margin-top: 24px;
+    }
+    
+    .modal-btn {
+        flex: 1;
+        padding: 16px;
+        border: none;
+        border-radius: 12px;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        transition: all 0.2s;
+    }
+    
+    .modal-btn.primary {
+        background: var(--primary);
+        color: white;
+    }
+    
+    .modal-btn.secondary {
+        background: var(--surface-high);
+        color: var(--text-primary);
+    }
+    
+    .modal-btn:active {
+        scale: 0.95;
+    }
+    
+    .success-animation,
+    .phase-complete-animation,
+    .route-complete-animation {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: var(--surface-elevated);
+        border-radius: 20px;
+        padding: 40px;
+        text-align: center;
+        z-index: 3000;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        animation: popIn 0.3s ease-out;
+    }
+    
+    @keyframes popIn {
+        from {
+            scale: 0.8;
+            opacity: 0;
+        }
+        to {
+            scale: 1;
+            opacity: 1;
+        }
+    }
+    
+    .success-icon {
+        width: 80px;
+        height: 80px;
+        background: var(--success);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 20px;
+        font-size: 48px;
+        color: white;
+    }
+    
+    .success-text {
+        font-size: 24px;
+        font-weight: 700;
+    }
+    
+    .phase-complete-content,
+    .route-complete-content {
+        max-width: 360px;
+    }
+    
+    .phase-icon,
+    .complete-icon {
+        font-size: 64px;
+        margin-bottom: 20px;
+    }
+    
+    .route-complete-content h1 {
+        font-size: 28px;
+        margin-bottom: 12px;
+    }
+    
+    .route-complete-content p {
+        font-size: 16px;
+        color: var(--text-secondary);
+        margin-bottom: 24px;
+    }
+    
+    .route-stats {
+        display: flex;
+        justify-content: center;
+        gap: 40px;
+        margin-bottom: 32px;
+    }
+    
+    .route-stats .stat {
+        text-align: center;
+    }
+    
+    .route-stats .stat-value {
+        display: block;
+        font-size: 32px;
+        font-weight: 700;
+        color: var(--primary);
+        margin-bottom: 4px;
+    }
+    
+    .route-stats .stat-label {
+        font-size: 14px;
+        color: var(--text-secondary);
+    }
+    
+    .complete-btn {
+        width: 100%;
+        background: var(--primary);
+        color: white;
+        border: none;
+        border-radius: 14px;
+        padding: 16px;
+        font-size: 18px;
+        font-weight: 700;
+        cursor: pointer;
+    }
+    
+    .notification {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: var(--surface-elevated);
+        color: var(--text-primary);
+        padding: 16px 20px;
+        border-radius: 12px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        z-index: 4000;
+        animation: slideIn 0.3s ease-out;
+        max-width: 350px;
+        border: 1px solid var(--border);
+    }
+    
+    .notification.success {
+        background: var(--success);
+        color: white;
+        border-color: var(--success);
+    }
+    
+    .notification.error {
+        background: var(--danger);
+        color: white;
+        border-color: var(--danger);
+    }
+    
+    .notification.warning {
+        background: var(--warning);
+        color: black;
+        border-color: var(--warning);
+    }
+    
+    .notification-icon {
+        font-size: 20px;
+    }
+    
+    .notification.hiding {
+        animation: slideOut 0.3s ease-out;
+    }
+    
+    @keyframes slideIn {
+        from {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+        to {
+            transform: translateX(0);
+            opacity: 1;
+        }
+    }
+    
+    @keyframes slideOut {
+        from {
+            transform: translateX(0);
+            opacity: 1;
+        }
+        to {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+    }
+    
+    .modal-closing {
+        animation: fadeOut 0.3s ease-out;
+    }
+    
+    @keyframes fadeOut {
+        to {
+            opacity: 0;
+        }
+    }
+`;
+document.head.appendChild(navStyles);
+
 // Export for debugging
 window.routeDebug = {
     state,
