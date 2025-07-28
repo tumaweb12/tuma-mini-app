@@ -305,10 +305,10 @@ class CommissionTracker {
                         <div class="commission-progress-bar" style="width: ${percentage}%"></div>
                     </div>
                     <div class="commission-actions">
-                        <button class="commission-pay-button" onclick="openPaymentModal()">
+                        <button type="button" class="commission-pay-button" onclick="openPaymentModal()">
                             Pay Commission
                         </button>
-                        <button class="commission-details-button" onclick="viewCommissionDetails()">
+                        <button type="button" class="commission-details-button" onclick="viewCommissionDetails()">
                             View Details
                         </button>
                     </div>
@@ -1156,9 +1156,7 @@ function displayRoutes() {
         const riderEarnings = Math.round(route.total_earnings * BUSINESS_CONFIG.commission.rider);
         
         return `
-            <div class="route-card ${route.status !== 'available' || hasActiveRoute ? 'claimed' : ''}" 
-                 onclick="${route.status === 'available' && !hasActiveRoute ? `claimRoute('${route.id}')` : ''}"
-                 style="cursor: ${route.status === 'available' && !hasActiveRoute ? 'pointer' : 'not-allowed'}">
+            <div class="route-card ${route.status !== 'available' || hasActiveRoute ? 'claimed' : ''}">
                 <div class="route-header">
                     <div class="route-name">${route.name}</div>
                     <div class="route-type ${route.type}">${route.type.toUpperCase()}</div>
@@ -1174,9 +1172,9 @@ function displayRoutes() {
                     <span class="time-estimate">~${route.estimatedTime} min</span>
                 </div>
                 
-                <button class="claim-button" type="button" 
+                <button type="button" class="claim-button" 
                         ${route.status !== 'available' || hasActiveRoute ? 'disabled' : ''}
-                        onclick="event.stopPropagation()">
+                        onclick="claimRoute('${route.id}')">
                     ${hasActiveRoute ? 'Route Active' : 
                       route.status === 'available' ? 'Claim Route' : 'Already Claimed'}
                 </button>
@@ -1231,6 +1229,23 @@ function showBlockedOverlay() {
 
 async function initialize() {
     console.log('Initializing rider dashboard...');
+    
+    // Clear any stale route data if page was refreshed
+    const storedRoute = localStorage.getItem('tuma_active_route');
+    if (storedRoute) {
+        try {
+            const route = JSON.parse(storedRoute);
+            // Check if route is older than 24 hours
+            const routeAge = Date.now() - new Date(route.created_at || 0).getTime();
+            if (routeAge > 24 * 60 * 60 * 1000) {
+                console.log('Clearing stale route data');
+                localStorage.removeItem('tuma_active_route');
+            }
+        } catch (e) {
+            console.error('Error parsing stored route:', e);
+            localStorage.removeItem('tuma_active_route');
+        }
+    }
     
     // Initialize DOM elements
     initializeElements();
@@ -1505,124 +1520,43 @@ async function loadAvailableRoutes() {
             `;
         }
         
-        // Fetch unclaimed parcels with detailed logging
-        console.log('Fetching parcels with filter: status=eq.submitted&rider_id=is.null');
-        
+        // Fetch ALL unclaimed parcels (increased limit)
         const unclaimedParcels = await supabaseAPI.query('parcels', {
             filter: 'status=eq.submitted&rider_id=is.null',
-            limit: 100,
+            limit: 1000, // Increased limit to get all parcels
             order: 'created_at.asc'
         });
         
-        console.log('=== PARCELS DEBUG ===');
-        console.log('Unclaimed parcels found:', unclaimedParcels.length);
-        console.log('Parcels data:', unclaimedParcels);
+        console.log(`Found ${unclaimedParcels.length} unclaimed parcels`);
         
-        // If no parcels found, let's check what parcels exist
         if (unclaimedParcels.length === 0) {
-            console.log('No unclaimed parcels found. Checking all parcels...');
-            
-            // Debug: Check all parcels regardless of status
+            // If no unclaimed parcels, check if there are any parcels at all
             const allParcels = await supabaseAPI.query('parcels', {
-                limit: 20
+                limit: 100
             });
             
             console.log('Total parcels in database:', allParcels.length);
-            console.log('Parcel statuses:', allParcels.map(p => ({
-                id: p.id,
-                status: p.status,
-                rider_id: p.rider_id,
-                created_at: p.created_at
-            })));
             
-            // Show demo routes
+            if (allParcels.length > 0) {
+                // Show why parcels aren't available
+                const statuses = {};
+                allParcels.forEach(p => {
+                    statuses[p.status] = (statuses[p.status] || 0) + 1;
+                });
+                console.log('Parcel statuses:', statuses);
+            }
+            
             state.availableRoutes = createDemoRoutes();
         } else {
-            // Check if parcels have required location data
-            console.log('Validating parcel location data...');
-            
-            const validParcels = unclaimedParcels.filter(p => {
-                // Log each parcel's structure
-                console.log(`Parcel ${p.id} structure:`, {
-                    pickup_location: p.pickup_location,
-                    delivery_location: p.delivery_location,
-                    pickup_lat: p.pickup_lat,
-                    pickup_lng: p.pickup_lng,
-                    delivery_lat: p.delivery_lat,
-                    delivery_lng: p.delivery_lng
-                });
-                
-                // Check for JSONB location format
-                let hasJSONBLocation = false;
-                if (p.pickup_location && p.delivery_location) {
-                    if (typeof p.pickup_location === 'object' && typeof p.delivery_location === 'object') {
-                        hasJSONBLocation = true;
-                        console.log(`Parcel ${p.id} has JSONB location data`);
-                    } else if (typeof p.pickup_location === 'string' && typeof p.delivery_location === 'string') {
-                        try {
-                            JSON.parse(p.pickup_location);
-                            JSON.parse(p.delivery_location);
-                            hasJSONBLocation = true;
-                            console.log(`Parcel ${p.id} has string JSONB location data`);
-                        } catch (e) {
-                            console.log(`Parcel ${p.id} has invalid JSONB strings`);
-                        }
-                    }
-                }
-                
-                // Check for separate lat/lng columns
-                const hasLatLng = (p.pickup_lat && p.pickup_lng && p.delivery_lat && p.delivery_lng);
-                if (hasLatLng) {
-                    console.log(`Parcel ${p.id} has lat/lng location data`);
-                }
-                
-                const hasLocation = hasJSONBLocation || hasLatLng;
-                
-                if (!hasLocation) {
-                    console.warn(`Parcel ${p.id} missing location data`);
-                }
-                
-                return hasLocation;
-            });
-            
-            console.log('Valid parcels with location data:', validParcels.length);
-            
-            if (validParcels.length === 0) {
-                console.log('No parcels with valid location data found');
-                state.availableRoutes = createDemoRoutes();
-            } else {
-                console.log('Creating routes from valid parcels...');
-                
-                // Create optimized routes using clustering
-                try {
-                    state.availableRoutes = createRoutes(validParcels);
-                    console.log('Routes created successfully:', state.availableRoutes.length);
-                    console.log('Route details:', state.availableRoutes);
-                } catch (clusterError) {
-                    console.error('Error in clustering algorithm:', clusterError);
-                    console.error('Stack trace:', clusterError.stack);
-                    state.availableRoutes = createDemoRoutes();
-                }
-            }
+            // Create optimized routes using clustering
+            state.availableRoutes = createRoutes(unclaimedParcels);
+            console.log(`Created ${state.availableRoutes.length} routes from ${unclaimedParcels.length} parcels`);
         }
-        
-        console.log('=== END PARCELS DEBUG ===');
-        console.log('Final routes to display:', state.availableRoutes);
         
         displayRoutes();
         
     } catch (error) {
         console.error('Error loading routes:', error);
-        console.error('Error details:', error.message);
-        console.error('Stack trace:', error.stack);
-        
-        // Check if it's a network error
-        if (error.message.includes('fetch')) {
-            console.error('Network error - check Supabase connection');
-            console.log('SUPABASE_URL:', SUPABASE_URL);
-            console.log('Using demo routes due to network error');
-        }
-        
         state.availableRoutes = createDemoRoutes();
         displayRoutes();
     }
@@ -1854,6 +1788,8 @@ function startLocationUpdates() {
 // ─── Event Listeners ───────────────────────────────────────────────────────
 
 function setupEventListeners() {
+    // Prevent form submission - REMOVED since we changed form to div
+    
     if (elements.codeInput) {
         elements.codeInput.addEventListener('input', (e) => {
             let value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -1961,7 +1897,7 @@ window.filterRoutes = function(type) {
 };
 
 window.claimRoute = async function(routeId) {
-    // Prevent any default form submission
+    // Prevent any default behavior
     if (window.event) {
         window.event.preventDefault();
         window.event.stopPropagation();
@@ -1974,28 +1910,23 @@ window.claimRoute = async function(routeId) {
     }
     
     const route = state.availableRoutes.find(r => r.id === routeId);
-    if (!route || route.status !== 'available') return;
+    if (!route || route.status !== 'available') {
+        showNotification('This route is not available', 'warning');
+        return;
+    }
     
     if (state.isLoading) return;
     state.isLoading = true;
     
+    // Show loading notification
+    showNotification('Claiming route...', 'info');
+    
     try {
+        // Debug log
+        console.log('Claiming route:', route);
+        
         // The route now includes parcelDetails with full parcel data
         if (route.parcelDetails && route.parcelDetails.length > 0) {
-            // Update parcels in database (skip for temporary riders)
-            if (!state.rider.id.startsWith('temp-')) {
-                for (const parcel of route.parcelDetails) {
-                    await supabaseAPI.update('parcels', 
-                        `id=eq.${parcel.id}`,
-                        { 
-                            rider_id: state.rider.id,
-                            status: 'assigned',
-                            assigned_at: new Date().toISOString()
-                        }
-                    );
-                }
-            }
-            
             // Create route with sequenced stops
             state.claimedRoute = {
                 ...route,
@@ -2028,67 +1959,38 @@ window.claimRoute = async function(routeId) {
                 state.claimedRoute.stops = [...optimizedStops, ...deliveryStops];
             }
             
+            // Store in localStorage
             localStorage.setItem('tuma_active_route', JSON.stringify(state.claimedRoute));
+            
+            // Update UI
             showActiveRoute();
             
             // Show navigation button
             const navButton = document.getElementById('navButton');
             if (navButton) navButton.style.display = 'flex';
-        } else if (route.parcels && route.parcels.length > 0) {
-            // Fallback for routes without parcelDetails
-            const parcels = await Promise.all(
-                route.parcels.map(parcelId => 
-                    supabaseAPI.query('parcels', {
-                        filter: `id=eq.${parcelId}`,
-                        limit: 1
-                    })
-                )
+            
+            // Mark all routes as unavailable
+            state.availableRoutes.forEach(r => r.status = 'claimed');
+            displayRoutes();
+            
+            const pickupAreas = route.metadata?.pickupAreas?.join(', ') || 'Multiple areas';
+            showNotification(
+                `Route claimed successfully! ${route.pickups} pickups in ${pickupAreas}`, 
+                'success'
             );
             
-            const flatParcels = parcels.flat();
-            
-            // Update parcels to assign to this rider
-            if (!state.rider.id.startsWith('temp-')) {
-                for (const parcel of flatParcels) {
-                    await supabaseAPI.update('parcels', 
-                        `id=eq.${parcel.id}`,
-                        { 
-                            rider_id: state.rider.id,
-                            status: 'assigned',
-                            assigned_at: new Date().toISOString()
-                        }
-                    );
-                }
-            }
-            
-            state.claimedRoute = {
-                ...route,
-                parcels: flatParcels,
-                stops: EnhancedRouteManager.sequenceStops(flatParcels)
-            };
-            
-            localStorage.setItem('tuma_active_route', JSON.stringify(state.claimedRoute));
-            showActiveRoute();
-            
-            const navButton = document.getElementById('navButton');
-            if (navButton) navButton.style.display = 'flex';
+            haptic('success');
+        } else {
+            throw new Error('Route has no parcel details');
         }
-        
-        // Mark all routes as unavailable
-        state.availableRoutes.forEach(r => r.status = 'claimed');
-        displayRoutes();
-        
-        const pickupAreas = route.metadata?.pickupAreas?.join(', ') || 'Multiple areas';
-        showNotification(
-            `Route claimed! ${route.pickups} pickups in ${pickupAreas}`, 
-            'success'
-        );
-        
-        haptic('success');
         
     } catch (error) {
         console.error('Error claiming route:', error);
         showNotification('Failed to claim route. Please try again.', 'error');
+        
+        // Clear any partially saved state
+        localStorage.removeItem('tuma_active_route');
+        state.claimedRoute = null;
     } finally {
         state.isLoading = false;
     }
@@ -2580,7 +2482,62 @@ window.tumaDebug = {
         });
         displayIncentiveProgress();
     },
-    testClustering
+    testClustering,
+    checkParcelStatus: async () => {
+        const allParcels = await supabaseAPI.query('parcels', {
+            limit: 100
+        });
+        
+        const summary = {
+            total: allParcels.length,
+            byStatus: {},
+            withRider: 0,
+            withoutRider: 0
+        };
+        
+        allParcels.forEach(p => {
+            summary.byStatus[p.status] = (summary.byStatus[p.status] || 0) + 1;
+            if (p.rider_id) summary.withRider++;
+            else summary.withoutRider++;
+        });
+        
+        console.log('Parcel Summary:', summary);
+        console.log('Available for clustering:', allParcels.filter(p => 
+            p.status === 'submitted' && !p.rider_id
+        ));
+        
+        return summary;
+    },
+    
+    resetParcels: async () => {
+        // Reset some parcels to submitted status for testing
+        const parcels = await supabaseAPI.query('parcels', {
+            filter: 'status=eq.delivered',
+            limit: 10
+        });
+        
+        for (const parcel of parcels) {
+            await supabaseAPI.update('parcels', 
+                `id=eq.${parcel.id}`,
+                { 
+                    status: 'submitted',
+                    rider_id: null,
+                    assigned_at: null,
+                    pickup_timestamp: null,
+                    delivery_timestamp: null
+                }
+            );
+        }
+        
+        console.log(`Reset ${parcels.length} parcels to submitted status`);
+        window.location.reload();
+    },
+    
+    clearStaleRoute: () => {
+        localStorage.removeItem('tuma_active_route');
+        console.log('Cleared stored route');
+        window.location.reload();
+    }
 };
 
 // Override window.haptic if not already defined
