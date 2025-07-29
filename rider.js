@@ -1566,10 +1566,11 @@ function createDemoRoutes() {
     console.log('Creating demo routes for testing...');
     const demoTotalEarnings = [2500, 1714, 3429]; // These are total earnings
     
+    // Demo routes with real Nairobi locations
     return [
         {
             id: 'demo-route-001',
-            name: 'Westlands → North',
+            name: 'Westlands → Gigiri',
             type: 'smart',
             deliveries: 5,
             pickups: 5,
@@ -1587,7 +1588,7 @@ function createDemoRoutes() {
         },
         {
             id: 'demo-route-002',
-            name: 'CBD → Eastlands',
+            name: 'CBD → Buruburu',
             type: 'express',
             deliveries: 3,
             pickups: 3,
@@ -1605,7 +1606,7 @@ function createDemoRoutes() {
         },
         {
             id: 'demo-route-003',
-            name: 'Karen Local',
+            name: 'Karen → Langata',
             type: 'eco',
             deliveries: 8,
             pickups: 8,
