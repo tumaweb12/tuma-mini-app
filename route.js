@@ -283,8 +283,8 @@ async function initializeMap() {
         imperial: false
     }).addTo(state.map);
     
-    // Enable two-finger rotation on mobile
-    if (L.Browser.touch) {
+    // Enable two-finger rotation on mobile if available
+    if (L.Browser.touch && state.map.touchRotate) {
         state.map.touchRotate.enable();
     }
     
@@ -537,14 +537,9 @@ function updateCurrentLocation(position) {
                 noMoveStart: true
             });
             
-            // Rotate map for heading-up view
-            if (state.currentHeading !== null && state.config.headingUp) {
-                const rotation = 360 - state.currentHeading;
-                if (Math.abs(rotation - state.lastMapRotation) > 5) {
-                    state.map.setBearing(rotation);
-                    state.lastMapRotation = rotation;
-                }
-            }
+            // Map rotation is not available in standard Leaflet
+            // If you want rotation, you'll need to install a plugin like Leaflet.Rotate
+            // For now, we'll just follow the user without rotation
             
             // Adjust zoom based on speed
             const targetZoom = calculateZoomFromSpeed(state.currentSpeed);
@@ -691,13 +686,10 @@ window.toggleFollowMode = function() {
 window.toggleHeadingMode = function() {
     state.config.headingUp = !state.config.headingUp;
     
-    if (!state.config.headingUp && state.map) {
-        // Reset to north up
-        state.map.setBearing(0);
-        state.lastMapRotation = 0;
-    }
+    // Note: Map rotation requires a plugin like Leaflet.Rotate
+    // For now, this just toggles the setting
     
-    showNotification(state.config.headingUp ? 'Heading up mode' : 'North up mode', 'info');
+    showNotification(state.config.headingUp ? 'Heading up mode (rotation requires plugin)' : 'North up mode', 'info');
 };
 
 // Create custom Leaflet icon with Tuma theme
