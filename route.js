@@ -1312,6 +1312,7 @@ function showEnhancedNavigation(targetStop) {
     // Create minimalist Waze-like navigation UI - FIXED: No blocking elements
     const navUI = document.createElement('div');
     navUI.className = 'enhanced-navigation waze-style';
+    navUI.style.cssText = 'pointer-events: none !important;';
     navUI.innerHTML = `
         <!-- Minimal top instruction bar -->
         <div class="waze-nav-top">
