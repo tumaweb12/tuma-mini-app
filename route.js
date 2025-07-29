@@ -1,6 +1,6 @@
 /**
  * Complete Enhanced Route Navigation Module with OpenRouteService
- * Fixed version combining best features from both versions
+ * Fixed version with improved UI/UX
  * Part 1: Core initialization, map setup, and UI functions
  */
 
@@ -55,7 +55,8 @@ const state = {
     mapBearing: 0,
     config: config,
     locationWatchId: null,
-    accuracyCircle: null
+    accuracyCircle: null,
+    radiusCircle: null // Track radius circle to remove it
 };
 
 // API Configuration
@@ -108,31 +109,141 @@ function injectNavigationStyles() {
             z-index: 1000 !important;
         }
         
-        .rider-marker-container {
+        .rider-marker-wrapper {
             position: relative;
+            width: 60px;
+            height: 60px;
+        }
+        
+        .rider-pulse {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 60px;
+            height: 60px;
+            background: rgba(0, 102, 255, 0.3);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% {
+                transform: translate(-50%, -50%) scale(0.8);
+                opacity: 0.8;
+            }
+            50% {
+                transform: translate(-50%, -50%) scale(1.2);
+                opacity: 0.4;
+            }
+            100% {
+                transform: translate(-50%, -50%) scale(0.8);
+                opacity: 0.8;
+            }
+        }
+        
+        .rider-marker-container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
             width: 40px;
             height: 40px;
+            transform-origin: center;
+            transform: translate(-50%, -50%);
             transition: transform 0.3s ease;
         }
         
-        /* Professional rider icon */
-        .rider-icon-svg {
-            width: 40px;
-            height: 40px;
-            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
-        }
-        
-        .rider-direction-indicator {
+        .rider-direction-cone {
             position: absolute;
-            top: -8px;
+            top: -15px;
             left: 50%;
-            transform: translateX(-50%);
             width: 0;
             height: 0;
-            border-left: 6px solid transparent;
-            border-right: 6px solid transparent;
-            border-bottom: 12px solid #0066FF;
+            border-left: 8px solid transparent;
+            border-right: 8px solid transparent;
+            border-bottom: 20px solid rgba(0, 102, 255, 0.6);
+            transform: translateX(-50%);
+        }
+        
+        .rider-dot {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 24px;
+            height: 24px;
+            background: #0066FF;
+            border: 3px solid white;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
             z-index: 2;
+        }
+        
+        .rider-inner-dot {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 8px;
+            height: 8px;
+            background: white;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+        }
+        
+        /* Fixed Navigation Controls */
+        .nav-controls {
+            position: fixed !important;
+            bottom: calc(180px + var(--safe-area-bottom)) !important;
+            left: 20px;
+            right: 20px;
+            z-index: 100;
+            display: flex;
+            gap: 12px;
+            transition: bottom 0.3s ease;
+        }
+        
+        /* Route Panel Improvements */
+        .route-panel {
+            position: fixed !important;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--surface-elevated);
+            border-radius: 20px 20px 0 0;
+            padding: 20px;
+            padding-bottom: calc(20px + var(--safe-area-bottom));
+            z-index: 50;
+            transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            max-height: 70%;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
+        }
+        
+        /* Prevent overlap */
+        .route-panel.expanded ~ .nav-controls {
+            bottom: calc(70% + 20px + var(--safe-area-bottom)) !important;
+        }
+        
+        /* Panel handle improvements */
+        .panel-handle {
+            width: 60px;
+            height: 5px;
+            background: var(--text-tertiary);
+            border-radius: 2.5px;
+            margin: 0 auto 16px;
+            cursor: grab;
+            opacity: 0.5;
+            transition: opacity 0.2s;
+        }
+        
+        .panel-handle:hover {
+            opacity: 1;
+        }
+        
+        .panel-handle:active {
+            cursor: grabbing;
+            opacity: 1;
         }
         
         /* Hide Leaflet rotation control */
@@ -201,7 +312,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             // Draw optimized route
             await drawOptimizedRoute();
             
-            // Show route panel
+            // Show route panel with proper positioning
             showRoutePanel();
             
             // Enhance route panel
@@ -296,93 +407,56 @@ async function initializeMap() {
     console.log('Map initialized with rotation enabled');
 }
 
-// Create enhanced rider icon
+// Create enhanced rider icon with better visibility
 function createRiderIcon(heading = 0) {
     return L.divIcon({
         className: 'rider-location-marker',
         html: `
-            <div class="rider-marker-container" style="transform: rotate(${heading}deg)">
-                <svg class="rider-icon-svg" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
-                    <!-- Outer circle with gradient -->
-                    <defs>
-                        <linearGradient id="riderGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                            <stop offset="0%" style="stop-color:#0066FF;stop-opacity:1" />
-                            <stop offset="100%" style="stop-color:#0052CC;stop-opacity:1" />
-                        </linearGradient>
-                        <filter id="dropShadow">
-                            <feDropShadow dx="0" dy="2" stdDeviation="2" flood-opacity="0.3"/>
-                        </filter>
-                    </defs>
+            <div class="rider-marker-wrapper">
+                <!-- Pulsing background circle -->
+                <div class="rider-pulse"></div>
+                
+                <!-- Main rider marker -->
+                <div class="rider-marker-container" style="transform: rotate(${heading}deg)">
+                    <!-- Direction cone -->
+                    <div class="rider-direction-cone"></div>
                     
-                    <!-- Direction indicator -->
-                    <path d="M20 5 L15 15 L20 12 L25 15 Z" fill="#0066FF" opacity="0.8"/>
-                    
-                    <!-- Main circle -->
-                    <circle cx="20" cy="20" r="15" fill="url(#riderGradient)" filter="url(#dropShadow)"/>
-                    
-                    <!-- Inner circle -->
-                    <circle cx="20" cy="20" r="10" fill="white" opacity="0.9"/>
-                    
-                    <!-- Rider icon -->
-                    <path d="M20 14 C18 14 16 16 16 18 C16 20 18 22 20 22 C22 22 24 20 24 18 C24 16 22 14 20 14 Z
-                             M20 12 C21 12 22 11 22 10 C22 9 21 8 20 8 C19 8 18 9 18 10 C18 11 19 12 20 12 Z
-                             M15 25 L25 25 L24 23 L16 23 Z" 
-                          fill="#0066FF"/>
-                </svg>
+                    <!-- Rider dot -->
+                    <div class="rider-dot">
+                        <div class="rider-inner-dot"></div>
+                    </div>
+                </div>
             </div>
         `,
-        iconSize: [40, 40],
-        iconAnchor: [20, 20]
+        iconSize: [60, 60],
+        iconAnchor: [30, 30]
     });
 }
 
-// Toggle route panel with proper show/hide functionality
+// Fixed toggle route panel functionality
 window.toggleRoutePanel = function() {
     const routePanel = document.getElementById('routePanel');
-    const toggleBtn = document.querySelector('.nav-button.secondary');
     const navControls = document.getElementById('navControls');
     
     if (!routePanel) return;
     
-    if (state.isPanelVisible) {
-        // Completely hide the panel
-        routePanel.style.display = 'none';
-        state.isPanelVisible = false;
+    if (state.isPanelExpanded) {
+        // Collapse panel
+        routePanel.style.transform = 'translateY(calc(100% - 160px))';
         state.isPanelExpanded = false;
         
-        // Adjust nav controls position
+        // Move nav controls back to default position
         if (navControls) {
-            navControls.style.bottom = 'calc(20px + var(--safe-area-bottom))';
-        }
-        
-        if (toggleBtn) {
-            toggleBtn.innerHTML = `
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
-                </svg>
-                <span>Details</span>
-            `;
+            navControls.style.bottom = 'calc(180px + var(--safe-area-bottom))';
         }
     } else {
-        // Show the panel
-        routePanel.style.display = 'block';
+        // Expand panel
         routePanel.style.transform = 'translateY(0)';
-        routePanel.style.maxHeight = '60%';
-        state.isPanelVisible = true;
         state.isPanelExpanded = true;
         
-        // Adjust nav controls
+        // Move nav controls higher to avoid overlap
         if (navControls) {
-            navControls.style.bottom = 'calc(200px + var(--safe-area-bottom))';
-        }
-        
-        if (toggleBtn) {
-            toggleBtn.innerHTML = `
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-                </svg>
-                <span>Hide</span>
-            `;
+            navControls.style.bottom = 'calc(60% + 20px + var(--safe-area-bottom))';
         }
     }
     
@@ -467,7 +541,7 @@ function enhanceRoutePanel() {
     }
 }
 
-// Update current location with enhanced tracking
+// Update current location without accuracy circle
 function updateCurrentLocation(position) {
     const newLocation = {
         lat: position.coords.latitude,
@@ -505,15 +579,7 @@ function updateCurrentLocation(position) {
                 }
             ).addTo(state.map);
             
-            // Add accuracy circle
-            state.accuracyCircle = L.circle([state.currentLocation.lat, state.currentLocation.lng], {
-                radius: position.coords.accuracy,
-                fillColor: '#0066FF',
-                fillOpacity: 0.1,
-                color: '#0066FF',
-                weight: 1,
-                interactive: false
-            }).addTo(state.map);
+            // Don't add accuracy circle - it's confusing
         } else {
             // Update position
             state.currentLocationMarker.setLatLng([state.currentLocation.lat, state.currentLocation.lng]);
@@ -521,12 +587,6 @@ function updateCurrentLocation(position) {
             // Update icon rotation
             const riderIcon = createRiderIcon(state.currentHeading);
             state.currentLocationMarker.setIcon(riderIcon);
-            
-            // Update accuracy circle
-            if (state.accuracyCircle) {
-                state.accuracyCircle.setLatLng([state.currentLocation.lat, state.currentLocation.lng]);
-                state.accuracyCircle.setRadius(position.coords.accuracy);
-            }
         }
         
         // Drone follow mode
@@ -536,10 +596,6 @@ function updateCurrentLocation(position) {
                 duration: 1,
                 noMoveStart: true
             });
-            
-            // Map rotation is not available in standard Leaflet
-            // If you want rotation, you'll need to install a plugin like Leaflet.Rotate
-            // For now, we'll just follow the user without rotation
             
             // Adjust zoom based on speed
             const targetZoom = calculateZoomFromSpeed(state.currentSpeed);
@@ -783,7 +839,7 @@ function createStopPopup(stop) {
     `;
 }
 
-// Plot route on map
+// Plot route on map without radius circles
 async function plotRoute() {
     if (!state.map || !state.activeRoute || !state.activeRoute.stops) return;
     
@@ -792,6 +848,12 @@ async function plotRoute() {
     if (state.routePolyline) {
         state.routePolyline.remove();
         state.routePolyline = null;
+    }
+    
+    // Remove any radius circles
+    if (state.radiusCircle) {
+        state.radiusCircle.remove();
+        state.radiusCircle = null;
     }
     
     const bounds = L.latLngBounds();
@@ -807,6 +869,7 @@ async function plotRoute() {
         bounds.extend([stop.location.lat, stop.location.lng]);
     });
     
+    // Fit bounds without drawing any circles
     state.map.fitBounds(bounds, { padding: [50, 50] });
 }
 
@@ -1205,11 +1268,30 @@ function formatTimeAgo(timestamp) {
     return `${hours} hour${hours > 1 ? 's' : ''} ago`;
 }
 
-// Show/hide UI elements
+// Show route panel with fixed positioning
 function showRoutePanel() {
-    document.getElementById('routePanel').style.display = 'block';
-    document.getElementById('navControls').style.display = 'flex';
-    document.getElementById('emptyState').style.display = 'none';
+    const routePanel = document.getElementById('routePanel');
+    const navControls = document.getElementById('navControls');
+    const emptyState = document.getElementById('emptyState');
+    
+    if (routePanel) {
+        routePanel.style.display = 'block';
+        // Ensure panel starts collapsed
+        routePanel.style.transform = 'translateY(calc(100% - 160px))';
+        routePanel.style.maxHeight = '70%';
+        state.isPanelVisible = true;
+        state.isPanelExpanded = false;
+    }
+    
+    if (navControls) {
+        navControls.style.display = 'flex';
+        // Position controls above the collapsed panel
+        navControls.style.bottom = 'calc(180px + var(--safe-area-bottom))';
+    }
+    
+    if (emptyState) {
+        emptyState.style.display = 'none';
+    }
 }
 
 function showEmptyState() {
@@ -2666,5 +2748,5 @@ window.routeDebug = {
 };
 
 console.log('✅ Fixed Route.js loaded successfully!');
-console.log('Features: Map rotation enabled, enhanced rider icon, proper panel hide/show');
+console.log('Features: No radius circles, improved rider icon, fixed button positioning');
 console.log('Debug commands: window.routeDebug');
