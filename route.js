@@ -1,10 +1,10 @@
 /**
  * Complete Enhanced Route Navigation Module with OpenRouteService
- * FIXED: Map visibility issue during navigation - ALL FIXES APPLIED
- * Part 1: Core logic, initialization, and map functions
+ * Fixed version combining best features from both versions
+ * Part 1: Core initialization, map setup, and UI functions
  */
 
-// Development Configuration (same as in rider.js)
+// Development Configuration
 const DEV_CONFIG = {
     isDevelopment: window.location.hostname === 'localhost' || 
                    window.location.hostname === '127.0.0.1' ||
@@ -22,10 +22,11 @@ const DEV_CONFIG = {
 const config = {
     headingUp: false,
     smoothMovement: true,
-    autoZoom: true
+    autoZoom: true,
+    mapRotatable: true // Enable map rotation
 };
 
-// State management with enhanced properties for navigation
+// State management with enhanced properties
 const state = {
     activeRoute: null,
     currentLocation: null,
@@ -44,6 +45,7 @@ const state = {
     lastLocationTime: null,
     pickupPhaseCompleted: false,
     isPanelVisible: true,
+    isPanelExpanded: false, // Track panel expansion state
     navigationActive: false,
     currentSpeed: 0,
     currentHeading: 0,
@@ -61,13 +63,11 @@ const OPENROUTE_API_KEY = '5b3ce3597851110001cf624841e48578ffb34c6b96dfe3bbe9b3a
 const SUPABASE_URL = 'https://btxavqfoirdzwpfrvezp.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ0eGF2cWZvaXJkendwZnJ2ZXpwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE0ODcxMTcsImV4cCI6MjA2NzA2MzExN30.kQKpukFGx-cBl1zZRuXmex02ifkZ751WCUfQPogYutk';
 
-// FIXED CSS injection function for navigation styles
+// CSS injection function for navigation styles
 function injectNavigationStyles() {
     const style = document.createElement('style');
     style.textContent = `
-        /* CRITICAL FIXES for map visibility */
-        
-        /* Ensure map container is always at the bottom layer */
+        /* Map container styles */
         .map-container {
             position: absolute !important;
             top: 0 !important;
@@ -75,7 +75,6 @@ function injectNavigationStyles() {
             right: 0 !important;
             bottom: 0 !important;
             z-index: 1 !important;
-            background: transparent !important;
         }
         
         #map {
@@ -85,41 +84,18 @@ function injectNavigationStyles() {
             width: 100% !important;
             height: 100% !important;
             z-index: 1 !important;
-            background: transparent !important;
         }
         
-        /* Ensure Leaflet elements are visible */
-        .leaflet-container {
-            z-index: 1 !important;
-            background: transparent !important;
-        }
-        
-        .leaflet-pane {
-            z-index: 2 !important;
-        }
-        
-        .leaflet-control-container {
-            z-index: 200 !important;
-        }
-        
-        /* Fix navigation overlay - NO BACKGROUND */
+        /* Ensure navigation doesn't block map */
         .enhanced-navigation {
             pointer-events: none !important;
-            background: transparent !important;
-            position: fixed !important;
-            top: 0 !important;
-            left: 0 !important;
-            right: 0 !important;
-            bottom: 0 !important;
-            z-index: 100 !important;
         }
         
         .enhanced-navigation.waze-style {
             pointer-events: none !important;
-            background: transparent !important;
         }
         
-        /* Make individual elements clickable */
+        /* Individual elements should be clickable */
         .waze-nav-top,
         .waze-bottom-pills,
         .waze-fab,
@@ -127,81 +103,46 @@ function injectNavigationStyles() {
             pointer-events: auto !important;
         }
         
-        /* Ensure header doesn't block map */
-        .header {
-            z-index: 150 !important;
-        }
-        
-        /* Route panel layering */
-        .route-panel {
-            z-index: 110 !important;
-        }
-        
-        .route-panel[style*="display: none"] {
-            z-index: -1 !important;
-        }
-        
-        /* Navigation controls */
-        .nav-controls {
-            z-index: 120 !important;
-        }
-        
-        /* Rider location marker */
+        /* Enhanced rider location marker */
         .rider-location-marker {
             z-index: 1000 !important;
         }
         
         .rider-marker-container {
             position: relative;
-            width: 30px;
-            height: 30px;
+            width: 40px;
+            height: 40px;
             transition: transform 0.3s ease;
         }
         
-        .rider-arrow {
+        /* Professional rider icon */
+        .rider-icon-svg {
+            width: 40px;
+            height: 40px;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+        }
+        
+        .rider-direction-indicator {
             position: absolute;
-            top: -5px;
+            top: -8px;
             left: 50%;
             transform: translateX(-50%);
             width: 0;
             height: 0;
-            border-left: 8px solid transparent;
-            border-right: 8px solid transparent;
-            border-bottom: 15px solid #0066FF;
+            border-left: 6px solid transparent;
+            border-right: 6px solid transparent;
+            border-bottom: 12px solid #0066FF;
             z-index: 2;
         }
         
-        .rider-dot {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 20px;
-            height: 20px;
-            background: #0066FF;
-            border: 3px solid white;
-            border-radius: 50%;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-            z-index: 1;
-        }
-        
-        /* Hide Leaflet rotation control if visible */
+        /* Hide Leaflet rotation control */
         .leaflet-control-rotate {
             display: none !important;
         }
         
-        /* Ensure no black backgrounds anywhere */
-        * {
-            background-color: transparent !important;
-        }
-        
-        /* Only apply background to specific elements that need it */
-        .waze-instruction-bar,
-        .waze-pill,
-        .waze-nav-menu,
-        .modal-content,
-        .route-panel {
-            background-color: var(--surface-elevated) !important;
+        /* Enable touch rotation */
+        .leaflet-touch-rotate {
+            pointer-events: auto;
         }
     `;
     document.head.appendChild(style);
@@ -225,19 +166,19 @@ function waitForLeaflet() {
 
 // Initialize on DOM ready
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log('Route.js initializing with fixed map visibility...');
+    console.log('Route.js initializing with enhanced features...');
     
-    // Inject navigation styles first
+    // Inject navigation styles
     injectNavigationStyles();
     
     // Add Waze navigation styles
     addWazeNavigationStyles();
     
-    // Wait for Leaflet to load
+    // Wait for Leaflet
     await waitForLeaflet();
     
     try {
-        // Load active route from localStorage
+        // Load active route
         const storedRoute = localStorage.getItem('tuma_active_route');
         console.log('Stored route data:', storedRoute);
         
@@ -245,7 +186,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             state.activeRoute = JSON.parse(storedRoute);
             console.log('Parsed route:', state.activeRoute);
             
-            // Initialize map
+            // Initialize map with rotation enabled
             await initializeMap();
             
             // Display route information
@@ -257,7 +198,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             // Plot route on map
             await plotRoute();
             
-            // Draw optimized route line on initial load
+            // Draw optimized route
             await drawOptimizedRoute();
             
             // Show route panel
@@ -271,7 +212,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             
             // Auto-collapse panel after 2 seconds
             setTimeout(() => {
-                collapsePanel();
+                if (!state.isPanelExpanded) {
+                    collapsePanel();
+                }
             }, 2000);
         } else {
             console.log('No active route found');
@@ -283,9 +226,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 });
 
-// FIXED: Initialize Leaflet Map with proper layering
+// Initialize Leaflet Map with rotation support
 async function initializeMap() {
-    console.log('Initializing Leaflet map with fixed visibility...');
+    console.log('Initializing map with rotation support...');
     
     const mapContainer = document.getElementById('map');
     if (!mapContainer) {
@@ -293,18 +236,11 @@ async function initializeMap() {
         return;
     }
     
-    // Force proper dimensions and clear any background
-    mapContainer.style.cssText = `
-        width: 100% !important;
-        height: 100% !important;
-        position: absolute !important;
-        top: 0 !important;
-        left: 0 !important;
-        z-index: 1 !important;
-        background: transparent !important;
-    `;
+    // Force proper dimensions
+    mapContainer.style.width = '100%';
+    mapContainer.style.height = '100%';
     
-    // Get center point from route or use Nairobi default
+    // Get center point
     let centerLat = -1.2921;
     let centerLng = 36.8219;
     
@@ -314,41 +250,350 @@ async function initializeMap() {
         centerLng = (bounds.east + bounds.west) / 2;
     }
     
-    // Create map with options for smooth movement
+    // Create map with rotation enabled
     state.map = L.map('map', {
         center: [centerLat, centerLng],
         zoom: 17,
         zoomControl: false,
         rotate: true,
         bearing: 0,
-        touchRotate: true,
-        rotateControl: false,
+        touchRotate: true, // Enable touch rotation
+        shiftKeyRotate: true, // Enable shift+drag rotation
+        rotateControl: {
+            closeOnZeroBearing: false,
+            position: 'topleft'
+        },
         attributionControl: false
     });
     
-    // Use a cleaner tile layer
+    // Use cleaner tile layer
     L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
         maxZoom: 19,
         subdomains: 'abcd'
     }).addTo(state.map);
     
-    // Add zoom control in bottom left
+    // Add zoom control
     L.control.zoom({
         position: 'bottomleft'
     }).addTo(state.map);
     
-    // Add scale control
+    // Add scale
     L.control.scale({
         position: 'bottomleft',
         imperial: false
     }).addTo(state.map);
     
-    // Force a resize
+    // Enable two-finger rotation on mobile
+    if (L.Browser.touch) {
+        state.map.touchRotate.enable();
+    }
+    
+    // Force resize
     setTimeout(() => {
         state.map.invalidateSize();
     }, 100);
     
-    console.log('Map initialized successfully');
+    console.log('Map initialized with rotation enabled');
+}
+
+// Create enhanced rider icon
+function createRiderIcon(heading = 0) {
+    return L.divIcon({
+        className: 'rider-location-marker',
+        html: `
+            <div class="rider-marker-container" style="transform: rotate(${heading}deg)">
+                <svg class="rider-icon-svg" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+                    <!-- Outer circle with gradient -->
+                    <defs>
+                        <linearGradient id="riderGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" style="stop-color:#0066FF;stop-opacity:1" />
+                            <stop offset="100%" style="stop-color:#0052CC;stop-opacity:1" />
+                        </linearGradient>
+                        <filter id="dropShadow">
+                            <feDropShadow dx="0" dy="2" stdDeviation="2" flood-opacity="0.3"/>
+                        </filter>
+                    </defs>
+                    
+                    <!-- Direction indicator -->
+                    <path d="M20 5 L15 15 L20 12 L25 15 Z" fill="#0066FF" opacity="0.8"/>
+                    
+                    <!-- Main circle -->
+                    <circle cx="20" cy="20" r="15" fill="url(#riderGradient)" filter="url(#dropShadow)"/>
+                    
+                    <!-- Inner circle -->
+                    <circle cx="20" cy="20" r="10" fill="white" opacity="0.9"/>
+                    
+                    <!-- Rider icon -->
+                    <path d="M20 14 C18 14 16 16 16 18 C16 20 18 22 20 22 C22 22 24 20 24 18 C24 16 22 14 20 14 Z
+                             M20 12 C21 12 22 11 22 10 C22 9 21 8 20 8 C19 8 18 9 18 10 C18 11 19 12 20 12 Z
+                             M15 25 L25 25 L24 23 L16 23 Z" 
+                          fill="#0066FF"/>
+                </svg>
+            </div>
+        `,
+        iconSize: [40, 40],
+        iconAnchor: [20, 20]
+    });
+}
+
+// Toggle route panel with proper show/hide functionality
+window.toggleRoutePanel = function() {
+    const routePanel = document.getElementById('routePanel');
+    const toggleBtn = document.querySelector('.nav-button.secondary');
+    const navControls = document.getElementById('navControls');
+    
+    if (!routePanel) return;
+    
+    if (state.isPanelVisible) {
+        // Completely hide the panel
+        routePanel.style.display = 'none';
+        state.isPanelVisible = false;
+        state.isPanelExpanded = false;
+        
+        // Adjust nav controls position
+        if (navControls) {
+            navControls.style.bottom = 'calc(20px + var(--safe-area-bottom))';
+        }
+        
+        if (toggleBtn) {
+            toggleBtn.innerHTML = `
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
+                </svg>
+                <span>Details</span>
+            `;
+        }
+    } else {
+        // Show the panel
+        routePanel.style.display = 'block';
+        routePanel.style.transform = 'translateY(0)';
+        routePanel.style.maxHeight = '60%';
+        state.isPanelVisible = true;
+        state.isPanelExpanded = true;
+        
+        // Adjust nav controls
+        if (navControls) {
+            navControls.style.bottom = 'calc(200px + var(--safe-area-bottom))';
+        }
+        
+        if (toggleBtn) {
+            toggleBtn.innerHTML = `
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                </svg>
+                <span>Hide</span>
+            `;
+        }
+    }
+    
+    // Force map resize
+    if (state.map) {
+        setTimeout(() => {
+            state.map.invalidateSize();
+        }, 300);
+    }
+};
+
+// Collapse panel (make it draggable)
+function collapsePanel() {
+    const routePanel = document.getElementById('routePanel');
+    if (routePanel && state.isPanelVisible && !state.isPanelExpanded) {
+        routePanel.style.transform = 'translateY(calc(100% - 140px))';
+        routePanel.style.maxHeight = '140px';
+    }
+}
+
+// Enhance route panel with drag functionality
+function enhanceRoutePanel() {
+    const routePanel = document.getElementById('routePanel');
+    if (!routePanel) return;
+    
+    const panelHandle = routePanel.querySelector('.panel-handle');
+    if (panelHandle) {
+        panelHandle.style.cursor = 'grab';
+        
+        let isDragging = false;
+        let startY = 0;
+        let startTransform = 0;
+        
+        panelHandle.addEventListener('touchstart', handleStart, { passive: true });
+        panelHandle.addEventListener('touchmove', handleMove, { passive: false });
+        panelHandle.addEventListener('touchend', handleEnd);
+        
+        panelHandle.addEventListener('mousedown', handleStart);
+        document.addEventListener('mousemove', handleMove);
+        document.addEventListener('mouseup', handleEnd);
+        
+        function handleStart(e) {
+            isDragging = true;
+            panelHandle.style.cursor = 'grabbing';
+            startY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
+            const transform = routePanel.style.transform;
+            const match = transform.match(/translateY\(calc\(100% - (\d+)px\)\)/);
+            startTransform = match ? parseInt(match[1]) : 0;
+        }
+        
+        function handleMove(e) {
+            if (!isDragging) return;
+            e.preventDefault();
+            
+            const currentY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
+            const deltaY = startY - currentY;
+            const newHeight = Math.max(140, Math.min(window.innerHeight * 0.6, startTransform + deltaY));
+            
+            routePanel.style.transform = `translateY(calc(100% - ${newHeight}px))`;
+            routePanel.style.maxHeight = `${newHeight}px`;
+        }
+        
+        function handleEnd() {
+            if (!isDragging) return;
+            isDragging = false;
+            panelHandle.style.cursor = 'grab';
+            
+            // Determine if panel should be expanded or collapsed
+            const currentHeight = parseInt(routePanel.style.maxHeight);
+            if (currentHeight > 300) {
+                // Expand
+                routePanel.style.transform = 'translateY(0)';
+                routePanel.style.maxHeight = '60%';
+                state.isPanelExpanded = true;
+            } else {
+                // Collapse
+                routePanel.style.transform = 'translateY(calc(100% - 140px))';
+                routePanel.style.maxHeight = '140px';
+                state.isPanelExpanded = false;
+            }
+        }
+    }
+}
+
+// Update current location with enhanced tracking
+function updateCurrentLocation(position) {
+    const newLocation = {
+        lat: position.coords.latitude,
+        lng: position.coords.longitude
+    };
+    
+    if (state.currentLocation) {
+        const distance = calculateDistance(state.currentLocation, newLocation);
+        if (distance < 0.005) return; // Ignore small movements
+    }
+    
+    state.currentLocation = newLocation;
+    
+    // Update heading
+    if (position.coords.heading !== null && position.coords.heading !== undefined) {
+        state.currentHeading = position.coords.heading;
+    } else if (state.lastLocation) {
+        state.currentHeading = calculateBearing(state.lastLocation, state.currentLocation);
+    }
+    
+    // Update speed
+    if (position.coords.speed !== null) {
+        state.currentSpeed = Math.round(position.coords.speed * 3.6); // m/s to km/h
+    }
+    
+    // Update map
+    if (state.map) {
+        if (!state.currentLocationMarker) {
+            const riderIcon = createRiderIcon(state.currentHeading);
+            state.currentLocationMarker = L.marker(
+                [state.currentLocation.lat, state.currentLocation.lng],
+                { 
+                    icon: riderIcon,
+                    zIndexOffset: 1000
+                }
+            ).addTo(state.map);
+            
+            // Add accuracy circle
+            state.accuracyCircle = L.circle([state.currentLocation.lat, state.currentLocation.lng], {
+                radius: position.coords.accuracy,
+                fillColor: '#0066FF',
+                fillOpacity: 0.1,
+                color: '#0066FF',
+                weight: 1,
+                interactive: false
+            }).addTo(state.map);
+        } else {
+            // Update position
+            state.currentLocationMarker.setLatLng([state.currentLocation.lat, state.currentLocation.lng]);
+            
+            // Update icon rotation
+            const riderIcon = createRiderIcon(state.currentHeading);
+            state.currentLocationMarker.setIcon(riderIcon);
+            
+            // Update accuracy circle
+            if (state.accuracyCircle) {
+                state.accuracyCircle.setLatLng([state.currentLocation.lat, state.currentLocation.lng]);
+                state.accuracyCircle.setRadius(position.coords.accuracy);
+            }
+        }
+        
+        // Drone follow mode
+        if (state.navigationActive && state.isFollowingUser) {
+            state.map.panTo([state.currentLocation.lat, state.currentLocation.lng], {
+                animate: true,
+                duration: 1,
+                noMoveStart: true
+            });
+            
+            // Rotate map for heading-up view
+            if (state.currentHeading !== null && state.config.headingUp) {
+                const rotation = 360 - state.currentHeading;
+                if (Math.abs(rotation - state.lastMapRotation) > 5) {
+                    state.map.setBearing(rotation);
+                    state.lastMapRotation = rotation;
+                }
+            }
+            
+            // Adjust zoom based on speed
+            const targetZoom = calculateZoomFromSpeed(state.currentSpeed);
+            const currentZoom = state.map.getZoom();
+            if (Math.abs(currentZoom - targetZoom) > 0.5) {
+                state.map.setZoom(targetZoom, {
+                    animate: true,
+                    duration: 1
+                });
+            }
+        }
+    }
+    
+    state.lastLocation = state.currentLocation;
+    state.lastLocationTime = Date.now();
+    
+    if (state.navigationActive) {
+        updateNavigationInfo();
+    }
+    
+    updateDynamicHeader();
+}
+
+// Calculate zoom level based on speed
+function calculateZoomFromSpeed(speed) {
+    if (speed > 60) return 15;      // Highway speed
+    if (speed > 40) return 16;      // Normal driving
+    if (speed > 20) return 17;      // City driving
+    if (speed > 5) return 18;       // Slow/walking
+    return 18;                      // Stationary
+}
+
+// Calculate bearing between two points
+function calculateBearing(start, end) {
+    const dLng = (end.lng - start.lng) * Math.PI / 180;
+    const lat1 = start.lat * Math.PI / 180;
+    const lat2 = end.lat * Math.PI / 180;
+    
+    const y = Math.sin(dLng) * Math.cos(lat2);
+    const x = Math.cos(lat1) * Math.sin(lat2) - 
+              Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLng);
+    
+    const bearing = Math.atan2(y, x) * 180 / Math.PI;
+    return (bearing + 360) % 360;
+}
+
+// Update navigation info
+function updateNavigationInfo() {
+    // This will be called during navigation to update any real-time info
 }
 
 // Calculate bounds from stops
@@ -367,7 +612,7 @@ function calculateBounds(stops) {
     return { north, south, east, west };
 }
 
-// Update dynamic header based on current navigation state
+// Update dynamic header
 function updateDynamicHeader() {
     const routeTitle = document.getElementById('routeTitle');
     if (!routeTitle || !state.activeRoute) return;
@@ -424,192 +669,6 @@ function getCurrentStop() {
     return completedStops[completedStops.length - 1];
 }
 
-// Helper function to create rider icon with heading
-function createRiderIcon(heading = 0) {
-    return L.divIcon({
-        className: 'rider-location-marker',
-        html: `
-            <div class="rider-marker-container" style="transform: rotate(${heading}deg)">
-                <div class="rider-arrow"></div>
-                <div class="rider-dot"></div>
-            </div>
-        `,
-        iconSize: [30, 30],
-        iconAnchor: [15, 15]
-    });
-}
-
-// Calculate zoom level based on speed
-function calculateZoomFromSpeed(speed) {
-    if (speed > 60) return 15;
-    if (speed > 40) return 16;
-    if (speed > 20) return 17;
-    if (speed > 5) return 18;
-    return 18;
-}
-
-// Calculate bearing between two points
-function calculateBearing(start, end) {
-    const dLng = (end.lng - start.lng) * Math.PI / 180;
-    const lat1 = start.lat * Math.PI / 180;
-    const lat2 = end.lat * Math.PI / 180;
-    
-    const y = Math.sin(dLng) * Math.cos(lat2);
-    const x = Math.cos(lat1) * Math.sin(lat2) - 
-              Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLng);
-    
-    const bearing = Math.atan2(y, x) * 180 / Math.PI;
-    return (bearing + 360) % 360;
-}
-
-// Update current location with enhanced tracking
-function updateCurrentLocation(position) {
-    const newLocation = {
-        lat: position.coords.latitude,
-        lng: position.coords.longitude
-    };
-    
-    if (state.currentLocation) {
-        const distance = calculateDistance(state.currentLocation, newLocation);
-        if (distance < 0.005) return;
-    }
-    
-    state.currentLocation = newLocation;
-    
-    if (position.coords.heading !== null && position.coords.heading !== undefined) {
-        state.currentHeading = position.coords.heading;
-    } else if (state.lastLocation) {
-        state.currentHeading = calculateBearing(state.lastLocation, state.currentLocation);
-    }
-    
-    if (position.coords.speed !== null) {
-        state.currentSpeed = Math.round(position.coords.speed * 3.6);
-    }
-    
-    if (state.map) {
-        if (!state.currentLocationMarker) {
-            const riderIcon = createRiderIcon(state.currentHeading);
-            state.currentLocationMarker = L.marker(
-                [state.currentLocation.lat, state.currentLocation.lng],
-                { 
-                    icon: riderIcon,
-                    rotationAngle: 0,
-                    zIndexOffset: 1000
-                }
-            ).addTo(state.map);
-            
-            state.accuracyCircle = L.circle([state.currentLocation.lat, state.currentLocation.lng], {
-                radius: position.coords.accuracy,
-                fillColor: '#0066FF',
-                fillOpacity: 0.1,
-                color: '#0066FF',
-                weight: 1,
-                interactive: false
-            }).addTo(state.map);
-        } else {
-            state.currentLocationMarker.setLatLng([state.currentLocation.lat, state.currentLocation.lng]);
-            const riderIcon = createRiderIcon(state.currentHeading);
-            state.currentLocationMarker.setIcon(riderIcon);
-            
-            if (state.accuracyCircle) {
-                state.accuracyCircle.setLatLng([state.currentLocation.lat, state.currentLocation.lng]);
-                state.accuracyCircle.setRadius(position.coords.accuracy);
-            }
-        }
-        
-        if (state.navigationActive && state.isFollowingUser) {
-            state.map.panTo([state.currentLocation.lat, state.currentLocation.lng], {
-                animate: true,
-                duration: 1,
-                noMoveStart: true
-            });
-            
-            if (state.currentHeading !== null && state.config?.headingUp) {
-                const rotation = 360 - state.currentHeading;
-                if (Math.abs(rotation - state.lastMapRotation) > 5) {
-                    state.map.setBearing(rotation);
-                    state.lastMapRotation = rotation;
-                }
-            }
-            
-            const targetZoom = calculateZoomFromSpeed(state.currentSpeed);
-            const currentZoom = state.map.getZoom();
-            if (Math.abs(currentZoom - targetZoom) > 0.5) {
-                state.map.setZoom(targetZoom, {
-                    animate: true,
-                    duration: 1
-                });
-            }
-        }
-    }
-    
-    state.lastLocation = state.currentLocation;
-    state.lastLocationTime = Date.now();
-    
-    if (state.navigationActive) {
-        updateNavigationInfo();
-    }
-    
-    updateDynamicHeader();
-}
-
-// Update navigation info
-function updateNavigationInfo() {
-    // This will be called during navigation to update any real-time info
-    // Currently handled by updateWazeNavigation
-}
-
-// Toggle route panel visibility
-window.toggleRoutePanel = function() {
-    const routePanel = document.getElementById('routePanel');
-    const toggleBtn = document.querySelector('.nav-button.secondary');
-    const navControls = document.getElementById('navControls');
-    
-    if (!routePanel) return;
-    
-    if (state.isPanelVisible) {
-        routePanel.style.display = 'none';
-        state.isPanelVisible = false;
-        
-        if (navControls) {
-            navControls.style.bottom = 'calc(20px + var(--safe-area-bottom))';
-        }
-        
-        if (toggleBtn) {
-            toggleBtn.innerHTML = `
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
-                </svg>
-                <span>Details</span>
-            `;
-        }
-    } else {
-        routePanel.style.display = 'block';
-        routePanel.style.transform = 'translateY(0)';
-        routePanel.style.maxHeight = '60%';
-        state.isPanelVisible = true;
-        
-        if (navControls) {
-            navControls.style.bottom = 'calc(200px + var(--safe-area-bottom))';
-        }
-        
-        if (toggleBtn) {
-            toggleBtn.innerHTML = `
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-                </svg>
-                <span>Hide</span>
-            `;
-        }
-    }
-    
-    if (state.map) {
-        setTimeout(() => {
-            state.map.invalidateSize();
-        }, 300);
-    }
-};
-
 // Toggle follow mode
 window.toggleFollowMode = function() {
     state.isFollowingUser = !state.isFollowingUser;
@@ -628,44 +687,18 @@ window.toggleFollowMode = function() {
     showNotification(state.isFollowingUser ? 'Following mode enabled' : 'Following mode disabled', 'info');
 };
 
-// Collapse panel
-function collapsePanel() {
-    const routePanel = document.getElementById('routePanel');
-    if (routePanel) {
-        routePanel.style.transform = 'translateY(calc(100% - 140px))';
-        routePanel.style.maxHeight = '140px';
-    }
-}
-
-// Make route panel collapsible
-function enhanceRoutePanel() {
-    const routePanel = document.getElementById('routePanel');
-    if (!routePanel) return;
+// Toggle heading up mode
+window.toggleHeadingMode = function() {
+    state.config.headingUp = !state.config.headingUp;
     
-    let isPanelCollapsed = false;
-    
-    const panelHandle = routePanel.querySelector('.panel-handle');
-    if (panelHandle) {
-        panelHandle.style.cursor = 'pointer';
-        panelHandle.addEventListener('click', togglePanelHeight);
-        
-        panelHandle.innerHTML = `
-            <div style="width: 40px; height: 4px; background: var(--text-tertiary); border-radius: 2px; margin: 0 auto;"></div>
-        `;
+    if (!state.config.headingUp && state.map) {
+        // Reset to north up
+        state.map.setBearing(0);
+        state.lastMapRotation = 0;
     }
     
-    function togglePanelHeight() {
-        isPanelCollapsed = !isPanelCollapsed;
-        
-        if (isPanelCollapsed) {
-            routePanel.style.transform = 'translateY(calc(100% - 140px))';
-            routePanel.style.maxHeight = '140px';
-        } else {
-            routePanel.style.transform = 'translateY(0)';
-            routePanel.style.maxHeight = '60%';
-        }
-    }
-}
+    showNotification(state.config.headingUp ? 'Heading up mode' : 'North up mode', 'info');
+};
 
 // Create custom Leaflet icon with Tuma theme
 function createLeafletIcon(stop) {
@@ -710,7 +743,7 @@ function createLeafletIcon(stop) {
     });
 }
 
-// Create popup content with Tuma theme
+// Create popup content
 function createStopPopup(stop) {
     const bgColor = stop.type === 'pickup' ? '#FF9F0A' : '#0066FF';
     const textColor = stop.type === 'pickup' ? 'black' : 'white';
@@ -808,8 +841,6 @@ async function drawOptimizedRoute() {
         
         coordinates = coordinates.concat(stops.map(stop => [stop.location.lng, stop.location.lat]));
         
-        console.log('Drawing route with coordinates:', coordinates);
-        
         const response = await fetch('https://api.openrouteservice.org/v2/directions/driving-car', {
             method: 'POST',
             headers: {
@@ -831,12 +862,11 @@ async function drawOptimizedRoute() {
         
         if (!response.ok) {
             const errorText = await response.text();
-            console.error('OpenRouteService error response:', errorText);
+            console.error('OpenRouteService error:', errorText);
             throw new Error('OpenRouteService API error');
         }
         
         const data = await response.json();
-        console.log('Route response:', data);
         
         if (data.routes && data.routes.length > 0) {
             const route = data.routes[0];
@@ -858,8 +888,6 @@ async function drawOptimizedRoute() {
             if (document.getElementById('estimatedTime')) {
                 document.getElementById('estimatedTime').textContent = duration;
             }
-            
-            console.log('Route drawn successfully');
         }
     } catch (error) {
         console.error('Error getting route:', error);
@@ -885,7 +913,7 @@ function drawFallbackRoute(stops) {
     }).addTo(state.map);
 }
 
-// Decode polyline from OpenRouteService
+// Decode polyline
 function decodePolyline(encoded) {
     const poly = [];
     let index = 0;
@@ -968,7 +996,7 @@ function updateRouteStats() {
     document.getElementById('estimatedTime').textContent = estimatedTime;
 }
 
-// Display stops list with enhanced UI
+// Display stops list
 function displayStops() {
     const stopsList = document.getElementById('stopsList');
     if (!stopsList || !state.activeRoute) return;
@@ -1087,7 +1115,7 @@ function updateParcelsInPossession() {
     });
 }
 
-// Create enhanced stop card
+// Create stop card
 function createStopCard(stop, number, type, isLocked = false) {
     const isActive = isNextStop(stop);
     const canInteract = !stop.completed && !isLocked && (type === 'pickup' || canCompleteDelivery(stop));
@@ -1148,7 +1176,7 @@ function createStopCard(stop, number, type, isLocked = false) {
     `;
 }
 
-// Check if stop is the next one
+// Check if stop is next
 function isNextStop(stop) {
     const nextStop = getNextStop();
     return nextStop && nextStop.id === stop.id;
@@ -1171,7 +1199,7 @@ function canCompleteStop(stop) {
     return canCompleteDelivery(stop);
 }
 
-// Check if all stops in array are completed
+// Check if all completed
 function allCompleted(stops) {
     return stops.every(s => s.completed);
 }
@@ -1198,7 +1226,7 @@ function showEmptyState() {
     document.getElementById('emptyState').style.display = 'block';
 }
 
-// Enhanced location tracking with high accuracy
+// Start location tracking
 function startLocationTracking() {
     if (!navigator.geolocation) {
         showNotification('Location services not available', 'warning');
@@ -1247,7 +1275,7 @@ window.centerOnLocation = function() {
     }
 };
 
-// FIXED: Enhanced start navigation
+// Start navigation
 window.startNavigation = function() {
     const nextStop = getNextStop();
     if (!nextStop) {
@@ -1265,42 +1293,36 @@ window.startNavigation = function() {
     }
 };
 
-// Helper function to proceed with navigation
+// Proceed with navigation
 function proceedWithNavigation(nextStop) {
     startContinuousTracking();
     showEnhancedNavigation(nextStop);
     state.navigationActive = true;
 }
 
-// FIXED: Enhanced Waze-like navigation interface
+// Enhanced Waze-like navigation interface
 function showEnhancedNavigation(targetStop) {
-    // Remove any existing navigation
     const existingNav = document.querySelector('.enhanced-navigation');
     if (existingNav) existingNav.remove();
     
-    // Hide the route panel completely
     const routePanel = document.getElementById('routePanel');
     if (routePanel) {
         routePanel.style.display = 'none';
-        routePanel.style.zIndex = '-1';
         state.isPanelVisible = false;
     }
     
-    // Hide nav controls
     const navControls = document.getElementById('navControls');
     if (navControls) {
         navControls.style.display = 'none';
     }
     
-    // Enable follow mode
     state.isFollowingUser = true;
     
-    // Create minimalist Waze-like navigation UI - FIXED: transparent background
     const navUI = document.createElement('div');
     navUI.className = 'enhanced-navigation waze-style';
-    navUI.style.cssText = 'pointer-events: none !important; background: transparent !important; position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 100;';
+    navUI.style.cssText = 'pointer-events: none !important;';
     navUI.innerHTML = `
-        <!-- Minimal top instruction bar -->
+        <!-- Top instruction bar -->
         <div class="waze-nav-top">
             <div class="waze-instruction-bar">
                 <button class="waze-close-btn" onclick="exitEnhancedNavigation()">
@@ -1326,7 +1348,7 @@ function showEnhancedNavigation(targetStop) {
             </div>
         </div>
         
-        <!-- Floating bottom info pills -->
+        <!-- Bottom info pills -->
         <div class="waze-bottom-pills">
             <div class="waze-pill eta-pill">
                 <span class="pill-icon">⏱</span>
@@ -1346,14 +1368,14 @@ function showEnhancedNavigation(targetStop) {
             </div>
         </div>
         
-        <!-- Floating action button for details/verify -->
+        <!-- Floating action button -->
         <button class="waze-fab" onclick="showNavigationActions()">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
                 <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/>
             </svg>
         </button>
         
-        <!-- Collapsible navigation menu -->
+        <!-- Navigation menu -->
         <div class="waze-nav-menu" id="navMenu" style="display: none;">
             <button class="nav-menu-item" onclick="toggleRoutePanel()">
                 <span class="menu-icon">📋</span>
@@ -1362,6 +1384,10 @@ function showEnhancedNavigation(targetStop) {
             <button class="nav-menu-item" onclick="toggleFollowMode()">
                 <span class="menu-icon">🎯</span>
                 <span id="followModeText">Following On</span>
+            </button>
+            <button class="nav-menu-item" onclick="toggleHeadingMode()">
+                <span class="menu-icon">🧭</span>
+                <span>Toggle Map Orientation</span>
             </button>
             <button class="nav-menu-item" onclick="openQuickVerification()">
                 <span class="menu-icon">✓</span>
@@ -1380,7 +1406,6 @@ function showEnhancedNavigation(targetStop) {
     
     document.body.appendChild(navUI);
     
-    // CRITICAL: Force map resize after UI changes
     setTimeout(() => {
         if (state.map) {
             state.map.invalidateSize();
@@ -1415,7 +1440,7 @@ window.showNavigationActions = function() {
     }
 };
 
-// Update navigation with Waze-style minimal info
+// Update navigation
 async function updateWazeNavigation(targetStop) {
     if (!state.currentLocation) {
         setTimeout(() => updateWazeNavigation(targetStop), 1000);
@@ -1481,7 +1506,7 @@ function showArrivalNotification(targetStop) {
     }, 2000);
 }
 
-// Get enhanced directions from OpenRouteService
+// Get enhanced directions
 async function getEnhancedDirections(targetStop) {
     if (!state.currentLocation) return;
     
@@ -1528,7 +1553,7 @@ async function getEnhancedDirections(targetStop) {
     }
 }
 
-// Update navigation instructions for minimal display
+// Update navigation instructions
 function updateNavigationInstructions(route) {
     if (!route.segments || route.segments.length === 0) return;
     
@@ -1588,7 +1613,7 @@ function getDirectionEmoji(type) {
     return emojis[type] || '⬆️';
 }
 
-// FIXED: Exit enhanced navigation and restore normal view
+// Exit navigation
 window.exitEnhancedNavigation = function() {
     const nav = document.querySelector('.enhanced-navigation');
     if (nav) nav.remove();
@@ -1596,26 +1621,21 @@ window.exitEnhancedNavigation = function() {
     state.navigationActive = false;
     state.isFollowingUser = false;
     
-    // Show route panel again
     const routePanel = document.getElementById('routePanel');
     if (routePanel) {
         routePanel.style.display = 'block';
-        routePanel.style.zIndex = '110'; // Restore proper z-index
         state.isPanelVisible = true;
     }
     
-    // Show nav controls
     const navControls = document.getElementById('navControls');
     if (navControls) {
         navControls.style.display = 'flex';
     }
     
-    // Reset map view and invalidate size
     if (state.map) {
         state.map.invalidateSize();
         state.map.setZoom(14);
         
-        // Re-fit bounds to show all stops
         if (state.activeRoute && state.activeRoute.stops) {
             const bounds = L.latLngBounds();
             state.activeRoute.stops.forEach(stop => {
@@ -1682,6 +1702,7 @@ window.navigateToStop = function(stopId) {
     showEnhancedNavigation(stop);
 };
 
+// Select stop
 window.selectStop = function(stopId) {
     const stop = state.activeRoute.stops.find(s => s.id === stopId);
     if (!stop || stop.completed) return;
@@ -1720,7 +1741,7 @@ function startContinuousTracking() {
     }, 5000);
 }
 
-// Check proximity to stops
+// Check proximity
 function checkStopProximity() {
     if (!state.currentLocation || !state.activeRoute) return;
     
@@ -1745,7 +1766,7 @@ function checkStopProximity() {
     }
 }
 
-// Calculate distance between two points
+// Calculate distance
 function calculateDistance(point1, point2) {
     const R = 6371;
     const dLat = (point2.lat - point1.lat) * Math.PI / 180;
@@ -1773,7 +1794,7 @@ function calculateETA(distance) {
     });
 }
 
-// Quick verification from header
+// Quick verification
 window.openQuickVerification = function() {
     const nextStop = getNextStop();
     if (nextStop) {
@@ -2023,10 +2044,10 @@ function showNotification(message, type = 'info') {
     }, 3000);
 }
 
-// FIXED: Add Waze-style navigation CSS
+// Add Waze navigation styles
 function addWazeNavigationStyles() {
     const wazeNavigationStyles = `
-        /* Waze-style Navigation UI */
+        /* Waze-style Navigation */
         .waze-nav-top {
             position: fixed;
             top: 0;
@@ -2037,7 +2058,7 @@ function addWazeNavigationStyles() {
         }
         
         .waze-instruction-bar {
-            background: linear-gradient(to bottom, rgba(10, 10, 11, 0.95), rgba(10, 10, 11, 0.85)) !important;
+            background: linear-gradient(to bottom, rgba(10, 10, 11, 0.95), rgba(10, 10, 11, 0.85));
             backdrop-filter: blur(20px);
             padding: 12px;
             display: flex;
@@ -2051,7 +2072,7 @@ function addWazeNavigationStyles() {
             width: 36px;
             height: 36px;
             border-radius: 50%;
-            background: rgba(255, 255, 255, 0.1) !important;
+            background: rgba(255, 255, 255, 0.1);
             border: none;
             display: flex;
             align-items: center;
@@ -2063,14 +2084,14 @@ function addWazeNavigationStyles() {
         
         .waze-close-btn:active,
         .waze-menu-btn:active {
-            background: rgba(255, 255, 255, 0.2) !important;
+            background: rgba(255, 255, 255, 0.2);
             transform: scale(0.95);
         }
         
         .waze-direction-icon {
             width: 40px;
             height: 40px;
-            background: var(--primary) !important;
+            background: var(--primary);
             border-radius: 50%;
             display: flex;
             align-items: center;
@@ -2102,7 +2123,7 @@ function addWazeNavigationStyles() {
             text-overflow: ellipsis;
         }
         
-        /* Floating bottom pills */
+        /* Bottom pills */
         .waze-bottom-pills {
             position: fixed;
             bottom: calc(30px + var(--safe-area-bottom));
@@ -2115,7 +2136,7 @@ function addWazeNavigationStyles() {
         }
         
         .waze-pill {
-            background: rgba(10, 10, 11, 0.9) !important;
+            background: rgba(10, 10, 11, 0.9);
             backdrop-filter: blur(10px);
             border: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: 25px;
@@ -2152,14 +2173,14 @@ function addWazeNavigationStyles() {
             line-height: 1;
         }
         
-        /* Floating Action Button */
+        /* FAB */
         .waze-fab {
             position: fixed;
             bottom: calc(100px + var(--safe-area-bottom));
             right: 20px;
             width: 56px;
             height: 56px;
-            background: var(--primary) !important;
+            background: var(--primary);
             border-radius: 50%;
             border: none;
             display: flex;
@@ -2176,12 +2197,12 @@ function addWazeNavigationStyles() {
             transform: scale(0.9);
         }
         
-        /* Navigation Menu */
+        /* Nav menu */
         .waze-nav-menu {
             position: fixed;
             bottom: calc(170px + var(--safe-area-bottom));
             right: 20px;
-            background: var(--surface-elevated) !important;
+            background: var(--surface-elevated);
             border-radius: 12px;
             padding: 8px;
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
@@ -2196,7 +2217,7 @@ function addWazeNavigationStyles() {
             gap: 12px;
             width: 100%;
             padding: 12px;
-            background: transparent !important;
+            background: transparent;
             border: none;
             color: var(--text-primary);
             font-size: 14px;
@@ -2208,7 +2229,7 @@ function addWazeNavigationStyles() {
         }
         
         .nav-menu-item:hover {
-            background: var(--surface-high) !important;
+            background: var(--surface-high);
         }
         
         .nav-menu-item:active {
@@ -2234,7 +2255,360 @@ function addWazeNavigationStyles() {
 // Add remaining CSS
 const navStyles = document.createElement('style');
 navStyles.textContent = `
-    ${additionalNavigationStyles}
+    .destination-details-modal,
+    .verification-modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 2000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+    }
+    
+    .modal-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.8);
+        backdrop-filter: blur(10px);
+    }
+    
+    .modal-content {
+        position: relative;
+        background: var(--surface-elevated);
+        border-radius: 20px;
+        max-width: 400px;
+        width: 100%;
+        overflow: hidden;
+        z-index: 1;
+    }
+    
+    .modal-header {
+        padding: 20px;
+        background: var(--surface-high);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    
+    .modal-header.pickup {
+        background: var(--warning);
+        color: black;
+    }
+    
+    .modal-header.delivery {
+        background: var(--success);
+        color: white;
+    }
+    
+    .modal-close {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.2);
+        border: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        color: inherit;
+    }
+    
+    .modal-body {
+        padding: 20px;
+    }
+    
+    .detail-section {
+        margin-bottom: 20px;
+    }
+    
+    .detail-section h4 {
+        font-size: 14px;
+        color: var(--text-secondary);
+        margin-bottom: 8px;
+    }
+    
+    .detail-section p {
+        font-size: 16px;
+        line-height: 1.5;
+    }
+    
+    .code-display {
+        font-family: monospace;
+        font-size: 20px;
+        font-weight: 700;
+        color: var(--primary);
+    }
+    
+    .verification-section {
+        margin: 20px 0;
+    }
+    
+    .verification-section label {
+        display: block;
+        font-size: 16px;
+        margin-bottom: 12px;
+    }
+    
+    .verification-input {
+        width: 100%;
+        background: var(--surface-high);
+        border: 2px solid var(--border);
+        border-radius: 12px;
+        padding: 16px;
+        font-size: 24px;
+        font-weight: 700;
+        text-align: center;
+        color: var(--text-primary);
+        letter-spacing: 4px;
+        text-transform: uppercase;
+        outline: none;
+        transition: all 0.3s;
+    }
+    
+    .verification-input:focus {
+        border-color: var(--primary);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 20px rgba(0, 102, 255, 0.2);
+    }
+    
+    .verification-input.error {
+        border-color: var(--danger);
+        animation: shake 0.3s;
+    }
+    
+    @keyframes shake {
+        0%, 100% { transform: translateX(0); }
+        25% { transform: translateX(-10px); }
+        75% { transform: translateX(10px); }
+    }
+    
+    .code-hint {
+        font-size: 14px;
+        color: var(--text-secondary);
+        text-align: center;
+        margin-top: 8px;
+    }
+    
+    .modal-actions {
+        display: flex;
+        gap: 12px;
+        margin-top: 24px;
+    }
+    
+    .modal-btn {
+        flex: 1;
+        padding: 16px;
+        border: none;
+        border-radius: 12px;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        transition: all 0.2s;
+    }
+    
+    .modal-btn.primary {
+        background: var(--primary);
+        color: white;
+    }
+    
+    .modal-btn.secondary {
+        background: var(--surface-high);
+        color: var(--text-primary);
+    }
+    
+    .modal-btn:active {
+        scale: 0.95;
+    }
+    
+    .success-animation,
+    .phase-complete-animation,
+    .route-complete-animation {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: var(--surface-elevated);
+        border-radius: 20px;
+        padding: 40px;
+        text-align: center;
+        z-index: 3000;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        animation: popIn 0.3s ease-out;
+    }
+    
+    @keyframes popIn {
+        from {
+            scale: 0.8;
+            opacity: 0;
+        }
+        to {
+            scale: 1;
+            opacity: 1;
+        }
+    }
+    
+    .success-icon {
+        width: 80px;
+        height: 80px;
+        background: var(--success);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 20px;
+        font-size: 48px;
+        color: white;
+    }
+    
+    .success-text {
+        font-size: 24px;
+        font-weight: 700;
+    }
+    
+    .phase-complete-content,
+    .route-complete-content {
+        max-width: 360px;
+    }
+    
+    .phase-icon,
+    .complete-icon {
+        font-size: 64px;
+        margin-bottom: 20px;
+    }
+    
+    .route-complete-content h1 {
+        font-size: 28px;
+        margin-bottom: 12px;
+    }
+    
+    .route-complete-content p {
+        font-size: 16px;
+        color: var(--text-secondary);
+        margin-bottom: 24px;
+    }
+    
+    .route-stats {
+        display: flex;
+        justify-content: center;
+        gap: 40px;
+        margin-bottom: 32px;
+    }
+    
+    .route-stats .stat {
+        text-align: center;
+    }
+    
+    .route-stats .stat-value {
+        display: block;
+        font-size: 32px;
+        font-weight: 700;
+        color: var(--primary);
+        margin-bottom: 4px;
+    }
+    
+    .route-stats .stat-label {
+        font-size: 14px;
+        color: var(--text-secondary);
+    }
+    
+    .complete-btn {
+        width: 100%;
+        background: var(--primary);
+        color: white;
+        border: none;
+        border-radius: 14px;
+        padding: 16px;
+        font-size: 18px;
+        font-weight: 700;
+        cursor: pointer;
+    }
+    
+    .notification {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: var(--surface-elevated);
+        color: var(--text-primary);
+        padding: 16px 20px;
+        border-radius: 12px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        z-index: 4000;
+        animation: slideIn 0.3s ease-out;
+        max-width: 350px;
+        border: 1px solid var(--border);
+    }
+    
+    .notification.success {
+        background: var(--success);
+        color: white;
+        border-color: var(--success);
+    }
+    
+    .notification.error {
+        background: var(--danger);
+        color: white;
+        border-color: var(--danger);
+    }
+    
+    .notification.warning {
+        background: var(--warning);
+        color: black;
+        border-color: var(--warning);
+    }
+    
+    .notification-icon {
+        font-size: 20px;
+    }
+    
+    .notification.hiding {
+        animation: slideOut 0.3s ease-out;
+    }
+    
+    @keyframes slideIn {
+        from {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+        to {
+            transform: translateX(0);
+            opacity: 1;
+        }
+    }
+    
+    @keyframes slideOut {
+        from {
+            transform: translateX(0);
+            opacity: 1;
+        }
+        to {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+    }
+    
+    .modal-closing {
+        animation: fadeOut 0.3s ease-out;
+    }
+    
+    @keyframes fadeOut {
+        to {
+            opacity: 0;
+        }
+    }
 `;
 document.head.appendChild(navStyles);
 
@@ -2299,142 +2673,6 @@ window.routeDebug = {
     }
 };
 
-// Additional navigation styles to be included
-const additionalNavigationStyles = `
-    .enhanced-navigation {
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: transparent !important;
-        z-index: 1000;
-        display: flex;
-        flex-direction: column;
-        pointer-events: none !important;
-    }
-    
-    .destination-details-modal,
-    .verification-modal {
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        z-index: 2000;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 20px;
-    }
-    
-    .modal-overlay {
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: rgba(0, 0, 0, 0.8) !important;
-        backdrop-filter: blur(10px);
-    }
-    
-    .modal-content {
-        position: relative;
-        background: var(--surface-elevated) !important;
-        border-radius: 20px;
-        max-width: 400px;
-        width: 100%;
-        overflow: hidden;
-        z-index: 1;
-    }
-    
-    .modal-header {
-        padding: 20px;
-        background: var(--surface-high) !important;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-    }
-    
-    .modal-header.pickup {
-        background: var(--warning) !important;
-        color: black;
-    }
-    
-    .modal-header.delivery {
-        background: var(--success) !important;
-        color: white;
-    }
-    
-    .verification-input {
-        width: 100%;
-        background: var(--surface-high) !important;
-        border: 2px solid var(--border);
-        border-radius: 12px;
-        padding: 16px;
-        font-size: 24px;
-        font-weight: 700;
-        text-align: center;
-        color: var(--text-primary);
-        letter-spacing: 4px;
-        text-transform: uppercase;
-        outline: none;
-        transition: all 0.3s;
-    }
-    
-    .success-animation,
-    .phase-complete-animation,
-    .route-complete-animation {
-        position: fixed;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        background: var(--surface-elevated) !important;
-        border-radius: 20px;
-        padding: 40px;
-        text-align: center;
-        z-index: 3000;
-        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
-        animation: popIn 0.3s ease-out;
-    }
-    
-    .notification {
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        background: var(--surface-elevated) !important;
-        color: var(--text-primary);
-        padding: 16px 20px;
-        border-radius: 12px;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        z-index: 4000;
-        animation: slideIn 0.3s ease-out;
-        max-width: 350px;
-        border: 1px solid var(--border);
-    }
-    
-    .notification.success {
-        background: var(--success) !important;
-        color: white;
-        border-color: var(--success);
-    }
-    
-    .notification.error {
-        background: var(--danger) !important;
-        color: white;
-        border-color: var(--danger);
-    }
-    
-    .notification.warning {
-        background: var(--warning) !important;
-        color: black;
-        border-color: var(--warning);
-    }
-`;
-
 console.log('✅ Fixed Route.js loaded successfully!');
-console.log('Map visibility issue resolved - navigation overlay is now transparent');
-console.log('Debug commands available: window.routeDebug');
+console.log('Features: Map rotation enabled, enhanced rider icon, proper panel hide/show');
+console.log('Debug commands: window.routeDebug');
