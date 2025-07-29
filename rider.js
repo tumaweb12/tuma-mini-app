@@ -1155,6 +1155,14 @@ function displayRoutes() {
         // Calculate rider earnings (70% of total)
         const riderEarnings = Math.round(route.total_earnings * BUSINESS_CONFIG.commission.rider);
         
+        // Generate a unique function name for each route to avoid conflicts
+        const claimFunctionName = `claimRoute_${route.id.replace(/[^a-zA-Z0-9]/g, '_')}`;
+        
+        // Store the claim function on window
+        window[claimFunctionName] = function() {
+            claimRoute(route.id);
+        };
+        
         return `
             <div class="route-card ${route.status !== 'available' || hasActiveRoute ? 'claimed' : ''}">
                 <div class="route-header">
@@ -1174,7 +1182,7 @@ function displayRoutes() {
                 
                 <button type="button" class="claim-button" 
                         ${route.status !== 'available' || hasActiveRoute ? 'disabled' : ''}
-                        onclick="claimRoute('${route.id}')">
+                        onclick="${claimFunctionName}()">
                     ${hasActiveRoute ? 'Route Active' : 
                       route.status === 'available' ? 'Claim Route' : 'Already Claimed'}
                 </button>
@@ -1789,8 +1797,7 @@ function startLocationUpdates() {
 // ─── Event Listeners ───────────────────────────────────────────────────────
 
 function setupEventListeners() {
-    // Prevent form submission - REMOVED since we changed form to div
-    
+    // Code input formatting
     if (elements.codeInput) {
         elements.codeInput.addEventListener('input', (e) => {
             let value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -1898,6 +1905,8 @@ window.filterRoutes = function(type) {
 };
 
 window.claimRoute = async function(routeId) {
+    console.log('claimRoute called with ID:', routeId);
+    
     // Prevent any default behavior
     if (window.event) {
         window.event.preventDefault();
@@ -1911,6 +1920,8 @@ window.claimRoute = async function(routeId) {
     }
     
     const route = state.availableRoutes.find(r => r.id === routeId);
+    console.log('Found route:', route);
+    
     if (!route || route.status !== 'available') {
         showNotification('This route is not available', 'warning');
         return;
