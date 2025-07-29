@@ -1,7 +1,7 @@
 /**
  * Complete Enhanced Route Navigation Module with OpenRouteService
  * Fixed version with all requested improvements including Waze-style navigation
- * FIXED: Map visibility issue during navigation
+ * FIXED: Map visibility issue during navigation with drone-like following
  * Part 1: Core logic and map functions
  */
 
@@ -26,7 +26,14 @@ const DEV_CONFIG = {
     ignoreRiderNotFound: true
 };
 
-// State management
+// Configuration for navigation behavior
+const config = {
+    headingUp: false, // Set to true for heading-up mode, false for north-up
+    smoothMovement: true,
+    autoZoom: true
+};
+
+// State management with enhanced properties for navigation
 const state = {
     activeRoute: null,
     currentLocation: null,
@@ -46,7 +53,16 @@ const state = {
     pickupPhaseCompleted: false,
     isPanelVisible: true,
     navigationActive: false,
-    currentSpeed: 0
+    currentSpeed: 0,
+    // New properties for enhanced navigation
+    currentHeading: 0,
+    isFollowingUser: true,
+    lastMapRotation: 0,
+    smoothLocationInterval: null,
+    mapBearing: 0,
+    config: config,
+    locationWatchId: null,
+    accuracyCircle: null
 };
 
 // API Configuration
@@ -54,12 +70,121 @@ const OPENROUTE_API_KEY = '5b3ce3597851110001cf624841e48578ffb34c6b96dfe3bbe9b3a
 const SUPABASE_URL = 'https://btxavqfoirdzwpfrvezp.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ0eGF2cWZvaXJkendwZnJ2ZXpwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE0ODcxMTcsImV4cCI6MjA2NzA2MzExN30.kQKpukFGx-cBl1zZRuXmex02ifkZ751WCUfQPogYutk';
 
+// CSS injection function for navigation styles
+function injectNavigationStyles() {
+    const style = document.createElement('style');
+    style.textContent = `
+        /* CRITICAL: Ensure navigation doesn't block map */
+        .enhanced-navigation {
+            pointer-events: none !important;
+        }
+        
+        .enhanced-navigation.waze-style {
+            pointer-events: none !important;
+        }
+        
+        /* Individual elements should be clickable */
+        .waze-nav-top,
+        .waze-bottom-pills,
+        .waze-fab,
+        .waze-nav-menu {
+            pointer-events: auto !important;
+        }
+        
+        /* Ensure map remains visible */
+        #map {
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            z-index: 1 !important;
+        }
+        
+        .map-container {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            z-index: 1 !important;
+        }
+        
+        /* Rider location marker styles */
+        .rider-location-marker {
+            z-index: 1000 !important;
+        }
+        
+        .rider-marker-container {
+            position: relative;
+            width: 30px;
+            height: 30px;
+            transition: transform 0.3s ease;
+        }
+        
+        .rider-arrow {
+            position: absolute;
+            top: -5px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 8px solid transparent;
+            border-right: 8px solid transparent;
+            border-bottom: 15px solid #0066FF;
+            z-index: 2;
+        }
+        
+        .rider-dot {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 20px;
+            height: 20px;
+            background: #0066FF;
+            border: 3px solid white;
+            border-radius: 50%;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            z-index: 1;
+        }
+        
+        /* Hide Leaflet rotation control if visible */
+        .leaflet-control-rotate {
+            display: none !important;
+        }
+    `;
+    document.head.appendChild(style);
+}
+
+// Wait for Leaflet to load
+function waitForLeaflet() {
+    return new Promise((resolve) => {
+        if (window.L) {
+            resolve();
+        } else {
+            const checkInterval = setInterval(() => {
+                if (window.L) {
+                    clearInterval(checkInterval);
+                    resolve();
+                }
+            }, 100);
+        }
+    });
+}
+
 // Initialize on DOM ready
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log('Route.js initializing with OpenRouteService...');
+    console.log('Route.js initializing with Waze-style navigation...');
+    
+    // Inject navigation styles first
+    injectNavigationStyles();
     
     // Add Waze navigation styles
     addWazeNavigationStyles();
+    
+    // Wait for Leaflet to load
+    await waitForLeaflet();
     
     try {
         // Load active route from localStorage
@@ -108,39 +233,65 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 });
 
-// Initialize Leaflet Map with Simplistic Style (like Google Maps Transit)
+// Initialize Leaflet Map with Waze-style view
 async function initializeMap() {
-    console.log('Initializing Leaflet map with simplistic style...');
+    console.log('Initializing Leaflet map with Waze-style view...');
     
-    // Get the center point from route stops
+    const mapContainer = document.getElementById('map');
+    if (!mapContainer) {
+        console.error('Map container not found!');
+        return;
+    }
+    
+    // Force proper dimensions
+    mapContainer.style.width = '100%';
+    mapContainer.style.height = '100%';
+    
+    // Get center point from route or use Nairobi default
     let centerLat = -1.2921;
     let centerLng = 36.8219;
     
     if (state.activeRoute && state.activeRoute.stops && state.activeRoute.stops.length > 0) {
-        // Calculate center from all stops
         const bounds = calculateBounds(state.activeRoute.stops);
         centerLat = (bounds.north + bounds.south) / 2;
         centerLng = (bounds.east + bounds.west) / 2;
     }
     
-    // Create map centered on route
+    // Create map with options for smooth movement
     state.map = L.map('map', {
-        zoomControl: false // Remove default zoom control for cleaner look
-    }).setView([centerLat, centerLng], 13);
+        center: [centerLat, centerLng],
+        zoom: 17, // Closer zoom for navigation
+        zoomControl: false,
+        rotate: true, // Enable rotation
+        bearing: 0, // Initial bearing
+        touchRotate: true, // Allow touch rotation
+        rotateControl: false, // Hide rotation control
+        attributionControl: false // Hide attribution for cleaner look
+    });
     
-    // Use CartoDB Positron for a clean, minimal map style (similar to Google Maps transit)
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-        attribution: '© OpenStreetMap contributors © CARTO',
-        subdomains: 'abcd',
-        maxZoom: 19
+    // Use a cleaner tile layer
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+        maxZoom: 19,
+        subdomains: 'abcd'
     }).addTo(state.map);
     
-    // Add custom zoom control in bottom left
+    // Add zoom control in bottom left
     L.control.zoom({
         position: 'bottomleft'
     }).addTo(state.map);
     
-    console.log('Map initialized with simplistic style');
+    // Add scale control
+    L.control.scale({
+        position: 'bottomleft',
+        imperial: false
+    }).addTo(state.map);
+    
+    // Force a resize
+    setTimeout(() => {
+        state.map.invalidateSize();
+    }, 100);
+    
+    console.log('Map initialized with Waze-style settings');
 }
 
 // Calculate bounds from stops
@@ -225,6 +376,162 @@ function getCurrentStop() {
     return completedStops[completedStops.length - 1];
 }
 
+// Helper function to create rider icon with heading
+function createRiderIcon(heading = 0) {
+    return L.divIcon({
+        className: 'rider-location-marker',
+        html: `
+            <div class="rider-marker-container" style="transform: rotate(${heading}deg)">
+                <div class="rider-arrow"></div>
+                <div class="rider-dot"></div>
+            </div>
+        `,
+        iconSize: [30, 30],
+        iconAnchor: [15, 15]
+    });
+}
+
+// Calculate zoom level based on speed
+function calculateZoomFromSpeed(speed) {
+    // Adjust zoom based on speed for better visibility
+    if (speed > 60) return 15;      // Highway speed
+    if (speed > 40) return 16;      // Normal driving
+    if (speed > 20) return 17;      // City driving
+    if (speed > 5) return 18;       // Slow/walking
+    return 18;                      // Stationary
+}
+
+// Calculate bearing between two points
+function calculateBearing(start, end) {
+    const dLng = (end.lng - start.lng) * Math.PI / 180;
+    const lat1 = start.lat * Math.PI / 180;
+    const lat2 = end.lat * Math.PI / 180;
+    
+    const y = Math.sin(dLng) * Math.cos(lat2);
+    const x = Math.cos(lat1) * Math.sin(lat2) - 
+              Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLng);
+    
+    const bearing = Math.atan2(y, x) * 180 / Math.PI;
+    return (bearing + 360) % 360;
+}
+
+// Update current location with enhanced tracking
+function updateCurrentLocation(position) {
+    const newLocation = {
+        lat: position.coords.latitude,
+        lng: position.coords.longitude
+    };
+    
+    // Smooth out location updates
+    if (state.currentLocation) {
+        // Calculate distance moved
+        const distance = calculateDistance(state.currentLocation, newLocation);
+        
+        // Ignore if moved less than 5 meters (GPS jitter)
+        if (distance < 0.005) return;
+    }
+    
+    state.currentLocation = newLocation;
+    
+    // Update heading if available
+    if (position.coords.heading !== null && position.coords.heading !== undefined) {
+        state.currentHeading = position.coords.heading;
+    } else if (state.lastLocation) {
+        // Calculate heading from movement
+        state.currentHeading = calculateBearing(state.lastLocation, state.currentLocation);
+    }
+    
+    // Update speed
+    if (position.coords.speed !== null) {
+        state.currentSpeed = Math.round(position.coords.speed * 3.6); // m/s to km/h
+    }
+    
+    // Update map
+    if (state.map) {
+        // Create or update rider marker
+        if (!state.currentLocationMarker) {
+            const riderIcon = createRiderIcon(state.currentHeading);
+            state.currentLocationMarker = L.marker(
+                [state.currentLocation.lat, state.currentLocation.lng],
+                { 
+                    icon: riderIcon,
+                    rotationAngle: 0,
+                    zIndexOffset: 1000
+                }
+            ).addTo(state.map);
+            
+            // Add accuracy circle
+            state.accuracyCircle = L.circle([state.currentLocation.lat, state.currentLocation.lng], {
+                radius: position.coords.accuracy,
+                fillColor: '#0066FF',
+                fillOpacity: 0.1,
+                color: '#0066FF',
+                weight: 1,
+                interactive: false
+            }).addTo(state.map);
+        } else {
+            // Update marker position smoothly
+            state.currentLocationMarker.setLatLng([state.currentLocation.lat, state.currentLocation.lng]);
+            
+            // Update icon rotation
+            const riderIcon = createRiderIcon(state.currentHeading);
+            state.currentLocationMarker.setIcon(riderIcon);
+            
+            // Update accuracy circle
+            if (state.accuracyCircle) {
+                state.accuracyCircle.setLatLng([state.currentLocation.lat, state.currentLocation.lng]);
+                state.accuracyCircle.setRadius(position.coords.accuracy);
+            }
+        }
+        
+        // Drone follow mode when navigating
+        if (state.navigationActive && state.isFollowingUser) {
+            // Smooth map movement to follow user
+            state.map.panTo([state.currentLocation.lat, state.currentLocation.lng], {
+                animate: true,
+                duration: 1,
+                noMoveStart: true
+            });
+            
+            // Rotate map based on heading (North up for now, can be changed to heading up)
+            if (state.currentHeading !== null && state.config?.headingUp) {
+                const rotation = 360 - state.currentHeading;
+                if (Math.abs(rotation - state.lastMapRotation) > 5) {
+                    state.map.setBearing(rotation);
+                    state.lastMapRotation = rotation;
+                }
+            }
+            
+            // Adjust zoom based on speed
+            const targetZoom = calculateZoomFromSpeed(state.currentSpeed);
+            const currentZoom = state.map.getZoom();
+            if (Math.abs(currentZoom - targetZoom) > 0.5) {
+                state.map.setZoom(targetZoom, {
+                    animate: true,
+                    duration: 1
+                });
+            }
+        }
+    }
+    
+    state.lastLocation = state.currentLocation;
+    state.lastLocationTime = Date.now();
+    
+    // Update navigation if active
+    if (state.navigationActive) {
+        updateNavigationInfo();
+    }
+    
+    // Update dynamic header when location changes
+    updateDynamicHeader();
+}
+
+// Update navigation info (placeholder for navigation updates)
+function updateNavigationInfo() {
+    // This will be called during navigation to update any real-time info
+    // Currently handled by updateWazeNavigation
+}
+
 // Toggle route panel visibility - UPDATED with complete hide functionality
 window.toggleRoutePanel = function() {
     const routePanel = document.getElementById('routePanel');
@@ -279,6 +586,24 @@ window.toggleRoutePanel = function() {
             state.map.invalidateSize();
         }, 300);
     }
+};
+
+// Toggle follow mode
+window.toggleFollowMode = function() {
+    state.isFollowingUser = !state.isFollowingUser;
+    const followText = document.getElementById('followModeText');
+    if (followText) {
+        followText.textContent = state.isFollowingUser ? 'Following On' : 'Following Off';
+    }
+    
+    if (state.isFollowingUser && state.currentLocation) {
+        state.map.panTo([state.currentLocation.lat, state.currentLocation.lng], {
+            animate: true,
+            duration: 1
+        });
+    }
+    
+    showNotification(state.isFollowingUser ? 'Following mode enabled' : 'Following mode disabled', 'info');
 };
 
 // Collapse panel
@@ -878,12 +1203,19 @@ function showEmptyState() {
     document.getElementById('emptyState').style.display = 'block';
 }
 
-// Location tracking
+// Enhanced location tracking with high accuracy
 function startLocationTracking() {
     if (!navigator.geolocation) {
         showNotification('Location services not available', 'warning');
         return;
     }
+    
+    // Request high accuracy location with heading
+    const geoOptions = {
+        enableHighAccuracy: true,
+        timeout: 5000,
+        maximumAge: 0
+    };
     
     // Get initial location
     navigator.geolocation.getCurrentPosition(
@@ -892,61 +1224,25 @@ function startLocationTracking() {
             state.isTracking = true;
             document.getElementById('trackingIndicator').style.display = 'flex';
             document.getElementById('locationButton').classList.add('active');
+            
+            // Center map on user location initially
+            if (state.map && state.currentLocation) {
+                state.map.setView([state.currentLocation.lat, state.currentLocation.lng], 17);
+            }
         },
         error => {
             console.error('Location error:', error);
             showNotification('Please enable location services', 'warning');
         },
-        { enableHighAccuracy: true }
+        geoOptions
     );
     
-    // Watch position
-    navigator.geolocation.watchPosition(
+    // Watch position with high frequency updates
+    state.locationWatchId = navigator.geolocation.watchPosition(
         position => updateCurrentLocation(position),
         error => console.error('Location update error:', error),
-        { enableHighAccuracy: true, maximumAge: 5000 }
+        geoOptions
     );
-}
-
-// Update current location
-function updateCurrentLocation(position) {
-    state.currentLocation = {
-        lat: position.coords.latitude,
-        lng: position.coords.longitude
-    };
-    
-    // Update map
-    if (state.map) {
-        // Add or update current location marker
-        if (!state.currentLocationMarker) {
-            state.currentLocationMarker = L.circleMarker(
-                [state.currentLocation.lat, state.currentLocation.lng],
-                {
-                    radius: 8,
-                    fillColor: '#0066FF',
-                    color: 'white',
-                    weight: 3,
-                    opacity: 1,
-                    fillOpacity: 1
-                }
-            ).addTo(state.map);
-            
-            // Add pulsing effect
-            L.circle([state.currentLocation.lat, state.currentLocation.lng], {
-                radius: 20,
-                fillColor: '#0066FF',
-                fillOpacity: 0.2,
-                color: '#0066FF',
-                weight: 1,
-                className: 'pulse-circle'
-            }).addTo(state.map);
-        } else {
-            state.currentLocationMarker.setLatLng([state.currentLocation.lat, state.currentLocation.lng]);
-        }
-    }
-    
-    // Update dynamic header when location changes
-    updateDynamicHeader();
 }
 
 // Navigation functions
@@ -989,10 +1285,7 @@ function proceedWithNavigation(nextStop) {
     
     // Set navigation active state
     state.navigationActive = true;
-}
-/**
- * Route.js - Part 2: Navigation UI, Verification, and Styles
- */
+};
 
 // Enhanced Waze-like navigation interface - FIXED MAP VISIBILITY
 function showEnhancedNavigation(targetStop) {
@@ -1012,6 +1305,9 @@ function showEnhancedNavigation(targetStop) {
     if (navControls) {
         navControls.style.display = 'none';
     }
+    
+    // Enable follow mode
+    state.isFollowingUser = true;
     
     // Create minimalist Waze-like navigation UI - FIXED: No blocking elements
     const navUI = document.createElement('div');
@@ -1076,6 +1372,10 @@ function showEnhancedNavigation(targetStop) {
                 <span class="menu-icon">📋</span>
                 <span>Route Details</span>
             </button>
+            <button class="nav-menu-item" onclick="toggleFollowMode()">
+                <span class="menu-icon">🎯</span>
+                <span id="followModeText">Following On</span>
+            </button>
             <button class="nav-menu-item" onclick="openQuickVerification()">
                 <span class="menu-icon">✓</span>
                 <span>Verify Stop</span>
@@ -1101,7 +1401,9 @@ function showEnhancedNavigation(targetStop) {
             
             // Then set view to current location
             if (state.currentLocation) {
-                state.map.setView([state.currentLocation.lat, state.currentLocation.lng], 17);
+                state.map.setView([state.currentLocation.lat, state.currentLocation.lng], 17, {
+                    animate: true
+                });
             } else if (targetStop && targetStop.location) {
                 // Fallback to target stop location if current location not available
                 state.map.setView([targetStop.location.lat, targetStop.location.lng], 15);
@@ -1116,7 +1418,23 @@ function showEnhancedNavigation(targetStop) {
     getEnhancedDirections(targetStop);
 }
 
-// Update navigation with Waze-style minimal info - UPDATED
+// Toggle navigation menu - NEW
+window.toggleNavigationMenu = function() {
+    const menu = document.getElementById('navMenu');
+    if (menu) {
+        menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+    }
+};
+
+// Show navigation actions (FAB menu) - NEW
+window.showNavigationActions = function() {
+    const menu = document.getElementById('navMenu');
+    if (menu) {
+        menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+    }
+};
+
+// Update navigation with Waze-style minimal info - UPDATED with drone follow
 async function updateWazeNavigation(targetStop) {
     if (!state.currentLocation) {
         setTimeout(() => updateWazeNavigation(targetStop), 1000);
@@ -1139,20 +1457,12 @@ async function updateWazeNavigation(targetStop) {
             `${distance.toFixed(1)} km`;
     }
     
-    // Update speed if available
-    if (speedPill && state.lastLocation) {
-        const timeDiff = Date.now() - state.lastLocationTime;
-        const distanceTraveled = calculateDistance(state.lastLocation, state.currentLocation);
-        const speed = Math.round((distanceTraveled / timeDiff) * 3600000); // km/h
-        
-        if (speed > 0 && speed < 200) { // Sanity check
-            speedPill.textContent = speed;
-            state.currentSpeed = speed;
-        }
+    if (speedPill && state.currentSpeed !== undefined) {
+        speedPill.textContent = state.currentSpeed || 0;
     }
     
     // Follow the user with drone-like view
-    if (state.map && state.currentLocation) {
+    if (state.map && state.currentLocation && state.isFollowingUser) {
         // Smooth pan to current location
         state.map.panTo([state.currentLocation.lat, state.currentLocation.lng], {
             animate: true,
@@ -1161,7 +1471,7 @@ async function updateWazeNavigation(targetStop) {
         
         // Adjust zoom based on speed (zoom out when moving fast)
         const currentZoom = state.map.getZoom();
-        const targetZoom = state.currentSpeed > 50 ? 15 : state.currentSpeed > 30 ? 16 : 17;
+        const targetZoom = calculateZoomFromSpeed(state.currentSpeed);
         if (Math.abs(currentZoom - targetZoom) > 0.5) {
             state.map.setZoom(targetZoom, { animate: true });
         }
@@ -1171,9 +1481,6 @@ async function updateWazeNavigation(targetStop) {
     if (distance < 0.05) { // Within 50 meters
         showArrivalNotification(targetStop);
     }
-    
-    state.lastLocation = state.currentLocation;
-    state.lastLocationTime = Date.now();
     
     // Continue updating if navigation is active
     if (document.querySelector('.enhanced-navigation') && state.navigationActive) {
@@ -1316,28 +1623,13 @@ function getDirectionEmoji(type) {
     return emojis[type] || '⬆️';
 }
 
-// Toggle navigation menu - NEW
-window.toggleNavigationMenu = function() {
-    const menu = document.getElementById('navMenu');
-    if (menu) {
-        menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
-    }
-};
-
-// Show navigation actions (FAB menu) - NEW
-window.showNavigationActions = function() {
-    const menu = document.getElementById('navMenu');
-    if (menu) {
-        menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
-    }
-};
-
 // Exit enhanced navigation and restore normal view - FIXED
 window.exitEnhancedNavigation = function() {
     const nav = document.querySelector('.enhanced-navigation');
     if (nav) nav.remove();
     
     state.navigationActive = false;
+    state.isFollowingUser = false;
     
     // Show route panel again
     const routePanel = document.getElementById('routePanel');
@@ -1419,6 +1711,9 @@ window.showDestinationDetails = function(stopId) {
 window.navigateToStop = function(stopId) {
     const stop = state.activeRoute.stops.find(s => s.id === stopId);
     if (!stop) return;
+    
+    // Set navigation active state
+    state.navigationActive = true;
     
     // Show in-app navigation
     showEnhancedNavigation(stop);
@@ -2723,8 +3018,18 @@ window.routeDebug = {
         } catch (error) {
             console.error('OpenRouteService test failed:', error);
         }
+    },
+    toggleFollowMode: () => {
+        state.isFollowingUser = !state.isFollowingUser;
+        console.log('Follow mode:', state.isFollowingUser);
+    },
+    setHeadingUp: (enabled) => {
+        state.config.headingUp = enabled;
+        console.log('Heading up mode:', enabled);
     }
 };
 
-console.log('Fixed Route.js with map visibility issue resolved!');
-console.log('Debug: window.routeDebug.testOpenRoute()');
+console.log('Fixed Route.js with Waze-style navigation and drone following!');
+console.log('Debug commands: window.routeDebug');
+console.log('Test navigation: window.routeDebug.simulatePickup()');
+console.log('Toggle follow: window.routeDebug.toggleFollowMode()');
