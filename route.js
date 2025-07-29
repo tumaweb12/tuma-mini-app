@@ -193,7 +193,7 @@ function injectNavigationStyles() {
         /* Fixed Navigation Controls */
         .nav-controls {
             position: fixed !important;
-            bottom: calc(180px + var(--safe-area-bottom)) !important;
+            bottom: calc(30px + var(--safe-area-bottom)) !important;
             left: 20px;
             right: 20px;
             z-index: 100;
@@ -464,7 +464,7 @@ window.toggleRoutePanel = function() {
         
         // Move nav controls to bottom
         if (navControls) {
-            navControls.style.bottom = 'calc(20px + var(--safe-area-bottom))';
+            navControls.style.bottom = 'calc(30px + var(--safe-area-bottom))';
         }
         
         if (toggleBtn) {
@@ -1301,7 +1301,7 @@ function showRoutePanel() {
     if (navControls) {
         navControls.style.display = 'flex';
         // Position controls at bottom since panel is hidden
-        navControls.style.bottom = 'calc(20px + var(--safe-area-bottom))';
+        navControls.style.bottom = 'calc(30px + var(--safe-area-bottom))';
     }
     
     if (emptyState) {
@@ -1721,7 +1721,7 @@ window.exitEnhancedNavigation = function() {
     const navControls = document.getElementById('navControls');
     if (navControls) {
         navControls.style.display = 'flex';
-        navControls.style.bottom = 'calc(20px + var(--safe-area-bottom))';
+        navControls.style.bottom = 'calc(30px + var(--safe-area-bottom))';
     }
     
     // Update the details button to show correct state
