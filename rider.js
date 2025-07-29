@@ -1582,7 +1582,48 @@ function createDemoRoutes() {
             estimatedTime: 45,
             metadata: {
                 pickupAreas: ['Westlands'],
-                deliveryCorri
+                deliveryCorridors: ['north'],
+                hasReturnTrip: false
+            }
+        },
+        {
+            id: 'demo-route-002',
+            name: 'CBD → Eastlands',
+            type: 'express',
+            deliveries: 3,
+            pickups: 3,
+            distance: 8,
+            total_earnings: demoTotalEarnings[1], // Will show as KES 1,200 (70%)
+            status: 'available',
+            parcels: [],
+            qualityScore: 82,
+            estimatedTime: 35,
+            metadata: {
+                pickupAreas: ['CBD'],
+                deliveryCorridors: ['east'],
+                hasReturnTrip: false
+            }
+        },
+        {
+            id: 'demo-route-003',
+            name: 'Karen Local',
+            type: 'eco',
+            deliveries: 8,
+            pickups: 8,
+            distance: 25,
+            total_earnings: demoTotalEarnings[2], // Will show as KES 2,400 (70%)
+            status: 'available',
+            parcels: [],
+            qualityScore: 68,
+            estimatedTime: 90,
+            metadata: {
+                pickupAreas: ['Karen'],
+                deliveryCorridors: ['south'],
+                hasReturnTrip: true
+            }
+        }
+    ];
+}
 
 async function checkActiveDeliveries() {
     try {
