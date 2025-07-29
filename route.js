@@ -320,13 +320,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             
             // Start location tracking
             startLocationTracking();
-            
-            // Auto-collapse panel after 2 seconds
-            setTimeout(() => {
-                if (!state.isPanelExpanded) {
-                    collapsePanel();
-                }
-            }, 2000);
         } else {
             console.log('No active route found');
             showEmptyState();
@@ -437,26 +430,50 @@ function createRiderIcon(heading = 0) {
 window.toggleRoutePanel = function() {
     const routePanel = document.getElementById('routePanel');
     const navControls = document.getElementById('navControls');
+    const toggleBtn = document.querySelector('.nav-button.secondary');
     
     if (!routePanel) return;
     
-    if (state.isPanelExpanded) {
-        // Collapse panel
-        routePanel.style.transform = 'translateY(calc(100% - 160px))';
-        state.isPanelExpanded = false;
-        
-        // Move nav controls back to default position
-        if (navControls) {
-            navControls.style.bottom = 'calc(180px + var(--safe-area-bottom))';
-        }
-    } else {
-        // Expand panel
+    // Simple toggle: show or hide completely
+    if (routePanel.style.display === 'none' || !state.isPanelVisible) {
+        // Show panel
+        routePanel.style.display = 'block';
         routePanel.style.transform = 'translateY(0)';
+        routePanel.style.maxHeight = '60%';
+        state.isPanelVisible = true;
         state.isPanelExpanded = true;
         
-        // Move nav controls higher to avoid overlap
+        // Move nav controls up to avoid overlap
         if (navControls) {
             navControls.style.bottom = 'calc(60% + 20px + var(--safe-area-bottom))';
+        }
+        
+        if (toggleBtn) {
+            toggleBtn.innerHTML = `
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                </svg>
+                <span>Hide</span>
+            `;
+        }
+    } else {
+        // Hide panel completely
+        routePanel.style.display = 'none';
+        state.isPanelVisible = false;
+        state.isPanelExpanded = false;
+        
+        // Move nav controls to bottom
+        if (navControls) {
+            navControls.style.bottom = 'calc(20px + var(--safe-area-bottom))';
+        }
+        
+        if (toggleBtn) {
+            toggleBtn.innerHTML = `
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
+                </svg>
+                <span>Details</span>
+            `;
         }
     }
     
@@ -1275,18 +1292,16 @@ function showRoutePanel() {
     const emptyState = document.getElementById('emptyState');
     
     if (routePanel) {
-        routePanel.style.display = 'block';
-        // Ensure panel starts collapsed
-        routePanel.style.transform = 'translateY(calc(100% - 160px))';
-        routePanel.style.maxHeight = '70%';
-        state.isPanelVisible = true;
+        // Start with panel completely hidden
+        routePanel.style.display = 'none';
+        state.isPanelVisible = false;
         state.isPanelExpanded = false;
     }
     
     if (navControls) {
         navControls.style.display = 'flex';
-        // Position controls above the collapsed panel
-        navControls.style.bottom = 'calc(180px + var(--safe-area-bottom))';
+        // Position controls at bottom since panel is hidden
+        navControls.style.bottom = 'calc(20px + var(--safe-area-bottom))';
     }
     
     if (emptyState) {
@@ -1451,7 +1466,7 @@ function showEnhancedNavigation(targetStop) {
         
         <!-- Navigation menu -->
         <div class="waze-nav-menu" id="navMenu" style="display: none;">
-            <button class="nav-menu-item" onclick="toggleRoutePanel()">
+            <button class="nav-menu-item" onclick="toggleNavigationMenu(); toggleRoutePanel();">
                 <span class="menu-icon">📋</span>
                 <span>Route Details</span>
             </button>
@@ -1695,15 +1710,29 @@ window.exitEnhancedNavigation = function() {
     state.navigationActive = false;
     state.isFollowingUser = false;
     
+    // Don't show the panel when exiting navigation
     const routePanel = document.getElementById('routePanel');
     if (routePanel) {
-        routePanel.style.display = 'block';
-        state.isPanelVisible = true;
+        routePanel.style.display = 'none';
+        state.isPanelVisible = false;
+        state.isPanelExpanded = false;
     }
     
     const navControls = document.getElementById('navControls');
     if (navControls) {
         navControls.style.display = 'flex';
+        navControls.style.bottom = 'calc(20px + var(--safe-area-bottom))';
+    }
+    
+    // Update the details button to show correct state
+    const toggleBtn = document.querySelector('.nav-button.secondary');
+    if (toggleBtn) {
+        toggleBtn.innerHTML = `
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
+            </svg>
+            <span>Details</span>
+        `;
     }
     
     if (state.map) {
