@@ -1,34 +1,26 @@
 /**
  * Complete Enhanced Route Navigation Module with OpenRouteService
- * Fixed version with all requested improvements including Waze-style navigation
- * FIXED: Map visibility issue during navigation with drone-like following
- * Part 1: Core logic and map functions
+ * FIXED: Map visibility issue during navigation - ALL FIXES APPLIED
+ * Part 1: Core logic, initialization, and map functions
  */
 
 // Development Configuration (same as in rider.js)
 const DEV_CONFIG = {
-    // Set to true when testing locally without Telegram
     isDevelopment: window.location.hostname === 'localhost' || 
                    window.location.hostname === '127.0.0.1' ||
                    window.location.hostname.includes('github.io'),
-    
-    // Test rider configuration (only used in development)
     testRider: {
-        id: 'ef5438ef-0cc0-4e35-8d1b-be18dbce7fe4', // Bobby G's test ID
+        id: 'ef5438ef-0cc0-4e35-8d1b-be18dbce7fe4',
         name: 'Bobby G',
         phone: '0725046880'
     },
-    
-    // Whether to show detailed console logs
     verboseLogging: true,
-    
-    // Whether to ignore API errors for missing riders
     ignoreRiderNotFound: true
 };
 
 // Configuration for navigation behavior
 const config = {
-    headingUp: false, // Set to true for heading-up mode, false for north-up
+    headingUp: false,
     smoothMovement: true,
     autoZoom: true
 };
@@ -54,7 +46,6 @@ const state = {
     isPanelVisible: true,
     navigationActive: false,
     currentSpeed: 0,
-    // New properties for enhanced navigation
     currentHeading: 0,
     isFollowingUser: true,
     lastMapRotation: 0,
@@ -70,28 +61,23 @@ const OPENROUTE_API_KEY = '5b3ce3597851110001cf624841e48578ffb34c6b96dfe3bbe9b3a
 const SUPABASE_URL = 'https://btxavqfoirdzwpfrvezp.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ0eGF2cWZvaXJkendwZnJ2ZXpwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE0ODcxMTcsImV4cCI6MjA2NzA2MzExN30.kQKpukFGx-cBl1zZRuXmex02ifkZ751WCUfQPogYutk';
 
-// CSS injection function for navigation styles
+// FIXED CSS injection function for navigation styles
 function injectNavigationStyles() {
     const style = document.createElement('style');
     style.textContent = `
-        /* CRITICAL: Ensure navigation doesn't block map */
-        .enhanced-navigation {
-            pointer-events: none !important;
+        /* CRITICAL FIXES for map visibility */
+        
+        /* Ensure map container is always at the bottom layer */
+        .map-container {
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            z-index: 1 !important;
+            background: transparent !important;
         }
         
-        .enhanced-navigation.waze-style {
-            pointer-events: none !important;
-        }
-        
-        /* Individual elements should be clickable */
-        .waze-nav-top,
-        .waze-bottom-pills,
-        .waze-fab,
-        .waze-nav-menu {
-            pointer-events: auto !important;
-        }
-        
-        /* Ensure map remains visible */
         #map {
             position: absolute !important;
             top: 0 !important;
@@ -99,18 +85,68 @@ function injectNavigationStyles() {
             width: 100% !important;
             height: 100% !important;
             z-index: 1 !important;
+            background: transparent !important;
         }
         
-        .map-container {
+        /* Ensure Leaflet elements are visible */
+        .leaflet-container {
+            z-index: 1 !important;
+            background: transparent !important;
+        }
+        
+        .leaflet-pane {
+            z-index: 2 !important;
+        }
+        
+        .leaflet-control-container {
+            z-index: 200 !important;
+        }
+        
+        /* Fix navigation overlay - NO BACKGROUND */
+        .enhanced-navigation {
+            pointer-events: none !important;
+            background: transparent !important;
             position: fixed !important;
             top: 0 !important;
             left: 0 !important;
             right: 0 !important;
             bottom: 0 !important;
-            z-index: 1 !important;
+            z-index: 100 !important;
         }
         
-        /* Rider location marker styles */
+        .enhanced-navigation.waze-style {
+            pointer-events: none !important;
+            background: transparent !important;
+        }
+        
+        /* Make individual elements clickable */
+        .waze-nav-top,
+        .waze-bottom-pills,
+        .waze-fab,
+        .waze-nav-menu {
+            pointer-events: auto !important;
+        }
+        
+        /* Ensure header doesn't block map */
+        .header {
+            z-index: 150 !important;
+        }
+        
+        /* Route panel layering */
+        .route-panel {
+            z-index: 110 !important;
+        }
+        
+        .route-panel[style*="display: none"] {
+            z-index: -1 !important;
+        }
+        
+        /* Navigation controls */
+        .nav-controls {
+            z-index: 120 !important;
+        }
+        
+        /* Rider location marker */
         .rider-location-marker {
             z-index: 1000 !important;
         }
@@ -153,6 +189,20 @@ function injectNavigationStyles() {
         .leaflet-control-rotate {
             display: none !important;
         }
+        
+        /* Ensure no black backgrounds anywhere */
+        * {
+            background-color: transparent !important;
+        }
+        
+        /* Only apply background to specific elements that need it */
+        .waze-instruction-bar,
+        .waze-pill,
+        .waze-nav-menu,
+        .modal-content,
+        .route-panel {
+            background-color: var(--surface-elevated) !important;
+        }
     `;
     document.head.appendChild(style);
 }
@@ -175,7 +225,7 @@ function waitForLeaflet() {
 
 // Initialize on DOM ready
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log('Route.js initializing with Waze-style navigation...');
+    console.log('Route.js initializing with fixed map visibility...');
     
     // Inject navigation styles first
     injectNavigationStyles();
@@ -233,9 +283,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 });
 
-// Initialize Leaflet Map with Waze-style view
+// FIXED: Initialize Leaflet Map with proper layering
 async function initializeMap() {
-    console.log('Initializing Leaflet map with Waze-style view...');
+    console.log('Initializing Leaflet map with fixed visibility...');
     
     const mapContainer = document.getElementById('map');
     if (!mapContainer) {
@@ -243,9 +293,16 @@ async function initializeMap() {
         return;
     }
     
-    // Force proper dimensions
-    mapContainer.style.width = '100%';
-    mapContainer.style.height = '100%';
+    // Force proper dimensions and clear any background
+    mapContainer.style.cssText = `
+        width: 100% !important;
+        height: 100% !important;
+        position: absolute !important;
+        top: 0 !important;
+        left: 0 !important;
+        z-index: 1 !important;
+        background: transparent !important;
+    `;
     
     // Get center point from route or use Nairobi default
     let centerLat = -1.2921;
@@ -260,13 +317,13 @@ async function initializeMap() {
     // Create map with options for smooth movement
     state.map = L.map('map', {
         center: [centerLat, centerLng],
-        zoom: 17, // Closer zoom for navigation
+        zoom: 17,
         zoomControl: false,
-        rotate: true, // Enable rotation
-        bearing: 0, // Initial bearing
-        touchRotate: true, // Allow touch rotation
-        rotateControl: false, // Hide rotation control
-        attributionControl: false // Hide attribution for cleaner look
+        rotate: true,
+        bearing: 0,
+        touchRotate: true,
+        rotateControl: false,
+        attributionControl: false
     });
     
     // Use a cleaner tile layer
@@ -291,7 +348,7 @@ async function initializeMap() {
         state.map.invalidateSize();
     }, 100);
     
-    console.log('Map initialized with Waze-style settings');
+    console.log('Map initialized successfully');
 }
 
 // Calculate bounds from stops
@@ -323,17 +380,13 @@ function updateDynamicHeader() {
         return;
     }
     
-    // Determine header text based on navigation state
     let headerText = '';
     
     if (currentStop && state.currentLocation) {
-        // Currently navigating from current location to next stop
         headerText = `Your Location → ${getStopShortName(nextStop)}`;
     } else if (currentStop) {
-        // Show from current stop to next stop
         headerText = `${getStopShortName(currentStop)} → ${getStopShortName(nextStop)}`;
     } else {
-        // Starting navigation
         const firstStop = state.activeRoute.stops[0];
         headerText = `Starting → ${getStopShortName(firstStop)}`;
     }
@@ -345,13 +398,10 @@ function updateDynamicHeader() {
 function getStopShortName(stop) {
     if (!stop) return '';
     
-    // Try to extract key location name from address
     const address = stop.address;
-    
-    // Common patterns to extract location names
     const patterns = [
-        /^([^,]+),/, // First part before comma
-        /^(.+?)(?:\s+Road|\s+Street|\s+Avenue|\s+Drive|\s+Centre|\s+Center)/i // Location before road type
+        /^([^,]+),/,
+        /^(.+?)(?:\s+Road|\s+Street|\s+Avenue|\s+Drive|\s+Centre|\s+Center)/i
     ];
     
     for (const pattern of patterns) {
@@ -361,18 +411,16 @@ function getStopShortName(stop) {
         }
     }
     
-    // Fallback to first 20 characters
     return address.length > 20 ? address.substring(0, 20) + '...' : address;
 }
 
-// Get current stop (last completed pickup if in delivery phase)
+// Get current stop
 function getCurrentStop() {
     if (!state.activeRoute) return null;
     
     const completedStops = state.activeRoute.stops.filter(s => s.completed);
     if (completedStops.length === 0) return null;
     
-    // Return last completed stop
     return completedStops[completedStops.length - 1];
 }
 
@@ -393,12 +441,11 @@ function createRiderIcon(heading = 0) {
 
 // Calculate zoom level based on speed
 function calculateZoomFromSpeed(speed) {
-    // Adjust zoom based on speed for better visibility
-    if (speed > 60) return 15;      // Highway speed
-    if (speed > 40) return 16;      // Normal driving
-    if (speed > 20) return 17;      // City driving
-    if (speed > 5) return 18;       // Slow/walking
-    return 18;                      // Stationary
+    if (speed > 60) return 15;
+    if (speed > 40) return 16;
+    if (speed > 20) return 17;
+    if (speed > 5) return 18;
+    return 18;
 }
 
 // Calculate bearing between two points
@@ -422,33 +469,24 @@ function updateCurrentLocation(position) {
         lng: position.coords.longitude
     };
     
-    // Smooth out location updates
     if (state.currentLocation) {
-        // Calculate distance moved
         const distance = calculateDistance(state.currentLocation, newLocation);
-        
-        // Ignore if moved less than 5 meters (GPS jitter)
         if (distance < 0.005) return;
     }
     
     state.currentLocation = newLocation;
     
-    // Update heading if available
     if (position.coords.heading !== null && position.coords.heading !== undefined) {
         state.currentHeading = position.coords.heading;
     } else if (state.lastLocation) {
-        // Calculate heading from movement
         state.currentHeading = calculateBearing(state.lastLocation, state.currentLocation);
     }
     
-    // Update speed
     if (position.coords.speed !== null) {
-        state.currentSpeed = Math.round(position.coords.speed * 3.6); // m/s to km/h
+        state.currentSpeed = Math.round(position.coords.speed * 3.6);
     }
     
-    // Update map
     if (state.map) {
-        // Create or update rider marker
         if (!state.currentLocationMarker) {
             const riderIcon = createRiderIcon(state.currentHeading);
             state.currentLocationMarker = L.marker(
@@ -460,7 +498,6 @@ function updateCurrentLocation(position) {
                 }
             ).addTo(state.map);
             
-            // Add accuracy circle
             state.accuracyCircle = L.circle([state.currentLocation.lat, state.currentLocation.lng], {
                 radius: position.coords.accuracy,
                 fillColor: '#0066FF',
@@ -470,30 +507,23 @@ function updateCurrentLocation(position) {
                 interactive: false
             }).addTo(state.map);
         } else {
-            // Update marker position smoothly
             state.currentLocationMarker.setLatLng([state.currentLocation.lat, state.currentLocation.lng]);
-            
-            // Update icon rotation
             const riderIcon = createRiderIcon(state.currentHeading);
             state.currentLocationMarker.setIcon(riderIcon);
             
-            // Update accuracy circle
             if (state.accuracyCircle) {
                 state.accuracyCircle.setLatLng([state.currentLocation.lat, state.currentLocation.lng]);
                 state.accuracyCircle.setRadius(position.coords.accuracy);
             }
         }
         
-        // Drone follow mode when navigating
         if (state.navigationActive && state.isFollowingUser) {
-            // Smooth map movement to follow user
             state.map.panTo([state.currentLocation.lat, state.currentLocation.lng], {
                 animate: true,
                 duration: 1,
                 noMoveStart: true
             });
             
-            // Rotate map based on heading (North up for now, can be changed to heading up)
             if (state.currentHeading !== null && state.config?.headingUp) {
                 const rotation = 360 - state.currentHeading;
                 if (Math.abs(rotation - state.lastMapRotation) > 5) {
@@ -502,7 +532,6 @@ function updateCurrentLocation(position) {
                 }
             }
             
-            // Adjust zoom based on speed
             const targetZoom = calculateZoomFromSpeed(state.currentSpeed);
             const currentZoom = state.map.getZoom();
             if (Math.abs(currentZoom - targetZoom) > 0.5) {
@@ -517,22 +546,20 @@ function updateCurrentLocation(position) {
     state.lastLocation = state.currentLocation;
     state.lastLocationTime = Date.now();
     
-    // Update navigation if active
     if (state.navigationActive) {
         updateNavigationInfo();
     }
     
-    // Update dynamic header when location changes
     updateDynamicHeader();
 }
 
-// Update navigation info (placeholder for navigation updates)
+// Update navigation info
 function updateNavigationInfo() {
     // This will be called during navigation to update any real-time info
     // Currently handled by updateWazeNavigation
 }
 
-// Toggle route panel visibility - UPDATED with complete hide functionality
+// Toggle route panel visibility
 window.toggleRoutePanel = function() {
     const routePanel = document.getElementById('routePanel');
     const toggleBtn = document.querySelector('.nav-button.secondary');
@@ -541,11 +568,9 @@ window.toggleRoutePanel = function() {
     if (!routePanel) return;
     
     if (state.isPanelVisible) {
-        // Completely hide the panel
         routePanel.style.display = 'none';
         state.isPanelVisible = false;
         
-        // Move nav controls to bottom when panel is hidden
         if (navControls) {
             navControls.style.bottom = 'calc(20px + var(--safe-area-bottom))';
         }
@@ -559,13 +584,11 @@ window.toggleRoutePanel = function() {
             `;
         }
     } else {
-        // Show the panel
         routePanel.style.display = 'block';
         routePanel.style.transform = 'translateY(0)';
         routePanel.style.maxHeight = '60%';
         state.isPanelVisible = true;
         
-        // Adjust nav controls position when panel is visible
         if (navControls) {
             navControls.style.bottom = 'calc(200px + var(--safe-area-bottom))';
         }
@@ -580,7 +603,6 @@ window.toggleRoutePanel = function() {
         }
     }
     
-    // Force map resize when toggling panel
     if (state.map) {
         setTimeout(() => {
             state.map.invalidateSize();
@@ -622,13 +644,11 @@ function enhanceRoutePanel() {
     
     let isPanelCollapsed = false;
     
-    // Add click handler to panel handle
     const panelHandle = routePanel.querySelector('.panel-handle');
     if (panelHandle) {
         panelHandle.style.cursor = 'pointer';
         panelHandle.addEventListener('click', togglePanelHeight);
         
-        // Add visual indicator
         panelHandle.innerHTML = `
             <div style="width: 40px; height: 4px; background: var(--text-tertiary); border-radius: 2px; margin: 0 auto;"></div>
         `;
@@ -642,7 +662,7 @@ function enhanceRoutePanel() {
             routePanel.style.maxHeight = '140px';
         } else {
             routePanel.style.transform = 'translateY(0)';
-            routePanel.style.maxHeight = '60%'; // Changed to 60% for better visibility
+            routePanel.style.maxHeight = '60%';
         }
     }
 }
@@ -653,7 +673,6 @@ function createLeafletIcon(stop) {
     const isActive = isNextStop(stop);
     const type = stop.type;
     
-    // Tuma color scheme
     const bgColor = isCompleted ? '#1C1C1F' : type === 'pickup' ? '#FF9F0A' : '#0066FF';
     const borderColor = isCompleted ? '#48484A' : '#FFFFFF';
     const symbol = isCompleted ? '✓' : type === 'pickup' ? 'P' : 'D';
@@ -739,11 +758,10 @@ function createStopPopup(stop) {
     `;
 }
 
-// Plot route on map with OpenRouteService (FIXED)
+// Plot route on map
 async function plotRoute() {
     if (!state.map || !state.activeRoute || !state.activeRoute.stops) return;
     
-    // Clear existing markers and routes
     state.markers.forEach(marker => marker.remove());
     state.markers = [];
     if (state.routePolyline) {
@@ -753,7 +771,6 @@ async function plotRoute() {
     
     const bounds = L.latLngBounds();
     
-    // Add stop markers
     state.activeRoute.stops.forEach((stop, index) => {
         const marker = L.marker([stop.location.lat, stop.location.lng], {
             icon: createLeafletIcon(stop)
@@ -765,13 +782,10 @@ async function plotRoute() {
         bounds.extend([stop.location.lat, stop.location.lng]);
     });
     
-    // Fit map to show all markers with padding
     state.map.fitBounds(bounds, { padding: [50, 50] });
-    
-    // DON'T draw any routes initially - wait for optimization
 }
 
-// Draw optimized route using OpenRouteService (FIXED)
+// Draw optimized route using OpenRouteService
 async function drawOptimizedRoute() {
     if (!state.activeRoute) return;
     
@@ -782,24 +796,20 @@ async function drawOptimizedRoute() {
     }
     
     try {
-        // Clear existing route line
         if (state.routePolyline) {
             state.routePolyline.remove();
             state.routePolyline = null;
         }
         
-        // Add current location if available and we're in navigation mode
         let coordinates = [];
         if (state.currentLocation && state.navigationActive) {
             coordinates.push([state.currentLocation.lng, state.currentLocation.lat]);
         }
         
-        // Add stop coordinates
         coordinates = coordinates.concat(stops.map(stop => [stop.location.lng, stop.location.lat]));
         
         console.log('Drawing route with coordinates:', coordinates);
         
-        // Call OpenRouteService Directions API with proper body format
         const response = await fetch('https://api.openrouteservice.org/v2/directions/driving-car', {
             method: 'POST',
             headers: {
@@ -830,11 +840,8 @@ async function drawOptimizedRoute() {
         
         if (data.routes && data.routes.length > 0) {
             const route = data.routes[0];
-            
-            // Decode the geometry
             const decodedCoords = decodePolyline(route.geometry);
             
-            // Draw the route with Tuma colors
             state.routePolyline = L.polyline(decodedCoords, {
                 color: '#0066FF',
                 weight: 6,
@@ -842,7 +849,6 @@ async function drawOptimizedRoute() {
                 smoothFactor: 1
             }).addTo(state.map);
             
-            // Update distance and time
             const distance = (route.summary.distance / 1000).toFixed(1);
             const duration = Math.round(route.summary.duration / 60);
             
@@ -857,7 +863,6 @@ async function drawOptimizedRoute() {
         }
     } catch (error) {
         console.error('Error getting route:', error);
-        // Draw fallback straight lines between stops
         drawFallbackRoute(stops);
     }
 }
@@ -923,7 +928,6 @@ function decodePolyline(encoded) {
 function displayRouteInfo() {
     if (!state.activeRoute) return;
     
-    // Update route type badge - now as a verify button
     const routeType = document.getElementById('routeType');
     if (routeType) {
         const nextStop = getNextStop();
@@ -943,10 +947,7 @@ function displayRouteInfo() {
         }
     }
     
-    // Update stats
     updateRouteStats();
-    
-    // Display stops
     displayStops();
 }
 
@@ -972,24 +973,19 @@ function displayStops() {
     const stopsList = document.getElementById('stopsList');
     if (!stopsList || !state.activeRoute) return;
     
-    // Group stops by phase
     const pickupStops = state.activeRoute.stops.filter(s => s.type === 'pickup');
     const deliveryStops = state.activeRoute.stops.filter(s => s.type === 'delivery');
     
-    // Check parcels in possession
     updateParcelsInPossession();
     
     let html = '';
     
-    // Add phase progress widget
     html += createPhaseProgressWidget(pickupStops, deliveryStops);
     
-    // Add parcels in possession widget if any
     if (state.parcelsInPossession.length > 0) {
         html += createParcelsInPossessionWidget();
     }
     
-    // Add pickup phase
     html += `
         <div class="phase-section ${allCompleted(pickupStops) ? 'completed' : ''}">
             <h3>
@@ -1002,7 +998,6 @@ function displayStops() {
         </div>
     `;
     
-    // Add delivery phase
     const deliveryLocked = !allCompleted(pickupStops);
     html += `
         <div class="phase-section ${deliveryLocked ? 'locked' : ''} ${allCompleted(deliveryStops) ? 'completed' : ''}">
@@ -1210,14 +1205,12 @@ function startLocationTracking() {
         return;
     }
     
-    // Request high accuracy location with heading
     const geoOptions = {
         enableHighAccuracy: true,
         timeout: 5000,
         maximumAge: 0
     };
     
-    // Get initial location
     navigator.geolocation.getCurrentPosition(
         position => {
             updateCurrentLocation(position);
@@ -1225,7 +1218,6 @@ function startLocationTracking() {
             document.getElementById('trackingIndicator').style.display = 'flex';
             document.getElementById('locationButton').classList.add('active');
             
-            // Center map on user location initially
             if (state.map && state.currentLocation) {
                 state.map.setView([state.currentLocation.lat, state.currentLocation.lng], 17);
             }
@@ -1237,7 +1229,6 @@ function startLocationTracking() {
         geoOptions
     );
     
-    // Watch position with high frequency updates
     state.locationWatchId = navigator.geolocation.watchPosition(
         position => updateCurrentLocation(position),
         error => console.error('Location update error:', error),
@@ -1256,7 +1247,7 @@ window.centerOnLocation = function() {
     }
 };
 
-// Enhanced start navigation with better UX
+// FIXED: Enhanced start navigation
 window.startNavigation = function() {
     const nextStop = getNextStop();
     if (!nextStop) {
@@ -1264,7 +1255,6 @@ window.startNavigation = function() {
         return;
     }
     
-    // Don't need to optimize route again if it's already drawn
     if (!state.routePolyline) {
         showNotification('Optimizing route...', 'info');
         drawOptimizedRoute().then(() => {
@@ -1277,26 +1267,22 @@ window.startNavigation = function() {
 
 // Helper function to proceed with navigation
 function proceedWithNavigation(nextStop) {
-    // Enable continuous tracking
     startContinuousTracking();
-    
-    // Show enhanced in-app navigation
     showEnhancedNavigation(nextStop);
-    
-    // Set navigation active state
     state.navigationActive = true;
-};
+}
 
-// Enhanced Waze-like navigation interface - FIXED MAP VISIBILITY
+// FIXED: Enhanced Waze-like navigation interface
 function showEnhancedNavigation(targetStop) {
     // Remove any existing navigation
     const existingNav = document.querySelector('.enhanced-navigation');
     if (existingNav) existingNav.remove();
     
-    // Hide the route panel completely when starting navigation
+    // Hide the route panel completely
     const routePanel = document.getElementById('routePanel');
     if (routePanel) {
         routePanel.style.display = 'none';
+        routePanel.style.zIndex = '-1';
         state.isPanelVisible = false;
     }
     
@@ -1309,10 +1295,10 @@ function showEnhancedNavigation(targetStop) {
     // Enable follow mode
     state.isFollowingUser = true;
     
-    // Create minimalist Waze-like navigation UI - FIXED: No blocking elements
+    // Create minimalist Waze-like navigation UI - FIXED: transparent background
     const navUI = document.createElement('div');
     navUI.className = 'enhanced-navigation waze-style';
-    navUI.style.cssText = 'pointer-events: none !important;';
+    navUI.style.cssText = 'pointer-events: none !important; background: transparent !important; position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 100;';
     navUI.innerHTML = `
         <!-- Minimal top instruction bar -->
         <div class="waze-nav-top">
@@ -1394,32 +1380,26 @@ function showEnhancedNavigation(targetStop) {
     
     document.body.appendChild(navUI);
     
-    // IMPORTANT: Force map resize after UI changes
+    // CRITICAL: Force map resize after UI changes
     setTimeout(() => {
         if (state.map) {
-            // Invalidate size to force map to recalculate its dimensions
             state.map.invalidateSize();
             
-            // Then set view to current location
             if (state.currentLocation) {
                 state.map.setView([state.currentLocation.lat, state.currentLocation.lng], 17, {
                     animate: true
                 });
             } else if (targetStop && targetStop.location) {
-                // Fallback to target stop location if current location not available
                 state.map.setView([targetStop.location.lat, targetStop.location.lng], 15);
             }
         }
     }, 100);
     
-    // Start navigation updates
     updateWazeNavigation(targetStop);
-    
-    // Get turn-by-turn directions
     getEnhancedDirections(targetStop);
 }
 
-// Toggle navigation menu - NEW
+// Toggle navigation menu
 window.toggleNavigationMenu = function() {
     const menu = document.getElementById('navMenu');
     if (menu) {
@@ -1427,7 +1407,7 @@ window.toggleNavigationMenu = function() {
     }
 };
 
-// Show navigation actions (FAB menu) - NEW
+// Show navigation actions
 window.showNavigationActions = function() {
     const menu = document.getElementById('navMenu');
     if (menu) {
@@ -1435,7 +1415,7 @@ window.showNavigationActions = function() {
     }
 };
 
-// Update navigation with Waze-style minimal info - UPDATED with drone follow
+// Update navigation with Waze-style minimal info
 async function updateWazeNavigation(targetStop) {
     if (!state.currentLocation) {
         setTimeout(() => updateWazeNavigation(targetStop), 1000);
@@ -1445,7 +1425,6 @@ async function updateWazeNavigation(targetStop) {
     const distance = calculateDistance(state.currentLocation, targetStop.location);
     const eta = calculateETA(distance);
     
-    // Update minimal UI elements
     const etaPill = document.querySelector('.eta-pill .pill-value');
     const distancePill = document.querySelector('.distance-pill .pill-value');
     const speedPill = document.querySelector('.speed-pill .pill-value');
@@ -1462,15 +1441,12 @@ async function updateWazeNavigation(targetStop) {
         speedPill.textContent = state.currentSpeed || 0;
     }
     
-    // Follow the user with drone-like view
     if (state.map && state.currentLocation && state.isFollowingUser) {
-        // Smooth pan to current location
         state.map.panTo([state.currentLocation.lat, state.currentLocation.lng], {
             animate: true,
             duration: 1
         });
         
-        // Adjust zoom based on speed (zoom out when moving fast)
         const currentZoom = state.map.getZoom();
         const targetZoom = calculateZoomFromSpeed(state.currentSpeed);
         if (Math.abs(currentZoom - targetZoom) > 0.5) {
@@ -1478,20 +1454,17 @@ async function updateWazeNavigation(targetStop) {
         }
     }
     
-    // Check arrival
-    if (distance < 0.05) { // Within 50 meters
+    if (distance < 0.05) {
         showArrivalNotification(targetStop);
     }
     
-    // Continue updating if navigation is active
     if (document.querySelector('.enhanced-navigation') && state.navigationActive) {
-        setTimeout(() => updateWazeNavigation(targetStop), 2000); // Update every 2 seconds
+        setTimeout(() => updateWazeNavigation(targetStop), 2000);
     }
 }
 
 // Show arrival notification
 function showArrivalNotification(targetStop) {
-    // Update navigation UI
     const distanceEl = document.querySelector('.waze-distance');
     const streetEl = document.querySelector('.waze-street');
     const arrowEl = document.querySelector('.direction-arrow');
@@ -1500,11 +1473,9 @@ function showArrivalNotification(targetStop) {
     if (streetEl) streetEl.textContent = `${targetStop.type} location reached`;
     if (arrowEl) arrowEl.textContent = '✅';
     
-    // Vibrate and show notification
     if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
     showNotification(`Arrived at ${targetStop.type} location`, 'success');
     
-    // Auto-show verification after 2 seconds
     setTimeout(() => {
         openQuickVerification();
     }, 2000);
@@ -1537,7 +1508,6 @@ async function getEnhancedDirections(targetStop) {
             if (data.routes && data.routes.length > 0) {
                 const route = data.routes[0];
                 
-                // Draw route on map
                 if (state.directionsPolyline) {
                     state.directionsPolyline.remove();
                 }
@@ -1550,7 +1520,6 @@ async function getEnhancedDirections(targetStop) {
                     className: 'navigation-route'
                 }).addTo(state.map);
                 
-                // Update navigation instructions
                 updateNavigationInstructions(route);
             }
         }
@@ -1559,18 +1528,16 @@ async function getEnhancedDirections(targetStop) {
     }
 }
 
-// Update navigation instructions for minimal display - UPDATED
+// Update navigation instructions for minimal display
 function updateNavigationInstructions(route) {
     if (!route.segments || route.segments.length === 0) return;
     
     const segment = route.segments[0];
     if (!segment.steps || segment.steps.length === 0) return;
     
-    // Get current step based on location
     const currentStep = getCurrentNavigationStep(segment.steps);
     if (!currentStep) return;
     
-    // Update minimal UI
     const distanceEl = document.querySelector('.waze-distance');
     const streetEl = document.querySelector('.waze-street');
     const arrowEl = document.querySelector('.direction-arrow');
@@ -1583,7 +1550,6 @@ function updateNavigationInstructions(route) {
     }
     
     if (streetEl) {
-        // Keep instruction short for minimal UI
         const instruction = currentStep.instruction.replace(/Continue straight on|Continue on|Drive along/, '');
         streetEl.textContent = instruction.length > 30 ? 
             instruction.substring(0, 30) + '...' : 
@@ -1597,8 +1563,6 @@ function updateNavigationInstructions(route) {
 
 // Get current navigation step
 function getCurrentNavigationStep(steps) {
-    // For now, return the first uncompleted step
-    // This could be enhanced with more sophisticated logic
     return steps[0];
 }
 
@@ -1624,7 +1588,7 @@ function getDirectionEmoji(type) {
     return emojis[type] || '⬆️';
 }
 
-// Exit enhanced navigation and restore normal view - FIXED
+// FIXED: Exit enhanced navigation and restore normal view
 window.exitEnhancedNavigation = function() {
     const nav = document.querySelector('.enhanced-navigation');
     if (nav) nav.remove();
@@ -1636,6 +1600,7 @@ window.exitEnhancedNavigation = function() {
     const routePanel = document.getElementById('routePanel');
     if (routePanel) {
         routePanel.style.display = 'block';
+        routePanel.style.zIndex = '110'; // Restore proper z-index
         state.isPanelVisible = true;
     }
     
@@ -1713,10 +1678,7 @@ window.navigateToStop = function(stopId) {
     const stop = state.activeRoute.stops.find(s => s.id === stopId);
     if (!stop) return;
     
-    // Set navigation active state
     state.navigationActive = true;
-    
-    // Show in-app navigation
     showEnhancedNavigation(stop);
 };
 
@@ -1724,11 +1686,9 @@ window.selectStop = function(stopId) {
     const stop = state.activeRoute.stops.find(s => s.id === stopId);
     if (!stop || stop.completed) return;
     
-    // Center map on stop
     if (state.map) {
         state.map.setView([stop.location.lat, stop.location.lng], 16);
         
-        // Open popup for this marker
         const marker = state.markers.find(m => {
             const latLng = m.getLatLng();
             return latLng.lat === stop.location.lat && latLng.lng === stop.location.lng;
@@ -1757,7 +1717,7 @@ function startContinuousTracking() {
                 { enableHighAccuracy: true, maximumAge: 5000 }
             );
         }
-    }, 5000); // Update every 5 seconds
+    }, 5000);
 }
 
 // Check proximity to stops
@@ -1772,7 +1732,6 @@ function checkStopProximity() {
         nextStop.location
     );
     
-    // If within 100 meters, show notification
     if (distance < 0.1 && !state.proximityNotified) {
         state.proximityNotified = true;
         showNotification(
@@ -1780,7 +1739,6 @@ function checkStopProximity() {
             'info'
         );
         
-        // Reset flag after 5 minutes
         setTimeout(() => {
             state.proximityNotified = false;
         }, 300000);
@@ -1789,7 +1747,7 @@ function checkStopProximity() {
 
 // Calculate distance between two points
 function calculateDistance(point1, point2) {
-    const R = 6371; // Earth's radius in km
+    const R = 6371;
     const dLat = (point2.lat - point1.lat) * Math.PI / 180;
     const dLon = (point2.lng - point1.lng) * Math.PI / 180;
     const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
@@ -1801,7 +1759,6 @@ function calculateDistance(point1, point2) {
 
 // Calculate ETA
 function calculateETA(distance) {
-    // Assume average speed of 30 km/h in city
     const avgSpeed = 30;
     const timeInHours = distance / avgSpeed;
     const timeInMinutes = Math.round(timeInHours * 60);
@@ -1889,12 +1846,10 @@ window.openVerificationModal = function(stopId) {
     
     document.body.appendChild(modal);
     
-    // Focus on input
     setTimeout(() => {
         document.getElementById('verificationCode').focus();
     }, 100);
     
-    // Add enter key handler
     document.getElementById('verificationCode').addEventListener('keypress', (e) => {
         if (e.key === 'Enter') {
             verifyCode(stop.id);
@@ -1925,42 +1880,30 @@ window.verifyCode = async function(stopId) {
         return;
     }
     
-    // Check code
     if (code !== stop.verificationCode.toUpperCase().replace(/[^A-Z0-9]/g, '')) {
         codeInput.classList.add('error');
         showNotification('Invalid code. Please try again.', 'error');
         return;
     }
     
-    // Mark stop as completed
     stop.completed = true;
     stop.timestamp = new Date();
     
-    // Update localStorage
     localStorage.setItem('tuma_active_route', JSON.stringify(state.activeRoute));
     
-    // Close modal
     closeVerificationModal();
-    
-    // Show success animation
     showSuccessAnimation(stop.type);
     
-    // Update displays
     displayRouteInfo();
     updateDynamicHeader();
     plotRoute();
-    
-    // Redraw the route line to reflect completed stops
     drawOptimizedRoute();
     
-    // Check if phase complete
     checkPhaseCompletion();
     
-    // Check if route complete
     if (state.activeRoute.stops.every(s => s.completed)) {
         completeRoute();
     } else {
-        // If still navigating, show next stop
         const nextStop = getNextStop();
         if (nextStop && state.navigationActive) {
             showEnhancedNavigation(nextStop);
@@ -2012,11 +1955,9 @@ function showPhaseCompleteAnimation() {
 
 // Complete route
 function completeRoute() {
-    // Calculate earnings (70% of total)
     const totalEarnings = state.activeRoute.total_earnings || 0;
     const riderEarnings = Math.round(totalEarnings * 0.7);
     
-    // Show completion animation
     const animation = document.createElement('div');
     animation.className = 'route-complete-animation';
     animation.innerHTML = `
@@ -2042,7 +1983,6 @@ function completeRoute() {
     
     document.body.appendChild(animation);
     
-    // Store completion data for rider.js
     localStorage.setItem('tuma_route_completion', JSON.stringify({
         completed: true,
         earnings: riderEarnings,
@@ -2053,10 +1993,7 @@ function completeRoute() {
 
 // Finish route
 window.finishRoute = function() {
-    // Clear active route
     localStorage.removeItem('tuma_active_route');
-    
-    // Navigate back to rider dashboard
     window.location.href = './rider.html';
 };
 
@@ -2086,52 +2023,21 @@ function showNotification(message, type = 'info') {
     }, 3000);
 }
 
-// Add Waze-style navigation CSS - FIXED for map visibility
+// FIXED: Add Waze-style navigation CSS
 function addWazeNavigationStyles() {
     const wazeNavigationStyles = `
-        /* FIXED: Ensure map is always visible */
-        #map {
-            position: absolute !important;
-            top: 0 !important;
-            left: 0 !important;
-            width: 100% !important;
-            height: 100% !important;
-            z-index: 1 !important;
-        }
-        
-        .map-container {
-            position: absolute !important;
-            top: 0 !important;
-            left: 0 !important;
-            right: 0 !important;
-            bottom: 0 !important;
-            z-index: 1 !important;
-        }
-        
-        /* Waze-style Navigation - No blocking container */
-        .enhanced-navigation.waze-style {
-            /* Remove all positioning that could block the map */
-            pointer-events: none !important;
-        }
-        
-        /* Individual navigation elements with pointer events */
-        .waze-nav-top,
-        .waze-bottom-pills,
-        .waze-fab,
-        .waze-nav-menu {
-            pointer-events: auto !important;
-        }
-        
+        /* Waze-style Navigation UI */
         .waze-nav-top {
             position: fixed;
             top: 0;
             left: 0;
             right: 0;
             z-index: 1000;
+            pointer-events: auto !important;
         }
         
         .waze-instruction-bar {
-            background: linear-gradient(to bottom, rgba(10, 10, 11, 0.95), rgba(10, 10, 11, 0.85));
+            background: linear-gradient(to bottom, rgba(10, 10, 11, 0.95), rgba(10, 10, 11, 0.85)) !important;
             backdrop-filter: blur(20px);
             padding: 12px;
             display: flex;
@@ -2145,7 +2051,7 @@ function addWazeNavigationStyles() {
             width: 36px;
             height: 36px;
             border-radius: 50%;
-            background: rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.1) !important;
             border: none;
             display: flex;
             align-items: center;
@@ -2157,14 +2063,14 @@ function addWazeNavigationStyles() {
         
         .waze-close-btn:active,
         .waze-menu-btn:active {
-            background: rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.2) !important;
             transform: scale(0.95);
         }
         
         .waze-direction-icon {
             width: 40px;
             height: 40px;
-            background: var(--primary);
+            background: var(--primary) !important;
             border-radius: 50%;
             display: flex;
             align-items: center;
@@ -2205,10 +2111,11 @@ function addWazeNavigationStyles() {
             display: flex;
             gap: 10px;
             z-index: 999;
+            pointer-events: auto !important;
         }
         
         .waze-pill {
-            background: rgba(10, 10, 11, 0.9);
+            background: rgba(10, 10, 11, 0.9) !important;
             backdrop-filter: blur(10px);
             border: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: 25px;
@@ -2252,7 +2159,7 @@ function addWazeNavigationStyles() {
             right: 20px;
             width: 56px;
             height: 56px;
-            background: var(--primary);
+            background: var(--primary) !important;
             border-radius: 50%;
             border: none;
             display: flex;
@@ -2262,6 +2169,7 @@ function addWazeNavigationStyles() {
             cursor: pointer;
             z-index: 998;
             transition: all 0.3s;
+            pointer-events: auto !important;
         }
         
         .waze-fab:active {
@@ -2273,12 +2181,13 @@ function addWazeNavigationStyles() {
             position: fixed;
             bottom: calc(170px + var(--safe-area-bottom));
             right: 20px;
-            background: var(--surface-elevated);
+            background: var(--surface-elevated) !important;
             border-radius: 12px;
             padding: 8px;
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
             z-index: 997;
             min-width: 200px;
+            pointer-events: auto !important;
         }
         
         .nav-menu-item {
@@ -2287,7 +2196,7 @@ function addWazeNavigationStyles() {
             gap: 12px;
             width: 100%;
             padding: 12px;
-            background: transparent;
+            background: transparent !important;
             border: none;
             color: var(--text-primary);
             font-size: 14px;
@@ -2299,7 +2208,7 @@ function addWazeNavigationStyles() {
         }
         
         .nav-menu-item:hover {
-            background: var(--surface-high);
+            background: var(--surface-high) !important;
         }
         
         .nav-menu-item:active {
@@ -2310,11 +2219,6 @@ function addWazeNavigationStyles() {
             font-size: 18px;
             width: 24px;
             text-align: center;
-        }
-        
-        /* Make sure nav controls are properly positioned */
-        .nav-controls {
-            transition: bottom 0.3s ease;
         }
     `;
     
@@ -2327,644 +2231,10 @@ function addWazeNavigationStyles() {
     }
 }
 
-// Add CSS for navigation UI
+// Add remaining CSS
 const navStyles = document.createElement('style');
 navStyles.textContent = `
-    .enhanced-navigation {
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: var(--surface);
-        z-index: 1000;
-        display: flex;
-        flex-direction: column;
-    }
-    
-    .nav-top-bar {
-        background: var(--surface-elevated);
-        border-bottom: 1px solid var(--border);
-        padding: 16px;
-        padding-top: calc(16px + var(--safe-area-top));
-    }
-    
-    .nav-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        margin-bottom: 16px;
-    }
-    
-    .nav-close-btn {
-        width: 40px;
-        height: 40px;
-        border-radius: 50%;
-        background: var(--surface-high);
-        border: none;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        color: var(--text-primary);
-    }
-    
-    .nav-route-info {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-    }
-    
-    .nav-route-type {
-        padding: 6px 12px;
-        border-radius: 8px;
-        font-size: 12px;
-        font-weight: 600;
-        background: var(--primary);
-        color: white;
-    }
-    
-    .nav-route-type.pickup {
-        background: var(--warning);
-        color: black;
-    }
-    
-    .nav-parcel-code {
-        font-size: 14px;
-        font-weight: 600;
-        color: var(--text-secondary);
-    }
-    
-    .nav-instruction-card {
-        background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-        border-radius: 16px;
-        padding: 24px;
-        color: white;
-        display: flex;
-        gap: 20px;
-        align-items: center;
-    }
-    
-    .nav-direction-visual {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        min-width: 80px;
-    }
-    
-    .direction-icon-large {
-        font-size: 48px;
-        margin-bottom: 8px;
-    }
-    
-    .direction-distance {
-        display: flex;
-        align-items: baseline;
-        gap: 4px;
-    }
-    
-    .distance-value {
-        font-size: 24px;
-        font-weight: 700;
-    }
-    
-    .distance-unit {
-        font-size: 16px;
-        opacity: 0.9;
-    }
-    
-    .nav-instruction-text {
-        flex: 1;
-    }
-    
-    .nav-street-name {
-        font-size: 24px;
-        font-weight: 700;
-        margin-bottom: 4px;
-    }
-    
-    .nav-instruction-detail {
-        font-size: 16px;
-        opacity: 0.9;
-    }
-    
-    .nav-bottom-info {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 12px;
-        padding: 16px;
-        background: var(--surface);
-    }
-    
-    .nav-eta-card,
-    .nav-distance-card,
-    .nav-speed-card {
-        background: var(--surface-elevated);
-        border-radius: 12px;
-        padding: 16px;
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        border: 1px solid var(--border);
-    }
-    
-    .eta-icon,
-    .distance-icon,
-    .speed-icon {
-        font-size: 24px;
-    }
-    
-    .eta-info,
-    .distance-info,
-    .speed-info {
-        flex: 1;
-    }
-    
-    .eta-time,
-    .distance-remaining,
-    .speed-value {
-        font-size: 18px;
-        font-weight: 700;
-        color: var(--primary);
-    }
-    
-    .eta-label,
-    .distance-label,
-    .speed-label {
-        font-size: 12px;
-        color: var(--text-secondary);
-    }
-    
-    .nav-destination-preview {
-        position: absolute;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        background: var(--surface-elevated);
-        border-radius: 20px 20px 0 0;
-        padding: 20px;
-        padding-bottom: calc(20px + var(--safe-area-bottom));
-        box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
-    }
-    
-    .destination-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 12px;
-    }
-    
-    .destination-type {
-        font-size: 14px;
-        font-weight: 600;
-        color: var(--text-secondary);
-    }
-    
-    .nav-more-btn {
-        width: 32px;
-        height: 32px;
-        border-radius: 50%;
-        background: var(--surface-high);
-        border: none;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        color: var(--text-primary);
-    }
-    
-    .destination-address {
-        font-size: 18px;
-        font-weight: 600;
-        margin-bottom: 8px;
-    }
-    
-    .destination-customer {
-        font-size: 16px;
-        color: var(--text-secondary);
-        margin-bottom: 16px;
-    }
-    
-    .nav-quick-actions {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 12px;
-    }
-    
-    .quick-action-btn {
-        background: var(--surface-high);
-        border: none;
-        border-radius: 12px;
-        padding: 12px;
-        color: var(--text-primary);
-        font-size: 14px;
-        font-weight: 600;
-        cursor: pointer;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 4px;
-        transition: all 0.2s;
-    }
-    
-    .quick-action-btn:active {
-        scale: 0.95;
-    }
-    
-    .quick-action-btn.call {
-        background: var(--success);
-        color: white;
-    }
-    
-    .quick-action-btn.verify {
-        background: var(--primary);
-        color: white;
-    }
-    
-    .nav-closing {
-        animation: slideOut 0.3s ease-out;
-    }
-    
-    @keyframes slideOut {
-        to {
-            transform: translateY(100%);
-        }
-    }
-    
-    .destination-details-modal,
-    .verification-modal {
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        z-index: 2000;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 20px;
-    }
-    
-    .modal-overlay {
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: rgba(0, 0, 0, 0.8);
-        backdrop-filter: blur(10px);
-    }
-    
-    .modal-content {
-        position: relative;
-        background: var(--surface-elevated);
-        border-radius: 20px;
-        max-width: 400px;
-        width: 100%;
-        overflow: hidden;
-        z-index: 1;
-    }
-    
-    .modal-header {
-        padding: 20px;
-        background: var(--surface-high);
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-    }
-    
-    .modal-header.pickup {
-        background: var(--warning);
-        color: black;
-    }
-    
-    .modal-header.delivery {
-        background: var(--success);
-        color: white;
-    }
-    
-    .modal-close {
-        width: 32px;
-        height: 32px;
-        border-radius: 50%;
-        background: rgba(255, 255, 255, 0.2);
-        border: none;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        color: inherit;
-    }
-    
-    .modal-body {
-        padding: 20px;
-    }
-    
-    .detail-section {
-        margin-bottom: 20px;
-    }
-    
-    .detail-section h4 {
-        font-size: 14px;
-        color: var(--text-secondary);
-        margin-bottom: 8px;
-    }
-    
-    .detail-section p {
-        font-size: 16px;
-        line-height: 1.5;
-    }
-    
-    .code-display {
-        font-family: monospace;
-        font-size: 20px;
-        font-weight: 700;
-        color: var(--primary);
-    }
-    
-    .verification-section {
-        margin: 20px 0;
-    }
-    
-    .verification-section label {
-        display: block;
-        font-size: 16px;
-        margin-bottom: 12px;
-    }
-    
-    .verification-input {
-        width: 100%;
-        background: var(--surface-high);
-        border: 2px solid var(--border);
-        border-radius: 12px;
-        padding: 16px;
-        font-size: 24px;
-        font-weight: 700;
-        text-align: center;
-        color: var(--text-primary);
-        letter-spacing: 4px;
-        text-transform: uppercase;
-        outline: none;
-        transition: all 0.3s;
-    }
-    
-    .verification-input:focus {
-        border-color: var(--primary);
-        transform: translateY(-2px);
-        box-shadow: 0 4px 20px rgba(0, 102, 255, 0.2);
-    }
-    
-    .verification-input.error {
-        border-color: var(--danger);
-        animation: shake 0.3s;
-    }
-    
-    @keyframes shake {
-        0%, 100% { transform: translateX(0); }
-        25% { transform: translateX(-10px); }
-        75% { transform: translateX(10px); }
-    }
-    
-    .code-hint {
-        font-size: 14px;
-        color: var(--text-secondary);
-        text-align: center;
-        margin-top: 8px;
-    }
-    
-    .modal-actions {
-        display: flex;
-        gap: 12px;
-        margin-top: 24px;
-    }
-    
-    .modal-btn {
-        flex: 1;
-        padding: 16px;
-        border: none;
-        border-radius: 12px;
-        font-size: 16px;
-        font-weight: 600;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-        transition: all 0.2s;
-    }
-    
-    .modal-btn.primary {
-        background: var(--primary);
-        color: white;
-    }
-    
-    .modal-btn.secondary {
-        background: var(--surface-high);
-        color: var(--text-primary);
-    }
-    
-    .modal-btn:active {
-        scale: 0.95;
-    }
-    
-    .success-animation,
-    .phase-complete-animation,
-    .route-complete-animation {
-        position: fixed;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        background: var(--surface-elevated);
-        border-radius: 20px;
-        padding: 40px;
-        text-align: center;
-        z-index: 3000;
-        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
-        animation: popIn 0.3s ease-out;
-    }
-    
-    @keyframes popIn {
-        from {
-            scale: 0.8;
-            opacity: 0;
-        }
-        to {
-            scale: 1;
-            opacity: 1;
-        }
-    }
-    
-    .success-icon {
-        width: 80px;
-        height: 80px;
-        background: var(--success);
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        margin: 0 auto 20px;
-        font-size: 48px;
-        color: white;
-    }
-    
-    .success-text {
-        font-size: 24px;
-        font-weight: 700;
-    }
-    
-    .phase-complete-content,
-    .route-complete-content {
-        max-width: 360px;
-    }
-    
-    .phase-icon,
-    .complete-icon {
-        font-size: 64px;
-        margin-bottom: 20px;
-    }
-    
-    .route-complete-content h1 {
-        font-size: 28px;
-        margin-bottom: 12px;
-    }
-    
-    .route-complete-content p {
-        font-size: 16px;
-        color: var(--text-secondary);
-        margin-bottom: 24px;
-    }
-    
-    .route-stats {
-        display: flex;
-        justify-content: center;
-        gap: 40px;
-        margin-bottom: 32px;
-    }
-    
-    .route-stats .stat {
-        text-align: center;
-    }
-    
-    .route-stats .stat-value {
-        display: block;
-        font-size: 32px;
-        font-weight: 700;
-        color: var(--primary);
-        margin-bottom: 4px;
-    }
-    
-    .route-stats .stat-label {
-        font-size: 14px;
-        color: var(--text-secondary);
-    }
-    
-    .complete-btn {
-        width: 100%;
-        background: var(--primary);
-        color: white;
-        border: none;
-        border-radius: 14px;
-        padding: 16px;
-        font-size: 18px;
-        font-weight: 700;
-        cursor: pointer;
-    }
-    
-    .notification {
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        background: var(--surface-elevated);
-        color: var(--text-primary);
-        padding: 16px 20px;
-        border-radius: 12px;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        z-index: 4000;
-        animation: slideIn 0.3s ease-out;
-        max-width: 350px;
-        border: 1px solid var(--border);
-    }
-    
-    .notification.success {
-        background: var(--success);
-        color: white;
-        border-color: var(--success);
-    }
-    
-    .notification.error {
-        background: var(--danger);
-        color: white;
-        border-color: var(--danger);
-    }
-    
-    .notification.warning {
-        background: var(--warning);
-        color: black;
-        border-color: var(--warning);
-    }
-    
-    .notification-icon {
-        font-size: 20px;
-    }
-    
-    .notification.hiding {
-        animation: slideOut 0.3s ease-out;
-    }
-    
-    @keyframes slideIn {
-        from {
-            transform: translateX(100%);
-            opacity: 0;
-        }
-        to {
-            transform: translateX(0);
-            opacity: 1;
-        }
-    }
-    
-    @keyframes slideOut {
-        from {
-            transform: translateX(0);
-            opacity: 1;
-        }
-        to {
-            transform: translateX(100%);
-            opacity: 0;
-        }
-    }
-    
-    .modal-closing {
-        animation: fadeOut 0.3s ease-out;
-    }
-    
-    @keyframes fadeOut {
-        to {
-            opacity: 0;
-        }
-    }
-    
-    /* Pulse effect for current location */
-    @keyframes pulse {
-        0% {
-            transform: scale(0.95);
-            opacity: 0.7;
-        }
-        70% {
-            transform: scale(1.3);
-            opacity: 0.3;
-        }
-        100% {
-            transform: scale(0.95);
-            opacity: 0.7;
-        }
-    }
-    
-    .pulse-circle {
-        animation: pulse 2s infinite;
-    }
+    ${additionalNavigationStyles}
 `;
 document.head.appendChild(navStyles);
 
@@ -2996,10 +2266,9 @@ window.routeDebug = {
         window.location.reload();
     },
     testOpenRoute: async () => {
-        // Test OpenRouteService API
         const testCoords = [
-            [36.8219, -1.2921], // Nairobi CBD
-            [36.7853, -1.2906]  // Kilimani
+            [36.8219, -1.2921],
+            [36.7853, -1.2906]
         ];
         
         try {
@@ -3030,7 +2299,142 @@ window.routeDebug = {
     }
 };
 
-console.log('Fixed Route.js with Waze-style navigation and drone following!');
-console.log('Debug commands: window.routeDebug');
-console.log('Test navigation: window.routeDebug.simulatePickup()');
-console.log('Toggle follow: window.routeDebug.toggleFollowMode()');
+// Additional navigation styles to be included
+const additionalNavigationStyles = `
+    .enhanced-navigation {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: transparent !important;
+        z-index: 1000;
+        display: flex;
+        flex-direction: column;
+        pointer-events: none !important;
+    }
+    
+    .destination-details-modal,
+    .verification-modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 2000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+    }
+    
+    .modal-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.8) !important;
+        backdrop-filter: blur(10px);
+    }
+    
+    .modal-content {
+        position: relative;
+        background: var(--surface-elevated) !important;
+        border-radius: 20px;
+        max-width: 400px;
+        width: 100%;
+        overflow: hidden;
+        z-index: 1;
+    }
+    
+    .modal-header {
+        padding: 20px;
+        background: var(--surface-high) !important;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    
+    .modal-header.pickup {
+        background: var(--warning) !important;
+        color: black;
+    }
+    
+    .modal-header.delivery {
+        background: var(--success) !important;
+        color: white;
+    }
+    
+    .verification-input {
+        width: 100%;
+        background: var(--surface-high) !important;
+        border: 2px solid var(--border);
+        border-radius: 12px;
+        padding: 16px;
+        font-size: 24px;
+        font-weight: 700;
+        text-align: center;
+        color: var(--text-primary);
+        letter-spacing: 4px;
+        text-transform: uppercase;
+        outline: none;
+        transition: all 0.3s;
+    }
+    
+    .success-animation,
+    .phase-complete-animation,
+    .route-complete-animation {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: var(--surface-elevated) !important;
+        border-radius: 20px;
+        padding: 40px;
+        text-align: center;
+        z-index: 3000;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        animation: popIn 0.3s ease-out;
+    }
+    
+    .notification {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: var(--surface-elevated) !important;
+        color: var(--text-primary);
+        padding: 16px 20px;
+        border-radius: 12px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        z-index: 4000;
+        animation: slideIn 0.3s ease-out;
+        max-width: 350px;
+        border: 1px solid var(--border);
+    }
+    
+    .notification.success {
+        background: var(--success) !important;
+        color: white;
+        border-color: var(--success);
+    }
+    
+    .notification.error {
+        background: var(--danger) !important;
+        color: white;
+        border-color: var(--danger);
+    }
+    
+    .notification.warning {
+        background: var(--warning) !important;
+        color: black;
+        border-color: var(--warning);
+    }
+`;
+
+console.log('✅ Fixed Route.js loaded successfully!');
+console.log('Map visibility issue resolved - navigation overlay is now transparent');
+console.log('Debug commands available: window.routeDebug');
