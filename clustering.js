@@ -125,21 +125,121 @@ class TumaRouteClustering {
         
         // Step 3: Create clusters within each group
         const allClusters = [];
+        const unclusteredExpress = [];
+        
         for (const [key, groupParcels] of Object.entries(groups)) {
-            const clusters = this.createClustersForGroup(groupParcels, key);
-            allClusters.push(...clusters);
+            const [serviceType, area] = key.split('_');
+            
+            if (serviceType === 'express') {
+                // Try to cluster express parcels, but keep unclustered ones
+                const { clusters, unclustered } = this.createExpressClusters(groupParcels, key);
+                allClusters.push(...clusters);
+                unclusteredExpress.push(...unclustered);
+            } else {
+                // Regular clustering for smart and eco
+                const clusters = this.createClustersForGroup(groupParcels, key);
+                allClusters.push(...clusters);
+            }
         }
         
-        // Step 4: Convert clusters to route objects
+        // Step 4: Create individual routes for unclustered express parcels
+        unclusteredExpress.forEach(parcel => {
+            allClusters.push([parcel]);
+        });
+        
+        // Step 5: Convert clusters to route objects
         const routes = allClusters.map((cluster, index) => 
             this.createRouteFromCluster(cluster, index)
         );
         
-        // Step 5: Sort by quality score
+        // Step 6: Sort by quality score
         routes.sort((a, b) => b.qualityScore - a.qualityScore);
         
         console.log(`[Clustering] Created ${routes.length} routes`);
         return routes;
+    }
+    
+    /**
+     * Create clusters for express parcels with fallback to individual routes
+     */
+    createExpressClusters(parcels, groupKey) {
+        const clusters = [];
+        const unclustered = [];
+        const assigned = new Set();
+        
+        // Sort parcels by delivery corridor for better clustering
+        const sortedParcels = this.sortByDeliveryCorridor(parcels);
+        
+        for (const seed of sortedParcels) {
+            if (assigned.has(seed.id)) continue;
+            
+            // Try to build a cluster around this seed
+            const cluster = this.buildExpressCluster(seed, sortedParcels, assigned);
+            
+            // If cluster has more than 1 parcel and is valid, use it
+            if (cluster.length > 1 && this.analyzeClusterQuality(cluster).isValid) {
+                clusters.push(cluster);
+                cluster.forEach(p => assigned.add(p.id));
+            } else {
+                // Otherwise, mark for individual route
+                unclustered.push(seed);
+                assigned.add(seed.id);
+            }
+        }
+        
+        return { clusters, unclustered };
+    }
+    
+    /**
+     * Build express cluster with stricter requirements
+     */
+    buildExpressCluster(seed, candidates, assigned) {
+        const cluster = [seed];
+        const maxSize = this.config.maxClusterSize.express;
+        const maxRadius = this.config.maxPickupRadius.express;
+        
+        // For express, only cluster if:
+        // 1. Very close pickup locations (within 1km)
+        // 2. Same delivery corridor
+        // 3. High route efficiency
+        
+        const scoredCandidates = candidates
+            .filter(c => !assigned.has(c.id) && c.id !== seed.id)
+            .map(candidate => {
+                const pickupDist = this.calculateDistance(seed._pickup, candidate._pickup);
+                
+                // Strict distance requirement for express
+                if (pickupDist > 1) return null;
+                
+                // Must be same corridor or adjacent
+                if (seed._deliveryCorridor !== candidate._deliveryCorridor &&
+                    !this.areCorridorsAdjacent(seed._deliveryCorridor, candidate._deliveryCorridor)) {
+                    return null;
+                }
+                
+                return {
+                    parcel: candidate,
+                    score: this.calculateClusteringScore(seed, candidate, cluster)
+                };
+            })
+            .filter(sc => sc && sc.score > 60) // Higher score threshold for express
+            .sort((a, b) => b.score - a.score);
+        
+        // Only add the best candidate if score is high enough
+        for (const { parcel: candidate, score } of scoredCandidates) {
+            if (cluster.length >= maxSize) break;
+            if (assigned.has(candidate.id)) continue;
+            
+            const testCluster = [...cluster, candidate];
+            const quality = this.analyzeClusterQuality(testCluster);
+            
+            // Stricter quality requirements for express
+            if (quality.isValid && quality.score >= 70) {
+                cluster.push(candidate);
+            }
+        }
+        
+        return cluster;
     }
     
     /**
@@ -536,69 +636,105 @@ class TumaRouteClustering {
      * Generate descriptive route name
      */
     generateRouteName(cluster) {
-        // Extract actual place names from addresses
-        const getPlaceName = (address) => {
-            if (!address) return '';
-            
-            // Common patterns to extract place names
-            const patterns = [
-                // Matches "Place Name, Area" format
-                /^([^,]+),/,
-                // Matches "Building/Place Name" before road/street
-                /^(.+?)(?:\s+Road|\s+Street|\s+Avenue|\s+Drive|\s+Lane|\s+Way|\s+Close)/i,
-                // Matches landmarks
-                /^(.+?)(?:\s+Mall|\s+Centre|\s+Center|\s+Plaza|\s+Building|\s+House|\s+Court)/i
-            ];
-            
-            for (const pattern of patterns) {
-                const match = address.match(pattern);
-                if (match) {
-                    return match[1].trim();
-                }
-            }
-            
-            // Fallback to first part of address
-            return address.split(',')[0].trim();
-        };
+        if (cluster.length === 0) return 'Empty Route';
         
-        // Get unique pickup places
-        const pickupPlaces = [...new Set(cluster.map(p => {
-            const pickup = this.getPickupLocation(p);
-            const address = p.pickup_address || pickup.address || '';
-            return getPlaceName(address);
-        }))].filter(p => p);
+        // Get pickup and delivery names from enriched data
+        const pickupNames = [...new Set(cluster.map(p => 
+            this.extractLocationName(p._pickup.address || p.pickup_address || '')
+        ))].filter(n => n);
         
-        // Get unique delivery places
-        const deliveryPlaces = [...new Set(cluster.map(p => {
-            const delivery = this.getDeliveryLocation(p);
-            const address = p.delivery_address || delivery.address || '';
-            return getPlaceName(address);
-        }))].filter(p => p);
+        const deliveryNames = [...new Set(cluster.map(p => 
+            this.extractLocationName(p._delivery.address || p.delivery_address || '')
+        ))].filter(n => n);
         
-        // Generate name based on actual places
-        if (pickupPlaces.length === 1 && deliveryPlaces.length === 1) {
-            if (pickupPlaces[0] === deliveryPlaces[0]) {
-                return `${pickupPlaces[0]} Local`;
-            }
-            return `${pickupPlaces[0]} → ${deliveryPlaces[0]}`;
-        } else if (pickupPlaces.length === 1) {
-            // One pickup, multiple deliveries
-            if (deliveryPlaces.length <= 2) {
-                return `${pickupPlaces[0]} → ${deliveryPlaces.join(' & ')}`;
-            } else {
-                return `${pickupPlaces[0]} → Multiple`;
-            }
-        } else if (deliveryPlaces.length === 1) {
-            // Multiple pickups, one delivery
-            if (pickupPlaces.length <= 2) {
-                return `${pickupPlaces.join(' & ')} → ${deliveryPlaces[0]}`;
-            } else {
-                return `Multiple → ${deliveryPlaces[0]}`;
-            }
-        } else {
-            // Multiple pickups and deliveries - show first of each
-            return `${pickupPlaces[0]} → ${deliveryPlaces[0]} +${cluster.length - 1}`;
+        // Single parcel routes
+        if (cluster.length === 1) {
+            const pickup = pickupNames[0] || this.getAreaName(cluster[0]._pickup);
+            const delivery = deliveryNames[0] || this.getAreaName(cluster[0]._delivery);
+            return `${pickup} → ${delivery}`;
         }
+        
+        // Multiple parcels
+        if (pickupNames.length === 1 && deliveryNames.length === 1) {
+            return pickupNames[0] === deliveryNames[0] 
+                ? `${pickupNames[0]} Local` 
+                : `${pickupNames[0]} → ${deliveryNames[0]}`;
+        }
+        
+        if (pickupNames.length === 1) {
+            return deliveryNames.length <= 2 
+                ? `${pickupNames[0]} → ${deliveryNames.join(' & ')}`
+                : `${pickupNames[0]} → Multiple`;
+        }
+        
+        if (deliveryNames.length === 1) {
+            return pickupNames.length <= 2
+                ? `${pickupNames.join(' & ')} → ${deliveryNames[0]}`
+                : `Multiple → ${deliveryNames[0]}`;
+        }
+        
+        // Multiple pickups and deliveries
+        const primaryPickup = pickupNames[0] || 'Multiple';
+        const primaryDelivery = deliveryNames[0] || 'Multiple';
+        return `${primaryPickup} → ${primaryDelivery} +${cluster.length - 1}`;
+    }
+    
+    /**
+     * Extract location name from address
+     */
+    extractLocationName(address) {
+        if (!address || address === 'Pickup location' || address === 'Delivery location') {
+            return '';
+        }
+        
+        // Clean common suffixes
+        let cleaned = address
+            .replace(/, Kenya$/i, '')
+            .replace(/, Nairobi County$/i, '')
+            .replace(/, Nairobi$/i, '');
+        
+        // Extract key location identifiers
+        const patterns = [
+            // Specific landmarks/buildings
+            /^(.*?(?:Mall|Centre|Center|Plaza|Building|House|Court|Hotel|Hospital|School|University|College|Market|Stage|Stop|Terminal))/i,
+            // Roads and streets
+            /^(.*?(?:Road|Street|Avenue|Drive|Lane|Way|Close|Crescent|Highway))/i,
+            // Areas before comma
+            /^([^,]+)/,
+            // First meaningful part
+            /^(.+?)(?:\s*[-–]\s*|,)/
+        ];
+        
+        for (const pattern of patterns) {
+            const match = cleaned.match(pattern);
+            if (match && match[1]) {
+                let name = match[1].trim();
+                
+                // Clean up common prefixes
+                name = name
+                    .replace(/^Quickmart\s*[-–]\s*/i, '')
+                    .replace(/^Railways\s+Bus\s+stop\s*\/?\s*bus\s+Stage/i, 'Railways')
+                    .replace(/\s+Apartments$/i, '')
+                    .replace(/\s+Estate$/i, '')
+                    .replace(/^The\s+/i, '');
+                
+                // Shorten long names
+                if (name.length > 25) {
+                    const shortened = name
+                        .replace(/\s+Shopping\s+Centre/i, '')
+                        .replace(/\s+Business\s+Centre/i, '')
+                        .replace(/\s+Commercial\s+Centre/i, '');
+                    
+                    if (shortened.length < name.length && shortened.length > 5) {
+                        name = shortened;
+                    }
+                }
+                
+                return name;
+            }
+        }
+        
+        return cleaned.split(',')[0].trim();
     }
     
     /**
@@ -661,69 +797,81 @@ class TumaRouteClustering {
     // ========================================================================
     
     /**
-     * Get pickup location from parcel
+     * Get pickup location from parcel - FIXED for JSON string format
      */
     getPickupLocation(parcel) {
         if (parcel._pickup) return parcel._pickup;
         
-        if (parcel.pickup_lat && parcel.pickup_lng) {
-            return {
-                lat: parseFloat(parcel.pickup_lat),
-                lng: parseFloat(parcel.pickup_lng),
-                address: parcel.pickup_address || 'Pickup location'
-            };
-        }
+        let location = { 
+            lat: -1.2921, 
+            lng: 36.8219, 
+            address: 'Pickup location' 
+        };
         
-        // Try to parse from JSON
+        // Handle JSON string format
         if (parcel.pickup_location) {
             try {
-                const loc = typeof parcel.pickup_location === 'string' 
+                const parsed = typeof parcel.pickup_location === 'string' 
                     ? JSON.parse(parcel.pickup_location) 
                     : parcel.pickup_location;
-                return { 
-                    lat: loc.lat, 
-                    lng: loc.lng,
-                    address: loc.address || parcel.pickup_address || 'Pickup location'
-                };
+                
+                location.lat = parseFloat(parsed.lat);
+                location.lng = parseFloat(parsed.lng);
+                location.address = parsed.address || parcel.pickup_address || 'Pickup location';
             } catch (e) {
                 console.error('[Clustering] Error parsing pickup location:', e);
             }
         }
         
-        return null;
+        // Also check the separate lat/lng columns as backup
+        if (parcel.pickup_lat && parcel.pickup_lng) {
+            location.lat = parseFloat(parcel.pickup_lat);
+            location.lng = parseFloat(parcel.pickup_lng);
+            if (parcel.pickup_address) {
+                location.address = parcel.pickup_address;
+            }
+        }
+        
+        return location;
     }
     
     /**
-     * Get delivery location from parcel
+     * Get delivery location from parcel - FIXED for JSON string format
      */
     getDeliveryLocation(parcel) {
         if (parcel._delivery) return parcel._delivery;
         
-        if (parcel.delivery_lat && parcel.delivery_lng) {
-            return {
-                lat: parseFloat(parcel.delivery_lat),
-                lng: parseFloat(parcel.delivery_lng),
-                address: parcel.delivery_address || 'Delivery location'
-            };
-        }
+        let location = { 
+            lat: -1.2921, 
+            lng: 36.8219, 
+            address: 'Delivery location' 
+        };
         
-        // Try to parse from JSON
+        // Handle JSON string format
         if (parcel.delivery_location) {
             try {
-                const loc = typeof parcel.delivery_location === 'string' 
+                const parsed = typeof parcel.delivery_location === 'string' 
                     ? JSON.parse(parcel.delivery_location) 
                     : parcel.delivery_location;
-                return { 
-                    lat: loc.lat, 
-                    lng: loc.lng,
-                    address: loc.address || parcel.delivery_address || 'Delivery location'
-                };
+                
+                location.lat = parseFloat(parsed.lat);
+                location.lng = parseFloat(parsed.lng);
+                location.address = parsed.address || parcel.delivery_address || 'Delivery location';
             } catch (e) {
                 console.error('[Clustering] Error parsing delivery location:', e);
             }
         }
         
-        return null;
+        // Also check the separate lat/lng columns as backup
+        if (parcel.delivery_lat && parcel.delivery_lng) {
+            location.lat = parseFloat(parcel.delivery_lat);
+            location.lng = parseFloat(parcel.delivery_lng);
+            if (parcel.delivery_address) {
+                location.address = parcel.delivery_address;
+            }
+        }
+        
+        return location;
     }
     
     /**
@@ -746,13 +894,58 @@ class TumaRouteClustering {
     }
     
     /**
-     * Get area name from location
+     * Get area name from location - ENHANCED for Nairobi
      */
     getAreaName(location) {
-        // Find closest area based on known centers
-        let closestArea = 'General';
-        let minDistance = Infinity;
+        if (!location) return 'General';
         
+        // Check address first if available
+        if (location.address && location.address !== 'Pickup location' && location.address !== 'Delivery location') {
+            const address = location.address.toLowerCase();
+            
+            // Check for specific areas mentioned in the address
+            const areaMap = {
+                'westlands': 'Westlands',
+                'karen': 'Karen',
+                'cbd': 'CBD',
+                'central business': 'CBD',
+                'town': 'CBD',
+                'mombasa road': 'Mombasa Road',
+                'panari': 'Mombasa Road',
+                'capital centre': 'Mombasa Road',
+                'eastlands': 'Eastlands',
+                'kasarani': 'Kasarani',
+                'embakasi': 'Embakasi',
+                'south b': 'South B',
+                'south c': 'South C',
+                'kilimani': 'Kilimani',
+                'lavington': 'Lavington',
+                'parklands': 'Parklands',
+                'mountain view': 'Westlands',
+                'waiyaki way': 'Westlands',
+                'mbagathi': 'Kilimani',
+                'kenyatta market': 'Kilimani',
+                'railway': 'CBD',
+                'stonebridge': 'Westlands',
+                'ngong road': 'Kilimani',
+                'langata': 'Langata',
+                'gigiri': 'Gigiri',
+                'kileleshwa': 'Kileleshwa',
+                'riverside': 'Riverside',
+                'hurlingham': 'Hurlingham',
+                'upperhill': 'Upper Hill',
+                'upper hill': 'Upper Hill'
+            };
+            
+            // Check each area pattern
+            for (const [pattern, area] of Object.entries(areaMap)) {
+                if (address.includes(pattern)) {
+                    return area;
+                }
+            }
+        }
+        
+        // Fall back to coordinate-based detection
         const areaCenters = {
             'CBD': { lat: -1.2833, lng: 36.8167 },
             'Westlands': { lat: -1.2634, lng: 36.8097 },
@@ -761,12 +954,19 @@ class TumaRouteClustering {
             'Eastlands': { lat: -1.2921, lng: 36.8608 },
             'Kasarani': { lat: -1.2225, lng: 36.8973 },
             'Embakasi': { lat: -1.3232, lng: 36.8941 },
-            'Langata': { lat: -1.3616, lng: 36.7483 }
+            'Langata': { lat: -1.3616, lng: 36.7483 },
+            'Mombasa Road': { lat: -1.3200, lng: 36.8500 },
+            'Upper Hill': { lat: -1.2975, lng: 36.8189 },
+            'Gigiri': { lat: -1.2325, lng: 36.8125 },
+            'Parklands': { lat: -1.2589, lng: 36.8119 }
         };
+        
+        let closestArea = 'General';
+        let minDistance = 5; // 5km threshold
         
         for (const [area, center] of Object.entries(areaCenters)) {
             const dist = this.calculateDistance(location, center);
-            if (dist < minDistance && dist < 5) { // Within 5km
+            if (dist < minDistance) {
                 minDistance = dist;
                 closestArea = area;
             }
