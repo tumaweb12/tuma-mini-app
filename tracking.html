@@ -1016,6 +1016,43 @@
             'cancelled': 'Cancelled'
         };
 
+        // Helper function to format timestamps correctly
+        function formatTimestamp(timestamp) {
+            if (!timestamp) return '--:--';
+            
+            // Parse the timestamp - Supabase returns UTC timestamps
+            const date = new Date(timestamp);
+            
+            // Force East Africa Time (UTC+3)
+            const options = {
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true,
+                timeZone: 'Africa/Nairobi' // EAT timezone
+            };
+            
+            return date.toLocaleTimeString('en-US', options);
+        }
+
+        // Helper function to format full date and time
+        function formatFullDateTime(timestamp) {
+            if (!timestamp) return '--';
+            
+            const date = new Date(timestamp);
+            
+            const options = {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true,
+                timeZone: 'Africa/Nairobi' // EAT timezone
+            };
+            
+            return date.toLocaleString('en-US', options);
+        }
+
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
             initializeTracking();
@@ -1164,410 +1201,3 @@
             ];
 
             timeline.innerHTML = steps.map((step, index) => {
-                const stepNumber = index + 1;
-                const isCompleted = currentStep >= stepNumber;
-                const isActive = currentStep === stepNumber;
-                const time = step.time ? new Date(step.time).toLocaleTimeString('en-US', { 
-                    hour: 'numeric', 
-                    minute: '2-digit',
-                    hour12: true 
-                }) : '--:--';
-
-                const location = step.key === 'picked_up' ? parcel.pickup_location?.address :
-                               step.key === 'delivered' ? parcel.delivery_location?.address : '';
-
-                return `
-                    <div class="timeline-item ${isCompleted ? 'completed' : ''} ${isActive ? 'active' : ''}">
-                        <div class="timeline-icon">${step.icon}</div>
-                        <div class="timeline-content">
-                            <div class="timeline-title">${step.label}</div>
-                            <div class="timeline-time">${time}</div>
-                            ${location ? `<div class="timeline-location">${location}</div>` : ''}
-                        </div>
-                    </div>
-                `;
-            }).join('');
-        }
-
-        function updateDeliveryDetails(parcel) {
-            document.getElementById('parcelCode').textContent = parcel.parcel_code;
-            document.getElementById('senderName').textContent = parcel.sender_name || '--';
-            document.getElementById('recipientName').textContent = parcel.recipient_name || '--';
-            document.getElementById('packageType').textContent = parcel.package_type || '--';
-            document.getElementById('serviceType').textContent = parcel.service_type || 'Standard';
-            
-            if (parcel.price) {
-                document.getElementById('deliveryFee').textContent = `KES ${parcel.price}`;
-                document.getElementById('priceDetail').style.display = 'flex';
-            }
-        }
-
-        function showRiderInfo(rider) {
-            document.getElementById('riderCard').style.display = 'block';
-            document.getElementById('riderName').textContent = rider.rider_name || '--';
-            document.getElementById('riderDetails').textContent = 
-                `${rider.motorcycle_plate || '--'} • ${rider.vehicle_make || ''} ${rider.vehicle_model || ''}`;
-            
-            // Show rating
-            const rating = rider.rating || 5;
-            const ratingHtml = Array(5).fill(0).map((_, i) => 
-                `<span class="star">${i < Math.floor(rating) ? '⭐' : '☆'}</span>`
-            ).join('') + `<span style="margin-left: 8px; color: var(--text-secondary);">${rating.toFixed(1)}</span>`;
-            
-            document.getElementById('riderRating').innerHTML = ratingHtml;
-            
-            // Show rider photo if available
-            if (rider.profile_photo_url) {
-                document.getElementById('riderPhoto').innerHTML = `<img src="${rider.profile_photo_url}" alt="${rider.rider_name}">`;
-            }
-            
-            // Store phone for calling
-            document.getElementById('callRiderBtn').dataset.phone = rider.phone || '';
-        }
-
-        function initializeMap() {
-            trackingState.trackingMap = L.map('trackingMap', {
-                zoomControl: true,
-                attributionControl: false
-            }).setView([-1.2921, 36.8219], 13);
-
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '© OpenStreetMap'
-            }).addTo(trackingState.trackingMap);
-        }
-
-        function updateMap(parcel) {
-            const map = trackingState.trackingMap;
-            
-            // Clear existing markers and route
-            Object.values(trackingState.markers).forEach(marker => {
-                if (marker) map.removeLayer(marker);
-            });
-            if (trackingState.routeLine) {
-                map.removeLayer(trackingState.routeLine);
-            }
-
-            // Add pickup marker
-            if (parcel.pickup_location) {
-                const pickupIcon = L.divIcon({
-                    className: 'custom-div-icon',
-                    html: '<div style="background: #0066FF; color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; box-shadow: 0 3px 10px rgba(0,0,0,0.5);">P</div>',
-                    iconSize: [30, 30],
-                    iconAnchor: [15, 15]
-                });
-                
-                trackingState.markers.pickup = L.marker(
-                    [parcel.pickup_location.lat, parcel.pickup_location.lng], 
-                    { icon: pickupIcon }
-                )
-                .addTo(map)
-                .bindPopup(`<strong>Pickup</strong><br>${parcel.pickup_location.address}`);
-            }
-
-            // Add delivery marker
-            if (parcel.delivery_location) {
-                const deliveryIcon = L.divIcon({
-                    className: 'custom-div-icon',
-                    html: '<div style="background: #34C759; color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; box-shadow: 0 3px 10px rgba(0,0,0,0.5);">D</div>',
-                    iconSize: [30, 30],
-                    iconAnchor: [15, 15]
-                });
-                
-                trackingState.markers.delivery = L.marker(
-                    [parcel.delivery_location.lat, parcel.delivery_location.lng], 
-                    { icon: deliveryIcon }
-                )
-                .addTo(map)
-                .bindPopup(`<strong>Delivery</strong><br>${parcel.delivery_location.address}`);
-            }
-
-            // Add rider marker if available
-            if (parcel.rider && parcel.rider.last_location_lat && parcel.rider.last_location_lng) {
-                const riderIcon = L.divIcon({
-                    className: 'motorcycle-marker',
-                    html: '<div style="font-size: 30px;">🏍️</div>',
-                    iconSize: [30, 30],
-                    iconAnchor: [15, 15]
-                });
-                
-                trackingState.markers.rider = L.marker(
-                    [parcel.rider.last_location_lat, parcel.rider.last_location_lng], 
-                    { icon: riderIcon }
-                )
-                .addTo(map)
-                .bindPopup(`<strong>Rider Location</strong><br>Last updated: ${new Date(parcel.rider.last_location_update || Date.now()).toLocaleTimeString()}`);
-            }
-
-            // Draw route if in transit
-            if (parcel.status !== 'submitted' && parcel.pickup_location && parcel.delivery_location) {
-                const routePoints = [];
-                
-                // Add pickup
-                routePoints.push([parcel.pickup_location.lat, parcel.pickup_location.lng]);
-                
-                // Add rider location if available
-                if (trackingState.markers.rider) {
-                    routePoints.push([parcel.rider.last_location_lat, parcel.rider.last_location_lng]);
-                }
-                
-                // Add delivery if not completed
-                if (parcel.status !== 'delivered') {
-                    routePoints.push([parcel.delivery_location.lat, parcel.delivery_location.lng]);
-                }
-                
-                if (routePoints.length > 1) {
-                    trackingState.routeLine = L.polyline(routePoints, {
-                        color: '#0066FF',
-                        weight: 4,
-                        opacity: 0.8,
-                        dashArray: parcel.status === 'delivered' ? '10, 10' : null
-                    }).addTo(map);
-                }
-            }
-
-            // Fit bounds
-            const bounds = [];
-            if (parcel.pickup_location) bounds.push([parcel.pickup_location.lat, parcel.pickup_location.lng]);
-            if (parcel.delivery_location) bounds.push([parcel.delivery_location.lat, parcel.delivery_location.lng]);
-            if (trackingState.markers.rider) bounds.push(trackingState.markers.rider.getLatLng());
-            
-            if (bounds.length > 0) {
-                map.fitBounds(bounds, { padding: [50, 50] });
-            }
-
-            // Update distance
-            if (parcel.distance_km) {
-                document.getElementById('mapDistance').textContent = `${parcel.distance_km.toFixed(1)} km`;
-            }
-        }
-
-        function showETA(parcel) {
-            document.getElementById('etaCard').style.display = 'block';
-            
-            // Calculate progress
-            let progress = 0;
-            if (parcel.status === 'picked_up') progress = 30;
-            else if (parcel.status === 'in_transit') progress = 60;
-            else if (parcel.status === 'out_for_delivery') progress = 80;
-            else if (parcel.status === 'delivered') progress = 100;
-            
-            document.getElementById('progressBar').style.width = `${progress}%`;
-            
-            // Calculate ETA based on distance and average speed
-            if (parcel.distance_km && parcel.rider) {
-                const avgSpeed = 30; // km/h in city
-                const remainingDistance = parcel.distance_km * (1 - progress / 100);
-                const etaMinutes = Math.round(remainingDistance / avgSpeed * 60);
-                
-                document.getElementById('etaTime').textContent = `${etaMinutes} min`;
-                document.getElementById('distanceRemaining').textContent = `${remainingDistance.toFixed(1)} km`;
-                
-                // Calculate arrival time
-                const arrivalTime = new Date();
-                arrivalTime.setMinutes(arrivalTime.getMinutes() + etaMinutes);
-                document.getElementById('arrivalTime').textContent = arrivalTime.toLocaleTimeString('en-US', { 
-                    hour: 'numeric', 
-                    minute: '2-digit',
-                    hour12: true 
-                });
-            }
-        }
-
-        function showProofOfDelivery(proof) {
-            document.getElementById('proofSection').style.display = 'block';
-            
-            if (proof.photo_url) {
-                document.getElementById('proofImage').innerHTML = `<img src="${proof.photo_url}" alt="Proof of delivery">`;
-            }
-            
-            if (proof.delivered_at) {
-                const deliveryTime = new Date(proof.delivered_at);
-                document.getElementById('proofTime').textContent = `Delivered at ${deliveryTime.toLocaleString()}`;
-            }
-            
-            if (proof.recipient_name) {
-                document.getElementById('proofSignature').textContent = `Received by: ${proof.recipient_name}`;
-            }
-            
-            // Show download receipt button
-            document.getElementById('downloadReceiptBtn').style.display = 'flex';
-        }
-
-        function setupRealtimeUpdates(parcelId) {
-            // Subscribe to parcel updates
-            trackingState.realtimeSubscription = supabase
-                .channel(`parcel-${parcelId}`)
-                .on('postgres_changes', 
-                    { 
-                        event: 'UPDATE', 
-                        schema: 'public', 
-                        table: 'parcels',
-                        filter: `id=eq.${parcelId}`
-                    }, 
-                    (payload) => {
-                        console.log('Parcel updated:', payload);
-                        trackingState.currentParcel = { ...trackingState.currentParcel, ...payload.new };
-                        showTrackingDetails(trackingState.currentParcel);
-                        
-                        // Show notification for status changes
-                        if (payload.old.status !== payload.new.status) {
-                            showStatusNotification(payload.new.status);
-                        }
-                    }
-                )
-                .subscribe();
-        }
-
-        function startLocationRefresh() {
-            // Refresh rider location every 30 seconds
-            trackingState.refreshInterval = setInterval(async () => {
-                if (trackingState.currentParcel && trackingState.currentParcel.rider_id) {
-                    const { data: rider } = await supabase
-                        .from('riders')
-                        .select('last_location_lat, last_location_lng, last_location_update')
-                        .eq('id', trackingState.currentParcel.rider_id)
-                        .single();
-                    
-                    if (rider && rider.last_location_lat) {
-                        trackingState.currentParcel.rider = { 
-                            ...trackingState.currentParcel.rider, 
-                            ...rider 
-                        };
-                        updateMap(trackingState.currentParcel);
-                    }
-                }
-            }, 30000);
-        }
-
-        function showStatusNotification(status) {
-            const message = statusLabels[status] || 'Status updated';
-            
-            // Update notification badge
-            const badge = document.getElementById('notificationBadge');
-            const currentCount = parseInt(badge.textContent) || 0;
-            badge.textContent = currentCount + 1;
-            badge.style.display = 'block';
-            
-            // Show browser notification if permitted
-            if ('Notification' in window && Notification.permission === 'granted') {
-                new Notification('Tuma Delivery Update', {
-                    body: `Your parcel status: ${message}`,
-                    icon: '/icon-192x192.png'
-                });
-            }
-        }
-
-        function showLoading() {
-            document.getElementById('loadingState').style.display = 'flex';
-            document.getElementById('errorMessage').style.display = 'none';
-            document.getElementById('trackingDetails').style.display = 'none';
-        }
-
-        function showError(message) {
-            document.getElementById('loadingState').style.display = 'none';
-            document.getElementById('errorMessage').style.display = 'block';
-            document.getElementById('errorText').textContent = message;
-        }
-
-        function saveToRecent(parcelCode) {
-            let recent = JSON.parse(localStorage.getItem('tuma_recent_parcels') || '[]');
-            recent = [parcelCode, ...recent.filter(code => code !== parcelCode)].slice(0, 10);
-            localStorage.setItem('tuma_recent_parcels', JSON.stringify(recent));
-        }
-
-        function quickTrack(parcelCode) {
-            document.getElementById('parcelCodeInput').value = parcelCode;
-            trackParcel();
-        }
-
-        function getStatusClass(parcelCode) {
-            // This would check actual status in production
-            return 'transit';
-        }
-
-        // Action Functions
-        function callRider() {
-            const phone = document.getElementById('callRiderBtn').dataset.phone;
-            if (phone) {
-                window.location.href = `tel:${phone}`;
-            }
-        }
-
-        function shareLocation() {
-            if (trackingState.currentParcel && trackingState.currentParcel.rider) {
-                const url = `https://www.google.com/maps?q=${trackingState.currentParcel.rider.last_location_lat},${trackingState.currentParcel.rider.last_location_lng}`;
-                
-                if (navigator.share) {
-                    navigator.share({
-                        title: 'Rider Location',
-                        text: 'Current location of your delivery rider',
-                        url: url
-                    });
-                } else {
-                    window.open(url, '_blank');
-                }
-            }
-        }
-
-        function shareTracking() {
-            const url = `${window.location.origin}/tracking.html?parcel=${trackingState.currentParcel.parcel_code}`;
-            
-            if (navigator.share) {
-                navigator.share({
-                    title: 'Track My Delivery',
-                    text: `Track delivery ${trackingState.currentParcel.parcel_code}`,
-                    url: url
-                });
-            } else {
-                navigator.clipboard.writeText(url);
-                alert('Tracking link copied to clipboard!');
-            }
-        }
-
-        function downloadReceipt() {
-            // In production, this would generate a PDF receipt
-            alert('Receipt download feature coming soon!');
-        }
-
-        function reportIssue() {
-            const issues = [
-                'Delayed delivery',
-                'Wrong location',
-                'Package damaged',
-                'Rider not responding',
-                'Other issue'
-            ];
-            
-            const issue = prompt(`Please select an issue:\n${issues.map((i, idx) => `${idx + 1}. ${i}`).join('\n')}`);
-            
-            if (issue) {
-                alert('Thank you for reporting. Our support team will contact you shortly.');
-                // In production, this would create a support ticket
-            }
-        }
-
-        function showNotifications() {
-            // Reset badge
-            document.getElementById('notificationBadge').style.display = 'none';
-            document.getElementById('notificationBadge').textContent = '0';
-            
-            alert('No new notifications');
-        }
-
-        // Cleanup on page unload
-        window.addEventListener('beforeunload', () => {
-            if (trackingState.refreshInterval) {
-                clearInterval(trackingState.refreshInterval);
-            }
-            if (trackingState.realtimeSubscription) {
-                trackingState.realtimeSubscription.unsubscribe();
-            }
-        });
-
-        // Request notification permission
-        if ('Notification' in window && Notification.permission === 'default') {
-            Notification.requestPermission();
-        }
-    </script>
-</body>
-</html>
