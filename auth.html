@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tuma Delivery - Sign In</title>
+    <title>Tuma - Sign In or Register</title>
     <style>
         * {
             margin: 0;
@@ -36,41 +36,35 @@
             background: var(--background);
             color: var(--text-primary);
             min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
             padding: 20px;
         }
 
+        .auth-wrapper {
+            max-width: 480px;
+            margin: 0 auto;
+        }
+
         .auth-container {
-            width: 100%;
-            max-width: 420px;
             background: var(--surface);
+            border: 1px solid var(--border);
             border-radius: 20px;
-            box-shadow: var(--shadow);
-            padding: 40px 30px;
+            padding: 32px;
+            box-shadow: var(--shadow-lg);
+        }
+
+        .auth-header {
+            text-align: center;
+            margin-bottom: 32px;
         }
 
         .logo {
-            text-align: center;
-            margin-bottom: 30px;
-        }
-
-        .logo-icon {
-            width: 60px;
-            height: 60px;
-            background: var(--primary);
-            border-radius: 16px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 28px;
-            color: white;
-            margin-bottom: 16px;
+            width: 100px;
+            height: auto;
+            margin-bottom: 20px;
         }
 
         h1 {
-            font-size: 24px;
+            font-size: 28px;
             font-weight: 700;
             margin-bottom: 8px;
         }
@@ -80,32 +74,58 @@
             font-size: 16px;
         }
 
-        .user-type-tabs {
-            display: flex;
-            gap: 8px;
-            margin-bottom: 30px;
-            background: var(--background);
-            padding: 4px;
+        /* User Type Selection */
+        .user-type-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        .user-type-card {
+            background: var(--surface-elevated);
+            border: 2px solid var(--border);
             border-radius: 12px;
-        }
-
-        .tab {
-            flex: 1;
-            padding: 12px;
-            border: none;
-            background: none;
-            border-radius: 8px;
-            font-size: 14px;
-            font-weight: 600;
-            color: var(--text-secondary);
+            padding: 20px;
             cursor: pointer;
-            transition: all 0.2s;
+            transition: all 0.3s;
+            text-align: center;
         }
 
-        .tab.active {
-            background: var(--surface);
-            color: var(--primary);
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        .user-type-card:hover {
+            border-color: var(--primary);
+            transform: translateY(-2px);
+        }
+
+        .user-type-card.active {
+            border-color: var(--primary);
+            background: rgba(0, 102, 255, 0.1);
+        }
+
+        .user-type-card.agent-special {
+            grid-column: 1 / -1;
+            background: linear-gradient(135deg, rgba(0, 102, 255, 0.1), rgba(0, 102, 255, 0.05));
+            border-color: var(--primary);
+        }
+
+        .user-icon {
+            font-size: 32px;
+            margin-bottom: 8px;
+        }
+
+        .user-type-name {
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .user-type-desc {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        /* Form Elements */
+        .form-section {
+            margin-bottom: 24px;
         }
 
         .form-group {
@@ -117,9 +137,14 @@
             font-size: 14px;
             font-weight: 600;
             margin-bottom: 8px;
+            color: var(--text-primary);
         }
 
-        .phone-input-wrapper {
+        .required {
+            color: var(--error);
+        }
+
+        .input-wrapper {
             position: relative;
         }
 
@@ -132,31 +157,30 @@
             font-weight: 500;
         }
 
-        input[type="tel"] {
+        input[type="text"],
+        input[type="tel"],
+        input[type="email"] {
             width: 100%;
-            padding: 14px 16px 14px 52px;
+            padding: 14px 16px;
+            background: var(--surface-elevated);
             border: 2px solid var(--border);
             border-radius: 10px;
             font-size: 16px;
+            color: var(--text-primary);
             outline: none;
             transition: all 0.2s;
         }
 
-        input[type="tel"]:focus {
+        input.with-prefix {
+            padding-left: 52px;
+        }
+
+        input:focus {
             border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.2);
         }
 
-        .pin-section {
-            display: none;
-            text-align: center;
-        }
-
-        .pin-title {
-            font-size: 18px;
-            font-weight: 600;
-            margin-bottom: 20px;
-        }
-
+        /* PIN Input */
         .pin-inputs {
             display: flex;
             gap: 12px;
@@ -167,11 +191,13 @@
         .pin-digit {
             width: 60px;
             height: 60px;
-            border: 2px solid var(--border);
-            border-radius: 12px;
             text-align: center;
             font-size: 24px;
             font-weight: 700;
+            background: var(--surface-elevated);
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            color: var(--text-primary);
             outline: none;
             transition: all 0.2s;
         }
@@ -182,15 +208,113 @@
         }
 
         .pin-digit.filled {
-            background: rgba(0, 102, 255, 0.05);
             border-color: var(--primary);
+            background: rgba(0, 102, 255, 0.1);
         }
 
+        /* KYC Section */
+        .kyc-section {
+            display: none;
+            margin-top: 24px;
+            padding: 20px;
+            background: var(--surface-elevated);
+            border-radius: 12px;
+            border: 1px solid var(--border);
+        }
+
+        .kyc-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .kyc-icon {
+            width: 40px;
+            height: 40px;
+            background: var(--primary);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+        }
+
+        .kyc-title {
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        /* File Upload */
+        .file-upload {
+            border: 2px dashed var(--border);
+            border-radius: 12px;
+            padding: 24px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .file-upload:hover {
+            border-color: var(--primary);
+            background: rgba(0, 102, 255, 0.05);
+        }
+
+        .file-upload.has-file {
+            border-style: solid;
+            border-color: var(--success);
+        }
+
+        .file-upload input[type="file"] {
+            position: absolute;
+            opacity: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+        }
+
+        .upload-icon {
+            font-size: 32px;
+            margin-bottom: 8px;
+        }
+
+        .upload-text {
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        /* Camera/Selfie */
+        .selfie-container {
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        .camera-view {
+            width: 200px;
+            height: 200px;
+            margin: 0 auto 16px;
+            background: var(--surface-elevated);
+            border-radius: 50%;
+            overflow: hidden;
+            position: relative;
+            border: 3px solid var(--border);
+        }
+
+        #selfieVideo,
+        #selfiePreview {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        /* Buttons */
         .btn {
             width: 100%;
-            padding: 14px;
+            padding: 16px;
             border: none;
-            border-radius: 10px;
+            border-radius: 12px;
             font-size: 16px;
             font-weight: 600;
             cursor: pointer;
@@ -203,13 +327,14 @@
         }
 
         .btn-primary:hover {
-            background: var(--primary-dark);
+            background: var(--primary-light);
             transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 102, 255, 0.4);
         }
 
         .btn-primary:disabled {
             background: var(--border);
-            color: var(--text-secondary);
+            color: var(--text-tertiary);
             cursor: not-allowed;
             transform: none;
         }
@@ -222,19 +347,46 @@
         }
 
         .btn-secondary:hover {
-            background: var(--background);
+            background: var(--surface-elevated);
             color: var(--text-primary);
+            border-color: var(--border-light);
         }
 
-        .divider {
-            text-align: center;
-            margin: 20px 0;
-            color: var(--text-secondary);
+        .btn-camera {
+            padding: 12px 24px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
             font-size: 14px;
+            cursor: pointer;
         }
 
+        /* Steps */
+        .steps-indicator {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 24px;
+        }
+
+        .step-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--border);
+            transition: all 0.3s;
+        }
+
+        .step-dot.active {
+            width: 24px;
+            border-radius: 4px;
+            background: var(--primary);
+        }
+
+        /* Messages */
         .message {
-            padding: 12px;
+            padding: 12px 16px;
             border-radius: 8px;
             margin-bottom: 16px;
             font-size: 14px;
@@ -244,33 +396,28 @@
         .message.error {
             background: rgba(255, 59, 48, 0.1);
             color: var(--error);
+            border: 1px solid rgba(255, 59, 48, 0.2);
         }
 
         .message.success {
             background: rgba(0, 185, 105, 0.1);
             color: var(--success);
+            border: 1px solid rgba(0, 185, 105, 0.2);
         }
 
-        .info-box {
-            background: rgba(255, 184, 0, 0.1);
-            border: 1px solid rgba(255, 184, 0, 0.2);
-            border-radius: 8px;
-            padding: 12px;
-            margin-top: 16px;
-            font-size: 13px;
-            color: var(--text-secondary);
+        .message.info {
+            background: rgba(0, 102, 255, 0.1);
+            color: var(--primary);
+            border: 1px solid rgba(0, 102, 255, 0.2);
         }
 
-        .info-box strong {
-            color: var(--text-primary);
-        }
-
+        /* Loading */
         .loading {
             display: inline-block;
             width: 16px;
             height: 16px;
-            border: 2px solid var(--surface);
-            border-top-color: transparent;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
             border-radius: 50%;
             animation: spin 0.8s linear infinite;
             margin-left: 8px;
@@ -281,9 +428,27 @@
             to { transform: rotate(360deg); }
         }
 
+        /* Role Badge */
+        .role-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 12px;
+            background: rgba(0, 102, 255, 0.1);
+            border: 1px solid var(--primary);
+            border-radius: 20px;
+            font-size: 12px;
+            color: var(--primary);
+            margin-top: 8px;
+        }
+
         @media (max-width: 480px) {
+            .auth-wrapper {
+                padding: 10px;
+            }
+            
             .auth-container {
-                padding: 30px 20px;
+                padding: 24px;
             }
             
             .pin-digit {
@@ -295,319 +460,614 @@
     </style>
 </head>
 <body>
-    <div class="auth-container">
-        <div class="logo">
-            <div class="logo-icon">📦</div>
-            <h1>Welcome to Tuma</h1>
-            <p class="subtitle">Quick and secure sign in</p>
-        </div>
+    <div class="auth-wrapper">
+        <div class="auth-container">
+            <div class="auth-header">
+                <img src="./assets/tuma-logo.png" alt="Tuma" class="logo">
+                <h1>Welcome to Tuma</h1>
+                <p class="subtitle">Choose how you want to use Tuma</p>
+            </div>
 
-        <!-- User Type Selection -->
-        <div class="user-type-tabs">
-            <button class="tab active" data-type="vendor" onclick="selectUserType('vendor')">
-                🏪 Vendor
-            </button>
-            <button class="tab" data-type="agent" onclick="selectUserType('agent')">
-                💼 Agent
-            </button>
-            <button class="tab" data-type="rider" onclick="selectUserType('rider')">
-                🏍️ Rider
-            </button>
-        </div>
+            <!-- Messages -->
+            <div class="message error" id="errorMsg"></div>
+            <div class="message success" id="successMsg"></div>
+            <div class="message info" id="infoMsg"></div>
 
-        <!-- Messages -->
-        <div class="message error" id="errorMsg"></div>
-        <div class="message success" id="successMsg"></div>
+            <!-- User Type Selection -->
+            <div id="userTypeSelection">
+                <div class="user-type-grid">
+                    <div class="user-type-card" onclick="selectUserType('vendor')">
+                        <div class="user-icon">🏪</div>
+                        <div class="user-type-name">Vendor</div>
+                        <div class="user-type-desc">Send parcels</div>
+                    </div>
+                    
+                    <div class="user-type-card" onclick="selectUserType('rider')">
+                        <div class="user-icon">🏍️</div>
+                        <div class="user-type-name">Rider</div>
+                        <div class="user-type-desc">Deliver parcels</div>
+                    </div>
+                    
+                    <div class="user-type-card agent-special" onclick="selectUserType('agent')">
+                        <div class="user-icon">💼</div>
+                        <div class="user-type-name">Agent</div>
+                        <div class="user-type-desc">Earn 20% commission on referrals</div>
+                        <div class="role-badge">
+                            <span>🌟</span>
+                            <span>Anyone can join!</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
-        <!-- Phone Input Section -->
-        <div id="phoneSection">
-            <form onsubmit="handlePhoneSubmit(event)">
-                <div class="form-group">
-                    <label>Phone Number</label>
-                    <div class="phone-input-wrapper">
-                        <span class="phone-prefix">+254</span>
-                        <input 
-                            type="tel" 
-                            id="phoneInput"
-                            placeholder="712345678"
-                            maxlength="9"
-                            pattern="[0-9]{9}"
-                            required
-                        >
+            <!-- Auth Form -->
+            <form id="authForm" style="display: none;">
+                <!-- Step Indicator -->
+                <div class="steps-indicator" id="stepsIndicator" style="display: none;">
+                    <div class="step-dot active"></div>
+                    <div class="step-dot"></div>
+                    <div class="step-dot"></div>
+                </div>
+
+                <!-- Phone/Login Step -->
+                <div id="phoneStep">
+                    <div class="form-group">
+                        <label>Phone Number</label>
+                        <div class="input-wrapper">
+                            <span class="phone-prefix">+254</span>
+                            <input 
+                                type="tel" 
+                                id="phoneInput"
+                                class="with-prefix"
+                                placeholder="712345678"
+                                maxlength="9"
+                                pattern="[0-9]{9}"
+                                required
+                            >
+                        </div>
+                    </div>
+
+                    <button type="button" class="btn btn-primary" onclick="checkPhoneAndProceed()">
+                        Continue
+                    </button>
+
+                    <!-- Vendor Skip Option -->
+                    <div id="vendorSkip" style="display: none;">
+                        <button type="button" class="btn btn-secondary" onclick="skipAuth()">
+                            Continue without account
+                        </button>
                     </div>
                 </div>
 
-                <button type="submit" class="btn btn-primary" id="continueBtn">
-                    Continue
-                </button>
+                <!-- PIN Step -->
+                <div id="pinStep" style="display: none;">
+                    <h3 style="text-align: center; margin-bottom: 20px;" id="pinTitle">
+                        Enter your 4-digit PIN
+                    </h3>
+                    
+                    <div class="pin-inputs">
+                        <input type="password" class="pin-digit" maxlength="1" pattern="[0-9]" inputmode="numeric">
+                        <input type="password" class="pin-digit" maxlength="1" pattern="[0-9]" inputmode="numeric">
+                        <input type="password" class="pin-digit" maxlength="1" pattern="[0-9]" inputmode="numeric">
+                        <input type="password" class="pin-digit" maxlength="1" pattern="[0-9]" inputmode="numeric">
+                    </div>
 
-                <!-- Vendor Skip Option -->
-                <div id="vendorSkip">
-                    <div class="divider">or</div>
-                    <button type="button" class="btn btn-secondary" onclick="skipAuth()">
-                        Continue without signing in
+                    <button type="button" class="btn btn-primary" onclick="handlePIN()" id="pinBtn">
+                        Sign In
+                    </button>
+
+                    <button type="button" class="btn btn-secondary" onclick="backToPhone()">
+                        Use different number
+                    </button>
+                </div>
+
+                <!-- Registration Step -->
+                <div id="registrationStep" style="display: none;">
+                    <h3 style="margin-bottom: 20px;">Create your account</h3>
+                    
+                    <div class="form-group">
+                        <label>Full Name <span class="required">*</span></label>
+                        <input type="text" id="fullName" placeholder="John Doe" required>
+                    </div>
+
+                    <div class="form-group" id="emailGroup">
+                        <label>Email (Optional)</label>
+                        <input type="email" id="email" placeholder="john@example.com">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Create 4-digit PIN <span class="required">*</span></label>
+                        <div class="pin-inputs">
+                            <input type="password" class="pin-digit new-pin" maxlength="1" pattern="[0-9]" inputmode="numeric">
+                            <input type="password" class="pin-digit new-pin" maxlength="1" pattern="[0-9]" inputmode="numeric">
+                            <input type="password" class="pin-digit new-pin" maxlength="1" pattern="[0-9]" inputmode="numeric">
+                            <input type="password" class="pin-digit new-pin" maxlength="1" pattern="[0-9]" inputmode="numeric">
+                        </div>
+                    </div>
+
+                    <button type="button" class="btn btn-primary" onclick="proceedToKYC()">
+                        Continue
+                    </button>
+                </div>
+
+                <!-- KYC Step (for Agents and Riders) -->
+                <div id="kycStep" style="display: none;">
+                    <div class="kyc-section" style="display: block;">
+                        <div class="kyc-header">
+                            <div class="kyc-icon">🔐</div>
+                            <div>
+                                <div class="kyc-title">Identity Verification</div>
+                                <div style="font-size: 14px; color: var(--text-secondary);">Required for security</div>
+                            </div>
+                        </div>
+
+                        <!-- National ID -->
+                        <div class="form-group">
+                            <label>National ID Number <span class="required">*</span></label>
+                            <input type="text" id="nationalId" placeholder="12345678" pattern="[0-9]{7,8}" maxlength="8" required>
+                        </div>
+
+                        <!-- M-Pesa Number -->
+                        <div class="form-group">
+                            <label>M-Pesa Number <span class="required">*</span></label>
+                            <div class="input-wrapper">
+                                <span class="phone-prefix">+254</span>
+                                <input type="tel" id="mpesaNumber" class="with-prefix" placeholder="712345678" pattern="[0-9]{9}" maxlength="9" required>
+                            </div>
+                            <small style="color: var(--text-secondary);">For receiving payments</small>
+                        </div>
+
+                        <!-- ID Upload -->
+                        <div class="form-group">
+                            <label>National ID Photos <span class="required">*</span></label>
+                            <div class="file-upload" id="idUpload">
+                                <input type="file" id="idFiles" accept="image/*" multiple required>
+                                <div class="upload-icon">📄</div>
+                                <div class="upload-text">Upload front and back of ID</div>
+                            </div>
+                        </div>
+
+                        <!-- Selfie -->
+                        <div class="form-group">
+                            <label>Take a Selfie <span class="required">*</span></label>
+                            <div class="selfie-container">
+                                <div class="camera-view">
+                                    <video id="selfieVideo" style="display: none;" autoplay playsinline></video>
+                                    <img id="selfiePreview" style="display: none;">
+                                    <div id="cameraPlaceholder" style="padding: 60px 0;">
+                                        <div style="font-size: 48px;">📸</div>
+                                    </div>
+                                </div>
+                                <button type="button" class="btn-camera" id="cameraBtn" onclick="handleCamera()">
+                                    Open Camera
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Terms -->
+                        <div class="form-group">
+                            <label style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="agreeTerms" style="margin-top: 2px;">
+                                <span style="font-weight: normal; font-size: 14px;">
+                                    I agree to the Terms of Service and Privacy Policy
+                                </span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <button type="button" class="btn btn-primary" onclick="submitRegistration()" id="submitBtn">
+                        Complete Registration
+                    </button>
+
+                    <button type="button" class="btn btn-secondary" onclick="backToRegistration()">
+                        Back
                     </button>
                 </div>
             </form>
-
-            <div class="info-box">
-                💡 <strong>Simple PIN Authentication:</strong><br>
-                Create a 4-digit PIN to secure your account. No emails or SMS required!
-            </div>
-        </div>
-
-        <!-- PIN Section -->
-        <div class="pin-section" id="pinSection">
-            <h2 class="pin-title" id="pinTitle">Create your 4-digit PIN</h2>
-            
-            <div class="pin-inputs">
-                <input type="password" class="pin-digit" maxlength="1" pattern="[0-9]" inputmode="numeric">
-                <input type="password" class="pin-digit" maxlength="1" pattern="[0-9]" inputmode="numeric">
-                <input type="password" class="pin-digit" maxlength="1" pattern="[0-9]" inputmode="numeric">
-                <input type="password" class="pin-digit" maxlength="1" pattern="[0-9]" inputmode="numeric">
-            </div>
-
-            <button class="btn btn-primary" id="pinBtn" onclick="handlePIN()" disabled>
-                Create PIN
-            </button>
-
-            <button class="btn btn-secondary" onclick="backToPhone()">
-                Use different number
-            </button>
         </div>
     </div>
 
     <script>
-        // State
+        // State management
         let state = {
-            userType: 'vendor',
+            userType: null,
             phone: '',
-            isNewUser: true
+            isNewUser: false,
+            currentStep: 'selection',
+            formData: {},
+            selfieData: null,
+            cameraStream: null
         };
 
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
-            // Phone input formatting
-            document.getElementById('phoneInput').addEventListener('input', (e) => {
-                e.target.value = e.target.value.replace(/\D/g, '');
-                hideMessages();
-            });
-
-            // Setup PIN inputs
             setupPINInputs();
-
-            // Check if already authenticated
-            checkExistingAuth();
         });
 
+        // User type selection
         function selectUserType(type) {
             state.userType = type;
             
             // Update UI
-            document.querySelectorAll('.tab').forEach(tab => {
-                tab.classList.toggle('active', tab.dataset.type === type);
+            document.querySelectorAll('.user-type-card').forEach(card => {
+                card.classList.remove('active');
             });
-
-            // Show/hide vendor skip option
-            document.getElementById('vendorSkip').style.display = 
-                type === 'vendor' ? 'block' : 'none';
+            event.target.closest('.user-type-card').classList.add('active');
+            
+            // Show form
+            document.getElementById('userTypeSelection').style.display = 'none';
+            document.getElementById('authForm').style.display = 'block';
+            
+            // Update subtitle
+            const subtitles = {
+                vendor: 'Send parcels quickly and easily',
+                agent: 'Start earning commissions today',
+                rider: 'Join our delivery network'
+            };
+            document.querySelector('.subtitle').textContent = subtitles[type];
+            
+            // Show vendor skip option
+            if (type === 'vendor') {
+                document.getElementById('vendorSkip').style.display = 'block';
+            }
+            
+            // Show info for new agents
+            if (type === 'agent') {
+                showInfo('New to Tuma? Perfect! Anyone can become an agent and start earning.');
+            }
         }
 
-        function handlePhoneSubmit(event) {
-            event.preventDefault();
-            
+        // Check phone and determine flow
+        async function checkPhoneAndProceed() {
             const phone = document.getElementById('phoneInput').value;
+            
             if (!/^[0-9]{9}$/.test(phone)) {
                 showError('Please enter a valid 9-digit phone number');
                 return;
             }
-
+            
             state.phone = '+254' + phone;
-
-            // Check if user exists (in production, check database)
-            const isNewUser = !localStorage.getItem(`pin_${state.phone}`);
-            state.isNewUser = isNewUser;
-
-            // Show PIN section
-            showPINSection(isNewUser);
+            hideMessages();
+            
+            // Check if user exists
+            const exists = await checkUserExists(state.phone);
+            state.isNewUser = !exists;
+            
+            if (state.isNewUser) {
+                // New user - go to registration
+                if (state.userType === 'rider') {
+                    // Riders need full application
+                    showInfo('New riders need to complete our application process');
+                    setTimeout(() => {
+                        window.location.href = './rider-signup.html';
+                    }, 2000);
+                } else {
+                    // Vendors and Agents can register here
+                    showRegistrationStep();
+                }
+            } else {
+                // Existing user - go to PIN
+                showPINStep();
+            }
         }
 
-        function showPINSection(isNew) {
-            document.getElementById('phoneSection').style.display = 'none';
-            document.getElementById('pinSection').style.display = 'block';
+        // Check if user exists (mock)
+        async function checkUserExists(phone) {
+            // In production, check database
+            const mockUsers = ['+254712345678', '+254722334455'];
+            return mockUsers.includes(phone);
+        }
 
-            const pinTitle = document.getElementById('pinTitle');
-            const pinBtn = document.getElementById('pinBtn');
-
-            if (isNew) {
-                pinTitle.textContent = 'Create your 4-digit PIN';
-                pinBtn.textContent = 'Create PIN';
-            } else {
-                pinTitle.textContent = 'Enter your 4-digit PIN';
-                pinBtn.textContent = 'Sign In';
+        // Show registration step
+        function showRegistrationStep() {
+            document.getElementById('phoneStep').style.display = 'none';
+            document.getElementById('registrationStep').style.display = 'block';
+            
+            // Show steps indicator for agents
+            if (state.userType === 'agent') {
+                document.getElementById('stepsIndicator').style.display = 'flex';
+                updateStepIndicator(1);
             }
+        }
 
+        // Show PIN step
+        function showPINStep() {
+            document.getElementById('phoneStep').style.display = 'none';
+            document.getElementById('pinStep').style.display = 'block';
+            
             // Focus first PIN input
             document.querySelector('.pin-digit').focus();
         }
 
-        function setupPINInputs() {
-            const inputs = document.querySelectorAll('.pin-digit');
-            const pinBtn = document.getElementById('pinBtn');
-
-            inputs.forEach((input, index) => {
-                input.addEventListener('input', (e) => {
-                    if (e.target.value) {
-                        e.target.classList.add('filled');
-                        // Move to next input
-                        if (index < inputs.length - 1) {
-                            inputs[index + 1].focus();
-                        }
-                    } else {
-                        e.target.classList.remove('filled');
-                    }
-
-                    // Check if all filled
-                    const allFilled = Array.from(inputs).every(i => i.value);
-                    pinBtn.disabled = !allFilled;
-                });
-
-                input.addEventListener('keydown', (e) => {
-                    if (e.key === 'Backspace' && !e.target.value && index > 0) {
-                        inputs[index - 1].focus();
-                    }
-                });
-
-                // Prevent non-numeric input
-                input.addEventListener('keypress', (e) => {
-                    if (!/[0-9]/.test(e.key)) {
-                        e.preventDefault();
-                    }
-                });
-            });
-        }
-
-        async function handlePIN() {
-            const inputs = document.querySelectorAll('.pin-digit');
-            const pin = Array.from(inputs).map(i => i.value).join('');
-
-            if (pin.length !== 4) {
-                showError('Please enter a 4-digit PIN');
+        // Proceed to KYC
+        function proceedToKYC() {
+            // Validate registration data
+            const fullName = document.getElementById('fullName').value.trim();
+            const newPIN = Array.from(document.querySelectorAll('.new-pin')).map(i => i.value).join('');
+            
+            if (!fullName) {
+                showError('Please enter your full name');
                 return;
             }
-
-            const btn = document.getElementById('pinBtn');
-            btn.disabled = true;
-            btn.innerHTML = state.isNewUser ? 
-                'Creating PIN<span class="loading"></span>' : 
-                'Signing in<span class="loading"></span>';
-
-            // Simulate API call
-            await new Promise(resolve => setTimeout(resolve, 1000));
-
-            if (state.isNewUser) {
-                // Save PIN (in production, hash and save to database)
-                localStorage.setItem(`pin_${state.phone}`, await hashPIN(pin));
-                showSuccess('PIN created successfully!');
+            
+            if (newPIN.length !== 4) {
+                showError('Please create a 4-digit PIN');
+                return;
+            }
+            
+            // Store data
+            state.formData = {
+                fullName,
+                email: document.getElementById('email').value.trim(),
+                pin: newPIN
+            };
+            
+            // Vendors don't need KYC
+            if (state.userType === 'vendor') {
+                submitRegistration();
             } else {
-                // Verify PIN
-                const savedPIN = localStorage.getItem(`pin_${state.phone}`);
-                const hashedInput = await hashPIN(pin);
+                // Agents need KYC
+                showKYCStep();
+            }
+        }
 
-                if (savedPIN === hashedInput) {
-                    showSuccess('Welcome back!');
-                } else {
-                    showError('Incorrect PIN. Please try again.');
-                    inputs.forEach(i => {
-                        i.value = '';
-                        i.classList.remove('filled');
+        // Show KYC step
+        function showKYCStep() {
+            document.getElementById('registrationStep').style.display = 'none';
+            document.getElementById('kycStep').style.display = 'block';
+            updateStepIndicator(2);
+        }
+
+        // Handle camera
+        async function handleCamera() {
+            const btn = document.getElementById('cameraBtn');
+            
+            if (!state.cameraStream) {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ 
+                        video: { facingMode: 'user' } 
                     });
-                    inputs[0].focus();
-                    btn.disabled = false;
-                    btn.textContent = 'Sign In';
+                    
+                    state.cameraStream = stream;
+                    const video = document.getElementById('selfieVideo');
+                    video.srcObject = stream;
+                    
+                    // Update UI
+                    video.style.display = 'block';
+                    document.getElementById('cameraPlaceholder').style.display = 'none';
+                    btn.textContent = 'Capture Photo';
+                } catch (error) {
+                    showError('Camera access denied. Please allow camera permissions.');
+                }
+            } else {
+                // Capture photo
+                captureSelfie();
+            }
+        }
+
+        // Capture selfie
+        function captureSelfie() {
+            const video = document.getElementById('selfieVideo');
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0);
+            
+            // Convert to blob
+            canvas.toBlob((blob) => {
+                state.selfieData = blob;
+                
+                // Show preview
+                const preview = document.getElementById('selfiePreview');
+                preview.src = URL.createObjectURL(blob);
+                preview.style.display = 'block';
+                video.style.display = 'none';
+                
+                // Update button
+                document.getElementById('cameraBtn').textContent = 'Retake Photo';
+                
+                // Stop stream
+                if (state.cameraStream) {
+                    state.cameraStream.getTracks().forEach(track => track.stop());
+                    state.cameraStream = null;
+                }
+            }, 'image/jpeg', 0.9);
+        }
+
+        // Submit registration
+        async function submitRegistration() {
+            // Validate KYC if required
+            if (state.userType === 'agent') {
+                const nationalId = document.getElementById('nationalId').value;
+                const mpesaNumber = document.getElementById('mpesaNumber').value;
+                const idFiles = document.getElementById('idFiles').files;
+                const agreeTerms = document.getElementById('agreeTerms').checked;
+                
+                if (!nationalId || !mpesaNumber || idFiles.length < 2 || !state.selfieData || !agreeTerms) {
+                    showError('Please complete all required fields');
                     return;
                 }
+                
+                state.formData.nationalId = nationalId;
+                state.formData.mpesaNumber = '+254' + mpesaNumber;
+                state.formData.idFiles = idFiles;
+                state.formData.selfie = state.selfieData;
             }
-
-            // Save session
-            const session = {
-                phone: state.phone,
-                userType: state.userType,
-                timestamp: Date.now()
-            };
-            localStorage.setItem(`tuma_${state.userType}_session`, JSON.stringify(session));
-
-            // Redirect
-            setTimeout(() => {
-                const redirects = {
-                    vendor: './vendor.html',
-                    agent: './agent.html',
-                    rider: './rider.html'
-                };
-                window.location.href = redirects[state.userType];
-            }, 1000);
-        }
-
-        async function hashPIN(pin) {
-            // Simple hash for demo (use bcrypt in production)
-            const encoder = new TextEncoder();
-            const data = encoder.encode(pin + 'tuma-2024');
-            const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-            const hashArray = Array.from(new Uint8Array(hashBuffer));
-            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-        }
-
-        function backToPhone() {
-            document.getElementById('phoneSection').style.display = 'block';
-            document.getElementById('pinSection').style.display = 'none';
             
-            // Clear PIN inputs
-            document.querySelectorAll('.pin-digit').forEach(input => {
-                input.value = '';
-                input.classList.remove('filled');
-            });
+            // Show loading
+            const btn = document.getElementById('submitBtn');
+            btn.disabled = true;
+            btn.innerHTML = 'Creating account<span class="loading"></span>';
             
-            hideMessages();
-        }
-
-        function skipAuth() {
-            window.location.href = './vendor.html';
-        }
-
-        function checkExistingAuth() {
-            const session = localStorage.getItem(`tuma_${state.userType}_session`);
-            if (session) {
-                const data = JSON.parse(session);
-                // Check if session is less than 30 days old
-                if (Date.now() - data.timestamp < 30 * 24 * 60 * 60 * 1000) {
-                    // Redirect to dashboard
+            try {
+                // Simulate registration
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                
+                // Generate agent code if agent
+                if (state.userType === 'agent') {
+                    const agentCode = generateAgentCode(state.formData.fullName);
+                    showSuccess(`Registration complete! Your agent code is: ${agentCode}`);
+                } else {
+                    showSuccess('Account created successfully!');
+                }
+                
+                // Store session
+                localStorage.setItem(`tuma_${state.userType}_session`, JSON.stringify({
+                    phone: state.phone,
+                    name: state.formData.fullName,
+                    timestamp: Date.now()
+                }));
+                
+                // Redirect after delay
+                setTimeout(() => {
                     const redirects = {
                         vendor: './vendor.html',
                         agent: './agent.html',
                         rider: './rider.html'
                     };
                     window.location.href = redirects[state.userType];
-                }
+                }, 2000);
+                
+            } catch (error) {
+                showError('Registration failed. Please try again.');
+                btn.disabled = false;
+                btn.textContent = 'Complete Registration';
             }
         }
 
+        // Generate agent code (2 letters + 3 numbers)
+        function generateAgentCode(fullName) {
+            const cleaned = fullName.toUpperCase().replace(/[^A-Z]/g, '');
+            const letters = cleaned.substring(0, 2);
+            const numbers = Math.floor(Math.random() * 900 + 100);
+            return letters + numbers;
+        }
+
+        // Handle PIN
+        async function handlePIN() {
+            const pin = Array.from(document.querySelectorAll('.pin-digit')).map(i => i.value).join('');
+            
+            if (pin.length !== 4) {
+                showError('Please enter your 4-digit PIN');
+                return;
+            }
+            
+            // Verify PIN (mock)
+            showSuccess('Welcome back!');
+            
+            // Check for multiple roles
+            const roles = await checkUserRoles(state.phone);
+            
+            if (roles.length > 1) {
+                // Show role selector
+                showRoleSelector(roles);
+            } else {
+                // Direct redirect
+                setTimeout(() => {
+                    const redirects = {
+                        vendor: './vendor.html',
+                        agent: './agent.html',
+                        rider: './rider.html'
+                    };
+                    window.location.href = redirects[state.userType];
+                }, 1000);
+            }
+        }
+
+        // Check user roles (mock)
+        async function checkUserRoles(phone) {
+            // In production, check database
+            if (phone === '+254712345678') {
+                return ['vendor', 'agent']; // Has multiple roles
+            }
+            return [state.userType];
+        }
+
+        // Setup PIN inputs
+        function setupPINInputs() {
+            document.querySelectorAll('.pin-digit').forEach((input, index, inputs) => {
+                input.addEventListener('input', (e) => {
+                    if (e.target.value) {
+                        e.target.classList.add('filled');
+                        if (index < inputs.length - 1) {
+                            inputs[index + 1].focus();
+                        }
+                    } else {
+                        e.target.classList.remove('filled');
+                    }
+                });
+                
+                input.addEventListener('keydown', (e) => {
+                    if (e.key === 'Backspace' && !e.target.value && index > 0) {
+                        inputs[index - 1].focus();
+                    }
+                });
+            });
+        }
+
+        // Update step indicator
+        function updateStepIndicator(step) {
+            document.querySelectorAll('.step-dot').forEach((dot, index) => {
+                dot.classList.toggle('active', index < step);
+            });
+        }
+
+        // Navigation
+        function backToPhone() {
+            document.getElementById('pinStep').style.display = 'none';
+            document.getElementById('phoneStep').style.display = 'block';
+        }
+
+        function backToRegistration() {
+            document.getElementById('kycStep').style.display = 'none';
+            document.getElementById('registrationStep').style.display = 'block';
+            updateStepIndicator(1);
+        }
+
+        function skipAuth() {
+            window.location.href = './vendor.html';
+        }
+
+        // Messages
         function showError(message) {
-            const errorEl = document.getElementById('errorMsg');
-            errorEl.textContent = message;
-            errorEl.style.display = 'block';
-            document.getElementById('successMsg').style.display = 'none';
+            document.getElementById('errorMsg').textContent = message;
+            document.getElementById('errorMsg').style.display = 'block';
+            hideSuccess();
+            hideInfo();
         }
 
         function showSuccess(message) {
-            const successEl = document.getElementById('successMsg');
-            successEl.textContent = message;
-            successEl.style.display = 'block';
-            document.getElementById('errorMsg').style.display = 'none';
+            document.getElementById('successMsg').textContent = message;
+            document.getElementById('successMsg').style.display = 'block';
+            hideError();
+            hideInfo();
+        }
+
+        function showInfo(message) {
+            document.getElementById('infoMsg').textContent = message;
+            document.getElementById('infoMsg').style.display = 'block';
+            hideError();
+            hideSuccess();
         }
 
         function hideMessages() {
             document.getElementById('errorMsg').style.display = 'none';
             document.getElementById('successMsg').style.display = 'none';
+            document.getElementById('infoMsg').style.display = 'none';
+        }
+
+        function hideError() {
+            document.getElementById('errorMsg').style.display = 'none';
+        }
+
+        function hideSuccess() {
+            document.getElementById('successMsg').style.display = 'none';
+        }
+
+        function hideInfo() {
+            document.getElementById('infoMsg').style.display = 'none';
         }
     </script>
 </body>
