@@ -2258,7 +2258,7 @@ async function handleFormSubmit(e) {
             if (existingVendors.length === 0) {
                 // Create new vendor
                 const newVendorData = {
-                    name: vendorNameValue,
+                    vendor_name: vendorNameValue,  // Changed from 'name' to 'vendor_name'
                     phone: phoneValue,
                     vendor_type: formState.get('vendorType') || 'casual',
                     is_managed: formState.get('vendorType') === 'managed',
