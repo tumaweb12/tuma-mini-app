@@ -57,10 +57,33 @@
             margin-bottom: 32px;
         }
 
-        .logo {
+        .logo-container {
             width: 100px;
-            height: auto;
-            margin-bottom: 20px;
+            height: 100px;
+            margin: 0 auto 20px;
+        }
+
+        .logo {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Logo animations */
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-3px); }
+        }
+
+        .t-float {
+            animation: float 3s ease-in-out infinite;
+        }
+
+        /* Updated grid for 2x2 layout */
+        .user-type-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-bottom: 24px;
         }
 
         h1 {
@@ -102,10 +125,19 @@
             background: rgba(0, 102, 255, 0.1);
         }
 
-        .user-type-card.agent-special {
+        .user-type-card.tracking-card {
             grid-column: 1 / -1;
-            background: linear-gradient(135deg, rgba(0, 102, 255, 0.1), rgba(0, 102, 255, 0.05));
-            border-color: var(--primary);
+            background: var(--surface-elevated);
+            padding: 16px 20px;
+        }
+
+        .tracking-card .user-icon {
+            font-size: 24px;
+            margin-bottom: 4px;
+        }
+
+        .tracking-card .user-type-name {
+            font-size: 16px;
         }
 
         .user-icon {
@@ -442,6 +474,54 @@
             margin-top: 8px;
         }
 
+        /* Special hover effect for agent card */
+        .user-type-card.agent-highlight {
+            position: relative;
+            overflow: hidden;
+            border-color: rgba(0, 102, 255, 0.5);
+        }
+
+        .pulse-bg {
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(0, 102, 255, 0.1) 0%, transparent 70%);
+            animation: pulse-glow 3s ease-in-out infinite;
+        }
+
+        @keyframes pulse-glow {
+            0%, 100% { transform: scale(0.8); opacity: 0; }
+            50% { transform: scale(1); opacity: 1; }
+        }
+
+        .agent-commission {
+            color: var(--primary);
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .user-type-card.agent-highlight:hover {
+            border-color: var(--primary);
+            box-shadow: 0 0 20px rgba(0, 102, 255, 0.3);
+        }
+
+        .user-type-card.agent-highlight .user-icon {
+            z-index: 1;
+            position: relative;
+        }
+
+        .user-type-card.agent-highlight .user-type-name {
+            z-index: 1;
+            position: relative;
+        }
+
+        .user-type-card.agent-highlight .user-type-desc {
+            z-index: 1;
+            position: relative;
+        }
+
         @media (max-width: 480px) {
             .auth-wrapper {
                 padding: 10px;
@@ -463,7 +543,72 @@
     <div class="auth-wrapper">
         <div class="auth-container">
             <div class="auth-header">
-                <img src="./assets/tuma-logo.png" alt="Tuma" class="logo">
+                <!-- Animated Logo -->
+                <div class="logo-container">
+                    <svg class="logo" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                        <!-- Background circle -->
+                        <circle cx="50" cy="50" r="48" fill="#0066FF" stroke="#0066FF" stroke-width="2"/>
+                        
+                        <!-- Animated map lines behind T -->
+                        <g class="map-lines" opacity="0.2">
+                            <path d="M20,30 Q35,35 50,30 T80,30" stroke="white" stroke-width="1" fill="none">
+                                <animate attributeName="d" 
+                                    values="M20,30 Q35,35 50,30 T80,30;
+                                            M20,35 Q35,30 50,35 T80,35;
+                                            M20,30 Q35,35 50,30 T80,30"
+                                    dur="3s" repeatCount="indefinite"/>
+                            </path>
+                            <path d="M15,50 Q30,55 45,50 T75,50" stroke="white" stroke-width="1" fill="none">
+                                <animate attributeName="d" 
+                                    values="M15,50 Q30,55 45,50 T75,50;
+                                            M15,55 Q30,50 45,55 T75,55;
+                                            M15,50 Q30,55 45,50 T75,50"
+                                    dur="4s" repeatCount="indefinite"/>
+                            </path>
+                            <path d="M25,70 Q40,65 55,70 T85,70" stroke="white" stroke-width="1" fill="none">
+                                <animate attributeName="d" 
+                                    values="M25,70 Q40,65 55,70 T85,70;
+                                            M25,65 Q40,70 55,65 T85,65;
+                                            M25,70 Q40,65 55,70 T85,70"
+                                    dur="3.5s" repeatCount="indefinite"/>
+                            </path>
+                        </g>
+                        
+                        <!-- Stylized T -->
+                        <g transform="translate(50, 50)">
+                            <!-- T shadow -->
+                            <g opacity="0.2" transform="translate(2, 2)">
+                                <path d="M-25,-20 L-25,-10 L-8,-10 L-8,25 L8,25 L8,-10 L25,-10 L25,-20 Z" 
+                                      fill="black"/>
+                            </g>
+                            
+                            <!-- Main T shape -->
+                            <g class="t-float">
+                                <!-- Horizontal bar -->
+                                <rect x="-25" y="-20" width="50" height="10" rx="2" fill="white"/>
+                                <!-- Vertical bar -->
+                                <rect x="-8" y="-20" width="16" height="45" rx="2" fill="white"/>
+                                
+                                <!-- Subtle gradient overlay -->
+                                <defs>
+                                    <linearGradient id="tGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                                        <stop offset="0%" style="stop-color:white;stop-opacity:0" />
+                                        <stop offset="100%" style="stop-color:white;stop-opacity:0.3" />
+                                    </linearGradient>
+                                </defs>
+                                <rect x="-25" y="-20" width="50" height="10" rx="2" fill="url(#tGradient)"/>
+                                <rect x="-8" y="-20" width="16" height="45" rx="2" fill="url(#tGradient)"/>
+                            </g>
+                            
+                            <!-- Location dot at bottom of T -->
+                            <circle cx="0" cy="25" r="4" fill="white">
+                                <animate attributeName="r" values="4;6;4" dur="2s" repeatCount="indefinite"/>
+                                <animate attributeName="opacity" values="1;0.6;1" dur="2s" repeatCount="indefinite"/>
+                            </circle>
+                        </g>
+                    </svg>
+                </div>
+                
                 <h1>Welcome to Tuma</h1>
                 <p class="subtitle">Choose how you want to use Tuma</p>
             </div>
@@ -478,24 +623,27 @@
                 <div class="user-type-grid">
                     <div class="user-type-card" onclick="selectUserType('vendor')">
                         <div class="user-icon">🏪</div>
-                        <div class="user-type-name">Vendor</div>
-                        <div class="user-type-desc">Send parcels</div>
+                        <div class="user-type-name">Send Parcel</div>
+                        <div class="user-type-desc">Book a delivery</div>
+                    </div>
+                    
+                    <div class="user-type-card" onclick="goToTracking()">
+                        <div class="user-icon">📍</div>
+                        <div class="user-type-name">Track Parcel</div>
+                        <div class="user-type-desc">No login needed</div>
                     </div>
                     
                     <div class="user-type-card" onclick="selectUserType('rider')">
                         <div class="user-icon">🏍️</div>
-                        <div class="user-type-name">Rider</div>
-                        <div class="user-type-desc">Deliver parcels</div>
+                        <div class="user-type-name">Become Rider</div>
+                        <div class="user-type-desc">Deliver & earn</div>
                     </div>
                     
-                    <div class="user-type-card agent-special" onclick="selectUserType('agent')">
+                    <div class="user-type-card agent-highlight" onclick="selectUserType('agent')">
+                        <div class="pulse-bg"></div>
                         <div class="user-icon">💼</div>
-                        <div class="user-type-name">Agent</div>
-                        <div class="user-type-desc">Earn 20% commission on referrals</div>
-                        <div class="role-badge">
-                            <span>🌟</span>
-                            <span>Anyone can join!</span>
-                        </div>
+                        <div class="user-type-name">Become Agent</div>
+                        <div class="user-type-desc agent-commission">Earn 20% commission</div>
                     </div>
                 </div>
             </div>
@@ -683,6 +831,11 @@
         document.addEventListener('DOMContentLoaded', () => {
             setupPINInputs();
         });
+
+        // Go to tracking (no auth needed)
+        function goToTracking() {
+            window.location.href = './track.html';
+        }
 
         // User type selection
         function selectUserType(type) {
