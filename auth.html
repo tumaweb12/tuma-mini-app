@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tuma Delivery - Sign In</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            /* Black and Blue Theme */
+            --primary: #0066FF;
+            --primary-dark: #0052CC;
+            --primary-light: #3384FF;
+            --success: #00B969;
+            --warning: #FFB800;
+            --error: #FF3B30;
+            --background: #000000;
+            --surface: #0A0A0A;
+            --surface-elevated: #141414;
+            --text-primary: #FFFFFF;
+            --text-secondary: #888888;
+            --text-tertiary: #666666;
+            --border: #222222;
+            --border-light: #333333;
+            --shadow: 0 4px 20px rgba(0, 102, 255, 0.15);
+            --shadow-lg: 0 10px 40px rgba(0, 102, 255, 0.2);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--background);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .auth-container {
+            width: 100%;
+            max-width: 420px;
+            background: var(--surface);
+            border-radius: 20px;
+            box-shadow: var(--shadow);
+            padding: 40px 30px;
+        }
+
+        .logo {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .logo-icon {
+            width: 60px;
+            height: 60px;
+            background: var(--primary);
+            border-radius: 16px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            color: white;
+            margin-bottom: 16px;
+        }
+
+        h1 {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            color: var(--text-secondary);
+            font-size: 16px;
+        }
+
+        .user-type-tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 30px;
+            background: var(--background);
+            padding: 4px;
+            border-radius: 12px;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            background: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .tab.active {
+            background: var(--surface);
+            color: var(--primary);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .phone-input-wrapper {
+            position: relative;
+        }
+
+        .phone-prefix {
+            position: absolute;
+            left: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        input[type="tel"] {
+            width: 100%;
+            padding: 14px 16px 14px 52px;
+            border: 2px solid var(--border);
+            border-radius: 10px;
+            font-size: 16px;
+            outline: none;
+            transition: all 0.2s;
+        }
+
+        input[type="tel"]:focus {
+            border-color: var(--primary);
+        }
+
+        .pin-section {
+            display: none;
+            text-align: center;
+        }
+
+        .pin-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+
+        .pin-inputs {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+
+        .pin-digit {
+            width: 60px;
+            height: 60px;
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            text-align: center;
+            font-size: 24px;
+            font-weight: 700;
+            outline: none;
+            transition: all 0.2s;
+        }
+
+        .pin-digit:focus {
+            border-color: var(--primary);
+            transform: scale(1.05);
+        }
+
+        .pin-digit.filled {
+            background: rgba(0, 102, 255, 0.05);
+            border-color: var(--primary);
+        }
+
+        .btn {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+            transform: translateY(-1px);
+        }
+
+        .btn-primary:disabled {
+            background: var(--border);
+            color: var(--text-secondary);
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: transparent;
+            color: var(--text-secondary);
+            border: 2px solid var(--border);
+            margin-top: 12px;
+        }
+
+        .btn-secondary:hover {
+            background: var(--background);
+            color: var(--text-primary);
+        }
+
+        .divider {
+            text-align: center;
+            margin: 20px 0;
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        .message {
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            font-size: 14px;
+            display: none;
+        }
+
+        .message.error {
+            background: rgba(255, 59, 48, 0.1);
+            color: var(--error);
+        }
+
+        .message.success {
+            background: rgba(0, 185, 105, 0.1);
+            color: var(--success);
+        }
+
+        .info-box {
+            background: rgba(255, 184, 0, 0.1);
+            border: 1px solid rgba(255, 184, 0, 0.2);
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 16px;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .info-box strong {
+            color: var(--text-primary);
+        }
+
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid var(--surface);
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-left: 8px;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 480px) {
+            .auth-container {
+                padding: 30px 20px;
+            }
+            
+            .pin-digit {
+                width: 50px;
+                height: 50px;
+                font-size: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="auth-container">
+        <div class="logo">
+            <div class="logo-icon">📦</div>
+            <h1>Welcome to Tuma</h1>
+            <p class="subtitle">Quick and secure sign in</p>
+        </div>
+
+        <!-- User Type Selection -->
+        <div class="user-type-tabs">
+            <button class="tab active" data-type="vendor" onclick="selectUserType('vendor')">
+                🏪 Vendor
+            </button>
+            <button class="tab" data-type="agent" onclick="selectUserType('agent')">
+                💼 Agent
+            </button>
+            <button class="tab" data-type="rider" onclick="selectUserType('rider')">
+                🏍️ Rider
+            </button>
+        </div>
+
+        <!-- Messages -->
+        <div class="message error" id="errorMsg"></div>
+        <div class="message success" id="successMsg"></div>
+
+        <!-- Phone Input Section -->
+        <div id="phoneSection">
+            <form onsubmit="handlePhoneSubmit(event)">
+                <div class="form-group">
+                    <label>Phone Number</label>
+                    <div class="phone-input-wrapper">
+                        <span class="phone-prefix">+254</span>
+                        <input 
+                            type="tel" 
+                            id="phoneInput"
+                            placeholder="712345678"
+                            maxlength="9"
+                            pattern="[0-9]{9}"
+                            required
+                        >
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary" id="continueBtn">
+                    Continue
+                </button>
+
+                <!-- Vendor Skip Option -->
+                <div id="vendorSkip">
+                    <div class="divider">or</div>
+                    <button type="button" class="btn btn-secondary" onclick="skipAuth()">
+                        Continue without signing in
+                    </button>
+                </div>
+            </form>
+
+            <div class="info-box">
+                💡 <strong>Simple PIN Authentication:</strong><br>
+                Create a 4-digit PIN to secure your account. No emails or SMS required!
+            </div>
+        </div>
+
+        <!-- PIN Section -->
+        <div class="pin-section" id="pinSection">
+            <h2 class="pin-title" id="pinTitle">Create your 4-digit PIN</h2>
+            
+            <div class="pin-inputs">
+                <input type="password" class="pin-digit" maxlength="1" pattern="[0-9]" inputmode="numeric">
+                <input type="password" class="pin-digit" maxlength="1" pattern="[0-9]" inputmode="numeric">
+                <input type="password" class="pin-digit" maxlength="1" pattern="[0-9]" inputmode="numeric">
+                <input type="password" class="pin-digit" maxlength="1" pattern="[0-9]" inputmode="numeric">
+            </div>
+
+            <button class="btn btn-primary" id="pinBtn" onclick="handlePIN()" disabled>
+                Create PIN
+            </button>
+
+            <button class="btn btn-secondary" onclick="backToPhone()">
+                Use different number
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // State
+        let state = {
+            userType: 'vendor',
+            phone: '',
+            isNewUser: true
+        };
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            // Phone input formatting
+            document.getElementById('phoneInput').addEventListener('input', (e) => {
+                e.target.value = e.target.value.replace(/\D/g, '');
+                hideMessages();
+            });
+
+            // Setup PIN inputs
+            setupPINInputs();
+
+            // Check if already authenticated
+            checkExistingAuth();
+        });
+
+        function selectUserType(type) {
+            state.userType = type;
+            
+            // Update UI
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.toggle('active', tab.dataset.type === type);
+            });
+
+            // Show/hide vendor skip option
+            document.getElementById('vendorSkip').style.display = 
+                type === 'vendor' ? 'block' : 'none';
+        }
+
+        function handlePhoneSubmit(event) {
+            event.preventDefault();
+            
+            const phone = document.getElementById('phoneInput').value;
+            if (!/^[0-9]{9}$/.test(phone)) {
+                showError('Please enter a valid 9-digit phone number');
+                return;
+            }
+
+            state.phone = '+254' + phone;
+
+            // Check if user exists (in production, check database)
+            const isNewUser = !localStorage.getItem(`pin_${state.phone}`);
+            state.isNewUser = isNewUser;
+
+            // Show PIN section
+            showPINSection(isNewUser);
+        }
+
+        function showPINSection(isNew) {
+            document.getElementById('phoneSection').style.display = 'none';
+            document.getElementById('pinSection').style.display = 'block';
+
+            const pinTitle = document.getElementById('pinTitle');
+            const pinBtn = document.getElementById('pinBtn');
+
+            if (isNew) {
+                pinTitle.textContent = 'Create your 4-digit PIN';
+                pinBtn.textContent = 'Create PIN';
+            } else {
+                pinTitle.textContent = 'Enter your 4-digit PIN';
+                pinBtn.textContent = 'Sign In';
+            }
+
+            // Focus first PIN input
+            document.querySelector('.pin-digit').focus();
+        }
+
+        function setupPINInputs() {
+            const inputs = document.querySelectorAll('.pin-digit');
+            const pinBtn = document.getElementById('pinBtn');
+
+            inputs.forEach((input, index) => {
+                input.addEventListener('input', (e) => {
+                    if (e.target.value) {
+                        e.target.classList.add('filled');
+                        // Move to next input
+                        if (index < inputs.length - 1) {
+                            inputs[index + 1].focus();
+                        }
+                    } else {
+                        e.target.classList.remove('filled');
+                    }
+
+                    // Check if all filled
+                    const allFilled = Array.from(inputs).every(i => i.value);
+                    pinBtn.disabled = !allFilled;
+                });
+
+                input.addEventListener('keydown', (e) => {
+                    if (e.key === 'Backspace' && !e.target.value && index > 0) {
+                        inputs[index - 1].focus();
+                    }
+                });
+
+                // Prevent non-numeric input
+                input.addEventListener('keypress', (e) => {
+                    if (!/[0-9]/.test(e.key)) {
+                        e.preventDefault();
+                    }
+                });
+            });
+        }
+
+        async function handlePIN() {
+            const inputs = document.querySelectorAll('.pin-digit');
+            const pin = Array.from(inputs).map(i => i.value).join('');
+
+            if (pin.length !== 4) {
+                showError('Please enter a 4-digit PIN');
+                return;
+            }
+
+            const btn = document.getElementById('pinBtn');
+            btn.disabled = true;
+            btn.innerHTML = state.isNewUser ? 
+                'Creating PIN<span class="loading"></span>' : 
+                'Signing in<span class="loading"></span>';
+
+            // Simulate API call
+            await new Promise(resolve => setTimeout(resolve, 1000));
+
+            if (state.isNewUser) {
+                // Save PIN (in production, hash and save to database)
+                localStorage.setItem(`pin_${state.phone}`, await hashPIN(pin));
+                showSuccess('PIN created successfully!');
+            } else {
+                // Verify PIN
+                const savedPIN = localStorage.getItem(`pin_${state.phone}`);
+                const hashedInput = await hashPIN(pin);
+
+                if (savedPIN === hashedInput) {
+                    showSuccess('Welcome back!');
+                } else {
+                    showError('Incorrect PIN. Please try again.');
+                    inputs.forEach(i => {
+                        i.value = '';
+                        i.classList.remove('filled');
+                    });
+                    inputs[0].focus();
+                    btn.disabled = false;
+                    btn.textContent = 'Sign In';
+                    return;
+                }
+            }
+
+            // Save session
+            const session = {
+                phone: state.phone,
+                userType: state.userType,
+                timestamp: Date.now()
+            };
+            localStorage.setItem(`tuma_${state.userType}_session`, JSON.stringify(session));
+
+            // Redirect
+            setTimeout(() => {
+                const redirects = {
+                    vendor: './vendor.html',
+                    agent: './agent.html',
+                    rider: './rider.html'
+                };
+                window.location.href = redirects[state.userType];
+            }, 1000);
+        }
+
+        async function hashPIN(pin) {
+            // Simple hash for demo (use bcrypt in production)
+            const encoder = new TextEncoder();
+            const data = encoder.encode(pin + 'tuma-2024');
+            const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
+        function backToPhone() {
+            document.getElementById('phoneSection').style.display = 'block';
+            document.getElementById('pinSection').style.display = 'none';
+            
+            // Clear PIN inputs
+            document.querySelectorAll('.pin-digit').forEach(input => {
+                input.value = '';
+                input.classList.remove('filled');
+            });
+            
+            hideMessages();
+        }
+
+        function skipAuth() {
+            window.location.href = './vendor.html';
+        }
+
+        function checkExistingAuth() {
+            const session = localStorage.getItem(`tuma_${state.userType}_session`);
+            if (session) {
+                const data = JSON.parse(session);
+                // Check if session is less than 30 days old
+                if (Date.now() - data.timestamp < 30 * 24 * 60 * 60 * 1000) {
+                    // Redirect to dashboard
+                    const redirects = {
+                        vendor: './vendor.html',
+                        agent: './agent.html',
+                        rider: './rider.html'
+                    };
+                    window.location.href = redirects[state.userType];
+                }
+            }
+        }
+
+        function showError(message) {
+            const errorEl = document.getElementById('errorMsg');
+            errorEl.textContent = message;
+            errorEl.style.display = 'block';
+            document.getElementById('successMsg').style.display = 'none';
+        }
+
+        function showSuccess(message) {
+            const successEl = document.getElementById('successMsg');
+            successEl.textContent = message;
+            successEl.style.display = 'block';
+            document.getElementById('errorMsg').style.display = 'none';
+        }
+
+        function hideMessages() {
+            document.getElementById('errorMsg').style.display = 'none';
+            document.getElementById('successMsg').style.display = 'none';
+        }
+    </script>
+</body>
+</html>
