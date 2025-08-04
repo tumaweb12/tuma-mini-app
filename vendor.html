@@ -933,7 +933,7 @@
             100% { transform: translate(-50%, -50%) rotate(360deg); }
         }
 
-         /* Success Screen - Now Scrollable */
+        /* Success Screen - Now Scrollable */
         .success-overlay {
             position: fixed;
             inset: 0;
@@ -959,6 +959,134 @@
             animation: modalBounce 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
             max-height: none; /* Added: Remove height constraints */
             height: auto; /* Added: Let modal grow as needed */
+        }
+
+        @keyframes modalBounce {
+            0% { transform: scale(0.5) translateY(50px); opacity: 0; }
+            100% { transform: scale(1) translateY(0); opacity: 1; }
+        }
+
+        /* FIXED: Success Modal Styles */
+        .success-icon {
+            width: 64px;
+            height: 64px;
+            background: var(--success);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+            animation: successBounce 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        }
+
+        @keyframes successBounce {
+            0% { transform: scale(0); }
+            60% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
+
+        .success-title {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+        }
+
+        .success-message {
+            font-size: 16px;
+            color: var(--text-secondary);
+            margin-bottom: 24px;
+        }
+
+        /* FIXED: Codes Container Styles */
+        .codes-container {
+            background: var(--surface-high);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 24px;
+        }
+
+        .code-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--border);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .code-item:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+
+        .code-item:first-child {
+            padding-top: 0;
+        }
+
+        .code-item:hover {
+            background: rgba(0, 102, 255, 0.05);
+            border-radius: 8px;
+            margin: 0 -8px;
+            padding-left: 8px;
+            padding-right: 8px;
+        }
+
+        .code-label {
+            font-size: 14px;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .code-value {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--primary);
+            font-family: 'SF Mono', Monaco, Consolas, monospace;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        /* FIXED: Action Buttons */
+        .success-actions {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .success-button {
+            flex: 1;
+            padding: 14px;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .success-button.primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .success-button.secondary {
+            background: var(--surface-high);
+            color: var(--text-primary);
+        }
+
+        .success-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+        }
+
+        .success-button:active {
+            transform: scale(0.98);
         }
 
         /* Added: Responsive adjustments for small screens */
@@ -1539,15 +1667,15 @@
                 <p class="success-message">Your delivery has been scheduled</p>
                 
                 <div class="codes-container">
-                    <div class="code-item">
+                    <div class="code-item" onclick="copyCode('parcel')">
                         <span class="code-label">Parcel Code</span>
                         <span class="code-value" id="displayParcelCode">-</span>
                     </div>
-                    <div class="code-item">
+                    <div class="code-item" onclick="copyCode('pickup')">
                         <span class="code-label">Pickup Code</span>
                         <span class="code-value" id="displayPickupCode">-</span>
                     </div>
-                    <div class="code-item">
+                    <div class="code-item" onclick="copyCode('delivery')">
                         <span class="code-label">Delivery Code</span>
                         <span class="code-value" id="displayDeliveryCode">-</span>
                     </div>
@@ -1665,6 +1793,26 @@
             pointer-events: none;
             z-index: 1000;
         }
+
+        /* Copy Code Tooltip */
+        .copy-toast {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: var(--success);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            transition: transform 0.3s ease;
+            z-index: 3000;
+        }
+
+        .copy-toast.show {
+            transform: translateX(-50%) translateY(0);
+        }
     </style>
 
     <!-- CRITICAL: Load configuration and vendor.js as regular scripts -->
@@ -1681,6 +1829,48 @@
                 initializeGooglePlacesAutocomplete();
             }
         };
+
+        // Copy code function
+        function copyCode(codeType) {
+            let codeElement;
+            let codeName;
+            
+            switch(codeType) {
+                case 'parcel':
+                    codeElement = document.getElementById('displayParcelCode');
+                    codeName = 'Parcel';
+                    break;
+                case 'pickup':
+                    codeElement = document.getElementById('displayPickupCode');
+                    codeName = 'Pickup';
+                    break;
+                case 'delivery':
+                    codeElement = document.getElementById('displayDeliveryCode');
+                    codeName = 'Delivery';
+                    break;
+            }
+            
+            if (codeElement && codeElement.textContent && codeElement.textContent !== '-') {
+                navigator.clipboard.writeText(codeElement.textContent).then(() => {
+                    // Create and show toast
+                    const toast = document.createElement('div');
+                    toast.className = 'copy-toast';
+                    toast.textContent = `${codeName} code copied!`;
+                    document.body.appendChild(toast);
+                    
+                    // Trigger animation
+                    setTimeout(() => toast.classList.add('show'), 10);
+                    
+                    // Remove after delay
+                    setTimeout(() => {
+                        toast.classList.remove('show');
+                        setTimeout(() => toast.remove(), 300);
+                    }, 2000);
+                }).catch(() => {
+                    showNotification('Failed to copy code', 'error');
+                });
+            }
+        }
     </script>
 
     <!-- Load vendor.js as regular script -->
