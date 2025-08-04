@@ -1,0 +1,1607 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Become a Tuma Rider</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #0066FF;
+            --primary-dark: #0052CC;
+            --success: #00B969;
+            --warning: #FFB800;
+            --error: #FF3B30;
+            --background: #F5F7FA;
+            --surface: #FFFFFF;
+            --surface-elevated: #FAFBFC;
+            --text-primary: #1A1A1A;
+            --text-secondary: #6B7280;
+            --text-tertiary: #9CA3AF;
+            --border: #E5E7EB;
+            --shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            --shadow-lg: 0 10px 40px rgba(0, 0, 0, 0.12);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--background);
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+
+        /* Header */
+        .header {
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: var(--shadow);
+        }
+
+        .header-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 16px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: var(--primary);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+        }
+
+        /* Progress Bar */
+        .progress-container {
+            background: var(--surface);
+            padding: 20px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .progress-bar {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .progress-steps {
+            display: flex;
+            justify-content: space-between;
+            position: relative;
+        }
+
+        .progress-line {
+            position: absolute;
+            top: 20px;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: var(--border);
+            z-index: 1;
+        }
+
+        .progress-line-fill {
+            height: 100%;
+            background: var(--primary);
+            transition: width 0.3s ease;
+        }
+
+        .progress-step {
+            position: relative;
+            z-index: 2;
+            text-align: center;
+            flex: 1;
+        }
+
+        .step-circle {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--surface);
+            border: 2px solid var(--border);
+            margin: 0 auto 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .step-circle.active {
+            border-color: var(--primary);
+            background: var(--primary);
+            color: white;
+        }
+
+        .step-circle.completed {
+            border-color: var(--success);
+            background: var(--success);
+            color: white;
+        }
+
+        .step-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        /* Main Content */
+        .main-content {
+            max-width: 600px;
+            margin: 40px auto;
+            padding: 0 20px;
+        }
+
+        .step-content {
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .step-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .step-header {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        .step-title {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .step-subtitle {
+            font-size: 16px;
+            color: var(--text-secondary);
+        }
+
+        /* Form Elements */
+        .form-card {
+            background: var(--surface);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: var(--shadow);
+        }
+
+        .form-group {
+            margin-bottom: 24px;
+        }
+
+        .form-group:last-child {
+            margin-bottom: 0;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+        }
+
+        .required {
+            color: var(--error);
+        }
+
+        .input-field {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid var(--border);
+            border-radius: 10px;
+            font-size: 16px;
+            background: var(--surface);
+            transition: all 0.2s;
+            outline: none;
+        }
+
+        .input-field:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.1);
+        }
+
+        .input-field.error {
+            border-color: var(--error);
+        }
+
+        .error-message {
+            font-size: 13px;
+            color: var(--error);
+            margin-top: 6px;
+        }
+
+        .success-message {
+            font-size: 13px;
+            color: var(--success);
+            margin-top: 6px;
+        }
+
+        /* File Upload */
+        .file-upload {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 32px;
+            border: 2px dashed var(--border);
+            border-radius: 12px;
+            background: var(--surface-elevated);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .file-upload:hover {
+            border-color: var(--primary);
+            background: rgba(0, 102, 255, 0.02);
+        }
+
+        .file-upload.drag-over {
+            border-color: var(--primary);
+            background: rgba(0, 102, 255, 0.05);
+        }
+
+        .file-upload.has-file {
+            border-style: solid;
+            border-color: var(--success);
+            background: rgba(0, 185, 105, 0.05);
+        }
+
+        .file-upload input[type="file"] {
+            position: absolute;
+            opacity: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+        }
+
+        .upload-icon {
+            width: 48px;
+            height: 48px;
+            background: var(--primary);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 16px;
+            color: white;
+            font-size: 24px;
+        }
+
+        .upload-text {
+            text-align: center;
+        }
+
+        .upload-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .upload-subtitle {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .file-preview {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-top: 16px;
+            padding: 12px;
+            background: var(--surface);
+            border-radius: 8px;
+        }
+
+        .file-preview img {
+            width: 60px;
+            height: 60px;
+            object-fit: cover;
+            border-radius: 8px;
+        }
+
+        .file-info {
+            flex: 1;
+        }
+
+        .file-name {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+
+        .file-size {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .remove-file {
+            padding: 8px;
+            background: var(--error);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        /* Selfie Capture */
+        .camera-container {
+            position: relative;
+            width: 100%;
+            max-width: 320px;
+            margin: 0 auto;
+        }
+
+        .camera-view {
+            width: 100%;
+            aspect-ratio: 1;
+            background: #000;
+            border-radius: 50%;
+            overflow: hidden;
+            position: relative;
+        }
+
+        #videoElement {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .camera-overlay {
+            position: absolute;
+            inset: 0;
+            border: 3px solid var(--primary);
+            border-radius: 50%;
+            pointer-events: none;
+        }
+
+        .camera-controls {
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+            margin-top: 20px;
+        }
+
+        .camera-btn {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .capture-btn {
+            background: var(--primary);
+            color: white;
+            font-size: 24px;
+        }
+
+        .capture-btn:hover {
+            transform: scale(1.1);
+        }
+
+        .retake-btn {
+            background: var(--error);
+            color: white;
+        }
+
+        /* Buttons */
+        .button-group {
+            display: flex;
+            gap: 12px;
+            margin-top: 32px;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 16px 24px;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 102, 255, 0.3);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            color: var(--text-secondary);
+            border: 2px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            background: var(--surface-elevated);
+            color: var(--text-primary);
+        }
+
+        .btn:disabled {
+            background: var(--border);
+            color: var(--text-tertiary);
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Summary Section */
+        .summary-card {
+            background: var(--surface);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 16px;
+            box-shadow: var(--shadow);
+        }
+
+        .summary-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+            font-weight: 600;
+        }
+
+        .summary-icon {
+            width: 32px;
+            height: 32px;
+            background: var(--primary);
+            color: white;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .summary-items {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .summary-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .summary-item:last-child {
+            border-bottom: none;
+        }
+
+        .summary-label {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .summary-value {
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .status-badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .status-badge.verified {
+            background: rgba(0, 185, 105, 0.1);
+            color: var(--success);
+        }
+
+        .status-badge.pending {
+            background: rgba(255, 184, 0, 0.1);
+            color: var(--warning);
+        }
+
+        /* Loading State */
+        .loading-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .loading-overlay.active {
+            display: flex;
+        }
+
+        .loading-spinner {
+            width: 48px;
+            height: 48px;
+            border: 4px solid var(--surface);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Success State */
+        .success-state {
+            text-align: center;
+            padding: 48px 20px;
+        }
+
+        .success-icon-large {
+            width: 80px;
+            height: 80px;
+            background: var(--success);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 24px;
+            font-size: 40px;
+            color: white;
+        }
+
+        /* Mobile Responsiveness */
+        @media (max-width: 600px) {
+            .step-label {
+                display: none;
+            }
+            
+            .form-card {
+                padding: 20px;
+            }
+            
+            .button-group {
+                flex-direction: column;
+            }
+            
+            .btn {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-content">
+            <div class="logo">
+                <div class="logo-icon">📦</div>
+                <span>Tuma Delivery</span>
+            </div>
+            <div class="header-actions">
+                <a href="./auth.html?type=rider" style="color: var(--primary); text-decoration: none;">
+                    Already a rider? Sign in
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <!-- Progress Bar -->
+    <div class="progress-container">
+        <div class="progress-bar">
+            <div class="progress-steps">
+                <div class="progress-line">
+                    <div class="progress-line-fill" id="progressFill" style="width: 0%"></div>
+                </div>
+                <div class="progress-step">
+                    <div class="step-circle active" id="step1Circle">1</div>
+                    <div class="step-label">Basic Info</div>
+                </div>
+                <div class="progress-step">
+                    <div class="step-circle" id="step2Circle">2</div>
+                    <div class="step-label">Documents</div>
+                </div>
+                <div class="progress-step">
+                    <div class="step-circle" id="step3Circle">3</div>
+                    <div class="step-label">Vehicle</div>
+                </div>
+                <div class="progress-step">
+                    <div class="step-circle" id="step4Circle">4</div>
+                    <div class="step-label">Photo</div>
+                </div>
+                <div class="progress-step">
+                    <div class="step-circle" id="step5Circle">5</div>
+                    <div class="step-label">Review</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Step 1: Basic Information -->
+        <div class="step-content active" id="step1">
+            <div class="step-header">
+                <h1 class="step-title">Let's get started</h1>
+                <p class="step-subtitle">Tell us about yourself</p>
+            </div>
+            
+            <form class="form-card" id="basicInfoForm">
+                <div class="form-group">
+                    <label class="form-label">Full Name <span class="required">*</span></label>
+                    <input type="text" class="input-field" id="fullName" placeholder="John Doe" required>
+                    <div class="error-message" id="fullNameError"></div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Phone Number <span class="required">*</span></label>
+                    <input type="tel" class="input-field" id="phoneNumber" placeholder="0712345678" maxlength="10" required>
+                    <div class="error-message" id="phoneError"></div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Email Address</label>
+                    <input type="email" class="input-field" id="email" placeholder="john@example.com">
+                    <div class="error-message" id="emailError"></div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">National ID Number <span class="required">*</span></label>
+                    <input type="text" class="input-field" id="nationalId" placeholder="12345678" required>
+                    <div class="error-message" id="nationalIdError"></div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Date of Birth <span class="required">*</span></label>
+                    <input type="date" class="input-field" id="dateOfBirth" required>
+                    <div class="error-message" id="dobError"></div>
+                </div>
+            </form>
+            
+            <div class="button-group">
+                <button class="btn btn-primary" onclick="nextStep()">Continue</button>
+            </div>
+        </div>
+
+        <!-- Step 2: Documents -->
+        <div class="step-content" id="step2">
+            <div class="step-header">
+                <h1 class="step-title">Upload your documents</h1>
+                <p class="step-subtitle">We need these to verify your identity</p>
+            </div>
+            
+            <div class="form-card">
+                <div class="form-group">
+                    <label class="form-label">National ID (Front & Back) <span class="required">*</span></label>
+                    <div class="file-upload" id="idUpload">
+                        <input type="file" id="idFile" accept="image/*,.pdf" multiple>
+                        <div class="upload-icon">📄</div>
+                        <div class="upload-text">
+                            <div class="upload-title">Drop files here or click to upload</div>
+                            <div class="upload-subtitle">PNG, JPG or PDF (max 5MB)</div>
+                        </div>
+                    </div>
+                    <div id="idPreview"></div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Driving License <span class="required">*</span></label>
+                    <div class="file-upload" id="licenseUpload">
+                        <input type="file" id="licenseFile" accept="image/*,.pdf">
+                        <div class="upload-icon">🚗</div>
+                        <div class="upload-text">
+                            <div class="upload-title">Upload your driving license</div>
+                            <div class="upload-subtitle">Must be valid motorcycle license</div>
+                        </div>
+                    </div>
+                    <div id="licensePreview"></div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Certificate of Good Conduct <span class="required">*</span></label>
+                    <div class="file-upload" id="conductUpload">
+                        <input type="file" id="conductFile" accept="image/*,.pdf">
+                        <div class="upload-icon">✅</div>
+                        <div class="upload-text">
+                            <div class="upload-title">Upload good conduct certificate</div>
+                            <div class="upload-subtitle">Must be less than 6 months old</div>
+                        </div>
+                    </div>
+                    <div id="conductPreview"></div>
+                </div>
+            </div>
+            
+            <div class="button-group">
+                <button class="btn btn-secondary" onclick="previousStep()">Back</button>
+                <button class="btn btn-primary" onclick="nextStep()">Continue</button>
+            </div>
+        </div>
+
+        <!-- Step 3: Vehicle Information -->
+        <div class="step-content" id="step3">
+            <div class="step-header">
+                <h1 class="step-title">Vehicle details</h1>
+                <p class="step-subtitle">Tell us about your motorcycle</p>
+            </div>
+            
+            <form class="form-card" id="vehicleForm">
+                <div class="form-group">
+                    <label class="form-label">Vehicle Make <span class="required">*</span></label>
+                    <select class="input-field" id="vehicleMake" required>
+                        <option value="">Select make</option>
+                        <option value="honda">Honda</option>
+                        <option value="yamaha">Yamaha</option>
+                        <option value="tvs">TVS</option>
+                        <option value="bajaj">Bajaj</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Vehicle Model <span class="required">*</span></label>
+                    <input type="text" class="input-field" id="vehicleModel" placeholder="e.g., Boda Boda 125" required>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">License Plate <span class="required">*</span></label>
+                    <input type="text" class="input-field" id="licensePlate" placeholder="KXX 123X" style="text-transform: uppercase;" required>
+                    <div class="error-message" id="plateError"></div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Vehicle Color <span class="required">*</span></label>
+                    <input type="text" class="input-field" id="vehicleColor" placeholder="e.g., Red" required>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Insurance Certificate <span class="required">*</span></label>
+                    <div class="file-upload" id="insuranceUpload">
+                        <input type="file" id="insuranceFile" accept="image/*,.pdf">
+                        <div class="upload-icon">🛡️</div>
+                        <div class="upload-text">
+                            <div class="upload-title">Upload insurance certificate</div>
+                            <div class="upload-subtitle">Must be valid and current</div>
+                        </div>
+                    </div>
+                    <div id="insurancePreview"></div>
+                </div>
+            </form>
+            
+            <div class="button-group">
+                <button class="btn btn-secondary" onclick="previousStep()">Back</button>
+                <button class="btn btn-primary" onclick="nextStep()">Continue</button>
+            </div>
+        </div>
+
+        <!-- Step 4: Profile Photo -->
+        <div class="step-content" id="step4">
+            <div class="step-header">
+                <h1 class="step-title">Take a selfie</h1>
+                <p class="step-subtitle">We need a clear photo of your face</p>
+            </div>
+            
+            <div class="form-card">
+                <div class="camera-container">
+                    <div class="camera-view">
+                        <video id="videoElement" autoplay playsinline></video>
+                        <canvas id="canvas" style="display: none;"></canvas>
+                        <img id="capturedPhoto" style="display: none; width: 100%; height: 100%; object-fit: cover;">
+                        <div class="camera-overlay"></div>
+                    </div>
+                    
+                    <div class="camera-controls">
+                        <button class="camera-btn capture-btn" id="captureBtn" onclick="capturePhoto()">
+                            📸
+                        </button>
+                        <button class="camera-btn retake-btn" id="retakeBtn" onclick="retakePhoto()" style="display: none;">
+                            🔄
+                        </button>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 20px; text-align: center;">
+                    <p style="font-size: 14px; color: var(--text-secondary);">
+                        Make sure your face is clearly visible and well-lit
+                    </p>
+                </div>
+            </div>
+            
+            <div class="button-group">
+                <button class="btn btn-secondary" onclick="previousStep()">Back</button>
+                <button class="btn btn-primary" id="photoNextBtn" onclick="nextStep()" disabled>Continue</button>
+            </div>
+        </div>
+
+        <!-- Step 5: Review & Submit -->
+        <div class="step-content" id="step5">
+            <div class="step-header">
+                <h1 class="step-title">Review your application</h1>
+                <p class="step-subtitle">Make sure everything is correct</p>
+            </div>
+            
+            <!-- Personal Information Summary -->
+            <div class="summary-card">
+                <div class="summary-header">
+                    <div class="summary-icon">👤</div>
+                    <span>Personal Information</span>
+                </div>
+                <div class="summary-items">
+                    <div class="summary-item">
+                        <span class="summary-label">Full Name</span>
+                        <span class="summary-value" id="summaryName"></span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Phone</span>
+                        <span class="summary-value" id="summaryPhone"></span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">National ID</span>
+                        <span class="summary-value" id="summaryId"></span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Documents Summary -->
+            <div class="summary-card">
+                <div class="summary-header">
+                    <div class="summary-icon">📄</div>
+                    <span>Documents</span>
+                </div>
+                <div class="summary-items">
+                    <div class="summary-item">
+                        <span class="summary-label">National ID</span>
+                        <span class="status-badge verified">✓ Uploaded</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Driving License</span>
+                        <span class="status-badge verified">✓ Uploaded</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Good Conduct</span>
+                        <span class="status-badge verified">✓ Uploaded</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Vehicle Summary -->
+            <div class="summary-card">
+                <div class="summary-header">
+                    <div class="summary-icon">🏍️</div>
+                    <span>Vehicle Information</span>
+                </div>
+                <div class="summary-items">
+                    <div class="summary-item">
+                        <span class="summary-label">Vehicle</span>
+                        <span class="summary-value" id="summaryVehicle"></span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">License Plate</span>
+                        <span class="summary-value" id="summaryPlate"></span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Insurance</span>
+                        <span class="status-badge verified">✓ Uploaded</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Terms & Conditions -->
+            <div class="form-card">
+                <label style="display: flex; align-items: flex-start; gap: 12px; cursor: pointer;">
+                    <input type="checkbox" id="termsCheckbox" style="margin-top: 4px;">
+                    <span style="font-size: 14px; color: var(--text-secondary);">
+                        I agree to the <a href="#" style="color: var(--primary);">Terms of Service</a> 
+                        and <a href="#" style="color: var(--primary);">Privacy Policy</a>. 
+                        I confirm that all information provided is accurate and true.
+                    </span>
+                </label>
+            </div>
+            
+            <div class="button-group">
+                <button class="btn btn-secondary" onclick="previousStep()">Back</button>
+                <button class="btn btn-primary" id="submitBtn" onclick="submitApplication()" disabled>
+                    Submit Application
+                </button>
+            </div>
+        </div>
+
+        <!-- Success State -->
+        <div class="step-content" id="successStep">
+            <div class="success-state">
+                <div class="success-icon-large">✓</div>
+                <h1 class="step-title">Application submitted!</h1>
+                <p class="step-subtitle">
+                    We'll review your application and get back to you within 24-48 hours
+                </p>
+                
+                <div class="form-card" style="margin-top: 32px;">
+                    <h3 style="margin-bottom: 16px;">What happens next?</h3>
+                    <ol style="text-align: left; padding-left: 20px; line-height: 2;">
+                        <li>Our team will verify your documents</li>
+                        <li>You'll receive an SMS once approved</li>
+                        <li>Download the Tuma Rider app and start earning</li>
+                    </ol>
+                </div>
+                
+                <div class="button-group">
+                    <button class="btn btn-primary" onclick="window.location.href='./auth.html?type=rider'">
+                        Go to Sign In
+                    </button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner"></div>
+    </div>
+
+    <script>
+        // State management
+        let currentStep = 1;
+        const totalSteps = 5;
+        let formData = {
+            // Basic info
+            fullName: '',
+            phoneNumber: '',
+            email: '',
+            nationalId: '',
+            dateOfBirth: '',
+            // Documents
+            idFiles: [],
+            licenseFile: null,
+            conductFile: null,
+            // Vehicle
+            vehicleMake: '',
+            vehicleModel: '',
+            licensePlate: '',
+            vehicleColor: '',
+            insuranceFile: null,
+            // Photo
+            profilePhoto: null
+        };
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            setupFileUploads();
+            setupFormValidation();
+            initializeCamera();
+            
+            // Check terms checkbox
+            document.getElementById('termsCheckbox').addEventListener('change', (e) => {
+                document.getElementById('submitBtn').disabled = !e.target.checked;
+            });
+        });
+
+        // Step Navigation
+        function nextStep() {
+            if (validateCurrentStep()) {
+                saveStepData();
+                
+                if (currentStep < totalSteps) {
+                    currentStep++;
+                    updateProgress();
+                    showStep(currentStep);
+                    
+                    if (currentStep === 5) {
+                        populateSummary();
+                    }
+                }
+            }
+        }
+
+        function previousStep() {
+            if (currentStep > 1) {
+                currentStep--;
+                updateProgress();
+                showStep(currentStep);
+            }
+        }
+
+        function showStep(step) {
+            // Hide all steps
+            document.querySelectorAll('.step-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            
+            // Show current step
+            document.getElementById(`step${step}`).classList.add('active');
+            
+            // Scroll to top
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function updateProgress() {
+            // Update progress bar
+            const progress = ((currentStep - 1) / (totalSteps - 1)) * 100;
+            document.getElementById('progressFill').style.width = `${progress}%`;
+            
+            // Update step circles
+            for (let i = 1; i <= totalSteps; i++) {
+                const circle = document.getElementById(`step${i}Circle`);
+                if (i < currentStep) {
+                    circle.classList.add('completed');
+                    circle.classList.remove('active');
+                    circle.innerHTML = '✓';
+                } else if (i === currentStep) {
+                    circle.classList.add('active');
+                    circle.classList.remove('completed');
+                    circle.innerHTML = i;
+                } else {
+                    circle.classList.remove('active', 'completed');
+                    circle.innerHTML = i;
+                }
+            }
+        }
+
+        // Form Validation
+        function validateCurrentStep() {
+            let isValid = true;
+            
+            switch (currentStep) {
+                case 1:
+                    // Validate basic info
+                    isValid = validateBasicInfo();
+                    break;
+                case 2:
+                    // Validate documents
+                    isValid = validateDocuments();
+                    break;
+                case 3:
+                    // Validate vehicle info
+                    isValid = validateVehicleInfo();
+                    break;
+                case 4:
+                    // Validate photo
+                    isValid = formData.profilePhoto !== null;
+                    if (!isValid) {
+                        alert('Please take a photo before continuing');
+                    }
+                    break;
+            }
+            
+            return isValid;
+        }
+
+        function validateBasicInfo() {
+            let isValid = true;
+            
+            // Full name
+            const fullName = document.getElementById('fullName').value.trim();
+            if (fullName.length < 3) {
+                showError('fullNameError', 'Please enter your full name');
+                isValid = false;
+            } else {
+                clearError('fullNameError');
+            }
+            
+            // Phone number
+            const phone = document.getElementById('phoneNumber').value.trim();
+            if (!/^0[0-9]{9}$/.test(phone)) {
+                showError('phoneError', 'Please enter a valid phone number');
+                isValid = false;
+            } else {
+                clearError('phoneError');
+            }
+            
+            // Email (optional but validate if provided)
+            const email = document.getElementById('email').value.trim();
+            if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                showError('emailError', 'Please enter a valid email address');
+                isValid = false;
+            } else {
+                clearError('emailError');
+            }
+            
+            // National ID
+            const nationalId = document.getElementById('nationalId').value.trim();
+            if (nationalId.length < 7) {
+                showError('nationalIdError', 'Please enter a valid national ID');
+                isValid = false;
+            } else {
+                clearError('nationalIdError');
+            }
+            
+            // Date of birth (must be 18+)
+            const dob = document.getElementById('dateOfBirth').value;
+            if (!dob) {
+                showError('dobError', 'Please enter your date of birth');
+                isValid = false;
+            } else {
+                const age = calculateAge(dob);
+                if (age < 18) {
+                    showError('dobError', 'You must be at least 18 years old');
+                    isValid = false;
+                } else {
+                    clearError('dobError');
+                }
+            }
+            
+            return isValid;
+        }
+
+        function validateDocuments() {
+            let isValid = true;
+            
+            if (formData.idFiles.length === 0) {
+                alert('Please upload your National ID');
+                isValid = false;
+            }
+            
+            if (!formData.licenseFile) {
+                alert('Please upload your Driving License');
+                isValid = false;
+            }
+            
+            if (!formData.conductFile) {
+                alert('Please upload your Certificate of Good Conduct');
+                isValid = false;
+            }
+            
+            return isValid;
+        }
+
+        function validateVehicleInfo() {
+            let isValid = true;
+            
+            const vehicleMake = document.getElementById('vehicleMake').value;
+            if (!vehicleMake) {
+                alert('Please select vehicle make');
+                return false;
+            }
+            
+            const vehicleModel = document.getElementById('vehicleModel').value.trim();
+            if (!vehicleModel) {
+                alert('Please enter vehicle model');
+                return false;
+            }
+            
+            const licensePlate = document.getElementById('licensePlate').value.trim();
+            if (!/^K[A-Z]{2}\s?\d{3}[A-Z]$/.test(licensePlate.toUpperCase().replace(/\s/g, ''))) {
+                showError('plateError', 'Please enter a valid license plate (e.g., KXX 123X)');
+                isValid = false;
+            } else {
+                clearError('plateError');
+            }
+            
+            const vehicleColor = document.getElementById('vehicleColor').value.trim();
+            if (!vehicleColor) {
+                alert('Please enter vehicle color');
+                return false;
+            }
+            
+            if (!formData.insuranceFile) {
+                alert('Please upload insurance certificate');
+                isValid = false;
+            }
+            
+            return isValid;
+        }
+
+        function calculateAge(dateOfBirth) {
+            const today = new Date();
+            const birthDate = new Date(dateOfBirth);
+            let age = today.getFullYear() - birthDate.getFullYear();
+            const monthDiff = today.getMonth() - birthDate.getMonth();
+            
+            if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+                age--;
+            }
+            
+            return age;
+        }
+
+        function showError(elementId, message) {
+            const errorEl = document.getElementById(elementId);
+            if (errorEl) {
+                errorEl.textContent = message;
+                errorEl.style.display = 'block';
+            }
+        }
+
+        function clearError(elementId) {
+            const errorEl = document.getElementById(elementId);
+            if (errorEl) {
+                errorEl.style.display = 'none';
+            }
+        }
+
+        // Save Step Data
+        function saveStepData() {
+            switch (currentStep) {
+                case 1:
+                    formData.fullName = document.getElementById('fullName').value.trim();
+                    formData.phoneNumber = document.getElementById('phoneNumber').value.trim();
+                    formData.email = document.getElementById('email').value.trim();
+                    formData.nationalId = document.getElementById('nationalId').value.trim();
+                    formData.dateOfBirth = document.getElementById('dateOfBirth').value;
+                    break;
+                case 3:
+                    formData.vehicleMake = document.getElementById('vehicleMake').value;
+                    formData.vehicleModel = document.getElementById('vehicleModel').value.trim();
+                    formData.licensePlate = document.getElementById('licensePlate').value.trim().toUpperCase();
+                    formData.vehicleColor = document.getElementById('vehicleColor').value.trim();
+                    break;
+            }
+        }
+
+        // File Upload Setup
+        function setupFileUploads() {
+            // ID Upload
+            setupFileInput('idFile', 'idUpload', 'idPreview', (files) => {
+                formData.idFiles = files;
+            }, true); // Allow multiple
+            
+            // License Upload
+            setupFileInput('licenseFile', 'licenseUpload', 'licensePreview', (file) => {
+                formData.licenseFile = file;
+            });
+            
+            // Good Conduct Upload
+            setupFileInput('conductFile', 'conductUpload', 'conductPreview', (file) => {
+                formData.conductFile = file;
+            });
+            
+            // Insurance Upload
+            setupFileInput('insuranceFile', 'insuranceUpload', 'insurancePreview', (file) => {
+                formData.insuranceFile = file;
+            });
+        }
+
+        function setupFileInput(inputId, uploadId, previewId, onFileSelect, multiple = false) {
+            const input = document.getElementById(inputId);
+            const uploadDiv = document.getElementById(uploadId);
+            const previewDiv = document.getElementById(previewId);
+            
+            // Drag and drop
+            uploadDiv.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                uploadDiv.classList.add('drag-over');
+            });
+            
+            uploadDiv.addEventListener('dragleave', () => {
+                uploadDiv.classList.remove('drag-over');
+            });
+            
+            uploadDiv.addEventListener('drop', (e) => {
+                e.preventDefault();
+                uploadDiv.classList.remove('drag-over');
+                handleFiles(e.dataTransfer.files);
+            });
+            
+            // File input change
+            input.addEventListener('change', (e) => {
+                handleFiles(e.target.files);
+            });
+            
+            function handleFiles(files) {
+                if (!files || files.length === 0) return;
+                
+                const validFiles = Array.from(files).filter(file => {
+                    // Check file size (5MB max)
+                    if (file.size > 5 * 1024 * 1024) {
+                        alert(`${file.name} is too large. Maximum size is 5MB.`);
+                        return false;
+                    }
+                    
+                    // Check file type
+                    const validTypes = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf'];
+                    if (!validTypes.includes(file.type)) {
+                        alert(`${file.name} is not a valid file type. Please upload JPG, PNG, or PDF.`);
+                        return false;
+                    }
+                    
+                    return true;
+                });
+                
+                if (validFiles.length > 0) {
+                    uploadDiv.classList.add('has-file');
+                    displayPreview(validFiles, previewDiv, multiple);
+                    
+                    if (multiple) {
+                        onFileSelect(validFiles);
+                    } else {
+                        onFileSelect(validFiles[0]);
+                    }
+                }
+            }
+        }
+
+        function displayPreview(files, previewDiv, multiple) {
+            previewDiv.innerHTML = '';
+            
+            const filesToShow = multiple ? files : [files[0]];
+            
+            filesToShow.forEach(file => {
+                const preview = document.createElement('div');
+                preview.className = 'file-preview';
+                
+                if (file.type.startsWith('image/')) {
+                    const img = document.createElement('img');
+                    img.src = URL.createObjectURL(file);
+                    preview.appendChild(img);
+                } else {
+                    const icon = document.createElement('div');
+                    icon.style.width = '60px';
+                    icon.style.height = '60px';
+                    icon.style.background = 'var(--primary)';
+                    icon.style.borderRadius = '8px';
+                    icon.style.display = 'flex';
+                    icon.style.alignItems = 'center';
+                    icon.style.justifyContent = 'center';
+                    icon.style.color = 'white';
+                    icon.style.fontSize = '24px';
+                    icon.innerHTML = '📄';
+                    preview.appendChild(icon);
+                }
+                
+                const info = document.createElement('div');
+                info.className = 'file-info';
+                info.innerHTML = `
+                    <div class="file-name">${file.name}</div>
+                    <div class="file-size">${formatFileSize(file.size)}</div>
+                `;
+                preview.appendChild(info);
+                
+                const removeBtn = document.createElement('button');
+                removeBtn.className = 'remove-file';
+                removeBtn.textContent = 'Remove';
+                removeBtn.onclick = () => {
+                    preview.remove();
+                    // Reset the input
+                    const input = previewDiv.parentElement.querySelector('input[type="file"]');
+                    input.value = '';
+                    
+                    // Update form data
+                    if (previewDiv.id === 'idPreview') {
+                        formData.idFiles = [];
+                    } else if (previewDiv.id === 'licensePreview') {
+                        formData.licenseFile = null;
+                    } else if (previewDiv.id === 'conductPreview') {
+                        formData.conductFile = null;
+                    } else if (previewDiv.id === 'insurancePreview') {
+                        formData.insuranceFile = null;
+                    }
+                    
+                    // Update upload div
+                    const uploadDiv = previewDiv.parentElement.querySelector('.file-upload');
+                    if (previewDiv.children.length === 0) {
+                        uploadDiv.classList.remove('has-file');
+                    }
+                };
+                preview.appendChild(removeBtn);
+                
+                previewDiv.appendChild(preview);
+            });
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+
+        // Camera Functions
+        let stream = null;
+        
+        async function initializeCamera() {
+            try {
+                const video = document.getElementById('videoElement');
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: 'user' } 
+                });
+                video.srcObject = stream;
+            } catch (error) {
+                console.error('Camera access denied:', error);
+                // Show alternative upload option
+                showAlternativePhotoUpload();
+            }
+        }
+
+        function showAlternativePhotoUpload() {
+            const cameraContainer = document.querySelector('.camera-container');
+            cameraContainer.innerHTML = `
+                <div class="file-upload" style="max-width: 320px; margin: 0 auto;">
+                    <input type="file" id="photoFile" accept="image/*" capture="user">
+                    <div class="upload-icon">📸</div>
+                    <div class="upload-text">
+                        <div class="upload-title">Take or upload a selfie</div>
+                        <div class="upload-subtitle">Clear photo of your face</div>
+                    </div>
+                </div>
+                <div id="photoPreview"></div>
+            `;
+            
+            setupFileInput('photoFile', null, 'photoPreview', (file) => {
+                formData.profilePhoto = file;
+                document.getElementById('photoNextBtn').disabled = false;
+            });
+        }
+
+        function capturePhoto() {
+            const video = document.getElementById('videoElement');
+            const canvas = document.getElementById('canvas');
+            const capturedPhoto = document.getElementById('capturedPhoto');
+            
+            // Set canvas size to match video
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            
+            // Draw video frame to canvas
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0);
+            
+            // Convert to blob
+            canvas.toBlob((blob) => {
+                formData.profilePhoto = new File([blob], 'selfie.jpg', { type: 'image/jpeg' });
+                
+                // Show captured photo
+                capturedPhoto.src = URL.createObjectURL(blob);
+                capturedPhoto.style.display = 'block';
+                video.style.display = 'none';
+                
+                // Update buttons
+                document.getElementById('captureBtn').style.display = 'none';
+                document.getElementById('retakeBtn').style.display = 'block';
+                document.getElementById('photoNextBtn').disabled = false;
+            }, 'image/jpeg', 0.9);
+        }
+
+        function retakePhoto() {
+            const video = document.getElementById('videoElement');
+            const capturedPhoto = document.getElementById('capturedPhoto');
+            
+            // Reset
+            capturedPhoto.style.display = 'none';
+            video.style.display = 'block';
+            formData.profilePhoto = null;
+            
+            // Update buttons
+            document.getElementById('captureBtn').style.display = 'block';
+            document.getElementById('retakeBtn').style.display = 'none';
+            document.getElementById('photoNextBtn').disabled = true;
+        }
+
+        // Form Validation Setup
+        function setupFormValidation() {
+            // Phone number formatting
+            document.getElementById('phoneNumber').addEventListener('input', (e) => {
+                e.target.value = e.target.value.replace(/\D/g, '');
+            });
+            
+            // National ID formatting
+            document.getElementById('nationalId').addEventListener('input', (e) => {
+                e.target.value = e.target.value.replace(/\D/g, '');
+            });
+            
+            // License plate formatting
+            document.getElementById('licensePlate').addEventListener('input', (e) => {
+                e.target.value = e.target.value.toUpperCase();
+            });
+        }
+
+        // Populate Summary
+        function populateSummary() {
+            document.getElementById('summaryName').textContent = formData.fullName;
+            document.getElementById('summaryPhone').textContent = formData.phoneNumber;
+            document.getElementById('summaryId').textContent = formData.nationalId;
+            document.getElementById('summaryVehicle').textContent = 
+                `${formData.vehicleMake} ${formData.vehicleModel}`;
+            document.getElementById('summaryPlate').textContent = formData.licensePlate;
+        }
+
+        // Submit Application
+        async function submitApplication() {
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            loadingOverlay.classList.add('active');
+            
+            try {
+                // Create FormData for file upload
+                const uploadData = new FormData();
+                
+                // Add basic info
+                uploadData.append('rider_name', formData.fullName);
+                uploadData.append('phone', formData.phoneNumber);
+                uploadData.append('email', formData.email || '');
+                uploadData.append('national_id', formData.nationalId);
+                uploadData.append('date_of_birth', formData.dateOfBirth);
+                
+                // Add vehicle info
+                uploadData.append('vehicle_make', formData.vehicleMake);
+                uploadData.append('vehicle_model', formData.vehicleModel);
+                uploadData.append('motorcycle_plate', formData.licensePlate);
+                uploadData.append('vehicle_color', formData.vehicleColor);
+                
+                // Add files
+                if (formData.idFiles.length > 0) {
+                    uploadData.append('national_id_front', formData.idFiles[0]);
+                    if (formData.idFiles[1]) {
+                        uploadData.append('national_id_back', formData.idFiles[1]);
+                    }
+                }
+                uploadData.append('license_front', formData.licenseFile);
+                uploadData.append('good_conduct_cert', formData.conductFile);
+                uploadData.append('insurance_cert', formData.insuranceFile);
+                uploadData.append('profile_photo', formData.profilePhoto);
+                
+                // Set initial status
+                uploadData.append('status', 'pending');
+                uploadData.append('verification_status', 'pending');
+                uploadData.append('rating', '5.00');
+                uploadData.append('total_deliveries', '0');
+                uploadData.append('total_earnings', '0.00');
+                
+                // Generate referral code
+                uploadData.append('referral_code', generateReferralCode());
+                
+                // Submit to your backend
+                // const response = await fetch('/api/riders/signup', {
+                //     method: 'POST',
+                //     body: uploadData
+                // });
+                
+                // For demo, simulate success
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                
+                // Show success
+                showStep('success');
+                currentStep = 'success';
+                
+            } catch (error) {
+                console.error('Submission error:', error);
+                alert('Failed to submit application. Please try again.');
+            } finally {
+                loadingOverlay.classList.remove('active');
+            }
+        }
+
+        function generateReferralCode() {
+            return Math.random().toString(36).substring(2, 10).toUpperCase();
+        }
+
+        // Stop camera when leaving page
+        window.addEventListener('beforeunload', () => {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+        });
+    </script>
+</body>
+</html>
