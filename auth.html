@@ -736,11 +736,13 @@
             if (state.isNewUser) {
                 // New user - go to registration
                 if (state.userType === 'rider') {
-                    // Riders need full application
-                    showInfo('New riders need to complete our application process');
+                    // Riders need full application with documents
+                    showInfo('Riders need to complete our full application process with document verification');
                     setTimeout(() => {
+                        // Go to the existing rider signup page you already created
                         window.location.href = './rider-signup.html';
                     }, 2000);
+                    return; // Stop here, don't continue with simple registration
                 } else {
                     // Vendors and Agents can register here
                     showRegistrationStep();
