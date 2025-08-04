@@ -807,6 +807,261 @@ function showNotification(message, type = 'info') {
 
 // Export showNotification globally
 window.showNotification = showNotification;
+
+// ─── URL Parameter Handling ────────────────────────────────────────────────
+
+async function handleURLParameters() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const waPhone = urlParams.get('wa');
+    
+    if (waPhone) {
+        console.log('📱 WhatsApp parameter detected:', waPhone);
+        
+        // Clean the phone number
+        let cleanedPhone = waPhone.replace(/\D/g, '');
+        if (cleanedPhone.startsWith('254')) {
+            cleanedPhone = '0' + cleanedPhone.substring(3);
+        } else if (!cleanedPhone.startsWith('0') && cleanedPhone.length === 9) {
+            cleanedPhone = '0' + cleanedPhone;
+        }
+        
+        // Validate and set phone
+        if (validation.validatePhone(cleanedPhone)) {
+            if (elements.phoneNumber) {
+                elements.phoneNumber.value = cleanedPhone;
+                
+                // Check if vendor exists and load their data
+                await loadVendorData(cleanedPhone);
+            }
+        }
+    }
+}
+
+// ─── Load Vendor Data ──────────────────────────────────────────────────────
+
+async function loadVendorData(phone) {
+    try {
+        // Check if vendor exists
+        const vendors = await supabaseAPI.query('vendors', {
+            filter: `phone=eq.${phone}`,
+            limit: 1
+        });
+        
+        if (vendors.length > 0) {
+            const vendor = vendors[0];
+            console.log('✅ Vendor found:', vendor.name);
+            
+            // Fill vendor name
+            if (elements.vendorName && vendor.name) {
+                elements.vendorName.value = vendor.name;
+            }
+            
+            // Set vendor type
+            if (vendor.is_managed) {
+                formState.set({
+                    vendorType: 'managed',
+                    agentCode: vendor.agent_code,
+                    agentName: vendor.agent_name
+                });
+                
+                displayVendorBadge({
+                    isManaged: true,
+                    agentName: vendor.agent_name
+                });
+            }
+            
+            // Load saved locations
+            await loadRecentPickupLocations(vendor.id, phone);
+            
+            // Show welcome back message
+            if (vendor.total_bookings > 0) {
+                showNotification(
+                    `Welcome back${vendor.name ? ', ' + vendor.name : ''}! ${vendor.total_bookings} deliveries completed`,
+                    'success'
+                );
+            } else {
+                showNotification(`Welcome back${vendor.name ? ', ' + vendor.name : ''}!`, 'success');
+            }
+        }
+    } catch (error) {
+        console.error('Error loading vendor data:', error);
+    }
+}
+
+// ─── Load Recent Pickup Locations ──────────────────────────────────────────
+
+async function loadRecentPickupLocations(vendorId, vendorPhone) {
+    try {
+        // Query recent successful bookings
+        let recentBookings;
+        
+        if (vendorId) {
+            // If we have vendor_id, use it
+            recentBookings = await supabaseAPI.query('parcels', {
+                filter: `vendor_id=eq.${vendorId}`,
+                select: 'pickup_location,created_at',
+                limit: 10
+            });
+        } else {
+            // Fallback to phone number
+            recentBookings = await supabaseAPI.query('parcels', {
+                filter: `vendor_phone=eq.${vendorPhone}`,
+                select: 'pickup_location,created_at',
+                limit: 10
+            });
+        }
+        
+        if (recentBookings.length > 0) {
+            // Get unique pickup locations
+            const locationMap = new Map();
+            
+            recentBookings.forEach(booking => {
+                if (booking.pickup_location) {
+                    const loc = booking.pickup_location;
+                    const key = `${loc.lat},${loc.lng}`;
+                    
+                    if (!locationMap.has(key)) {
+                        locationMap.set(key, {
+                            address: loc.address,
+                            lat: loc.lat,
+                            lng: loc.lng,
+                            count: 1,
+                            lastUsed: booking.created_at
+                        });
+                    } else {
+                        const existing = locationMap.get(key);
+                        existing.count++;
+                        if (booking.created_at > existing.lastUsed) {
+                            existing.lastUsed = booking.created_at;
+                        }
+                    }
+                }
+            });
+            
+            // Sort by frequency and recency
+            const sortedLocations = Array.from(locationMap.values())
+                .sort((a, b) => {
+                    // First by count, then by recency
+                    if (b.count !== a.count) return b.count - a.count;
+                    return new Date(b.lastUsed) - new Date(a.lastUsed);
+                })
+                .slice(0, 3); // Show top 3
+            
+            if (sortedLocations.length > 0) {
+                displaySavedLocations(sortedLocations);
+            }
+        }
+    } catch (error) {
+        console.error('Error loading saved locations:', error);
+    }
+}
+
+// ─── Display Saved Locations ───────────────────────────────────────────────
+
+function displaySavedLocations(locations) {
+    // Remove existing saved locations if any
+    const existing = document.getElementById('savedLocationsContainer');
+    if (existing) existing.remove();
+    
+    // Find pickup section
+    const pickupSection = elements.pickupLocation?.closest('.form-section');
+    if (!pickupSection) return;
+    
+    // Create saved locations UI
+    const container = document.createElement('div');
+    container.id = 'savedLocationsContainer';
+    container.style.cssText = 'margin-top: 12px; animation: fadeIn 0.3s ease-out;';
+    
+    container.innerHTML = `
+        <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;">
+            Quick select recent locations:
+        </p>
+        <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+            ${locations.map((loc, index) => {
+                const shortAddress = loc.address.split(',')[0];
+                const timesUsed = loc.count > 1 ? ` (${loc.count}×)` : '';
+                return `
+                    <button type="button" 
+                            class="saved-location-btn" 
+                            onclick="useSavedLocation(${index})"
+                            style="
+                                background: var(--surface-elevated);
+                                border: 1px solid var(--border);
+                                border-radius: 20px;
+                                padding: 8px 16px;
+                                font-size: 13px;
+                                color: var(--text-secondary);
+                                cursor: pointer;
+                                transition: all 0.2s;
+                                display: flex;
+                                align-items: center;
+                                gap: 6px;
+                            ">
+                        <span style="font-size: 16px;">📍</span>
+                        ${shortAddress}${timesUsed}
+                    </button>
+                `;
+            }).join('')}
+        </div>
+    `;
+    
+    // Add after location options
+    const locationOptions = pickupSection.querySelector('.location-options');
+    if (locationOptions) {
+        locationOptions.insertAdjacentElement('afterend', container);
+    }
+    
+    // Store locations for use
+    window.savedPickupLocations = locations;
+}
+
+// ─── Use Saved Location ────────────────────────────────────────────────────
+
+window.useSavedLocation = function(index) {
+    const location = window.savedPickupLocations?.[index];
+    if (!location) return;
+    
+    // Fill pickup field
+    elements.pickupLocation.value = location.address;
+    elements.pickupLocation.dataset.lat = location.lat;
+    elements.pickupLocation.dataset.lng = location.lng;
+    
+    // Update form state
+    formState.set('pickupCoords', {
+        lat: parseFloat(location.lat),
+        lng: parseFloat(location.lng),
+        display_name: location.address
+    });
+    
+    // Visual feedback
+    updateLocationStatus(elements.pickupLocation, true);
+    
+    // Calculate distance if delivery exists
+    if (formState.get('deliveryCoords')) {
+        calculateDistance();
+    }
+    
+    // Highlight selected button
+    document.querySelectorAll('.saved-location-btn').forEach((btn, i) => {
+        if (i === index) {
+            btn.style.background = 'var(--primary)';
+            btn.style.color = 'white';
+            btn.style.borderColor = 'var(--primary)';
+        } else {
+            btn.style.background = 'var(--surface-elevated)';
+            btn.style.color = 'var(--text-secondary)';
+            btn.style.borderColor = 'var(--border)';
+        }
+    });
+    
+    showNotification('Pickup location set!', 'success');
+    
+    // Auto-focus next field
+    if (elements.deliveryLocation && !elements.deliveryLocation.value) {
+        elements.deliveryLocation.focus();
+    }
+};
+
 // ─── Global Functions ──────────────────────────────────────────────────────
 
 window.updateItemCount = function(change) {
@@ -1129,6 +1384,9 @@ async function initialize() {
         formState.set('isAuthenticated', false);
     }
     
+    // Handle URL parameters
+    await handleURLParameters();
+    
     setupEventListeners();
     setupStateSubscriptions();
     updateCapacityDisplay();
@@ -1326,6 +1584,13 @@ async function handlePhoneInput(e) {
             
             if (vendors.length > 0) {
                 const vendor = vendors[0];
+                
+                // Auto-fill vendor name
+                if (elements.vendorName && vendor.name) {
+                    elements.vendorName.value = vendor.name;
+                }
+                
+                // Check if managed vendor
                 if (vendor.is_managed && vendor.agent_name) {
                     formState.set({
                         vendorType: 'managed',
@@ -1337,16 +1602,34 @@ async function handlePhoneInput(e) {
                         isManaged: true,
                         agentName: vendor.agent_name
                     });
-                    
-                    showNotification(`Welcome back! Managed by ${vendor.agent_name}`, 'success');
+                }
+                
+                // Load saved locations
+                await loadRecentPickupLocations(vendor.id, value);
+                
+                // Show welcome back message
+                if (vendor.total_bookings > 0) {
+                    showNotification(
+                        `Welcome back${vendor.name ? ', ' + vendor.name : ''}! ${vendor.total_bookings} deliveries completed`,
+                        'success'
+                    );
+                } else {
+                    showNotification(`Welcome back${vendor.name ? ', ' + vendor.name : ''}!`, 'success');
                 }
             } else {
+                // New vendor
                 formState.set({
                     vendorType: 'casual',
                     agentCode: null,
                     agentName: null
                 });
                 elements.vendorBadge.style.display = 'none';
+                
+                // Clear saved locations
+                const savedLocContainer = document.getElementById('savedLocationsContainer');
+                if (savedLocContainer) {
+                    savedLocContainer.remove();
+                }
             }
         } catch (error) {
             console.error('Error checking vendor status:', error);
@@ -1355,6 +1638,12 @@ async function handlePhoneInput(e) {
                 agentCode: null,
                 agentName: null
             });
+        }
+    } else {
+        // Clear saved locations if phone is invalid
+        const savedLocContainer = document.getElementById('savedLocationsContainer');
+        if (savedLocContainer) {
+            savedLocContainer.remove();
         }
     }
 }
@@ -1944,9 +2233,11 @@ async function handleFormSubmit(e) {
         console.log('Creating booking with price:', finalPrice);
         
         let vendorData;
+        let vendorId = null;
         
         if (formState.get('isAuthenticated')) {
             vendorData = formState.get('authenticatedVendor');
+            vendorId = vendorData.id;
             console.log('Using authenticated vendor:', vendorData);
         } else {
             const vendorNameValue = elements.vendorName?.value?.trim();
@@ -1958,20 +2249,51 @@ async function handleFormSubmit(e) {
                 return;
             }
             
-            vendorData = {
-                vendor_name: vendorNameValue,
-                phone: phoneValue,
-                phone_number: phoneValue,
-                name: vendorNameValue,
-                vendor_type: formState.get('vendorType') || 'casual',
-                is_managed: formState.get('vendorType') === 'managed',
-                agent_code: formState.get('agentCode') || null,
-                agent_name: formState.get('agentName') || null,
-                status: 'active',
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-                last_active: new Date().toISOString()
-            };
+            // Check if vendor exists
+            const existingVendors = await supabaseAPI.query('vendors', {
+                filter: `phone=eq.${phoneValue}`,
+                limit: 1
+            });
+            
+            if (existingVendors.length === 0) {
+                // Create new vendor
+                const newVendorData = {
+                    name: vendorNameValue,
+                    phone: phoneValue,
+                    vendor_type: formState.get('vendorType') || 'casual',
+                    is_managed: formState.get('vendorType') === 'managed',
+                    agent_code: formState.get('agentCode') || null,
+                    agent_name: formState.get('agentName') || null,
+                    status: 'active',
+                    total_bookings: 0,
+                    successful_deliveries: 0,
+                    created_at: new Date().toISOString()
+                };
+                
+                const newVendor = await supabaseAPI.insert('vendors', newVendorData);
+                console.log('✅ New vendor created:', newVendor);
+                vendorId = newVendor[0]?.id;
+                
+                vendorData = {
+                    ...newVendorData,
+                    id: vendorId,
+                    vendor_name: vendorNameValue,
+                    phone_number: phoneValue
+                };
+            } else {
+                // Update existing vendor
+                vendorId = existingVendors[0].id;
+                await supabaseAPI.update('vendors', vendorId, {
+                    last_active: new Date().toISOString(),
+                    total_bookings: (existingVendors[0].total_bookings || 0) + 1
+                });
+                
+                vendorData = {
+                    ...existingVendors[0],
+                    vendor_name: vendorNameValue,
+                    phone_number: phoneValue
+                };
+            }
         }
         
         console.log('Vendor data:', vendorData);
@@ -1980,10 +2302,10 @@ async function handleFormSubmit(e) {
         const pricingBreakdown = pricing.calculateBreakdown(finalPrice, formState.get('selectedService'));
         
         const parcelData = {
-            vendor_name: vendorData.vendor_name,
-            vendor_phone: vendorData.phone,
+            vendor_id: vendorId,
+            vendor_name: vendorData.vendor_name || vendorData.name,
+            vendor_phone: vendorData.phone || vendorData.phone_number,
             vendor_type: vendorData.vendor_type,
-            vendor_id: null,
             
             pickup_location: {
                 address: elements.pickupLocation.value,
@@ -2053,33 +2375,6 @@ async function handleFormSubmit(e) {
         console.log('Saving booking to database...');
         console.log('Parcel data:', parcelData);
         console.log('Price field value:', parcelData.price);
-        
-        if (!formState.get('isAuthenticated')) {
-            try {
-                const existingVendors = await supabaseAPI.query('vendors', {
-                    filter: `phone=eq.${vendorData.phone}`,
-                    limit: 1
-                });
-                
-                if (existingVendors.length === 0) {
-                    const newVendor = await supabaseAPI.insert('vendors', vendorData);
-                    console.log('✅ New vendor created:', newVendor);
-                    if (newVendor && newVendor[0]) {
-                        parcelData.vendor_id = newVendor[0].id;
-                    }
-                } else {
-                    console.log('Vendor already exists:', existingVendors[0]);
-                    parcelData.vendor_id = existingVendors[0].id;
-                    await supabaseAPI.update('vendors', existingVendors[0].id, {
-                        last_active: new Date().toISOString()
-                    });
-                }
-            } catch (vendorError) {
-                console.error('Vendor save error:', vendorError);
-            }
-        } else {
-            parcelData.vendor_id = vendorData.id;
-        }
         
         const savedParcel = await supabaseAPI.insert('parcels', parcelData);
         console.log('✅ Parcel saved successfully:', savedParcel);
@@ -2389,10 +2684,16 @@ window.showSuccessManual = function(parcelCode = 'TM123456', pickupCode = 'PK123
 
 // ─── CSS Styles ────────────────────────────────────────────────────────────
 
-if (!document.getElementById('location-success-styles')) {
+// Add fade-in animation for saved locations
+if (!document.getElementById('saved-locations-animations')) {
     const style = document.createElement('style');
-    style.id = 'location-success-styles';
+    style.id = 'saved-locations-animations';
     style.textContent = `
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
         @keyframes locationSuccess {
             0% { transform: scale(1); }
             50% { transform: scale(1.02); }
@@ -2406,6 +2707,18 @@ if (!document.getElementById('location-success-styles')) {
         
         .input-action {
             transition: all 0.3s ease;
+        }
+        
+        .saved-location-btn:hover {
+            background: var(--surface-high) !important;
+            border-color: var(--primary) !important;
+            color: var(--text-primary) !important;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 102, 255, 0.15);
+        }
+        
+        .saved-location-btn:active {
+            transform: scale(0.98);
         }
     `;
     document.head.appendChild(style);
