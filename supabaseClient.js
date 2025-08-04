@@ -1,6 +1,7 @@
 /**
  * Supabase Client Module
  * Handles all database operations with Supabase
+ * Updated with correct column names
  */
 
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
@@ -107,6 +108,41 @@ export const parcelsDB = {
     return data;
   },
 
+  // Get parcels by agent
+  async getByAgent(agentId, dateRange = null) {
+    let query = supabase
+      .from('parcels')
+      .select('*')
+      .eq('agent_id', agentId)
+      .order('created_at', { ascending: false });
+    
+    if (dateRange) {
+      const now = new Date();
+      let startDate;
+      
+      switch(dateRange) {
+        case 'today':
+          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          break;
+        case 'week':
+          startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          break;
+        case 'month':
+          startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+          break;
+      }
+      
+      if (startDate) {
+        query = query.gte('created_at', startDate.toISOString());
+      }
+    }
+    
+    const { data, error } = await query;
+    
+    if (error) throw error;
+    return data;
+  },
+
   // Get available parcels for clustering
   async getAvailableForClustering(area, service) {
     const { data, error } = await supabase
@@ -130,7 +166,7 @@ export const vendorsDB = {
   async checkManaged(phone) {
     const { data, error } = await supabase
       .from('managed_vendors')
-      .select('*, agent:agents(name, code)')
+      .select('*, agent:agents(agent_name, agent_code)') // Updated column names
       .eq('phone', phone)
       .eq('is_active', true)
       .single();
@@ -146,8 +182,8 @@ export const vendorsDB = {
     return {
       isManaged: true,
       vendorData: data,
-      agentName: data.agent?.name,
-      agentCode: data.agent?.code
+      agentName: data.agent?.agent_name, // Updated column name
+      agentCode: data.agent?.agent_code  // Updated column name
     };
   },
 
@@ -206,8 +242,7 @@ export const agentsDB = {
     const { data, error } = await supabase
       .from('agents')
       .select('*')
-      .eq('code', agentCode)
-      .eq('is_active', true)
+      .eq('agent_code', agentCode) // Updated column name
       .single();
     
     if (error) throw error;
@@ -220,10 +255,69 @@ export const agentsDB = {
       .from('agents')
       .select('*')
       .eq('phone', phone)
-      .eq('is_active', true)
       .single();
     
     if (error) throw error;
+    return data;
+  },
+
+  // Create new agent
+  async create(agentData) {
+    const { data, error } = await supabase
+      .from('agents')
+      .insert([{
+        agent_name: agentData.agent_name || agentData.name,
+        agent_code: agentData.agent_code || agentData.code,
+        phone: agentData.phone,
+        email: agentData.email,
+        password_hash: agentData.password_hash || agentData.pin,
+        national_id: agentData.national_id,
+        mpesa_number: agentData.mpesa_number,
+        type: agentData.type || 'external',
+        status: agentData.status || 'pending',
+        commission_rate: agentData.commission_rate || 0.20,
+        is_active: agentData.is_active !== undefined ? agentData.is_active : true,
+        created_at: new Date().toISOString()
+      }])
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
+  },
+
+  // Update agent
+  async update(agentId, updates) {
+    const { data, error } = await supabase
+      .from('agents')
+      .update({
+        ...updates,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', agentId)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
+  },
+
+  // Verify agent PIN
+  async verifyPin(phone, hashedPin) {
+    const { data, error } = await supabase
+      .from('agents')
+      .select('*')
+      .eq('phone', phone)
+      .eq('password_hash', hashedPin)
+      .single();
+    
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return null; // No matching record
+      }
+      throw error;
+    }
+    
     return data;
   },
 
@@ -274,7 +368,41 @@ export const ridersDB = {
       .from('riders')
       .select('*')
       .eq('phone', phone)
-      .eq('is_active', true)
+      .single();
+    
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return null; // No matching record
+      }
+      throw error;
+    }
+    
+    return data;
+  },
+
+  // Create new rider
+  async create(riderData) {
+    const { data, error } = await supabase
+      .from('riders')
+      .insert([{
+        rider_name: riderData.rider_name || riderData.name,
+        phone: riderData.phone,
+        email: riderData.email,
+        national_id: riderData.national_id,
+        date_of_birth: riderData.date_of_birth,
+        vehicle_make: riderData.vehicle_make,
+        vehicle_model: riderData.vehicle_model,
+        motorcycle_plate: riderData.motorcycle_plate || riderData.license_plate,
+        vehicle_color: riderData.vehicle_color,
+        status: riderData.status || 'pending',
+        verification_status: riderData.verification_status || 'pending',
+        rating: riderData.rating || 5.00,
+        total_deliveries: riderData.total_deliveries || 0,
+        total_earnings: riderData.total_earnings || 0,
+        is_active: riderData.is_active !== undefined ? riderData.is_active : true,
+        created_at: new Date().toISOString()
+      }])
+      .select()
       .single();
     
     if (error) throw error;
@@ -311,6 +439,25 @@ export const ridersDB = {
       .single();
     
     if (error) throw error;
+    return data;
+  },
+
+  // Verify rider PIN
+  async verifyPin(phone, hashedPin) {
+    const { data, error } = await supabase
+      .from('riders')
+      .select('*')
+      .eq('phone', phone)
+      .eq('pin', hashedPin)
+      .single();
+    
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return null; // No matching record
+      }
+      throw error;
+    }
+    
     return data;
   },
 
@@ -438,6 +585,56 @@ export const routesDB = {
 };
 
 /**
+ * Agent Payouts Operations
+ */
+export const payoutsDB = {
+  // Request payout
+  async requestPayout(payoutData) {
+    const { data, error } = await supabase
+      .from('agent_payouts')
+      .insert([{
+        ...payoutData,
+        status: 'pending',
+        requested_at: new Date().toISOString()
+      }])
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
+  },
+
+  // Get payouts by agent
+  async getByAgent(agentId) {
+    const { data, error } = await supabase
+      .from('agent_payouts')
+      .select('*')
+      .eq('agent_id', agentId)
+      .order('requested_at', { ascending: false });
+    
+    if (error) throw error;
+    return data;
+  },
+
+  // Update payout status
+  async updateStatus(payoutId, status, additionalData = {}) {
+    const { data, error } = await supabase
+      .from('agent_payouts')
+      .update({
+        status,
+        ...additionalData,
+        processed_at: status === 'completed' ? new Date().toISOString() : null
+      })
+      .eq('id', payoutId)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
+  }
+};
+
+/**
  * Authentication helpers
  */
 export const auth = {
@@ -502,6 +699,19 @@ export const realtime = {
         schema: 'public',
         table: 'riders',
         filter: `id=eq.${riderId}`
+      }, callback)
+      .subscribe();
+  },
+
+  // Subscribe to agent notifications
+  subscribeToAgentNotifications(agentId, callback) {
+    return supabase
+      .channel(`agent:${agentId}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'agent_notifications',
+        filter: `agent_id=eq.${agentId}`
       }, callback)
       .subscribe();
   },
