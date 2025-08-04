@@ -4,6 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tuma - Sign In or Register</title>
+    
+    <!-- Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
     <style>
         * {
             margin: 0;
@@ -816,6 +820,13 @@
     </div>
 
     <script>
+        // Initialize Supabase
+        const SUPABASE_URL = 'https://btxavqfoirdzwpfrvezp.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ0eGF2cWZvaXJkendwZnJ2ZXpwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE0ODcxMTcsImV4cCI6MjA2NzA2MzExN30.kQKpukFGx-cBl1zZRuXmex02ifkZ751WCUfQPogYutk';
+        
+        // Create Supabase client - FIXED
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
         // State management
         let state = {
             userType: null,
@@ -882,35 +893,77 @@
             state.phone = '+254' + phone;
             hideMessages();
             
-            // Check if user exists
-            const exists = await checkUserExists(state.phone);
-            state.isNewUser = !exists;
+            // Show loading
+            const btn = event.target;
+            btn.disabled = true;
+            btn.innerHTML = 'Checking<span class="loading"></span>';
             
-            if (state.isNewUser) {
-                // New user - go to registration
-                if (state.userType === 'rider') {
-                    // Riders need full application with documents
-                    showInfo('Riders need to complete our full application process with document verification');
-                    setTimeout(() => {
-                        // Go to the existing rider signup page you already created
-                        window.location.href = './rider-signup.html';
-                    }, 2000);
-                    return; // Stop here, don't continue with simple registration
+            try {
+                // Check if user exists in database
+                const exists = await checkUserExists(state.phone, state.userType);
+                state.isNewUser = !exists;
+                
+                if (state.isNewUser) {
+                    // New user - go to registration
+                    if (state.userType === 'rider') {
+                        // Riders need full application
+                        showInfo('Riders need to complete our full application process with document verification');
+                        setTimeout(() => {
+                            window.location.href = './rider-signup.html';
+                        }, 2000);
+                        return;
+                    } else {
+                        // Vendors and Agents can register here
+                        showRegistrationStep();
+                    }
                 } else {
-                    // Vendors and Agents can register here
-                    showRegistrationStep();
+                    // Existing user - go to PIN
+                    showPINStep();
                 }
-            } else {
-                // Existing user - go to PIN
-                showPINStep();
+            } catch (error) {
+                console.error('Error checking user:', error);
+                showError('Error checking user. Please try again.');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Continue';
             }
         }
 
-        // Check if user exists (mock)
-        async function checkUserExists(phone) {
-            // In production, check database
-            const mockUsers = ['+254712345678', '+254722334455'];
-            return mockUsers.includes(phone);
+        // Check if user exists in Supabase
+        async function checkUserExists(phone, userType) {
+            try {
+                if (userType === 'agent') {
+                    const { data, error } = await supabaseClient
+                        .from('agents')
+                        .select('id, phone, agent_name, status')
+                        .eq('phone', phone)
+                        .single();
+                    
+                    return !error && data;
+                    
+                } else if (userType === 'rider') {
+                    const { data, error } = await supabaseClient
+                        .from('riders')
+                        .select('id, phone, rider_name, status')
+                        .eq('phone', phone)
+                        .single();
+                    
+                    return !error && data;
+                    
+                } else {
+                    // For vendors, check if they have previous orders
+                    const { data, error } = await supabaseClient
+                        .from('parcels')
+                        .select('vendor_phone')
+                        .eq('vendor_phone', phone)
+                        .limit(1);
+                    
+                    return !error && data && data.length > 0;
+                }
+            } catch (error) {
+                console.error('Database error:', error);
+                return false;
+            }
         }
 
         // Show registration step
@@ -1033,74 +1086,184 @@
 
         // Submit registration
         async function submitRegistration() {
-            // Validate KYC if required
-            if (state.userType === 'agent') {
-                const nationalId = document.getElementById('nationalId').value;
-                const mpesaNumber = document.getElementById('mpesaNumber').value;
-                const idFiles = document.getElementById('idFiles').files;
-                const agreeTerms = document.getElementById('agreeTerms').checked;
-                
-                if (!nationalId || !mpesaNumber || idFiles.length < 2 || !state.selfieData || !agreeTerms) {
-                    showError('Please complete all required fields');
-                    return;
-                }
-                
-                state.formData.nationalId = nationalId;
-                state.formData.mpesaNumber = '+254' + mpesaNumber;
-                state.formData.idFiles = idFiles;
-                state.formData.selfie = state.selfieData;
-            }
-            
             // Show loading
             const btn = document.getElementById('submitBtn');
             btn.disabled = true;
             btn.innerHTML = 'Creating account<span class="loading"></span>';
             
             try {
-                // Simulate registration
-                await new Promise(resolve => setTimeout(resolve, 2000));
-                
-                // Generate agent code if agent
-                if (state.userType === 'agent') {
-                    const agentCode = generateAgentCode(state.formData.fullName);
-                    showSuccess(`Registration complete! Your agent code is: ${agentCode}`);
-                } else {
+                if (state.userType === 'vendor') {
+                    // Vendors - minimal registration, no database record needed
                     showSuccess('Account created successfully!');
+                    
+                    // Store session
+                    localStorage.setItem('tuma_vendor_session', JSON.stringify({
+                        phone: state.phone,
+                        name: state.formData.fullName,
+                        type: 'vendor',
+                        timestamp: Date.now()
+                    }));
+                    
+                    // Redirect
+                    setTimeout(() => {
+                        window.location.href = './vendor.html';
+                    }, 1500);
+                    
+                } else if (state.userType === 'agent') {
+                    // Validate KYC
+                    const nationalId = document.getElementById('nationalId').value;
+                    const mpesaNumber = document.getElementById('mpesaNumber').value;
+                    const idFiles = document.getElementById('idFiles').files;
+                    const agreeTerms = document.getElementById('agreeTerms').checked;
+                    
+                    if (!nationalId || !mpesaNumber || idFiles.length < 2 || !state.selfieData || !agreeTerms) {
+                        showError('Please complete all required fields');
+                        btn.disabled = false;
+                        btn.textContent = 'Complete Registration';
+                        return;
+                    }
+                    
+                    // Generate agent code
+                    const agentCode = generateAgentCode(state.formData.fullName);
+                    
+                    // Hash PIN
+                    const hashedPin = await hashPin(state.formData.pin);
+                    
+                    // Prepare agent data with correct column names
+                    const agentData = {
+                        agent_name: state.formData.fullName,
+                        agent_code: agentCode,
+                        phone: state.phone,
+                        email: state.formData.email || `${state.phone}@tuma.local`,
+                        password_hash: hashedPin, // Using existing column name
+                        national_id: nationalId,
+                        mpesa_number: '+254' + mpesaNumber,
+                        type: 'external',
+                        status: 'pending',
+                        commission_rate: 0.20,
+                        is_active: true,
+                        created_at: new Date().toISOString()
+                    };
+                    
+                    // Insert agent into database
+                    const { data, error } = await supabaseClient
+                        .from('agents')
+                        .insert([agentData])
+                        .select()
+                        .single();
+                    
+                    if (error) {
+                        console.error('Registration error:', error);
+                        if (error.message.includes('duplicate')) {
+                            showError('This phone number is already registered');
+                        } else {
+                            showError('Registration failed. Please try again.');
+                        }
+                        btn.disabled = false;
+                        btn.textContent = 'Complete Registration';
+                        return;
+                    }
+                    
+                    // Upload KYC documents
+                    if (data) {
+                        await uploadKYCDocuments(data.id, {
+                            idFront: idFiles[0],
+                            idBack: idFiles[1],
+                            selfie: state.selfieData
+                        });
+                    }
+                    
+                    showSuccess(`Registration complete! Your agent code is: ${agentCode}`);
+                    
+                    // Store session
+                    localStorage.setItem('tuma_agent_session', JSON.stringify({
+                        phone: state.phone,
+                        name: state.formData.fullName,
+                        agentId: data.id,
+                        code: agentCode,
+                        type: 'agent',
+                        timestamp: Date.now()
+                    }));
+                    
+                    // Redirect
+                    setTimeout(() => {
+                        window.location.href = './agent.html';
+                    }, 3000);
                 }
                 
-                // Store session
-                localStorage.setItem(`tuma_${state.userType}_session`, JSON.stringify({
-                    phone: state.phone,
-                    name: state.formData.fullName,
-                    timestamp: Date.now()
-                }));
-                
-                // Redirect after delay
-                setTimeout(() => {
-                    const redirects = {
-                        vendor: './vendor.html',
-                        agent: './agent.html',
-                        rider: './rider.html'
-                    };
-                    window.location.href = redirects[state.userType];
-                }, 2000);
-                
             } catch (error) {
+                console.error('Registration error:', error);
                 showError('Registration failed. Please try again.');
                 btn.disabled = false;
                 btn.textContent = 'Complete Registration';
             }
         }
 
+        // Upload KYC documents to Supabase Storage
+        async function uploadKYCDocuments(agentId, documents) {
+            try {
+                const uploads = [];
+                
+                // Upload ID front
+                if (documents.idFront) {
+                    const fileName = `${agentId}/id-front-${Date.now()}.jpg`;
+                    uploads.push(
+                        supabaseClient.storage
+                            .from('agent-kyc')
+                            .upload(fileName, documents.idFront)
+                    );
+                }
+                
+                // Upload ID back
+                if (documents.idBack) {
+                    const fileName = `${agentId}/id-back-${Date.now()}.jpg`;
+                    uploads.push(
+                        supabaseClient.storage
+                            .from('agent-kyc')
+                            .upload(fileName, documents.idBack)
+                    );
+                }
+                
+                // Upload selfie
+                if (documents.selfie) {
+                    const fileName = `${agentId}/selfie-${Date.now()}.jpg`;
+                    uploads.push(
+                        supabaseClient.storage
+                            .from('agent-kyc')
+                            .upload(fileName, documents.selfie)
+                    );
+                }
+                
+                const results = await Promise.all(uploads);
+                
+                // Update agent record with document URLs
+                const urls = {};
+                if (results[0]?.data) urls.id_front_url = results[0].data.path;
+                if (results[1]?.data) urls.id_back_url = results[1].data.path;
+                if (results[2]?.data) urls.selfie_url = results[2].data.path;
+                
+                if (Object.keys(urls).length > 0) {
+                    await supabaseClient
+                        .from('agents')
+                        .update(urls)
+                        .eq('id', agentId);
+                }
+                
+            } catch (error) {
+                console.error('Error uploading KYC documents:', error);
+                // Don't fail registration if upload fails
+            }
+        }
+
         // Generate agent code (2 letters + 3 numbers)
         function generateAgentCode(fullName) {
             const cleaned = fullName.toUpperCase().replace(/[^A-Z]/g, '');
-            const letters = cleaned.substring(0, 2);
+            const letters = cleaned.substring(0, 2).padEnd(2, 'X');
             const numbers = Math.floor(Math.random() * 900 + 100);
             return letters + numbers;
         }
 
-        // Handle PIN
+        // Handle PIN verification
         async function handlePIN() {
             const pin = Array.from(document.querySelectorAll('.pin-digit')).map(i => i.value).join('');
             
@@ -1109,35 +1272,92 @@
                 return;
             }
             
-            // Verify PIN (mock)
-            showSuccess('Welcome back!');
+            const btn = document.getElementById('pinBtn');
+            btn.disabled = true;
+            btn.innerHTML = 'Verifying<span class="loading"></span>';
             
-            // Check for multiple roles
-            const roles = await checkUserRoles(state.phone);
-            
-            if (roles.length > 1) {
-                // Show role selector
-                showRoleSelector(roles);
-            } else {
-                // Direct redirect
-                setTimeout(() => {
-                    const redirects = {
-                        vendor: './vendor.html',
-                        agent: './agent.html',
-                        rider: './rider.html'
+            try {
+                // Hash the entered PIN
+                const hashedPin = await hashPin(pin);
+                
+                // Verify against database
+                let verified = false;
+                let userData = null;
+                
+                if (state.userType === 'agent') {
+                    const { data, error } = await supabaseClient
+                        .from('agents')
+                        .select('*')
+                        .eq('phone', state.phone)
+                        .eq('password_hash', hashedPin)
+                        .single();
+                    
+                    if (!error && data) {
+                        verified = true;
+                        userData = data;
+                    }
+                } else if (state.userType === 'rider') {
+                    const { data, error } = await supabaseClient
+                        .from('riders')
+                        .select('*')
+                        .eq('phone', state.phone)
+                        .eq('pin', hashedPin)
+                        .single();
+                    
+                    if (!error && data) {
+                        verified = true;
+                        userData = data;
+                    }
+                }
+                
+                if (verified) {
+                    showSuccess('Welcome back!');
+                    
+                    // Store session
+                    const sessionData = {
+                        phone: state.phone,
+                        name: userData.agent_name || userData.rider_name || userData.name,
+                        type: state.userType,
+                        timestamp: Date.now()
                     };
-                    window.location.href = redirects[state.userType];
-                }, 1000);
+                    
+                    if (state.userType === 'agent') {
+                        sessionData.agentId = userData.id;
+                        sessionData.code = userData.agent_code;
+                    }
+                    
+                    localStorage.setItem(`tuma_${state.userType}_session`, JSON.stringify(sessionData));
+                    
+                    // Redirect
+                    setTimeout(() => {
+                        const redirects = {
+                            vendor: './vendor.html',
+                            agent: './agent.html',
+                            rider: './rider.html'
+                        };
+                        window.location.href = redirects[state.userType];
+                    }, 1000);
+                } else {
+                    showError('Incorrect PIN. Please try again.');
+                    btn.disabled = false;
+                    btn.textContent = 'Sign In';
+                }
+                
+            } catch (error) {
+                console.error('PIN verification error:', error);
+                showError('Verification failed. Please try again.');
+                btn.disabled = false;
+                btn.textContent = 'Sign In';
             }
         }
 
-        // Check user roles (mock)
-        async function checkUserRoles(phone) {
-            // In production, check database
-            if (phone === '+254712345678') {
-                return ['vendor', 'agent']; // Has multiple roles
-            }
-            return [state.userType];
+        // Hash PIN using Web Crypto API
+        async function hashPin(pin) {
+            const encoder = new TextEncoder();
+            const data = encoder.encode(pin);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
         }
 
         // Setup PIN inputs
@@ -1224,6 +1444,15 @@
         function hideInfo() {
             document.getElementById('infoMsg').style.display = 'none';
         }
+
+        // ID file upload handler
+        document.getElementById('idFiles')?.addEventListener('change', function(e) {
+            const files = e.target.files;
+            if (files.length >= 2) {
+                document.getElementById('idUpload').classList.add('has-file');
+                document.querySelector('#idUpload .upload-text').textContent = `${files.length} files selected`;
+            }
+        });
     </script>
 </body>
 </html>
