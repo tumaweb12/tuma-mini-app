@@ -15,7 +15,10 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     
-    <!-- 3) Your config & modules -->
+    <!-- 3) QR Code Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    
+    <!-- 4) Your config & modules -->
     <script src="./config.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
     <script type="module" src="./supabaseClient.js"></script>
@@ -227,6 +230,8 @@
         .form-section:nth-child(3) { animation-delay: 0.2s; }
         .form-section:nth-child(4) { animation-delay: 0.25s; }
         .form-section:nth-child(5) { animation-delay: 0.3s; }
+        .form-section:nth-child(6) { animation-delay: 0.35s; }
+        .form-section:nth-child(7) { animation-delay: 0.4s; }
 
         @keyframes slideUp {
             to {
@@ -286,6 +291,136 @@
             color: rgba(255, 255, 255, 0.9);
         }
 
+        /* Referral Section */
+        .referral-box {
+            background: var(--surface-elevated);
+            border-radius: 14px;
+            padding: 20px;
+            border: 1px solid var(--border);
+            margin-bottom: 16px;
+        }
+
+        .referral-link {
+            background: var(--surface-high);
+            padding: 16px;
+            border-radius: 10px;
+            font-family: monospace;
+            font-size: 14px;
+            word-break: break-all;
+            margin-bottom: 16px;
+            color: var(--primary);
+        }
+
+        .referral-actions {
+            display: flex;
+            gap: 12px;
+        }
+
+        .copy-btn, .share-btn {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .copy-btn {
+            background: var(--primary);
+            color: white;
+        }
+
+        .share-btn {
+            background: var(--surface-high);
+            color: var(--text-primary);
+        }
+
+        .qr-code {
+            display: flex;
+            justify-content: center;
+            padding: 20px;
+            background: white;
+            border-radius: 14px;
+            margin-top: 16px;
+        }
+
+        /* Payout Section */
+        .payout-info {
+            background: var(--surface-elevated);
+            border-radius: 14px;
+            padding: 20px;
+            border: 1px solid var(--border);
+            margin-bottom: 16px;
+        }
+
+        .payout-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .payout-item:last-child {
+            border-bottom: none;
+        }
+
+        .payout-item .amount {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--success);
+        }
+
+        .payout-item .date {
+            color: var(--text-secondary);
+        }
+
+        .payout-btn {
+            width: 100%;
+            background: var(--success);
+            color: white;
+            border: none;
+            border-radius: 14px;
+            padding: 16px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .payout-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Performance Metrics */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+        }
+
+        .metric-card {
+            background: var(--surface-elevated);
+            border-radius: 14px;
+            padding: 16px;
+            text-align: center;
+            border: 1px solid var(--border);
+        }
+
+        .metric-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 4px;
+        }
+
+        .metric-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
         /* Time Period Selector */
         .time-selector {
             display: flex;
@@ -312,6 +447,57 @@
         .time-option.active {
             background: var(--primary);
             color: white;
+        }
+
+        /* Transaction List */
+        .transaction-list {
+            background: var(--surface-elevated);
+            border-radius: 14px;
+            overflow: hidden;
+        }
+
+        .transaction-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .transaction-item:last-child {
+            border-bottom: none;
+        }
+
+        .transaction-info {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .vendor-name {
+            font-weight: 600;
+            font-size: 16px;
+        }
+
+        .parcel-code {
+            font-size: 12px;
+            color: var(--text-secondary);
+            font-family: monospace;
+        }
+
+        .transaction-amount {
+            text-align: right;
+        }
+
+        .commission {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--success);
+        }
+
+        .transaction-date {
+            font-size: 12px;
+            color: var(--text-secondary);
         }
 
         /* Vendor List */
@@ -378,6 +564,66 @@
             color: var(--success);
         }
 
+        .vendor-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .vendor-action-btn {
+            padding: 8px 12px;
+            border: none;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .vendor-action-btn.primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .vendor-action-btn.secondary {
+            background: var(--surface-high);
+            color: var(--text-primary);
+        }
+
+        /* Marketing Grid */
+        .marketing-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+        }
+
+        .marketing-btn {
+            background: var(--surface-elevated);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .marketing-btn:hover {
+            background: var(--surface-high);
+            transform: translateY(-2px);
+        }
+
+        .marketing-btn span:first-child {
+            font-size: 32px;
+        }
+
+        .marketing-btn span:last-child {
+            font-size: 14px;
+            font-weight: 600;
+        }
+
         /* Add Vendor Button */
         .add-vendor-btn {
             width: 100%;
@@ -420,6 +666,8 @@
             padding: 24px;
             max-width: 400px;
             width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
             animation: modalBounce 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
         }
 
@@ -529,19 +777,62 @@
             color: var(--text-secondary);
         }
 
-        /* Skeleton Loading */
-        .skeleton {
-            background: linear-gradient(90deg, var(--surface-elevated) 25%, var(--surface-high) 50%, var(--surface-elevated) 75%);
-            background-size: 200% 100%;
-            animation: loading 1.5s infinite;
-            border-radius: 14px;
-            height: 100%;
-            width: 100%;
+        /* Loading State */
+        .loading-state {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            color: var(--text-secondary);
         }
 
-        @keyframes loading {
-            0% { background-position: 200% 0; }
-            100% { background-position: -200% 0; }
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--surface-high);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Notification Toast */
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: var(--success);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            z-index: 3000;
+            font-weight: 600;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            max-width: 350px;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        .notification.error {
+            background: var(--danger);
+        }
+
+        .notification.warning {
+            background: var(--warning);
+            color: black;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
         }
 
         /* Responsive */
@@ -584,11 +875,11 @@
                             <p class="app-subtitle">Agent Dashboard</p>
                         </div>
                     </div>
-                    <button class="menu-button" aria-label="Home" onclick="window.location.href='index.html'" style="cursor: pointer;">
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
-        <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
-    </svg>
-</button>
+                    <button class="menu-button" aria-label="Home" onclick="window.location.href='auth.html'" style="cursor: pointer;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
+                            <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
+                        </svg>
+                    </button>
                 </div>
             </div>
 
@@ -596,14 +887,33 @@
             <form class="form-container">
                 <!-- Hero Section -->
                 <div class="hero-section">
-                    <h2 class="hero-title">Welcome, Agent</h2>
+                    <h2 class="hero-title">Welcome, <span id="agentName">Agent</span></h2>
                     <p class="hero-subtitle">Manage your vendors and track commissions</p>
                     <span class="agent-code">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                             <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/>
                         </svg>
-                        <span id="agentCode">AGT-001</span>
+                        <span id="agentCode">Loading...</span>
                     </span>
+                </div>
+
+                <!-- Referral Link Section -->
+                <div class="form-section">
+                    <h2 class="section-title">My Referral Link</h2>
+                    <div class="referral-box">
+                        <div class="referral-link" id="referralLink">
+                            Loading...
+                        </div>
+                        <div class="referral-actions">
+                            <button type="button" onclick="copyReferralLink()" class="copy-btn">
+                                Copy Link
+                            </button>
+                            <button type="button" onclick="shareReferralLink()" class="share-btn">
+                                Share
+                            </button>
+                        </div>
+                    </div>
+                    <div class="qr-code" id="qrCode"></div>
                 </div>
 
                 <!-- Commission Overview -->
@@ -629,14 +939,64 @@
                     </div>
                 </div>
 
+                <!-- Payout Information -->
+                <div class="form-section">
+                    <h2 class="section-title">Payout Information</h2>
+                    <div class="payout-info">
+                        <div class="payout-item">
+                            <span>Available Balance</span>
+                            <span class="amount">KES <span id="availableBalance">0</span></span>
+                        </div>
+                        <div class="payout-item">
+                            <span>Pending Commission</span>
+                            <span class="amount">KES <span id="pendingCommission">0</span></span>
+                        </div>
+                        <div class="payout-item">
+                            <span>Next Payout</span>
+                            <span class="date" id="nextPayoutDate">Not scheduled</span>
+                        </div>
+                    </div>
+                    <button type="button" onclick="requestPayout()" class="payout-btn" id="payoutBtn">
+                        Request Payout
+                    </button>
+                </div>
+
+                <!-- Performance Metrics -->
+                <div class="form-section">
+                    <h2 class="section-title">Performance Metrics</h2>
+                    <div class="metrics-grid">
+                        <div class="metric-card">
+                            <div class="metric-value"><span id="conversionRate">0</span>%</div>
+                            <div class="metric-label">Conversion Rate</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-value">KES <span id="avgOrderValue">0</span></div>
+                            <div class="metric-label">Avg Order Value</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-value"><span id="vendorRetention">0</span>%</div>
+                            <div class="metric-label">Vendor Retention</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-value"><span id="growthRate">0</span>%</div>
+                            <div class="metric-label">Growth Rate</div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Time Period Selector -->
                 <div class="form-section">
-                    <h2 class="section-title">Parcel History</h2>
+                    <h2 class="section-title">Transaction History</h2>
                     <div class="time-selector">
                         <button type="button" class="time-option active" onclick="selectTimePeriod('today')">Today</button>
                         <button type="button" class="time-option" onclick="selectTimePeriod('week')">This Week</button>
                         <button type="button" class="time-option" onclick="selectTimePeriod('month')">This Month</button>
                         <button type="button" class="time-option" onclick="selectTimePeriod('all')">All Time</button>
+                    </div>
+                    <div class="transaction-list" id="transactionList">
+                        <div class="loading-state">
+                            <div class="loading-spinner"></div>
+                        </div>
                     </div>
                 </div>
 
@@ -644,12 +1004,32 @@
                 <div class="form-section">
                     <h2 class="section-title">My Managed Vendors</h2>
                     <div class="vendor-list" id="vendorList">
-                        <!-- Vendor items will be populated here -->
-                        <div class="empty-state">
-                            <div class="empty-icon">👥</div>
-                            <h3 class="empty-title">No Vendors Yet</h3>
-                            <p class="empty-message">Add your first vendor to start earning commissions</p>
+                        <div class="loading-state">
+                            <div class="loading-spinner"></div>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Marketing Tools -->
+                <div class="form-section">
+                    <h2 class="section-title">Marketing Tools</h2>
+                    <div class="marketing-grid">
+                        <button type="button" onclick="downloadFlyer()" class="marketing-btn">
+                            <span>📄</span>
+                            <span>Download Flyer</span>
+                        </button>
+                        <button type="button" onclick="getSocialPosts()" class="marketing-btn">
+                            <span>📱</span>
+                            <span>Social Posts</span>
+                        </button>
+                        <button type="button" onclick="getWhatsAppTemplate()" class="marketing-btn">
+                            <span>💬</span>
+                            <span>WhatsApp</span>
+                        </button>
+                        <button type="button" onclick="sendBulkMessage()" class="marketing-btn">
+                            <span>📢</span>
+                            <span>Bulk Message</span>
+                        </button>
                     </div>
                 </div>
 
@@ -689,8 +1069,56 @@
                 </form>
             </div>
         </div>
+
+        <!-- Vendor Details Modal -->
+        <div class="modal-overlay" id="vendorDetailsModal">
+            <div class="modal">
+                <div class="modal-header">
+                    <h3 class="modal-title">Vendor Details</h3>
+                    <button class="close-modal" onclick="hideVendorDetailsModal()">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                        </svg>
+                    </button>
+                </div>
+                <div id="vendorDetailsContent">
+                    <!-- Vendor details will be populated here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Payout Request Modal -->
+        <div class="modal-overlay" id="payoutModal">
+            <div class="modal">
+                <div class="modal-header">
+                    <h3 class="modal-title">Request Payout</h3>
+                    <button class="close-modal" onclick="hidePayoutModal()">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                        </svg>
+                    </button>
+                </div>
+                <form id="payoutForm">
+                    <div class="payout-info" style="margin-bottom: 20px;">
+                        <div class="payout-item">
+                            <span>Available for Payout</span>
+                            <span class="amount">KES <span id="payoutAmount">0</span></span>
+                        </div>
+                    </div>
+                    <p style="margin-bottom: 20px; color: var(--text-secondary);">
+                        Payout will be sent to your registered M-Pesa number: <strong id="mpesaNumber">Loading...</strong>
+                    </p>
+                    <div class="modal-actions">
+                        <button type="button" class="modal-btn secondary" onclick="hidePayoutModal()">Cancel</button>
+                        <button type="submit" class="modal-btn primary">Confirm Request</button>
+                    </div>
+                </form>
+            </div>
+        </div>
     </div>
 
+    <!-- Add auth check before loading agent.js -->
+    <script src="./auth-check.js"></script>
     <!-- Module imports -->
     <script type="module" src="./agent.js"></script>
 </body>
