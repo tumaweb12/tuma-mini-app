@@ -824,7 +824,7 @@
         const SUPABASE_URL = 'https://btxavqfoirdzwpfrvezp.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ0eGF2cWZvaXJkendwZnJ2ZXpwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE0ODcxMTcsImV4cCI6MjA2NzA2MzExN30.kQKpukFGx-cBl1zZRuXmex02ifkZ751WCUfQPogYutk';
         
-        // Create Supabase client - FIXED
+        // Create Supabase client
         const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
         // State management
@@ -836,6 +836,13 @@
             formData: {},
             selfieData: null,
             cameraStream: null
+        };
+
+        // PIN storage table name for each user type
+        const PIN_TABLES = {
+            vendor: 'vendor_pins',
+            agent: 'agent_pins',
+            rider: 'rider_pins'
         };
 
         // Initialize
@@ -890,7 +897,7 @@
                 return;
             }
             
-            state.phone = '+254' + phone;
+            state.phone = '0' + phone; // Store without +254 to match database
             hideMessages();
             
             // Show loading
@@ -942,6 +949,7 @@
                     return !error && data;
                     
                 } else if (userType === 'rider') {
+                    // Riders table doesn't have PIN, check if they exist
                     const { data, error } = await supabaseClient
                         .from('riders')
                         .select('id, phone, rider_name, status')
@@ -951,14 +959,14 @@
                     return !error && data;
                     
                 } else {
-                    // For vendors, check if they have previous orders
+                    // For vendors, check the vendors table
                     const { data, error } = await supabaseClient
-                        .from('parcels')
-                        .select('vendor_phone')
-                        .eq('vendor_phone', phone)
-                        .limit(1);
+                        .from('vendors')
+                        .select('id, phone, vendor_name, status')
+                        .eq('phone', phone)
+                        .single();
                     
-                    return !error && data && data.length > 0;
+                    return !error && data;
                 }
             } catch (error) {
                 console.error('Database error:', error);
@@ -1093,11 +1101,39 @@
             
             try {
                 if (state.userType === 'vendor') {
-                    // Vendors - minimal registration, no database record needed
+                    // Create vendor record
+                    const vendorData = {
+                        vendor_name: state.formData.fullName,
+                        phone: state.phone,
+                        email: state.formData.email || null,
+                        status: 'active',
+                        vendor_type: 'direct',
+                        created_at: new Date().toISOString()
+                    };
+                    
+                    // Insert vendor
+                    const { data: vendor, error: vendorError } = await supabaseClient
+                        .from('vendors')
+                        .insert([vendorData])
+                        .select()
+                        .single();
+                    
+                    if (vendorError) {
+                        console.error('Vendor registration error:', vendorError);
+                        showError('Registration failed. Please try again.');
+                        btn.disabled = false;
+                        btn.textContent = 'Complete Registration';
+                        return;
+                    }
+                    
+                    // Store PIN separately (create vendor_pins table if needed)
+                    await storePIN(vendor.id, state.phone, state.formData.pin, 'vendor');
+                    
                     showSuccess('Account created successfully!');
                     
                     // Store session
                     localStorage.setItem('tuma_vendor_session', JSON.stringify({
+                        vendorId: vendor.id,
                         phone: state.phone,
                         name: state.formData.fullName,
                         type: 'vendor',
@@ -1126,18 +1162,19 @@
                     // Generate agent code
                     const agentCode = generateAgentCode(state.formData.fullName);
                     
-                    // Hash PIN
+                    // Hash PIN for password_hash column
                     const hashedPin = await hashPin(state.formData.pin);
                     
-                    // Prepare agent data with correct column names
+                    // Prepare agent data
                     const agentData = {
                         agent_name: state.formData.fullName,
                         agent_code: agentCode,
                         phone: state.phone,
                         email: state.formData.email || `${state.phone}@tuma.local`,
-                        password_hash: hashedPin, // Using existing column name
+                        password_hash: hashedPin,
+                        pin: state.formData.pin, // Store plain PIN in pin column
                         national_id: nationalId,
-                        mpesa_number: '+254' + mpesaNumber,
+                        mpesa_number: '0' + mpesaNumber,
                         type: 'external',
                         status: 'pending',
                         commission_rate: 0.20,
@@ -1145,7 +1182,7 @@
                         created_at: new Date().toISOString()
                     };
                     
-                    // Insert agent into database
+                    // Insert agent
                     const { data, error } = await supabaseClient
                         .from('agents')
                         .insert([agentData])
@@ -1177,9 +1214,9 @@
                     
                     // Store session
                     localStorage.setItem('tuma_agent_session', JSON.stringify({
+                        agentId: data.id,
                         phone: state.phone,
                         name: state.formData.fullName,
-                        agentId: data.id,
                         code: agentCode,
                         type: 'agent',
                         timestamp: Date.now()
@@ -1196,6 +1233,36 @@
                 showError('Registration failed. Please try again.');
                 btn.disabled = false;
                 btn.textContent = 'Complete Registration';
+            }
+        }
+
+        // Store PIN in separate table (for vendors/riders without PIN columns)
+        async function storePIN(userId, phone, pin, userType) {
+            try {
+                const hashedPin = await hashPin(pin);
+                
+                // First, create table if it doesn't exist
+                await supabaseClient.rpc('create_pin_table_if_not_exists', {
+                    table_name: PIN_TABLES[userType]
+                }).catch(() => {
+                    // Table might already exist, continue
+                });
+                
+                // Store PIN
+                const { error } = await supabaseClient
+                    .from(PIN_TABLES[userType])
+                    .insert([{
+                        user_id: userId,
+                        phone: phone,
+                        pin_hash: hashedPin,
+                        created_at: new Date().toISOString()
+                    }]);
+                
+                if (error) {
+                    console.error('Error storing PIN:', error);
+                }
+            } catch (error) {
+                console.error('PIN storage error:', error);
             }
         }
 
@@ -1255,7 +1322,7 @@
             }
         }
 
-        // Generate agent code (2 letters + 3 numbers)
+        // Generate agent code
         function generateAgentCode(fullName) {
             const cleaned = fullName.toUpperCase().replace(/[^A-Z]/g, '');
             const letters = cleaned.substring(0, 2).padEnd(2, 'X');
@@ -1277,37 +1344,71 @@
             btn.innerHTML = 'Verifying<span class="loading"></span>';
             
             try {
-                // Hash the entered PIN
-                const hashedPin = await hashPin(pin);
-                
-                // Verify against database
                 let verified = false;
                 let userData = null;
                 
                 if (state.userType === 'agent') {
-                    const { data, error } = await supabaseClient
+                    // For agents, check both password_hash and pin columns
+                    const hashedPin = await hashPin(pin);
+                    
+                    // Try password_hash first
+                    let { data, error } = await supabaseClient
                         .from('agents')
                         .select('*')
                         .eq('phone', state.phone)
                         .eq('password_hash', hashedPin)
                         .single();
                     
-                    if (!error && data) {
-                        verified = true;
-                        userData = data;
+                    if (error || !data) {
+                        // Try plain PIN column
+                        const result = await supabaseClient
+                            .from('agents')
+                            .select('*')
+                            .eq('phone', state.phone)
+                            .eq('pin', pin)
+                            .single();
+                        
+                        data = result.data;
+                        error = result.error;
                     }
-                } else if (state.userType === 'rider') {
-                    const { data, error } = await supabaseClient
-                        .from('riders')
-                        .select('*')
-                        .eq('phone', state.phone)
-                        .eq('pin', hashedPin)
-                        .single();
                     
                     if (!error && data) {
                         verified = true;
                         userData = data;
                     }
+                    
+                } else if (state.userType === 'vendor') {
+                    // For vendors, check the vendor_pins table
+                    const hashedPin = await hashPin(pin);
+                    
+                    // First get vendor data
+                    const { data: vendor, error: vendorError } = await supabaseClient
+                        .from('vendors')
+                        .select('*')
+                        .eq('phone', state.phone)
+                        .single();
+                    
+                    if (!vendorError && vendor) {
+                        // Check PIN in vendor_pins table
+                        const { data: pinData, error: pinError } = await supabaseClient
+                            .from('vendor_pins')
+                            .select('*')
+                            .eq('user_id', vendor.id)
+                            .eq('pin_hash', hashedPin)
+                            .single();
+                        
+                        if (!pinError && pinData) {
+                            verified = true;
+                            userData = vendor;
+                        }
+                    }
+                    
+                } else if (state.userType === 'rider') {
+                    // Riders don't have PIN authentication
+                    showError('Riders must use the Rider app for authentication');
+                    btn.disabled = false;
+                    btn.textContent = 'Sign In';
+                    return;
                 }
                 
                 if (verified) {
@@ -1316,7 +1417,7 @@
                     // Store session
                     const sessionData = {
                         phone: state.phone,
-                        name: userData.agent_name || userData.rider_name || userData.name,
+                        name: userData.agent_name || userData.vendor_name || userData.name,
                         type: state.userType,
                         timestamp: Date.now()
                     };
@@ -1324,6 +1425,8 @@
                     if (state.userType === 'agent') {
                         sessionData.agentId = userData.id;
                         sessionData.code = userData.agent_code;
+                    } else if (state.userType === 'vendor') {
+                        sessionData.vendorId = userData.id;
                     }
                     
                     localStorage.setItem(`tuma_${state.userType}_session`, JSON.stringify(sessionData));
