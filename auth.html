@@ -838,13 +838,6 @@
             cameraStream: null
         };
 
-        // PIN storage table name for each user type
-        const PIN_TABLES = {
-            vendor: 'vendor_pins',
-            agent: 'agent_pins',
-            rider: 'rider_pins'
-        };
-
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
             setupPINInputs();
@@ -1107,7 +1100,7 @@
                         phone: state.phone,
                         email: state.formData.email || null,
                         status: 'active',
-                        vendor_type: 'direct',
+                        vendor_type: 'casual', // Valid values: 'casual' or 'managed'
                         created_at: new Date().toISOString()
                     };
                     
@@ -1120,14 +1113,20 @@
                     
                     if (vendorError) {
                         console.error('Vendor registration error:', vendorError);
-                        showError('Registration failed. Please try again.');
+                        if (vendorError.message.includes('duplicate')) {
+                            showError('This phone number is already registered');
+                        } else {
+                            showError('Registration failed. Please try again.');
+                        }
                         btn.disabled = false;
                         btn.textContent = 'Complete Registration';
                         return;
                     }
                     
-                    // Store PIN separately (create vendor_pins table if needed)
-                    await storePIN(vendor.id, state.phone, state.formData.pin, 'vendor');
+                    // Store PIN in vendor_pins table
+                    if (vendor && vendor.id) {
+                        await storePIN(vendor.id, state.phone, state.formData.pin, 'vendor');
+                    }
                     
                     showSuccess('Account created successfully!');
                     
@@ -1236,21 +1235,14 @@
             }
         }
 
-        // Store PIN in separate table (for vendors/riders without PIN columns)
+        // Store PIN in separate table (for vendors without PIN columns)
         async function storePIN(userId, phone, pin, userType) {
             try {
                 const hashedPin = await hashPin(pin);
                 
-                // First, create table if it doesn't exist
-                await supabaseClient.rpc('create_pin_table_if_not_exists', {
-                    table_name: PIN_TABLES[userType]
-                }).catch(() => {
-                    // Table might already exist, continue
-                });
-                
                 // Store PIN
                 const { error } = await supabaseClient
-                    .from(PIN_TABLES[userType])
+                    .from('vendor_pins')
                     .insert([{
                         user_id: userId,
                         phone: phone,
@@ -1260,6 +1252,8 @@
                 
                 if (error) {
                     console.error('Error storing PIN:', error);
+                    // Don't fail the registration if PIN storage fails
+                    // User can still reset PIN later
                 }
             } catch (error) {
                 console.error('PIN storage error:', error);
