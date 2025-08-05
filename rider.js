@@ -1659,7 +1659,30 @@ async function checkActiveDeliveries() {
         const storedRoute = localStorage.getItem('tuma_active_route');
         if (storedRoute) {
             try {
-                state.claimedRoute = JSON.parse(storedRoute);
+                const route = JSON.parse(storedRoute);
+                console.log('Found stored route:', route);
+                
+                // Check if all stops are completed
+                const allStopsCompleted = route.stops && route.stops.every(s => s.completed);
+                
+                if (allStopsCompleted) {
+                    console.log('All stops completed - clearing route');
+                    localStorage.removeItem('tuma_active_route');
+                    state.claimedRoute = null;
+                    
+                    // Hide navigation button
+                    const navButton = document.getElementById('navButton');
+                    if (navButton) navButton.style.display = 'none';
+                    
+                    // Hide active delivery section
+                    if (elements.activeDeliverySection) {
+                        elements.activeDeliverySection.style.display = 'none';
+                    }
+                    
+                    return; // No active route
+                }
+                
+                state.claimedRoute = route;
                 
                 // Disable all routes if there's an active route
                 if (state.availableRoutes) {
@@ -1680,11 +1703,16 @@ async function checkActiveDeliveries() {
             } catch (error) {
                 console.error('Error parsing stored route:', error);
                 localStorage.removeItem('tuma_active_route');
+                state.claimedRoute = null;
             }
         }
         
         // Skip database check for temporary riders
-        if (!state.rider || state.rider.id.startsWith('temp-')) return;
+        if (!state.rider || state.rider.id.startsWith('temp-')) {
+            console.log('No active route for temporary rider');
+            state.claimedRoute = null;
+            return;
+        }
         
         const activeParcels = await supabaseAPI.query('parcels', {
             filter: `rider_id=eq.${state.rider.id}&status=in.(route_assigned,picked,in_transit)`,
@@ -1704,10 +1732,14 @@ async function checkActiveDeliveries() {
             if (navButton) {
                 navButton.style.display = 'flex';
             }
+        } else {
+            console.log('No active parcels found');
+            state.claimedRoute = null;
         }
         
     } catch (error) {
         console.error('Error checking active deliveries:', error);
+        state.claimedRoute = null;
     }
 }
 
@@ -2045,7 +2077,7 @@ window.claimRoute = async function(routeId) {
                             `id=eq.${parcel.id}`,
                             { 
                                 rider_id: state.rider.id,
-                                status: 'assigned',
+                                status: 'route_assigned', // Changed from 'assigned' to 'route_assigned'
                                 assigned_at: new Date().toISOString()
                             }
                         );
@@ -2688,7 +2720,9 @@ window.tumaDebug = {
     
     clearStaleRoute: () => {
         localStorage.removeItem('tuma_active_route');
-        console.log('Cleared stored route');
+        localStorage.removeItem('tuma_route_completion');
+        state.claimedRoute = null;
+        console.log('Cleared stored route and completion data');
         window.location.reload();
     },
     
