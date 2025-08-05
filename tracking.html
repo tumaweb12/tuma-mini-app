@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Track Delivery - Tuma</title>
     
@@ -1114,6 +1114,8 @@
             showLoading();
 
             try {
+                console.log('Searching for parcel:', parcelCode);
+                
                 // Query parcel from database
                 const { data: parcel, error } = await supabaseClient
                     .from('parcels')
@@ -1124,7 +1126,58 @@
                     .eq('parcel_code', parcelCode)
                     .single();
 
-                if (error || !parcel) {
+                console.log('Query result:', { parcel, error });
+
+                if (error) {
+                    console.error('Supabase error:', error);
+                    
+                    // Try a simpler query without the join
+                    console.log('Trying simple query without join...');
+                    const { data: simpleParcel, error: simpleError } = await supabaseClient
+                        .from('parcels')
+                        .select('*')
+                        .eq('parcel_code', parcelCode)
+                        .single();
+                    
+                    console.log('Simple query result:', { simpleParcel, simpleError });
+                    
+                    if (simpleError) {
+                        showError('Parcel not found. Please check the code and try again.');
+                        return;
+                    }
+                    
+                    // If simple query works, use it and fetch rider separately
+                    trackingState.currentParcel = simpleParcel;
+                    
+                    // Try to fetch rider if rider_id exists
+                    if (simpleParcel.rider_id) {
+                        const { data: rider } = await supabaseClient
+                            .from('riders')
+                            .select('*')
+                            .eq('id', simpleParcel.rider_id)
+                            .single();
+                        
+                        if (rider) {
+                            trackingState.currentParcel.rider = rider;
+                        }
+                    }
+                    
+                    // Save to recent parcels
+                    saveToRecent(parcelCode);
+                    
+                    // Show tracking details
+                    showTrackingDetails(trackingState.currentParcel);
+                    
+                    // Setup real-time updates
+                    setupRealtimeUpdates(trackingState.currentParcel.id);
+                    
+                    // Start auto-refresh for location updates
+                    startLocationRefresh();
+                    
+                    return;
+                }
+
+                if (!parcel) {
                     showError('Parcel not found. Please check the code and try again.');
                     return;
                 }
