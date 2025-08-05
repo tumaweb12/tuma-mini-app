@@ -1117,7 +1117,7 @@
                 console.log('Searching for parcel:', parcelCode);
                 
                 // Query parcel from database
-                const { data: parcel, error } = await window.supabaseClient
+                const { data: parcel, error } = await supabaseClient
                     .from('parcels')
                     .select(`
                         *,
@@ -1133,7 +1133,7 @@
                     
                     // Try a simpler query without the join
                     console.log('Trying simple query without join...');
-                    const { data: simpleParcel, error: simpleError } = await window.supabaseClient
+                    const { data: simpleParcel, error: simpleError } = await supabaseClient
                         .from('parcels')
                         .select('*')
                         .eq('parcel_code', parcelCode)
@@ -1151,7 +1151,7 @@
                     
                     // Try to fetch rider if rider_id exists
                     if (simpleParcel.rider_id) {
-                        const { data: rider } = await window.supabaseClient
+                        const { data: rider } = await supabaseClient
                             .from('riders')
                             .select('*')
                             .eq('id', simpleParcel.rider_id)
@@ -1476,7 +1476,7 @@
 
         function setupRealtimeUpdates(parcelId) {
             // Subscribe to parcel updates
-            trackingState.realtimeSubscription = window.supabaseClient
+            trackingState.realtimeSubscription = supabaseClient
                 .channel(`parcel-${parcelId}`)
                 .on('postgres_changes', 
                     { 
@@ -1503,7 +1503,7 @@
             // Refresh rider location every 30 seconds
             trackingState.refreshInterval = setInterval(async () => {
                 if (trackingState.currentParcel && trackingState.currentParcel.rider_id) {
-                    const { data: rider } = await window.supabaseClient
+                    const { data: rider } = await supabaseClient
                         .from('riders')
                         .select('last_location_lat, last_location_lng, last_location_update')
                         .eq('id', trackingState.currentParcel.rider_id)
