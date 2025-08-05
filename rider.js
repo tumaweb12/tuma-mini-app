@@ -1035,11 +1035,16 @@ async function checkRouteCompletionStatus() {
         const data = JSON.parse(completionData);
         localStorage.removeItem('tuma_route_completion');
         
+        console.log('Processing route completion:', data);
+        
         if (data.completed && state.commissionTracker) {
+            // Calculate commission from the total earnings
+            const totalPrice = data.earnings / BUSINESS_CONFIG.commission.rider; // Convert rider earnings to total price
+            
             // Add the commission from the completed route
             const commissionResult = await state.commissionTracker.addDeliveryCommission(
                 'route-' + Date.now(),
-                data.earnings / 0.7 // Convert rider earnings back to total price
+                totalPrice
             );
             
             // Update display
@@ -1058,9 +1063,19 @@ async function checkRouteCompletionStatus() {
                 );
             }
             
-            // Update earnings display
-            await loadEarnings();
+            // Update earnings - add the route earnings to daily total
+            state.earnings.daily += data.earnings;
+            state.stats.deliveries += data.deliveries;
+            
+            // Update displays
             updateEarningsDisplay();
+            updateStatsDisplay();
+            
+            // Clear any active route state
+            state.claimedRoute = null;
+            localStorage.removeItem('tuma_active_route');
+            
+            showNotification(`Route completed! Earned KES ${data.earnings}`, 'success');
         }
     } catch (error) {
         console.error('Error processing route completion:', error);
@@ -1746,6 +1761,28 @@ async function checkActiveDeliveries() {
 function showActiveRoute() {
     if (!state.claimedRoute) return;
     
+    // Check if all stops are completed
+    const allComplete = state.claimedRoute.stops && state.claimedRoute.stops.every(s => s.completed);
+    if (allComplete) {
+        console.log('All stops completed - route should be cleared');
+        // Clear the route if all stops are complete
+        state.claimedRoute = null;
+        localStorage.removeItem('tuma_active_route');
+        
+        // Hide active delivery section
+        if (elements.activeDeliverySection) {
+            elements.activeDeliverySection.style.display = 'none';
+        }
+        
+        // Hide navigation button
+        const navButton = document.getElementById('navButton');
+        if (navButton) {
+            navButton.style.display = 'none';
+        }
+        
+        return;
+    }
+    
     const activeStops = state.claimedRoute.stops.filter(s => !s.completed);
     if (activeStops.length === 0) return;
     
@@ -2283,6 +2320,8 @@ window.verifyCode = async function(type) {
                     deliveries: state.claimedRoute.stops.filter(s => s.type === 'delivery').length,
                     timestamp: new Date().toISOString()
                 };
+                
+                console.log('Storing route completion data:', completionData);
                 localStorage.setItem('tuma_route_completion', JSON.stringify(completionData));
                 
                 // Clear active route state
@@ -2726,6 +2765,47 @@ window.tumaDebug = {
         state.claimedRoute = null;
         console.log('Cleared stored route and completion data');
         window.location.reload();
+    },
+    
+    syncRouteCompletion: async () => {
+        // Force process any pending route completion
+        await checkRouteCompletionStatus();
+        
+        // Check if current route is actually complete
+        if (state.claimedRoute && state.claimedRoute.stops) {
+            const allComplete = state.claimedRoute.stops.every(s => s.completed);
+            if (allComplete) {
+                console.log('Current route is complete - clearing');
+                
+                // Calculate earnings
+                let totalEarnings = 0;
+                if (state.claimedRoute.total_earnings) {
+                    totalEarnings = state.claimedRoute.total_earnings * BUSINESS_CONFIG.commission.rider;
+                } else if (state.claimedRoute.parcels) {
+                    totalEarnings = state.claimedRoute.parcels.reduce((sum, p) => 
+                        sum + ((p.price || 500) * BUSINESS_CONFIG.commission.rider), 0
+                    );
+                }
+                
+                // Store completion
+                const completionData = {
+                    completed: true,
+                    earnings: Math.round(totalEarnings),
+                    deliveries: state.claimedRoute.stops.filter(s => s.type === 'delivery').length,
+                    timestamp: new Date().toISOString()
+                };
+                
+                localStorage.setItem('tuma_route_completion', JSON.stringify(completionData));
+                localStorage.removeItem('tuma_active_route');
+                state.claimedRoute = null;
+                
+                // Process completion
+                await checkRouteCompletionStatus();
+                
+                // Reload routes
+                await loadAvailableRoutes();
+            }
+        }
     },
     
     analyzeRoutes: () => {
