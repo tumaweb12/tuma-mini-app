@@ -1,7 +1,7 @@
 /**
  * Complete Enhanced Route Navigation Module with OpenRouteService
- * Fixed version with improved UI/UX
- * Part 1: Core initialization, map setup, and UI functions
+ * Fixed version with improved synchronization and direct API calls
+ * Includes commission tracking and proper route completion handling
  */
 
 // Development Configuration
@@ -45,7 +45,7 @@ const state = {
     lastLocationTime: null,
     pickupPhaseCompleted: false,
     isPanelVisible: true,
-    isPanelExpanded: false, // Track panel expansion state
+    isPanelExpanded: false,
     navigationActive: false,
     currentSpeed: 0,
     currentHeading: 0,
@@ -56,13 +56,100 @@ const state = {
     config: config,
     locationWatchId: null,
     accuracyCircle: null,
-    radiusCircle: null // Track radius circle to remove it
+    radiusCircle: null,
+    totalRouteEarnings: 0, // Track total earnings
+    routeCommission: 0 // Track total commission
 };
 
 // API Configuration
 const OPENROUTE_API_KEY = '5b3ce3597851110001cf624841e48578ffb34c6b96dfe3bbe9b3ad4c';
 const SUPABASE_URL = 'https://btxavqfoirdzwpfrvezp.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ0eGF2cWZvaXJkendwZnJ2ZXpwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE0ODcxMTcsImV4cCI6MjA2NzA2MzExN30.kQKpukFGx-cBl1zZRuXmex02ifkZ751WCUfQPogYutk';
+
+// Business configuration (matching rider.js)
+const BUSINESS_CONFIG = {
+    commission: {
+        rider: 0.70,      // 70% of delivery fee goes to rider
+        platform: 0.30,   // 30% platform fee
+        maxUnpaid: 300,   // Max unpaid commission before blocking
+        warningThreshold: 250  // Show warning at this amount
+    }
+};
+
+// Direct API functions (no wrapper)
+async function supabaseQuery(table, options = {}) {
+    const { select = '*', filter = '', order = '', limit } = options;
+    
+    let url = `${SUPABASE_URL}/rest/v1/${table}?select=${select}`;
+    if (filter) url += `&${filter}`;
+    if (order) url += `&order=${order}`;
+    if (limit) url += `&limit=${limit}`;
+    
+    const response = await fetch(url, {
+        headers: {
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+            'Content-Type': 'application/json'
+        }
+    });
+    
+    if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`API Error: ${response.status} ${errorText}`);
+        throw new Error(`API Error: ${response.status}`);
+    }
+    
+    return await response.json();
+}
+
+async function supabaseUpdate(table, filter, data) {
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${filter}`, {
+        method: 'PATCH',
+        headers: {
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=representation'
+        },
+        body: JSON.stringify(data)
+    });
+    
+    if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`Update Error: ${response.status} ${errorText}`);
+        throw new Error(`Update Error: ${response.status}`);
+    }
+    
+    return await response.json();
+}
+
+// Helper function to parse price from various formats
+function parsePrice(priceValue) {
+    if (typeof priceValue === 'number') return priceValue;
+    if (typeof priceValue === 'string') {
+        // Remove currency symbols and commas, then parse
+        const cleaned = priceValue.replace(/[^0-9.-]+/g, '');
+        return parseFloat(cleaned) || 0;
+    }
+    return 0;
+}
+
+// Sync helper function
+async function syncRouteData() {
+    if (!state.activeRoute) return;
+    
+    try {
+        // Update localStorage
+        localStorage.setItem('tuma_active_route', JSON.stringify(state.activeRoute));
+        
+        // If route is complete, prepare completion data
+        if (state.activeRoute.stops && state.activeRoute.stops.every(s => s.completed)) {
+            await handleRouteCompletion();
+        }
+    } catch (error) {
+        console.error('Error syncing route data:', error);
+    }
+}
 
 // CSS injection function for navigation styles
 function injectNavigationStyles() {
@@ -297,6 +384,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             state.activeRoute = JSON.parse(storedRoute);
             console.log('Parsed route:', state.activeRoute);
             
+            // Calculate total earnings and commission for the route
+            calculateRouteFinancials();
+            
             // Initialize map with rotation enabled
             await initializeMap();
             
@@ -330,6 +420,41 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 });
 
+// Calculate route financials
+function calculateRouteFinancials() {
+    if (!state.activeRoute) return;
+    
+    state.totalRouteEarnings = 0;
+    state.routeCommission = 0;
+    
+    // Calculate from parcels if available
+    if (state.activeRoute.parcels && state.activeRoute.parcels.length > 0) {
+        state.activeRoute.parcels.forEach(parcel => {
+            const price = parsePrice(parcel.price || parcel.total_price || 500);
+            const riderPayout = price * BUSINESS_CONFIG.commission.rider;
+            const commission = price * BUSINESS_CONFIG.commission.platform;
+            
+            state.totalRouteEarnings += riderPayout;
+            state.routeCommission += commission;
+        });
+    } else if (state.activeRoute.total_earnings) {
+        // Use route total earnings
+        const totalPrice = parsePrice(state.activeRoute.total_earnings);
+        state.totalRouteEarnings = totalPrice * BUSINESS_CONFIG.commission.rider;
+        state.routeCommission = totalPrice * BUSINESS_CONFIG.commission.platform;
+    } else {
+        // Fallback calculation
+        const deliveryCount = state.activeRoute.stops?.filter(s => s.type === 'delivery').length || 0;
+        state.totalRouteEarnings = deliveryCount * 350; // Default earnings per delivery
+        state.routeCommission = deliveryCount * 150; // Default commission per delivery
+    }
+    
+    console.log('Route financials calculated:', {
+        earnings: state.totalRouteEarnings,
+        commission: state.routeCommission
+    });
+}
+
 // Initialize Leaflet Map with rotation support
 async function initializeMap() {
     console.log('Initializing map with rotation support...');
@@ -361,8 +486,8 @@ async function initializeMap() {
         zoomControl: false,
         rotate: true,
         bearing: 0,
-        touchRotate: true, // Enable touch rotation
-        shiftKeyRotate: true, // Enable shift+drag rotation
+        touchRotate: true,
+        shiftKeyRotate: true,
         rotateControl: {
             closeOnZeroBearing: false,
             position: 'topleft'
@@ -398,6 +523,53 @@ async function initializeMap() {
     }, 100);
     
     console.log('Map initialized with rotation enabled');
+}
+
+// Handle route completion
+async function handleRouteCompletion() {
+    console.log('Handling route completion...');
+    
+    // Calculate final earnings
+    const deliveryCount = state.activeRoute.stops.filter(s => s.type === 'delivery').length;
+    
+    // Create completion data
+    const completionData = {
+        completed: true,
+        earnings: Math.round(state.totalRouteEarnings),
+        commission: Math.round(state.routeCommission),
+        deliveries: deliveryCount,
+        stops: state.activeRoute.stops.length,
+        timestamp: new Date().toISOString(),
+        routeId: state.activeRoute.id,
+        parcels: state.activeRoute.parcels || []
+    };
+    
+    console.log('Storing completion data:', completionData);
+    
+    // Store completion data for rider.js to process
+    localStorage.setItem('tuma_route_completion', JSON.stringify(completionData));
+    
+    // Clear active route
+    localStorage.removeItem('tuma_active_route');
+    
+    // Update parcels in database if not demo route
+    if (!state.activeRoute.id?.startsWith('demo-')) {
+        try {
+            // Update all parcels to delivered status
+            for (const parcel of (state.activeRoute.parcels || [])) {
+                await supabaseUpdate('parcels',
+                    `id=eq.${parcel.id}`,
+                    {
+                        status: 'delivered',
+                        delivery_timestamp: new Date().toISOString()
+                    }
+                );
+            }
+        } catch (error) {
+            console.error('Error updating parcel status:', error);
+            // Continue anyway - local state is already updated
+        }
+    }
 }
 
 // Create enhanced rider icon with better visibility
@@ -484,15 +656,6 @@ window.toggleRoutePanel = function() {
         }, 300);
     }
 };
-
-// Collapse panel (make it draggable)
-function collapsePanel() {
-    const routePanel = document.getElementById('routePanel');
-    if (routePanel && state.isPanelVisible && !state.isPanelExpanded) {
-        routePanel.style.transform = 'translateY(calc(100% - 140px))';
-        routePanel.style.maxHeight = '140px';
-    }
-}
 
 // Enhance route panel with drag functionality
 function enhanceRoutePanel() {
@@ -595,8 +758,6 @@ function updateCurrentLocation(position) {
                     zIndexOffset: 1000
                 }
             ).addTo(state.map);
-            
-            // Don't add accuracy circle - it's confusing
         } else {
             // Update position
             state.currentLocationMarker.setLatLng([state.currentLocation.lat, state.currentLocation.lng]);
@@ -638,11 +799,11 @@ function updateCurrentLocation(position) {
 
 // Calculate zoom level based on speed
 function calculateZoomFromSpeed(speed) {
-    if (speed > 60) return 15;      // Highway speed
-    if (speed > 40) return 16;      // Normal driving
-    if (speed > 20) return 17;      // City driving
-    if (speed > 5) return 18;       // Slow/walking
-    return 18;                      // Stationary
+    if (speed > 60) return 15;
+    if (speed > 40) return 16;
+    if (speed > 20) return 17;
+    if (speed > 5) return 18;
+    return 18;
 }
 
 // Calculate bearing between two points
@@ -758,9 +919,6 @@ window.toggleFollowMode = function() {
 // Toggle heading up mode
 window.toggleHeadingMode = function() {
     state.config.headingUp = !state.config.headingUp;
-    
-    // Note: Map rotation requires a plugin like Leaflet.Rotate
-    // For now, this just toggles the setting
     
     showNotification(state.config.headingUp ? 'Heading up mode (rotation requires plugin)' : 'North up mode', 'info');
 };
@@ -1710,7 +1868,6 @@ window.exitEnhancedNavigation = function() {
     state.navigationActive = false;
     state.isFollowingUser = false;
     
-    // Don't show the panel when exiting navigation
     const routePanel = document.getElementById('routePanel');
     if (routePanel) {
         routePanel.style.display = 'none';
@@ -1724,7 +1881,6 @@ window.exitEnhancedNavigation = function() {
         navControls.style.bottom = 'calc(30px + var(--safe-area-bottom))';
     }
     
-    // Update the details button to show correct state
     const toggleBtn = document.querySelector('.nav-button.secondary');
     if (toggleBtn) {
         toggleBtn.innerHTML = `
@@ -1990,7 +2146,7 @@ window.closeVerificationModal = function() {
     }
 };
 
-// Verify code
+// Verify code with improved sync
 window.verifyCode = async function(stopId) {
     const stop = state.activeRoute.stops.find(s => s.id === stopId);
     if (!stop) return;
@@ -2010,14 +2166,33 @@ window.verifyCode = async function(stopId) {
         return;
     }
     
+    // Mark stop as completed
     stop.completed = true;
     stop.timestamp = new Date();
     
-    localStorage.setItem('tuma_active_route', JSON.stringify(state.activeRoute));
+    // Save immediately
+    await syncRouteData();
     
     closeVerificationModal();
     showSuccessAnimation(stop.type);
     
+    // Update database for non-demo routes
+    if (!state.activeRoute.id?.startsWith('demo-')) {
+        try {
+            await supabaseUpdate('parcels',
+                `id=eq.${stop.parcelId}`,
+                {
+                    status: stop.type === 'pickup' ? 'picked' : 'delivered',
+                    [`${stop.type}_timestamp`]: stop.timestamp.toISOString()
+                }
+            );
+        } catch (error) {
+            console.error('Database update error:', error);
+            // Continue anyway - local state is already updated
+        }
+    }
+    
+    // Refresh UI
     displayRouteInfo();
     updateDynamicHeader();
     plotRoute();
@@ -2025,8 +2200,9 @@ window.verifyCode = async function(stopId) {
     
     checkPhaseCompletion();
     
+    // Check if route is complete
     if (state.activeRoute.stops.every(s => s.completed)) {
-        completeRoute();
+        await completeRoute();
     } else {
         const nextStop = getNextStop();
         if (nextStop && state.navigationActive) {
@@ -2077,11 +2253,14 @@ function showPhaseCompleteAnimation() {
     setTimeout(() => animation.remove(), 3000);
 }
 
-// Complete route
-function completeRoute() {
-    const totalEarnings = state.activeRoute.total_earnings || 0;
-    const riderEarnings = Math.round(totalEarnings * 0.7);
+// Complete route with proper sync
+async function completeRoute() {
+    console.log('Completing route...');
     
+    // Handle completion and store data
+    await handleRouteCompletion();
+    
+    // Show completion animation
     const animation = document.createElement('div');
     animation.className = 'route-complete-animation';
     animation.innerHTML = `
@@ -2095,7 +2274,7 @@ function completeRoute() {
                     <span class="stat-label">Stops</span>
                 </div>
                 <div class="stat">
-                    <span class="stat-value">KES ${riderEarnings}</span>
+                    <span class="stat-value">KES ${Math.round(state.totalRouteEarnings)}</span>
                     <span class="stat-label">Earned</span>
                 </div>
             </div>
@@ -2106,18 +2285,10 @@ function completeRoute() {
     `;
     
     document.body.appendChild(animation);
-    
-    localStorage.setItem('tuma_route_completion', JSON.stringify({
-        completed: true,
-        earnings: riderEarnings,
-        stops: state.activeRoute.stops.length,
-        timestamp: new Date()
-    }));
 }
 
 // Finish route
 window.finishRoute = function() {
-    localStorage.removeItem('tuma_active_route');
     window.location.href = './rider.html';
 };
 
@@ -2740,42 +2911,34 @@ window.routeDebug = {
     },
     clearRoute: () => {
         localStorage.removeItem('tuma_active_route');
+        localStorage.removeItem('tuma_route_completion');
         window.location.reload();
     },
-    testOpenRoute: async () => {
-        const testCoords = [
-            [36.8219, -1.2921],
-            [36.7853, -1.2906]
-        ];
-        
-        try {
-            const response = await fetch('https://api.openrouteservice.org/v2/directions/driving-car', {
-                method: 'POST',
-                headers: {
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/json',
-                    'Authorization': OPENROUTE_API_KEY
-                },
-                body: JSON.stringify({ coordinates: testCoords })
+    forceComplete: async () => {
+        // Mark all stops as completed
+        if (state.activeRoute && state.activeRoute.stops) {
+            state.activeRoute.stops.forEach(stop => {
+                stop.completed = true;
+                stop.timestamp = new Date();
             });
-            
-            const data = await response.json();
-            console.log('OpenRouteService test:', data);
-            return data;
-        } catch (error) {
-            console.error('OpenRouteService test failed:', error);
+            await syncRouteData();
+            await completeRoute();
         }
     },
-    toggleFollowMode: () => {
-        state.isFollowingUser = !state.isFollowingUser;
-        console.log('Follow mode:', state.isFollowingUser);
+    checkCompletion: () => {
+        const completionData = localStorage.getItem('tuma_route_completion');
+        console.log('Stored completion data:', completionData);
+        return completionData ? JSON.parse(completionData) : null;
     },
-    setHeadingUp: (enabled) => {
-        state.config.headingUp = enabled;
-        console.log('Heading up mode:', enabled);
+    calculateFinancials: () => {
+        calculateRouteFinancials();
+        console.log('Route financials:', {
+            totalEarnings: state.totalRouteEarnings,
+            totalCommission: state.routeCommission
+        });
     }
 };
 
-console.log('✅ Fixed Route.js loaded successfully!');
-console.log('Features: No radius circles, improved rider icon, fixed button positioning');
+console.log('✅ Fixed Route.js loaded successfully with improved synchronization!');
+console.log('Features: Direct API calls, proper price parsing, better error handling, sync helpers');
 console.log('Debug commands: window.routeDebug');
