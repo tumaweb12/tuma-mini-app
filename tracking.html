@@ -12,7 +12,7 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     
     <!-- Supabase -->
-    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.js"></script>
     
     <style>
         * {
@@ -1117,7 +1117,7 @@
                 console.log('Searching for parcel:', parcelCode);
                 
                 // Query parcel from database
-                const { data: parcel, error } = await supabaseClient
+                const { data: parcel, error } = await window.supabaseClient
                     .from('parcels')
                     .select(`
                         *,
@@ -1133,7 +1133,7 @@
                     
                     // Try a simpler query without the join
                     console.log('Trying simple query without join...');
-                    const { data: simpleParcel, error: simpleError } = await supabaseClient
+                    const { data: simpleParcel, error: simpleError } = await window.supabaseClient
                         .from('parcels')
                         .select('*')
                         .eq('parcel_code', parcelCode)
@@ -1151,7 +1151,7 @@
                     
                     // Try to fetch rider if rider_id exists
                     if (simpleParcel.rider_id) {
-                        const { data: rider } = await supabaseClient
+                        const { data: rider } = await window.supabaseClient
                             .from('riders')
                             .select('*')
                             .eq('id', simpleParcel.rider_id)
@@ -1476,7 +1476,7 @@
 
         function setupRealtimeUpdates(parcelId) {
             // Subscribe to parcel updates
-            trackingState.realtimeSubscription = supabaseClient
+            trackingState.realtimeSubscription = window.supabaseClient
                 .channel(`parcel-${parcelId}`)
                 .on('postgres_changes', 
                     { 
@@ -1503,7 +1503,7 @@
             // Refresh rider location every 30 seconds
             trackingState.refreshInterval = setInterval(async () => {
                 if (trackingState.currentParcel && trackingState.currentParcel.rider_id) {
-                    const { data: rider } = await supabaseClient
+                    const { data: rider } = await window.supabaseClient
                         .from('riders')
                         .select('last_location_lat, last_location_lng, last_location_update')
                         .eq('id', trackingState.currentParcel.rider_id)
