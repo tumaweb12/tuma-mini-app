@@ -2141,6 +2141,7 @@ window.verifyCode = async function(type) {
             activeStop.timestamp = new Date();
             
             // Update parcel status in database (skip for temporary riders)
+            let dbError = null; // Define dbError in outer scope
             if (!state.rider.id.startsWith('temp-')) {
                 try {
                     await supabaseAPI.update('parcels',
@@ -2150,13 +2151,14 @@ window.verifyCode = async function(type) {
                             [`${type}_timestamp`]: activeStop.timestamp.toISOString()
                         }
                     );
-                } catch (dbError) {
-                    console.error('Database update error:', dbError);
+                } catch (error) {
+                    dbError = error; // Store the error
+                    console.error('Database update error:', error);
                     
                     // If it's the agent_notifications trigger error, continue anyway
-                    if (dbError.message && (
-                        dbError.message.includes('agent_notifications') ||
-                        dbError.message.includes('column "title"')
+                    if (error.message && (
+                        error.message.includes('agent_notifications') ||
+                        error.message.includes('column "title"')
                     )) {
                         console.log('Continuing despite agent_notifications error');
                         showNotification(
@@ -2168,7 +2170,7 @@ window.verifyCode = async function(type) {
                         // Don't throw - continue with local state update
                     } else {
                         // For other errors, still continue but warn
-                        console.error('Unexpected database error:', dbError);
+                        console.error('Unexpected database error:', error);
                         showNotification(
                             `${type.charAt(0).toUpperCase() + type.slice(1)} recorded locally. Sync pending.`, 
                             'warning'
