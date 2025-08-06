@@ -145,7 +145,11 @@ const EnhancedRouteManager = {
                 specialInstructions: parcel.delivery_instructions,
                 completed: false,
                 timestamp: null,
-                dependsOn: `${parcel.id}-pickup`
+                dependsOn: `${parcel.id}-pickup`,
+                // Payment information
+                paymentMethod: parcel.payment_method || 'cash',
+                paymentStatus: parcel.payment_status || 'pending',
+                amountToCollect: parcel.payment_status === 'pending' ? (parcel.price || 500) : 0
             });
         });
         
@@ -1901,6 +1905,26 @@ function showActiveRoute() {
                 <span>Code: ${nextStop.parcelCode}</span>
                 <span>Customer: ${nextStop.customerName}</span>
             </div>
+            
+            ${nextStop.type === 'delivery' && nextStop.amountToCollect > 0 ? `
+                <div class="payment-info">
+                    <div class="collect-amount">
+                        <span class="collect-label">Collect Cash:</span>
+                        <span class="collect-value">KES ${nextStop.amountToCollect.toLocaleString()}</span>
+                    </div>
+                    <div class="payment-note">
+                        <span class="note-icon">💵</span>
+                        <span>Customer pays on delivery</span>
+                    </div>
+                </div>
+            ` : nextStop.type === 'delivery' && nextStop.paymentStatus === 'paid' ? `
+                <div class="payment-info paid">
+                    <div class="paid-indicator">
+                        <span class="paid-icon">✅</span>
+                        <span>Already paid - No collection needed</span>
+                    </div>
+                </div>
+            ` : ''}
         </div>
     `;
     
@@ -2265,6 +2289,15 @@ window.verifyCode = async function(type) {
             
             // Handle commission for deliveries
             if (type === 'delivery') {
+                // Check if rider needs to collect payment
+                if (activeStop.amountToCollect > 0) {
+                    // Show payment collection reminder
+                    showNotification(
+                        `Remember to collect KES ${activeStop.amountToCollect.toLocaleString()} from ${activeStop.customerName}`,
+                        'warning'
+                    );
+                }
+                
                 // Find the parcel
                 let deliveryPrice = 0;
                 
@@ -2344,6 +2377,10 @@ window.verifyCode = async function(type) {
             // Check if route is complete BEFORE updating UI
             const allComplete = state.claimedRoute.stops.every(s => s.completed);
             if (allComplete) {
+                // Calculate total collected and earnings
+                const deliveryStops = state.claimedRoute.stops.filter(s => s.type === 'delivery');
+                const totalCollected = deliveryStops.reduce((sum, stop) => sum + (stop.amountToCollect || 0), 0);
+                
                 // Calculate total earnings for the route
                 let totalEarnings = 0;
                 if (state.claimedRoute.total_earnings) {
@@ -2358,11 +2395,17 @@ window.verifyCode = async function(type) {
                     totalEarnings = state.claimedRoute.stops.filter(s => s.type === 'delivery').length * 350;
                 }
                 
+                // Show route completion summary if cash was collected
+                if (totalCollected > 0) {
+                    showRouteCompletionSummary(totalCollected, totalEarnings, deliveryStops.length);
+                }
+                
                 // Store completion data for commission tracking
                 const completionData = {
                     completed: true,
                     earnings: Math.round(totalEarnings),
-                    deliveries: state.claimedRoute.stops.filter(s => s.type === 'delivery').length,
+                    deliveries: deliveryStops.length,
+                    totalCollected: totalCollected,
                     timestamp: new Date().toISOString()
                 };
                 
@@ -2584,6 +2627,245 @@ window.goBack = function() {
     }
 };
 
+// Show route completion summary with collection details
+function showRouteCompletionSummary(totalCollected, riderEarnings, deliveryCount) {
+    // Calculate platform commission (30% of total)
+    const platformCommission = Math.round(totalCollected * BUSINESS_CONFIG.commission.platform);
+    const riderKeeps = Math.round(totalCollected * BUSINESS_CONFIG.commission.rider);
+    
+    const summary = document.createElement('div');
+    summary.className = 'route-completion-summary';
+    summary.innerHTML = `
+        <div class="summary-content">
+            <div class="summary-icon">🎉</div>
+            <h2>Route Completed!</h2>
+            
+            <div class="summary-stats">
+                <div class="stat-item">
+                    <span class="stat-label">Deliveries Completed</span>
+                    <span class="stat-value">${deliveryCount}</span>
+                </div>
+                
+                <div class="stat-item highlight-green">
+                    <span class="stat-label">Cash Collected</span>
+                    <span class="stat-value cash">KES ${totalCollected.toLocaleString()}</span>
+                </div>
+                
+                <div class="stat-breakdown">
+                    <div class="breakdown-item keep">
+                        <span class="breakdown-label">Your Earnings (70%)</span>
+                        <span class="breakdown-value">KES ${riderKeeps.toLocaleString()}</span>
+                    </div>
+                    
+                    <div class="breakdown-item remit">
+                        <span class="breakdown-label">Platform Commission (30%)</span>
+                        <span class="breakdown-value">KES ${platformCommission.toLocaleString()}</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="collection-reminder">
+                <div class="reminder-icon">💰</div>
+                <div class="reminder-text">
+                    <strong>Commission Due:</strong>
+                    <p>From the KES ${totalCollected.toLocaleString()} collected, you keep KES ${riderKeeps.toLocaleString()} as your earnings.</p>
+                    <p class="commission-due">Please remit KES ${platformCommission.toLocaleString()} platform commission.</p>
+                </div>
+            </div>
+            
+            <button class="continue-btn" onclick="closeCompletionSummary()">
+                Continue
+            </button>
+        </div>
+    `;
+    
+    document.body.appendChild(summary);
+    
+    // Add styles if not present
+    if (!document.getElementById('completion-summary-styles')) {
+        const style = document.createElement('style');
+        style.id = 'completion-summary-styles';
+        style.textContent = `
+            .route-completion-summary {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0, 0, 0, 0.95);
+                backdrop-filter: blur(20px);
+                z-index: 10001;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 20px;
+                animation: fadeIn 0.3s ease-out;
+            }
+            
+            .summary-content {
+                background: var(--surface-elevated);
+                border-radius: 24px;
+                padding: 32px;
+                max-width: 440px;
+                width: 100%;
+                text-align: center;
+            }
+            
+            .summary-icon {
+                font-size: 64px;
+                margin-bottom: 20px;
+            }
+            
+            .summary-content h2 {
+                font-size: 28px;
+                font-weight: 700;
+                margin-bottom: 24px;
+                color: var(--text-primary);
+            }
+            
+            .summary-stats {
+                display: grid;
+                gap: 16px;
+                margin-bottom: 24px;
+            }
+            
+            .stat-item {
+                background: var(--surface-high);
+                border-radius: 12px;
+                padding: 16px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
+            
+            .stat-item.highlight-green {
+                background: rgba(52, 199, 89, 0.1);
+                border: 2px solid var(--success);
+            }
+            
+            .stat-label {
+                font-size: 16px;
+                color: var(--text-secondary);
+            }
+            
+            .stat-value {
+                font-size: 24px;
+                font-weight: 700;
+                color: var(--text-primary);
+            }
+            
+            .stat-value.cash {
+                color: var(--success);
+            }
+            
+            .stat-breakdown {
+                display: grid;
+                gap: 12px;
+                margin-top: -8px;
+            }
+            
+            .breakdown-item {
+                background: var(--surface-high);
+                border-radius: 10px;
+                padding: 12px 16px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                font-size: 15px;
+            }
+            
+            .breakdown-item.keep {
+                background: rgba(52, 199, 89, 0.05);
+                border: 1px solid rgba(52, 199, 89, 0.3);
+            }
+            
+            .breakdown-item.remit {
+                background: rgba(255, 159, 10, 0.05);
+                border: 1px solid rgba(255, 159, 10, 0.3);
+            }
+            
+            .breakdown-label {
+                color: var(--text-secondary);
+                font-weight: 500;
+            }
+            
+            .breakdown-value {
+                font-weight: 700;
+                color: var(--text-primary);
+            }
+            
+            .breakdown-item.keep .breakdown-value {
+                color: var(--success);
+            }
+            
+            .breakdown-item.remit .breakdown-value {
+                color: var(--warning);
+            }
+            
+            .collection-reminder {
+                background: rgba(255, 159, 10, 0.1);
+                border: 2px solid var(--warning);
+                border-radius: 12px;
+                padding: 16px;
+                margin-bottom: 24px;
+                display: flex;
+                gap: 12px;
+                text-align: left;
+            }
+            
+            .reminder-icon {
+                font-size: 24px;
+                flex-shrink: 0;
+            }
+            
+            .reminder-text strong {
+                color: var(--warning);
+                font-size: 14px;
+                font-weight: 700;
+                display: block;
+                margin-bottom: 4px;
+            }
+            
+            .reminder-text p {
+                font-size: 14px;
+                color: var(--text-secondary);
+                margin: 0 0 4px 0;
+                line-height: 1.5;
+            }
+            
+            .reminder-text .commission-due {
+                font-weight: 600;
+                color: var(--text-primary);
+            }
+            
+            .continue-btn {
+                width: 100%;
+                background: var(--primary);
+                color: white;
+                border: none;
+                border-radius: 12px;
+                padding: 16px;
+                font-size: 18px;
+                font-weight: 700;
+                cursor: pointer;
+                transition: opacity 0.2s;
+            }
+            
+            .continue-btn:hover {
+                opacity: 0.9;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+}
+
+window.closeCompletionSummary = function() {
+    const summary = document.querySelector('.route-completion-summary');
+    if (summary) {
+        summary.remove();
+    }
+};
+
 // ─── Custom Styles Function ────────────────────────────────────────────────
 
 function addCustomStyles() {
@@ -2640,6 +2922,162 @@ function addCustomStyles() {
             
             @keyframes spin {
                 to { transform: rotate(360deg); }
+            }
+            
+            /* Payment collection styles */
+            .payment-info {
+                background: var(--warning-light, rgba(255, 159, 10, 0.1));
+                border: 2px solid var(--warning);
+                border-radius: 12px;
+                padding: 16px;
+                margin-top: 16px;
+            }
+            
+            .payment-info.paid {
+                background: var(--success-light, rgba(52, 199, 89, 0.1));
+                border-color: var(--success);
+            }
+            
+            .collect-amount {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 8px;
+            }
+            
+            .collect-label {
+                font-size: 16px;
+                font-weight: 600;
+                color: var(--text-secondary);
+            }
+            
+            .collect-value {
+                font-size: 28px;
+                font-weight: 700;
+                color: var(--warning);
+            }
+            
+            .payment-note,
+            .paid-indicator {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                font-size: 14px;
+                color: var(--text-secondary);
+            }
+            
+            .note-icon,
+            .paid-icon {
+                font-size: 18px;
+            }
+            
+            .paid-indicator {
+                color: var(--success);
+                font-weight: 600;
+            }
+            
+            /* Active route info styles */
+            .active-route-info {
+                margin-bottom: 16px;
+            }
+            
+            .route-progress-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 8px;
+                font-size: 14px;
+            }
+            
+            .progress-label {
+                color: var(--text-secondary);
+                font-weight: 600;
+            }
+            
+            .progress-stats {
+                color: var(--text-primary);
+                font-weight: 700;
+            }
+            
+            .route-progress-bar {
+                height: 6px;
+                background: var(--surface-high);
+                border-radius: 3px;
+                overflow: hidden;
+            }
+            
+            .progress-fill {
+                height: 100%;
+                background: var(--primary);
+                border-radius: 3px;
+                transition: width 0.3s ease;
+            }
+            
+            .carrying-indicator {
+                background: var(--primary-light, rgba(0, 122, 255, 0.1));
+                border: 1px solid var(--primary);
+                border-radius: 8px;
+                padding: 8px 12px;
+                display: inline-flex;
+                align-items: center;
+                gap: 8px;
+                font-size: 14px;
+                font-weight: 600;
+                color: var(--primary);
+                margin-bottom: 16px;
+            }
+            
+            .carrying-icon {
+                font-size: 18px;
+            }
+            
+            .next-stop-info {
+                background: var(--surface-high);
+                border-radius: 12px;
+                padding: 16px;
+            }
+            
+            .stop-type-badge {
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                padding: 6px 12px;
+                border-radius: 20px;
+                font-size: 12px;
+                font-weight: 700;
+                text-transform: uppercase;
+                margin-bottom: 12px;
+            }
+            
+            .stop-type-badge.pickup {
+                background: var(--primary-light, rgba(0, 122, 255, 0.1));
+                color: var(--primary);
+            }
+            
+            .stop-type-badge.delivery {
+                background: var(--success-light, rgba(52, 199, 89, 0.1));
+                color: var(--success);
+            }
+            
+            .stop-address {
+                font-size: 18px;
+                font-weight: 700;
+                color: var(--text-primary);
+                margin-bottom: 8px;
+                line-height: 1.3;
+            }
+            
+            .stop-details {
+                display: flex;
+                gap: 16px;
+                font-size: 14px;
+                color: var(--text-secondary);
+            }
+            
+            .stop-details span {
+                display: flex;
+                align-items: center;
+                gap: 4px;
             }
         `;
         document.head.appendChild(style);
