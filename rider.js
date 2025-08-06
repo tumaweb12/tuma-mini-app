@@ -1069,6 +1069,30 @@ async function checkRouteCompletionStatus() {
         console.log('Processing route completion:', data);
         
         if (data.completed && state.commissionTracker) {
+            // Calculate total cash collected from parcels
+            let totalCashCollected = 0;
+            
+            if (data.parcels && data.parcels.length > 0) {
+                // Sum up cash from all parcels where payment was pending
+                data.parcels.forEach(parcel => {
+                    if (parcel.payment_status === 'pending' || !parcel.payment_status) {
+                        totalCashCollected += parsePrice(parcel.price || parcel.total_price || 500);
+                    }
+                });
+            } else {
+                // Fallback: assume all deliveries were cash on delivery
+                totalCashCollected = data.deliveries * 500;
+            }
+            
+            // Show route completion summary if cash was collected
+            if (totalCashCollected > 0) {
+                // Show the completion summary first
+                showRouteCompletionSummary(totalCashCollected, data.earnings, data.deliveries);
+                
+                // Also show a persistent reminder in the UI
+                showCashCollectionReminder(totalCashCollected);
+            }
+            
             // Calculate commission from the total earnings
             const totalPrice = data.earnings / BUSINESS_CONFIG.commission.rider; // Convert rider earnings to total price
             
@@ -1119,6 +1143,163 @@ async function checkRouteCompletionStatus() {
         console.error('Error processing route completion:', error);
     }
 }
+
+// Helper function to parse price
+function parsePrice(priceValue) {
+    if (typeof priceValue === 'number') return priceValue;
+    if (typeof priceValue === 'string') {
+        const cleaned = priceValue.replace(/[^0-9.-]+/g, '');
+        return parseFloat(cleaned) || 0;
+    }
+    return 0;
+}
+
+// Show persistent cash collection reminder
+function showCashCollectionReminder(totalCashCollected) {
+    // Calculate commission from collected amount
+    const platformCommission = Math.round(totalCashCollected * BUSINESS_CONFIG.commission.platform);
+    const riderKeeps = Math.round(totalCashCollected * BUSINESS_CONFIG.commission.rider);
+    
+    // Create a persistent reminder banner
+    const reminderBanner = document.createElement('div');
+    reminderBanner.id = 'cashCollectionReminder';
+    reminderBanner.className = 'cash-collection-reminder';
+    reminderBanner.innerHTML = `
+        <div class="reminder-content">
+            <div class="reminder-icon">💰</div>
+            <div class="reminder-text">
+                <div class="reminder-title">Cash Collection Summary</div>
+                <div class="reminder-details">
+                    <span>Collected: <strong>KES ${totalCashCollected.toLocaleString()}</strong></span>
+                    <span class="separator">•</span>
+                    <span>Your earnings: <strong class="earnings">KES ${riderKeeps.toLocaleString()}</strong></span>
+                    <span class="separator">•</span>
+                    <span>Commission due: <strong class="commission">KES ${platformCommission.toLocaleString()}</strong></span>
+                </div>
+            </div>
+            <button class="reminder-close" onclick="dismissCashReminder()">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                </svg>
+            </button>
+        </div>
+    `;
+    
+    // Insert after header
+    const header = document.querySelector('.header');
+    if (header && header.parentNode) {
+        header.parentNode.insertBefore(reminderBanner, header.nextSibling);
+    }
+    
+    // Add styles if not present
+    if (!document.getElementById('cash-reminder-styles')) {
+        const style = document.createElement('style');
+        style.id = 'cash-reminder-styles';
+        style.textContent = `
+            .cash-collection-reminder {
+                background: linear-gradient(135deg, rgba(255, 159, 10, 0.95), rgba(255, 140, 0, 0.95));
+                padding: 16px 20px;
+                margin: 0;
+                box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+                position: relative;
+                z-index: 100;
+            }
+            
+            .reminder-content {
+                display: flex;
+                align-items: center;
+                gap: 16px;
+                max-width: 1200px;
+                margin: 0 auto;
+            }
+            
+            .reminder-icon {
+                font-size: 32px;
+                flex-shrink: 0;
+            }
+            
+            .reminder-text {
+                flex: 1;
+                color: black;
+            }
+            
+            .reminder-title {
+                font-size: 16px;
+                font-weight: 700;
+                margin-bottom: 4px;
+            }
+            
+            .reminder-details {
+                font-size: 14px;
+                display: flex;
+                align-items: center;
+                flex-wrap: wrap;
+                gap: 8px;
+            }
+            
+            .reminder-details strong {
+                font-weight: 700;
+            }
+            
+            .reminder-details .earnings {
+                color: #006400;
+            }
+            
+            .reminder-details .commission {
+                color: #8B0000;
+            }
+            
+            .separator {
+                opacity: 0.5;
+            }
+            
+            .reminder-close {
+                background: rgba(0, 0, 0, 0.2);
+                border: none;
+                border-radius: 50%;
+                width: 32px;
+                height: 32px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                cursor: pointer;
+                color: black;
+                transition: all 0.2s;
+            }
+            
+            .reminder-close:hover {
+                background: rgba(0, 0, 0, 0.3);
+            }
+            
+            @media (max-width: 600px) {
+                .reminder-content {
+                    flex-wrap: wrap;
+                }
+                
+                .reminder-icon {
+                    font-size: 24px;
+                }
+                
+                .reminder-text {
+                    flex: auto;
+                }
+                
+                .reminder-details {
+                    font-size: 13px;
+                }
+            }
+        `;
+        document.head.appendChild(style);
+    }
+}
+
+window.dismissCashReminder = function() {
+    const reminder = document.getElementById('cashCollectionReminder');
+    if (reminder) {
+        reminder.style.animation = 'slideUp 0.3s ease-out';
+        setTimeout(() => reminder.remove(), 300);
+    }
+};
 
 // Show urgent payment warning
 function showUrgentPaymentWarning() {
@@ -2922,6 +3103,17 @@ function addCustomStyles() {
             
             @keyframes spin {
                 to { transform: rotate(360deg); }
+            }
+            
+            @keyframes slideUp {
+                from {
+                    transform: translateY(0);
+                    opacity: 1;
+                }
+                to {
+                    transform: translateY(-100%);
+                    opacity: 0;
+                }
             }
             
             /* Payment collection styles */
