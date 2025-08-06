@@ -2285,18 +2285,7 @@ window.verifyCode = async function(type) {
                 showNotification(`${type.charAt(0).toUpperCase() + type.slice(1)} verified successfully!`, 'success');
             }
             
-            // Update UI
-            showActiveRoute();
-            
-            // Check if entering delivery phase
-            const pickups = state.claimedRoute.stops.filter(s => s.type === 'pickup');
-            const allPickupsComplete = pickups.every(p => p.completed);
-            
-            if (allPickupsComplete && type === 'pickup') {
-                showNotification('All pickups complete! Starting delivery phase 🚀', 'success');
-            }
-            
-            // Check if route is complete
+            // Check if route is complete BEFORE updating UI
             const allComplete = state.claimedRoute.stops.every(s => s.completed);
             if (allComplete) {
                 // Calculate total earnings for the route
@@ -2347,6 +2336,17 @@ window.verifyCode = async function(type) {
                 
                 // Process the completion data
                 await checkRouteCompletionStatus();
+            } else {
+                // Only update UI if route is not complete
+                showActiveRoute();
+                
+                // Check if entering delivery phase
+                const pickups = state.claimedRoute.stops.filter(s => s.type === 'pickup');
+                const allPickupsComplete = pickups.every(p => p.completed);
+                
+                if (allPickupsComplete && type === 'pickup') {
+                    showNotification('All pickups complete! Starting delivery phase 🚀', 'success');
+                }
             }
         }
         
