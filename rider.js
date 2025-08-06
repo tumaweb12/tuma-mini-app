@@ -21,7 +21,11 @@ const DEV_CONFIG = {
     verboseLogging: true,
     
     // Whether to ignore API errors for missing riders
-    ignoreRiderNotFound: true
+    ignoreRiderNotFound: true,
+    
+    // Development-only commission settings
+    bypassCommissionBlock: true, // Set to false in production
+    commissionWarningsOnly: true // Show warnings but don't block
 };
 
 // ─── Configuration ─────────────────────────────────────────────────────────
@@ -268,9 +272,17 @@ class CommissionTracker {
             isBlocked: false
         };
 
-        if (this.state.unpaidCommission >= this.config.maxUnpaid) {
+        // Check if should block (but respect dev bypass)
+        const shouldBlock = this.state.unpaidCommission >= this.config.maxUnpaid;
+        const devBypass = DEV_CONFIG.isDevelopment && DEV_CONFIG.bypassCommissionBlock;
+
+        if (shouldBlock && !devBypass) {
             this.state.isBlocked = true;
             result.isBlocked = true;
+        } else if (shouldBlock && devBypass) {
+            // In dev mode with bypass, show warning but don't block
+            console.warn(`[DEV MODE] Commission block bypassed. Amount: KES ${Math.round(this.state.unpaidCommission)}`);
+            result.warningShown = true;
         } else if (this.state.unpaidCommission >= this.config.warningThreshold) {
             result.warningShown = true;
         }
@@ -292,13 +304,17 @@ class CommissionTracker {
         const summary = this.getSummary();
         const percentage = Math.min(summary.percentageUsed, 100);
         const isWarning = percentage >= 83;
-        const isBlocked = percentage >= 100;
+        const isBlocked = percentage >= 100 && !(DEV_CONFIG.isDevelopment && DEV_CONFIG.bypassCommissionBlock);
+        
+        // Show dev mode indicator if bypassing
+        const devModeIndicator = (DEV_CONFIG.isDevelopment && DEV_CONFIG.bypassCommissionBlock && percentage >= 100) ? 
+            '<span class="dev-mode-badge">DEV MODE</span>' : '';
 
         return {
             statusBar: `
                 <div class="commission-status ${isWarning ? 'warning' : ''} ${isBlocked ? 'blocked' : ''}">
                     <div class="commission-header">
-                        <span class="commission-title">Platform Commission</span>
+                        <span class="commission-title">Platform Commission ${devModeIndicator}</span>
                         <span class="commission-amount">KES ${summary.unpaid} / ${this.config.maxUnpaid}</span>
                     </div>
                     <div class="commission-progress">
@@ -503,6 +519,17 @@ class CommissionTracker {
             .blocked-help {
                 font-size: 14px;
                 color: var(--text-tertiary);
+            }
+            
+            .dev-mode-badge {
+                background: #FF9F0A;
+                color: black;
+                padding: 2px 8px;
+                border-radius: 4px;
+                font-size: 10px;
+                font-weight: 700;
+                margin-left: 8px;
+                vertical-align: middle;
             }
             
             /* Make route cards clickable */
@@ -1051,8 +1078,15 @@ async function checkRouteCompletionStatus() {
             displayCommissionStatus();
             
             // Show appropriate notification based on commission status
-            if (commissionResult.isBlocked) {
+            if (commissionResult.isBlocked && !(DEV_CONFIG.isDevelopment && DEV_CONFIG.bypassCommissionBlock)) {
                 showBlockedOverlay();
+            } else if (commissionResult.isBlocked && DEV_CONFIG.isDevelopment && DEV_CONFIG.bypassCommissionBlock) {
+                // Dev mode - show urgent warning but don't block
+                console.warn(`[DEV MODE] Would be blocked. Commission: KES ${commissionResult.totalUnpaid}`);
+                showNotification(
+                    `DEV MODE: Commission limit exceeded (KES ${commissionResult.totalUnpaid})`,
+                    'warning'
+                );
             } else if (commissionResult.totalUnpaid >= 300) {
                 // Show urgent payment warning with timer
                 showUrgentPaymentWarning();
@@ -1118,7 +1152,14 @@ function showUrgentPaymentWarning() {
         if (timeLeft <= 0) {
             clearInterval(countdown);
             warning.remove();
-            showBlockedOverlay();
+            
+            // Only show blocked overlay if not in dev bypass mode
+            if (!(DEV_CONFIG.isDevelopment && DEV_CONFIG.bypassCommissionBlock)) {
+                showBlockedOverlay();
+            } else {
+                console.warn('[DEV MODE] Timer expired but blocking bypassed');
+                showNotification('DEV MODE: Would be blocked now', 'warning');
+            }
         }
     }, 1000);
     
@@ -1302,9 +1343,15 @@ async function initialize() {
             await state.commissionTracker.initialize(state.rider.id, supabaseAPI);
             displayCommissionStatus();
             
-            if (state.commissionTracker.state.isBlocked) {
+            // Check if blocked (but respect dev bypass)
+            const devBypass = DEV_CONFIG.isDevelopment && DEV_CONFIG.bypassCommissionBlock;
+            
+            if (state.commissionTracker.state.isBlocked && !devBypass) {
                 showBlockedOverlay();
                 return;
+            } else if (state.commissionTracker.state.isBlocked && devBypass) {
+                console.warn('[DEV MODE] Commission block bypassed on initialization');
+                showNotification('DEV MODE: Commission block bypassed', 'warning');
             }
         } catch (error) {
             console.error('Error initializing commission tracker:', error);
@@ -2229,7 +2276,7 @@ window.verifyCode = async function(type) {
                     deliveryPrice = 500;
                 }
                 
-                // Always update commission tracker
+                // Update commission tracker
                 if (state.commissionTracker) {
                     const commissionResult = await state.commissionTracker.addDeliveryCommission(
                         activeStop.parcelId,
@@ -2254,9 +2301,18 @@ window.verifyCode = async function(type) {
                     
                     displayCommissionStatus();
                     
-                    if (commissionResult.isBlocked) {
+                    // Check blocking with dev bypass
+                    const devBypass = DEV_CONFIG.isDevelopment && DEV_CONFIG.bypassCommissionBlock;
+                    
+                    if (commissionResult.isBlocked && !devBypass) {
                         showBlockedOverlay();
                         return;
+                    } else if (commissionResult.isBlocked && devBypass) {
+                        console.warn('[DEV MODE] Commission block bypassed after delivery');
+                        showNotification(
+                            `DEV MODE: Would be blocked (KES ${commissionResult.totalUnpaid})`,
+                            'warning'
+                        );
                     } else if (commissionResult.warningShown) {
                         showNotification(
                             `Commission balance: KES ${commissionResult.totalUnpaid}. Please pay soon.`,
@@ -2808,6 +2864,49 @@ window.tumaDebug = {
         }
     },
     
+    resetCommission: async () => {
+        // Dev-only function to reset commission
+        if (!DEV_CONFIG.isDevelopment) {
+            console.error('This function is only available in development mode');
+            return;
+        }
+        
+        if (state.commissionTracker) {
+            state.commissionTracker.state.unpaidCommission = 0;
+            state.commissionTracker.state.isBlocked = false;
+            state.commissionTracker.state.pendingDeliveries = [];
+            
+            displayCommissionStatus();
+            
+            // Remove any blocked overlay
+            const blockedOverlay = document.getElementById('commissionBlockedOverlay');
+            if (blockedOverlay) {
+                blockedOverlay.remove();
+            }
+            
+            console.log('Commission reset to 0');
+            showNotification('DEV: Commission reset', 'success');
+        }
+    },
+    
+    setCommission: (amount) => {
+        // Dev-only function to set commission to specific amount
+        if (!DEV_CONFIG.isDevelopment) {
+            console.error('This function is only available in development mode');
+            return;
+        }
+        
+        if (state.commissionTracker) {
+            state.commissionTracker.state.unpaidCommission = amount;
+            state.commissionTracker.state.isBlocked = amount >= BUSINESS_CONFIG.commission.maxUnpaid;
+            
+            displayCommissionStatus();
+            
+            console.log(`Commission set to KES ${amount}`);
+            showNotification(`DEV: Commission set to KES ${amount}`, 'info');
+        }
+    },
+    
     analyzeRoutes: () => {
         if (!state.availableRoutes || state.availableRoutes.length === 0) {
             console.log('No routes available');
@@ -2824,6 +2923,12 @@ window.tumaDebug = {
             console.log(`   Quality: ${route.qualityScore}`);
             console.log(`   Areas: ${route.metadata?.pickupAreas?.join(', ') || 'N/A'}`);
         });
+    },
+    
+    getDevConfig: () => {
+        console.log('Development Configuration:', DEV_CONFIG);
+        console.log(`Commission bypass active: ${DEV_CONFIG.isDevelopment && DEV_CONFIG.bypassCommissionBlock}`);
+        return DEV_CONFIG;
     }
 };
 
@@ -2835,5 +2940,6 @@ if (!window.haptic) {
 // Make showNotification globally available
 window.showNotification = showNotification;
 
-console.log('✅ rider.js loaded successfully with enhanced clustering support!');
+console.log('✅ rider.js loaded successfully with enhanced clustering support and dev bypass!');
 console.log('Debug commands available: window.tumaDebug');
+console.log(`Commission bypass: ${DEV_CONFIG.isDevelopment && DEV_CONFIG.bypassCommissionBlock ? 'ACTIVE' : 'INACTIVE'}`);
