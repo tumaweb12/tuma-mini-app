@@ -1,11 +1,13 @@
 /**
- * clustering.js - Tuma Route Clustering Module
+ * clustering.js - Enhanced Tuma Route Clustering Module
  * 
- * Intelligent route clustering for delivery optimization in Nairobi
- * Considers pickup proximity, delivery corridors, and service types
+ * Intelligent route clustering with:
+ * - Route awareness (parcels on the way)
+ * - Return trip optimization
+ * - Smart delivery corridors
  * 
  * @module clustering
- * @version 1.0.0
+ * @version 2.0.0
  */
 
 // ============================================================================
@@ -20,70 +22,74 @@ const CLUSTERING_CONFIG = {
         eco: 4
     },
     
+    // Route deviation tolerance (km off main route)
+    maxRouteDeviation: {
+        express: 1.5,
+        smart: 2.5,
+        eco: 3.5
+    },
+    
+    // Return trip configuration
+    returnTrip: {
+        maxReturnDistance: 3,      // km from last delivery to new pickup
+        maxAngleDeviation: 45,     // degrees from home direction
+        bonusMultiplier: 1.15,     // 15% bonus for return trips
+        preferredEndLocations: ['CBD', 'Westlands', 'Kilimani'] // Common rider bases
+    },
+    
     // Clustering time windows (minutes)
     clusteringWindows: {
-        express: 10,
-        smart: 20,
-        eco: 60
+        express: 15,
+        smart: 30,
+        eco: 90
     },
     
     // Route size constraints
     minClusterSize: {
         express: 1,
         smart: 1,
-        eco: 3
+        eco: 2  // Reduced from 3 for flexibility
     },
     
     maxClusterSize: {
-        express: 3,
-        smart: 6,
-        eco: 10
+        express: 4,  // Increased for route efficiency
+        smart: 8,
+        eco: 12
     },
     
     // Quality thresholds
-    maxRouteDistance: 25,
+    maxRouteDistance: 30,
     maxPickupChainDistance: 15,
     maxPickupSegment: 5,
-    minClusterScore: 50
+    minClusterScore: 45,  // Reduced for flexibility
+    minRouteAwareScore: 55  // Higher score for route-aware clusters
 };
 
-// Nairobi delivery corridors
-const DELIVERY_CORRIDORS = {
-    'north': {
-        areas: ['Gigiri', 'UN Complex', 'Village Market', 'Rosslyn', 'Runda', 'Muthaiga'],
-        angle: 0
+// Major Nairobi corridors and routes
+const NAIROBI_ROUTES = {
+    'waiyaki_way': {
+        areas: ['Chiromo', 'Westlands', 'Kangemi', 'Mountain View', 'Kikuyu'],
+        connects: ['CBD', 'Western regions']
     },
-    'northeast': {
-        areas: ['Kasarani', 'Roysambu', 'Thika Road', 'Garden Estate', 'Kahawa'],
-        angle: 45
+    'uhuru_highway': {
+        areas: ['CBD', 'University Way', 'Pangani', 'Muthaiga'],
+        connects: ['CBD', 'Northern regions']
     },
-    'east': {
-        areas: ['Eastlands', 'Buruburu', 'Donholm', 'Umoja', 'Embakasi', 'Pipeline'],
-        angle: 90
+    'mombasa_road': {
+        areas: ['CBD', 'South C', 'Industrial Area', 'Imara Daima', 'Syokimau', 'JKIA'],
+        connects: ['CBD', 'Airport', 'Eastern regions']
     },
-    'southeast': {
-        areas: ['South B', 'South C', 'Industrial Area', 'Imara Daima', 'Syokimau'],
-        angle: 135
+    'langata_road': {
+        areas: ['CBD', 'Kilimani', 'Karen', 'Langata', 'Rongai'],
+        connects: ['CBD', 'Southern regions']
     },
-    'south': {
-        areas: ['Karen', 'Langata', 'Hardy', 'Bomas', 'Rongai', 'Ngong'],
-        angle: 180
+    'thika_road': {
+        areas: ['CBD', 'Pangani', 'Roysambu', 'Kasarani', 'Ruiru'],
+        connects: ['CBD', 'Northern regions']
     },
-    'southwest': {
-        areas: ['Kilimani', 'Lavington', 'Kileleshwa', 'Riverside', 'Hurlingham'],
-        angle: 225
-    },
-    'west': {
-        areas: ['Westlands', 'Parklands', 'Spring Valley', 'Loresho', 'Mountain View'],
-        angle: 270
-    },
-    'northwest': {
-        areas: ['Kiambu Road', 'Ridgeways', 'Runda Estate', 'Nyari', 'Kikuyu'],
-        angle: 315
-    },
-    'central': {
-        areas: ['CBD', 'Upper Hill', 'Community', 'Pangani', 'Ngara'],
-        angle: null
+    'kilimani_ring': {
+        areas: ['Kilimani', 'Kileleshwa', 'Lavington', 'Hurlingham'],
+        connects: ['Westlands', 'Upper Hill', 'CBD']
     }
 };
 
@@ -95,22 +101,22 @@ class TumaRouteClustering {
     constructor(config = {}) {
         this.config = { ...CLUSTERING_CONFIG, ...config };
         this.distanceCache = new Map();
+        this.routeCache = new Map();
     }
     
     /**
      * Create optimized routes from an array of parcels
-     * This is the main entry point for rider.js
-     * 
      * @param {Array} parcels - Array of parcel objects from Supabase
+     * @param {Object} riderInfo - Current rider information (location, preferred end point)
      * @returns {Array} Array of optimized route objects
      */
-    createOptimizedRoutes(parcels) {
+    createOptimizedRoutes(parcels, riderInfo = {}) {
         if (!parcels || parcels.length === 0) {
             console.log('[Clustering] No parcels to cluster');
             return [];
         }
         
-        console.log(`[Clustering] Processing ${parcels.length} parcels`);
+        console.log(`[Clustering] Processing ${parcels.length} parcels with route awareness`);
         
         // Step 1: Validate and enrich parcel data
         const validParcels = this.preprocessParcels(parcels);
@@ -120,126 +126,545 @@ class TumaRouteClustering {
             return [];
         }
         
-        // Step 2: Group parcels by service type and area
-        const groups = this.groupParcels(validParcels);
+        // Step 2: Create initial clusters with route awareness
+        const clusters = this.createRouteAwareClusters(validParcels);
         
-        // Step 3: Create clusters within each group
-        const allClusters = [];
-        const unclusteredExpress = [];
+        // Step 3: Optimize for return trips
+        const optimizedClusters = this.optimizeReturnTrips(clusters, riderInfo);
         
-        for (const [key, groupParcels] of Object.entries(groups)) {
-            const [serviceType, area] = key.split('_');
-            
-            if (serviceType === 'express') {
-                // Try to cluster express parcels, but keep unclustered ones
-                const { clusters, unclustered } = this.createExpressClusters(groupParcels, key);
-                allClusters.push(...clusters);
-                unclusteredExpress.push(...unclustered);
-            } else {
-                // Regular clustering for smart and eco
-                const clusters = this.createClustersForGroup(groupParcels, key);
-                allClusters.push(...clusters);
-            }
-        }
-        
-        // Step 4: Create individual routes for unclustered express parcels
-        unclusteredExpress.forEach(parcel => {
-            allClusters.push([parcel]);
-        });
-        
-        // Step 5: Convert clusters to route objects
-        const routes = allClusters.map((cluster, index) => 
+        // Step 4: Convert clusters to route objects
+        const routes = optimizedClusters.map((cluster, index) => 
             this.createRouteFromCluster(cluster, index)
         );
         
-        // Step 6: Sort by quality score
-        routes.sort((a, b) => b.qualityScore - a.qualityScore);
+        // Step 5: Sort by quality score and return potential
+        routes.sort((a, b) => {
+            // Prioritize return trips
+            if (a.metadata.hasReturnTrip && !b.metadata.hasReturnTrip) return -1;
+            if (!a.metadata.hasReturnTrip && b.metadata.hasReturnTrip) return 1;
+            return b.qualityScore - a.qualityScore;
+        });
         
-        console.log(`[Clustering] Created ${routes.length} routes`);
+        console.log(`[Clustering] Created ${routes.length} routes (${routes.filter(r => r.metadata.hasReturnTrip).length} with return trips)`);
         return routes;
     }
     
     /**
-     * Create clusters for express parcels with fallback to individual routes
+     * Create clusters with route awareness
      */
-    createExpressClusters(parcels, groupKey) {
+    createRouteAwareClusters(parcels) {
         const clusters = [];
-        const unclustered = [];
         const assigned = new Set();
         
-        // Sort parcels by delivery corridor for better clustering
-        const sortedParcels = this.sortByDeliveryCorridor(parcels);
+        // Sort by service priority and location efficiency
+        const sorted = this.smartSort(parcels);
         
-        for (const seed of sortedParcels) {
+        for (const seed of sorted) {
             if (assigned.has(seed.id)) continue;
             
-            // Try to build a cluster around this seed
-            const cluster = this.buildExpressCluster(seed, sortedParcels, assigned);
+            const cluster = this.buildRouteAwareCluster(seed, sorted, assigned);
             
-            // If cluster has more than 1 parcel and is valid, use it
-            if (cluster.length > 1 && this.analyzeClusterQuality(cluster).isValid) {
+            if (this.isValidCluster(cluster, seed.customer_choice)) {
                 clusters.push(cluster);
                 cluster.forEach(p => assigned.add(p.id));
-            } else {
-                // Otherwise, mark for individual route
-                unclustered.push(seed);
+            } else if (cluster.length === 1 && seed.customer_choice !== 'eco') {
+                // Single parcel routes OK for express/smart
+                clusters.push(cluster);
                 assigned.add(seed.id);
             }
         }
         
-        return { clusters, unclustered };
+        return clusters;
     }
     
     /**
-     * Build express cluster with stricter requirements
+     * Smart sorting that considers hubs and corridors
      */
-    buildExpressCluster(seed, candidates, assigned) {
+    smartSort(parcels) {
+        return parcels.sort((a, b) => {
+            // Priority order
+            const servicePriority = { express: 3, smart: 2, eco: 1 };
+            const sPriorityDiff = servicePriority[b.customer_choice] - servicePriority[a.customer_choice];
+            if (sPriorityDiff !== 0) return sPriorityDiff;
+            
+            // Same service type - prefer hub pickups
+            const aIsHub = this.isHubLocation(a._pickup);
+            const bIsHub = this.isHubLocation(b._pickup);
+            if (aIsHub && !bIsHub) return -1;
+            if (!aIsHub && bIsHub) return 1;
+            
+            // Then by creation time
+            return new Date(a.created_at) - new Date(b.created_at);
+        });
+    }
+    
+    /**
+     * Build cluster with route awareness
+     */
+    buildRouteAwareCluster(seed, candidates, assigned) {
         const cluster = [seed];
-        const maxSize = this.config.maxClusterSize.express;
-        const maxRadius = this.config.maxPickupRadius.express;
+        const serviceType = seed.customer_choice;
+        const maxSize = this.config.maxClusterSize[serviceType];
         
-        // For express, only cluster if:
-        // 1. Very close pickup locations (within 1km)
-        // 2. Same delivery corridor
-        // 3. High route efficiency
+        // Get the main route for this seed
+        const seedRoute = this.getMainRoute(seed._pickup, seed._delivery);
         
-        const scoredCandidates = candidates
+        // Find all compatible candidates
+        const compatibleCandidates = candidates
             .filter(c => !assigned.has(c.id) && c.id !== seed.id)
             .map(candidate => {
-                const pickupDist = this.calculateDistance(seed._pickup, candidate._pickup);
-                
-                // Strict distance requirement for express
-                if (pickupDist > 1) return null;
-                
-                // Must be same corridor or adjacent
-                if (seed._deliveryCorridor !== candidate._deliveryCorridor &&
-                    !this.areCorridorsAdjacent(seed._deliveryCorridor, candidate._deliveryCorridor)) {
-                    return null;
-                }
-                
-                return {
-                    parcel: candidate,
-                    score: this.calculateClusteringScore(seed, candidate, cluster)
-                };
+                const score = this.calculateRouteAwareScore(seed, candidate, cluster, seedRoute);
+                return { parcel: candidate, score };
             })
-            .filter(sc => sc && sc.score > 60) // Higher score threshold for express
+            .filter(c => c.score > 0)
             .sort((a, b) => b.score - a.score);
         
-        // Only add the best candidate if score is high enough
-        for (const { parcel: candidate, score } of scoredCandidates) {
+        // Build cluster greedily
+        for (const { parcel: candidate, score } of compatibleCandidates) {
             if (cluster.length >= maxSize) break;
             if (assigned.has(candidate.id)) continue;
             
+            // Test cluster quality with new addition
             const testCluster = [...cluster, candidate];
             const quality = this.analyzeClusterQuality(testCluster);
             
-            // Stricter quality requirements for express
-            if (quality.isValid && quality.score >= 70) {
+            if (quality.isValid && quality.score >= this.config.minRouteAwareScore) {
                 cluster.push(candidate);
             }
         }
         
         return cluster;
+    }
+    
+    /**
+     * Calculate score with route awareness
+     */
+    calculateRouteAwareScore(seed, candidate, currentCluster, seedRoute) {
+        let score = 0;
+        
+        // 1. Service compatibility (15 points)
+        if (!this.areServicesCompatible(seed, candidate)) return 0;
+        score += seed.customer_choice === candidate.customer_choice ? 15 : 8;
+        
+        // 2. Route awareness check (35 points) - HIGHEST WEIGHT
+        const routeCheck = this.isOnRoute(candidate._pickup, seedRoute);
+        if (routeCheck.onRoute) {
+            // Perfect score if pickup is directly on route
+            score += Math.max(0, 35 - routeCheck.deviation * 10);
+        } else {
+            // Check if pickup is close to seed pickup
+            const pickupDist = this.calculateDistance(seed._pickup, candidate._pickup);
+            if (pickupDist <= 0.5) score += 25;  // Very close
+            else if (pickupDist <= 1) score += 15;
+            else if (pickupDist <= 2) score += 8;
+            else if (pickupDist > this.config.maxPickupRadius[seed.customer_choice]) return 0;
+        }
+        
+        // 3. Delivery compatibility (25 points)
+        const deliveryScore = this.scoreDeliveryCompatibility(seed, candidate);
+        if (deliveryScore === 0) return 0;
+        score += deliveryScore;
+        
+        // 4. Time compatibility (15 points)
+        const timeScore = this.scoreTimeCompatibility(seed, candidate);
+        score += timeScore;
+        
+        // 5. Efficiency bonus (10 points)
+        const efficiency = this.calculateAdditionEfficiency(currentCluster, candidate);
+        score += efficiency * 10;
+        
+        return score;
+    }
+    
+    /**
+     * Check if a pickup is on the route
+     */
+    isOnRoute(pickup, route) {
+        if (!route || route.segments.length === 0) {
+            return { onRoute: false };
+        }
+        
+        let minDeviation = Infinity;
+        let nearestSegment = null;
+        
+        for (const segment of route.segments) {
+            const deviation = this.pointToLineDistance(pickup, segment.start, segment.end);
+            if (deviation < minDeviation) {
+                minDeviation = deviation;
+                nearestSegment = segment;
+            }
+        }
+        
+        const maxDeviation = this.config.maxRouteDeviation[route.serviceType] || 2;
+        
+        return {
+            onRoute: minDeviation <= maxDeviation,
+            deviation: minDeviation,
+            nearestSegment
+        };
+    }
+    
+    /**
+     * Get main route between two points
+     */
+    getMainRoute(start, end) {
+        const cacheKey = `${start.lat},${start.lng}-${end.lat},${end.lng}`;
+        if (this.routeCache.has(cacheKey)) {
+            return this.routeCache.get(cacheKey);
+        }
+        
+        // Determine which major route this likely uses
+        const route = {
+            start,
+            end,
+            segments: [],
+            serviceType: 'smart'
+        };
+        
+        // Simple approximation - create segments through likely waypoints
+        const distance = this.calculateDistance(start, end);
+        
+        if (distance < 2) {
+            // Direct route for short distances
+            route.segments = [{ start, end }];
+        } else {
+            // Identify likely route through Nairobi
+            const corridor = this.identifyCorridor(start, end);
+            if (corridor) {
+                route.segments = this.getCorridorSegments(start, end, corridor);
+            } else {
+                // Default to direct route
+                route.segments = [{ start, end }];
+            }
+        }
+        
+        this.routeCache.set(cacheKey, route);
+        return route;
+    }
+    
+    /**
+     * Identify which corridor a route likely uses
+     */
+    identifyCorridor(start, end) {
+        // Check if route aligns with major corridors
+        const bearing = this.calculateBearing(start, end);
+        const distance = this.calculateDistance(start, end);
+        
+        // Simplified corridor detection
+        if (bearing > 315 || bearing <= 45) return 'north';
+        if (bearing > 45 && bearing <= 135) return 'east';
+        if (bearing > 135 && bearing <= 225) return 'south';
+        if (bearing > 225 && bearing <= 315) return 'west';
+        
+        return null;
+    }
+    
+    /**
+     * Get corridor segments (simplified)
+     */
+    getCorridorSegments(start, end, corridor) {
+        // For now, return waypoint through common areas
+        const waypoints = [];
+        
+        // Example: If going from Kangemi to Upper Hill
+        if (this.isNearArea(start, 'Kangemi') && this.isNearArea(end, 'Upper Hill')) {
+            waypoints.push(
+                start,
+                { lat: -1.2890, lng: 36.7851 }, // Kilimani waypoint
+                end
+            );
+        } else {
+            waypoints.push(start, end);
+        }
+        
+        const segments = [];
+        for (let i = 0; i < waypoints.length - 1; i++) {
+            segments.push({
+                start: waypoints[i],
+                end: waypoints[i + 1]
+            });
+        }
+        
+        return segments;
+    }
+    
+    /**
+     * Calculate point to line distance
+     */
+    pointToLineDistance(point, lineStart, lineEnd) {
+        const A = point.lng - lineStart.lng;
+        const B = point.lat - lineStart.lat;
+        const C = lineEnd.lng - lineStart.lng;
+        const D = lineEnd.lat - lineStart.lat;
+        
+        const dot = A * C + B * D;
+        const lenSq = C * C + D * D;
+        let param = -1;
+        
+        if (lenSq !== 0) param = dot / lenSq;
+        
+        let xx, yy;
+        
+        if (param < 0) {
+            xx = lineStart.lng;
+            yy = lineStart.lat;
+        } else if (param > 1) {
+            xx = lineEnd.lng;
+            yy = lineEnd.lat;
+        } else {
+            xx = lineStart.lng + param * C;
+            yy = lineStart.lat + param * D;
+        }
+        
+        const dx = point.lng - xx;
+        const dy = point.lat - yy;
+        
+        return Math.sqrt(dx * dx + dy * dy) * 111; // Convert to km
+    }
+    
+    /**
+     * Optimize clusters for return trips
+     */
+    optimizeReturnTrips(clusters, riderInfo) {
+        const optimized = [];
+        const used = new Set();
+        
+        // Get rider's preferred end location
+        const riderEndLocation = this.getRiderEndLocation(riderInfo);
+        
+        // Try to chain clusters with return opportunities
+        for (let i = 0; i < clusters.length; i++) {
+            if (used.has(i)) continue;
+            
+            const cluster = clusters[i];
+            const lastDelivery = this.getLastDelivery(cluster);
+            
+            // Look for return opportunities
+            let bestReturn = null;
+            let bestScore = 0;
+            
+            for (let j = 0; j < clusters.length; j++) {
+                if (i === j || used.has(j)) continue;
+                
+                const returnCluster = clusters[j];
+                const returnScore = this.scoreReturnTrip(
+                    lastDelivery,
+                    returnCluster[0]._pickup,
+                    riderEndLocation
+                );
+                
+                if (returnScore > bestScore) {
+                    bestScore = returnScore;
+                    bestReturn = j;
+                }
+            }
+            
+            // If good return trip found, combine clusters
+            if (bestReturn !== null && bestScore > 70) {
+                const combinedCluster = this.combineForReturnTrip(cluster, clusters[bestReturn]);
+                optimized.push(combinedCluster);
+                used.add(i);
+                used.add(bestReturn);
+            } else {
+                // Check if this cluster ends near rider's preferred location
+                const homeScore = this.scoreReturnToBase(lastDelivery, riderEndLocation);
+                if (homeScore > 80) {
+                    cluster._metadata = { ...cluster._metadata, returnsToBase: true };
+                }
+                optimized.push(cluster);
+                used.add(i);
+            }
+        }
+        
+        return optimized;
+    }
+    
+    /**
+     * Score a potential return trip
+     */
+    scoreReturnTrip(lastDelivery, nextPickup, riderEndLocation) {
+        let score = 0;
+        
+        // Distance from last delivery to next pickup
+        const distance = this.calculateDistance(lastDelivery, nextPickup);
+        if (distance > this.config.returnTrip.maxReturnDistance) return 0;
+        
+        // Distance score (40 points max)
+        score += Math.max(0, 40 - distance * 10);
+        
+        // Check if it's towards rider's end location (30 points max)
+        const bearingToEnd = this.calculateBearing(lastDelivery, riderEndLocation);
+        const bearingToPickup = this.calculateBearing(lastDelivery, nextPickup);
+        const angleDiff = Math.abs(bearingToEnd - bearingToPickup);
+        
+        if (angleDiff <= this.config.returnTrip.maxAngleDeviation) {
+            score += 30 * (1 - angleDiff / this.config.returnTrip.maxAngleDeviation);
+        }
+        
+        // Efficiency bonus (30 points max)
+        const directDistance = this.calculateDistance(lastDelivery, riderEndLocation);
+        const viaDistance = distance + this.calculateDistance(nextPickup, riderEndLocation);
+        const efficiency = directDistance / viaDistance;
+        score += efficiency * 30;
+        
+        return score;
+    }
+    
+    /**
+     * Score return to base
+     */
+    scoreReturnToBase(lastDelivery, baseLocation) {
+        const distance = this.calculateDistance(lastDelivery, baseLocation);
+        
+        // Within 3km is excellent
+        if (distance <= 3) return 100;
+        if (distance <= 5) return 80;
+        if (distance <= 8) return 60;
+        return 40;
+    }
+    
+    /**
+     * Combine clusters for return trip
+     */
+    combineForReturnTrip(cluster1, cluster2) {
+        const combined = [...cluster1, ...cluster2];
+        combined._metadata = {
+            isReturnTrip: true,
+            firstLeg: cluster1.length,
+            returnLeg: cluster2.length,
+            returnBonus: this.config.returnTrip.bonusMultiplier
+        };
+        return combined;
+    }
+    
+    /**
+     * Get rider's preferred end location
+     */
+    getRiderEndLocation(riderInfo) {
+        if (riderInfo.preferredEndLocation) {
+            return riderInfo.preferredEndLocation;
+        }
+        
+        // Default to CBD
+        return { lat: -1.2921, lng: 36.8219, name: 'CBD' };
+    }
+    
+    /**
+     * Get last delivery location from cluster
+     */
+    getLastDelivery(cluster) {
+        const deliveries = cluster.filter(p => p._delivery);
+        if (deliveries.length === 0) return null;
+        
+        // For now, return the furthest delivery
+        let furthest = deliveries[0]._delivery;
+        let maxDist = 0;
+        
+        const center = { lat: -1.2921, lng: 36.8219 }; // CBD
+        
+        deliveries.forEach(p => {
+            const dist = this.calculateDistance(center, p._delivery);
+            if (dist > maxDist) {
+                maxDist = dist;
+                furthest = p._delivery;
+            }
+        });
+        
+        return furthest;
+    }
+    
+    /**
+     * Check if services are compatible for clustering
+     */
+    areServicesCompatible(parcel1, parcel2) {
+        const service1 = parcel1.customer_choice;
+        const service2 = parcel2.customer_choice;
+        
+        // Same service always compatible
+        if (service1 === service2) return true;
+        
+        // Check time window compatibility
+        const timeDiff = Math.abs(
+            new Date(parcel1.created_at).getTime() - 
+            new Date(parcel2.created_at).getTime()
+        ) / (1000 * 60); // minutes
+        
+        const maxWindow = Math.min(
+            this.config.clusteringWindows[service1],
+            this.config.clusteringWindows[service2]
+        );
+        
+        return timeDiff <= maxWindow;
+    }
+    
+    /**
+     * Score delivery compatibility
+     */
+    scoreDeliveryCompatibility(parcel1, parcel2) {
+        const dist = this.calculateDistance(parcel1._delivery, parcel2._delivery);
+        
+        if (dist <= 1) return 25;      // Same area
+        if (dist <= 2) return 20;      // Very close
+        if (dist <= 3) return 15;      // Close
+        if (dist <= 5) return 10;      // Same corridor
+        if (dist <= 8) return 5;       // Acceptable
+        return 0;                      // Too far
+    }
+    
+    /**
+     * Score time compatibility
+     */
+    scoreTimeCompatibility(parcel1, parcel2) {
+        const timeDiff = Math.abs(
+            new Date(parcel1.created_at).getTime() - 
+            new Date(parcel2.created_at).getTime()
+        ) / (1000 * 60); // minutes
+        
+        if (timeDiff <= 5) return 15;
+        if (timeDiff <= 15) return 10;
+        if (timeDiff <= 30) return 5;
+        return 0;
+    }
+    
+    /**
+     * Calculate efficiency of adding parcel to cluster
+     */
+    calculateAdditionEfficiency(cluster, newParcel) {
+        if (cluster.length === 0) return 1;
+        
+        // Calculate current route distance
+        const currentDistance = this.calculateClusterDistance(cluster);
+        
+        // Calculate new distance with addition
+        const newCluster = [...cluster, newParcel];
+        const newDistance = this.calculateClusterDistance(newCluster);
+        
+        // Efficiency is how little extra distance we add
+        const extraDistance = newDistance - currentDistance;
+        const directDistance = this.calculateDistance(newParcel._pickup, newParcel._delivery);
+        
+        return Math.max(0, 1 - (extraDistance - directDistance) / directDistance);
+    }
+    
+    /**
+     * Check if location is near a known area
+     */
+    isNearArea(location, areaName) {
+        const area = this.getAreaName(location);
+        return area.toLowerCase().includes(areaName.toLowerCase());
+    }
+    
+    /**
+     * Check if location is a hub
+     */
+    isHubLocation(location) {
+        const hubs = [
+            'Sarit Centre', 'Westgate', 'Junction Mall', 'Village Market',
+            'CBD', 'Yaya Centre', 'The Hub Karen', 'Two Rivers'
+        ];
+        
+        const locationName = location.address || '';
+        return hubs.some(hub => locationName.toLowerCase().includes(hub.toLowerCase()));
     }
     
     /**
@@ -277,131 +702,6 @@ class TumaRouteClustering {
             
             return true;
         });
-    }
-    
-    /**
-     * Group parcels by service type and pickup area
-     */
-    groupParcels(parcels) {
-        const groups = {};
-        
-        parcels.forEach(parcel => {
-            const serviceType = parcel.customer_choice || 'smart';
-            const area = parcel._pickupArea;
-            const key = `${serviceType}_${area}`;
-            
-            if (!groups[key]) {
-                groups[key] = [];
-            }
-            groups[key].push(parcel);
-        });
-        
-        return groups;
-    }
-    
-    /**
-     * Create clusters for a specific group
-     */
-    createClustersForGroup(parcels, groupKey) {
-        const [serviceType, area] = groupKey.split('_');
-        const clusters = [];
-        const assigned = new Set();
-        
-        // Sort parcels by delivery corridor for better clustering
-        const sortedParcels = this.sortByDeliveryCorridor(parcels);
-        
-        for (const seed of sortedParcels) {
-            if (assigned.has(seed.id)) continue;
-            
-            // Try to build a cluster around this seed
-            const cluster = this.buildCluster(seed, sortedParcels, assigned, serviceType);
-            
-            // Validate cluster quality
-            if (this.isValidCluster(cluster, serviceType)) {
-                clusters.push(cluster);
-                cluster.forEach(p => assigned.add(p.id));
-            } else {
-                // For express/smart, single parcels are OK
-                if (serviceType !== 'eco' && cluster.length === 1) {
-                    clusters.push(cluster);
-                    assigned.add(seed.id);
-                }
-            }
-        }
-        
-        return clusters;
-    }
-    
-    /**
-     * Build a cluster starting from a seed parcel
-     */
-    buildCluster(seed, candidates, assigned, serviceType) {
-        const cluster = [seed];
-        const maxSize = this.config.maxClusterSize[serviceType];
-        const maxRadius = this.config.maxPickupRadius[serviceType];
-        
-        // Score all candidates
-        const scoredCandidates = candidates
-            .filter(c => !assigned.has(c.id) && c.id !== seed.id)
-            .map(candidate => ({
-                parcel: candidate,
-                score: this.calculateClusteringScore(seed, candidate, cluster)
-            }))
-            .filter(sc => sc.score > 0)
-            .sort((a, b) => b.score - a.score);
-        
-        // Greedily add best candidates
-        for (const { parcel: candidate, score } of scoredCandidates) {
-            if (cluster.length >= maxSize) break;
-            if (assigned.has(candidate.id)) continue;
-            
-            // Check pickup distance
-            const pickupDist = this.calculateDistance(seed._pickup, candidate._pickup);
-            if (pickupDist > maxRadius) continue;
-            
-            // Check if adding maintains cluster quality
-            const testCluster = [...cluster, candidate];
-            if (this.analyzeClusterQuality(testCluster).isValid) {
-                cluster.push(candidate);
-            }
-        }
-        
-        return cluster;
-    }
-    
-    /**
-     * Calculate score for adding a candidate to a cluster
-     */
-    calculateClusteringScore(seed, candidate, currentCluster) {
-        let score = 0;
-        
-        // 1. Pickup proximity (40 points max)
-        const pickupDist = this.calculateDistance(seed._pickup, candidate._pickup);
-        if (pickupDist <= 1) score += 40;
-        else if (pickupDist <= 2) score += 30;
-        else if (pickupDist <= 3) score += 20;
-        else if (pickupDist <= 4) score += 10;
-        else return 0; // Too far
-        
-        // 2. Delivery corridor compatibility (30 points max)
-        if (seed._deliveryCorridor === candidate._deliveryCorridor) {
-            score += 30;
-        } else if (this.areCorridorsAdjacent(seed._deliveryCorridor, candidate._deliveryCorridor)) {
-            score += 15;
-        } else {
-            return 0; // Incompatible corridors
-        }
-        
-        // 3. Same pickup location bonus (10 points)
-        if (this.isSameLocation(seed._pickup, candidate._pickup)) {
-            score += 10;
-        }
-        
-        // 4. Route efficiency (20 points max)
-        const routeEfficiency = this.calculateRouteEfficiency([...currentCluster, candidate]);
-        score += Math.min(20, routeEfficiency * 20);
-        
-        return score;
     }
     
     /**
@@ -457,7 +757,7 @@ class TumaRouteClustering {
         const corridors = new Set(cluster.map(p => p._deliveryCorridor));
         analysis.corridorCount = corridors.size;
         
-        if (corridors.size > 2) {
+        if (corridors.size > 3) {  // Allow up to 3 corridors for flexibility
             analysis.isValid = false;
             return analysis;
         }
@@ -568,20 +868,25 @@ class TumaRouteClustering {
     calculateClusterScore(cluster, deliveryPattern, pickupDistance) {
         let score = 0;
         
-        // Corridor alignment (40 points)
+        // Corridor alignment (30 points)
         const corridors = new Set(cluster.map(p => p._deliveryCorridor));
-        if (corridors.size === 1) score += 40;
+        if (corridors.size === 1) score += 30;
         else if (corridors.size === 2) score += 20;
+        else if (corridors.size === 3) score += 10;
         
-        // Delivery pattern (30 points)
-        if (deliveryPattern.angleSpread < 60) score += 30;
-        else if (deliveryPattern.angleSpread < 90) score += 20;
-        else if (deliveryPattern.angleSpread < 120) score += 10;
+        // Delivery pattern (25 points)
+        if (deliveryPattern.angleSpread < 60) score += 25;
+        else if (deliveryPattern.angleSpread < 90) score += 15;
+        else if (deliveryPattern.angleSpread < 120) score += 5;
         
-        // Pickup efficiency (30 points)
-        if (pickupDistance <= 5) score += 30;
-        else if (pickupDistance <= 10) score += 20;
-        else if (pickupDistance <= 15) score += 10;
+        // Pickup efficiency (25 points)
+        if (pickupDistance <= 3) score += 25;
+        else if (pickupDistance <= 6) score += 15;
+        else if (pickupDistance <= 10) score += 5;
+        
+        // Route awareness bonus (20 points)
+        const routeAwareCount = cluster.filter(p => p._isOnRoute).length;
+        score += (routeAwareCount / cluster.length) * 20;
         
         return score;
     }
@@ -601,13 +906,14 @@ class TumaRouteClustering {
      */
     createRouteFromCluster(cluster, index) {
         const serviceType = cluster[0].customer_choice || 'smart';
+        const hasReturnTrip = cluster._metadata?.isReturnTrip || false;
         
         const route = {
             id: `route-${Date.now()}-${index}`,
             name: this.generateRouteName(cluster),
             type: serviceType,
             parcels: cluster.map(p => p.id),
-            parcelDetails: cluster, // Include full parcel data
+            parcelDetails: cluster,
             pickups: cluster.length,
             deliveries: cluster.length,
             distance: Math.round(this.calculateClusterDistance(cluster)),
@@ -615,6 +921,11 @@ class TumaRouteClustering {
             status: 'available',
             created_at: new Date().toISOString()
         };
+        
+        // Apply return trip bonus if applicable
+        if (hasReturnTrip) {
+            route.total_earnings = Math.round(route.total_earnings * this.config.returnTrip.bonusMultiplier);
+        }
         
         // Add computed properties
         route.earnings_per_km = Math.round(route.total_earnings / Math.max(route.distance, 1));
@@ -625,11 +936,38 @@ class TumaRouteClustering {
         route.metadata = {
             pickupAreas: [...new Set(cluster.map(p => p._pickupArea))],
             deliveryCorridors: [...new Set(cluster.map(p => p._deliveryCorridor))],
-            hasReturnTrip: this.checkReturnOpportunity(cluster),
-            pickupSequence: this.optimizePickupSequence(cluster).map(p => p.id)
+            hasReturnTrip: hasReturnTrip,
+            returnsToBase: cluster._metadata?.returnsToBase || false,
+            pickupSequence: this.optimizePickupSequence(cluster).map(p => p.id),
+            routeType: this.classifyRouteType(cluster)
         };
         
         return route;
+    }
+    
+    /**
+     * Classify route type
+     */
+    classifyRouteType(cluster) {
+        const pickupAreas = new Set(cluster.map(p => p._pickupArea));
+        const deliveryAreas = new Set(cluster.map(p => p._deliveryArea));
+        
+        if (pickupAreas.size === 1 && deliveryAreas.size === 1) {
+            if (Array.from(pickupAreas)[0] === Array.from(deliveryAreas)[0]) {
+                return 'local'; // Same area pickup and delivery
+            }
+            return 'point-to-point'; // Single pickup area to single delivery area
+        }
+        
+        if (pickupAreas.size === 1 && deliveryAreas.size > 1) {
+            return 'distribution'; // One pickup, multiple delivery areas
+        }
+        
+        if (pickupAreas.size > 1 && deliveryAreas.size === 1) {
+            return 'collection'; // Multiple pickups to one area
+        }
+        
+        return 'multi-stop'; // Multiple pickups and deliveries
     }
     
     /**
@@ -638,7 +976,10 @@ class TumaRouteClustering {
     generateRouteName(cluster) {
         if (cluster.length === 0) return 'Empty Route';
         
-        // Get pickup and delivery names from enriched data
+        const routeType = this.classifyRouteType(cluster);
+        const hasReturn = cluster._metadata?.isReturnTrip;
+        
+        // Get pickup and delivery names
         const pickupNames = [...new Set(cluster.map(p => 
             this.extractLocationName(p._pickup.address || p.pickup_address || '')
         ))].filter(n => n);
@@ -647,36 +988,44 @@ class TumaRouteClustering {
             this.extractLocationName(p._delivery.address || p.delivery_address || '')
         ))].filter(n => n);
         
+        let name = '';
+        
         // Single parcel routes
         if (cluster.length === 1) {
             const pickup = pickupNames[0] || this.getAreaName(cluster[0]._pickup);
             const delivery = deliveryNames[0] || this.getAreaName(cluster[0]._delivery);
-            return `${pickup} → ${delivery}`;
+            name = `${pickup} → ${delivery}`;
+        } else {
+            // Multiple parcels - vary by route type
+            switch (routeType) {
+                case 'local':
+                    name = `${pickupNames[0]} Local (${cluster.length} stops)`;
+                    break;
+                    
+                case 'distribution':
+                    name = `${pickupNames[0]} → ${deliveryNames.length > 2 ? 'Multiple' : deliveryNames.join(' & ')}`;
+                    break;
+                    
+                case 'collection':
+                    name = `${pickupNames.length > 2 ? 'Multiple' : pickupNames.join(' & ')} → ${deliveryNames[0]}`;
+                    break;
+                    
+                default:
+                    const primary = pickupNames[0] || 'Multiple';
+                    const dest = deliveryNames[0] || 'Multiple';
+                    name = `${primary} → ${dest}`;
+                    if (cluster.length > 2) {
+                        name += ` +${cluster.length - 1}`;
+                    }
+            }
         }
         
-        // Multiple parcels
-        if (pickupNames.length === 1 && deliveryNames.length === 1) {
-            return pickupNames[0] === deliveryNames[0] 
-                ? `${pickupNames[0]} Local` 
-                : `${pickupNames[0]} → ${deliveryNames[0]}`;
+        // Add return trip indicator
+        if (hasReturn) {
+            name += ' ↩️';
         }
         
-        if (pickupNames.length === 1) {
-            return deliveryNames.length <= 2 
-                ? `${pickupNames[0]} → ${deliveryNames.join(' & ')}`
-                : `${pickupNames[0]} → Multiple`;
-        }
-        
-        if (deliveryNames.length === 1) {
-            return pickupNames.length <= 2
-                ? `${pickupNames.join(' & ')} → ${deliveryNames[0]}`
-                : `Multiple → ${deliveryNames[0]}`;
-        }
-        
-        // Multiple pickups and deliveries
-        const primaryPickup = pickupNames[0] || 'Multiple';
-        const primaryDelivery = deliveryNames[0] || 'Multiple';
-        return `${primaryPickup} → ${primaryDelivery} +${cluster.length - 1}`;
+        return name;
     }
     
     /**
@@ -738,28 +1087,15 @@ class TumaRouteClustering {
     }
     
     /**
-     * Format corridor name for display
-     */
-    formatCorridorName(corridor) {
-        const names = {
-            'north': 'North',
-            'northeast': 'Northeast',
-            'east': 'Eastlands',
-            'southeast': 'Southeast',
-            'south': 'South',
-            'southwest': 'Kilimani Area',
-            'west': 'Westlands Area',
-            'northwest': 'Northwest',
-            'central': 'CBD'
-        };
-        return names[corridor] || 'Mixed';
-    }
-    
-    /**
      * Calculate total earnings
      */
     calculateEarnings(cluster) {
-        return cluster.reduce((sum, p) => sum + (p.rider_payout || 350), 0);
+        return cluster.reduce((sum, p) => {
+            // Use price if available, otherwise calculate
+            const price = p.price || p.total_price || 
+                         (p.rider_payout ? p.rider_payout / 0.7 : 500);
+            return sum + price;
+        }, 0);
     }
     
     /**
@@ -780,24 +1116,12 @@ class TumaRouteClustering {
         return Math.round(time);
     }
     
-    /**
-     * Check for return trip opportunity
-     */
-    checkReturnOpportunity(cluster) {
-        if (cluster.length === 0) return false;
-        
-        const lastDelivery = cluster[cluster.length - 1]._delivery;
-        const firstPickup = cluster[0]._pickup;
-        
-        return this.calculateDistance(lastDelivery, firstPickup) <= 3;
-    }
-    
     // ========================================================================
     // HELPER METHODS
     // ========================================================================
     
     /**
-     * Get pickup location from parcel - FIXED for JSON string format
+     * Get pickup location from parcel
      */
     getPickupLocation(parcel) {
         if (parcel._pickup) return parcel._pickup;
@@ -836,7 +1160,7 @@ class TumaRouteClustering {
     }
     
     /**
-     * Get delivery location from parcel - FIXED for JSON string format
+     * Get delivery location from parcel
      */
     getDeliveryLocation(parcel) {
         if (parcel._delivery) return parcel._delivery;
@@ -886,15 +1210,7 @@ class TumaRouteClustering {
     }
     
     /**
-     * Check if two locations are the same
-     */
-    isSameLocation(loc1, loc2, precision = 5) {
-        return loc1.lat.toFixed(precision) === loc2.lat.toFixed(precision) &&
-               loc1.lng.toFixed(precision) === loc2.lng.toFixed(precision);
-    }
-    
-    /**
-     * Get area name from location - ENHANCED for Nairobi
+     * Get area name from location
      */
     getAreaName(location) {
         if (!location) return 'General';
@@ -910,31 +1226,20 @@ class TumaRouteClustering {
                 'cbd': 'CBD',
                 'central business': 'CBD',
                 'town': 'CBD',
-                'mombasa road': 'Mombasa Road',
-                'panari': 'Mombasa Road',
-                'capital centre': 'Mombasa Road',
+                'upper hill': 'Upper Hill',
+                'upperhill': 'Upper Hill',
+                'kilimani': 'Kilimani',
+                'kileleshwa': 'Kileleshwa',
+                'lavington': 'Lavington',
                 'eastlands': 'Eastlands',
-                'kasarani': 'Kasarani',
-                'embakasi': 'Embakasi',
                 'south b': 'South B',
                 'south c': 'South C',
-                'kilimani': 'Kilimani',
-                'lavington': 'Lavington',
-                'parklands': 'Parklands',
-                'mountain view': 'Westlands',
-                'waiyaki way': 'Westlands',
-                'mbagathi': 'Kilimani',
-                'kenyatta market': 'Kilimani',
-                'railway': 'CBD',
-                'stonebridge': 'Westlands',
-                'ngong road': 'Kilimani',
                 'langata': 'Langata',
-                'gigiri': 'Gigiri',
-                'kileleshwa': 'Kileleshwa',
-                'riverside': 'Riverside',
-                'hurlingham': 'Hurlingham',
-                'upperhill': 'Upper Hill',
-                'upper hill': 'Upper Hill'
+                'industrial area': 'Industrial Area',
+                'kasarani': 'Kasarani',
+                'kangemi': 'Kangemi',
+                'parklands': 'Parklands',
+                'hurlingham': 'Hurlingham'
             };
             
             // Check each area pattern
@@ -952,13 +1257,8 @@ class TumaRouteClustering {
             'Kilimani': { lat: -1.2906, lng: 36.7853 },
             'Karen': { lat: -1.3194, lng: 36.7096 },
             'Eastlands': { lat: -1.2921, lng: 36.8608 },
-            'Kasarani': { lat: -1.2225, lng: 36.8973 },
-            'Embakasi': { lat: -1.3232, lng: 36.8941 },
-            'Langata': { lat: -1.3616, lng: 36.7483 },
-            'Mombasa Road': { lat: -1.3200, lng: 36.8500 },
             'Upper Hill': { lat: -1.2975, lng: 36.8189 },
-            'Gigiri': { lat: -1.2325, lng: 36.8125 },
-            'Parklands': { lat: -1.2589, lng: 36.8119 }
+            'Kangemi': { lat: -1.2681, lng: 36.7493 }
         };
         
         let closestArea = 'General';
@@ -983,59 +1283,17 @@ class TumaRouteClustering {
         const cbd = { lat: -1.2921, lng: 36.8219 };
         const bearing = this.calculateBearing(cbd, location);
         
-        // Find matching corridor
-        for (const [corridor, data] of Object.entries(DELIVERY_CORRIDORS)) {
-            if (data.angle === null) continue; // Skip central
-            
-            const angleDiff = Math.abs(bearing - data.angle);
-            if (angleDiff <= 22.5 || angleDiff >= 337.5) {
-                return corridor;
-            }
-        }
-        
-        // Check if in CBD
-        if (this.calculateDistance(cbd, location) < 2) {
-            return 'central';
-        }
+        // Map bearing to corridor
+        if (bearing >= 337.5 || bearing < 22.5) return 'north';
+        if (bearing >= 22.5 && bearing < 67.5) return 'northeast';
+        if (bearing >= 67.5 && bearing < 112.5) return 'east';
+        if (bearing >= 112.5 && bearing < 157.5) return 'southeast';
+        if (bearing >= 157.5 && bearing < 202.5) return 'south';
+        if (bearing >= 202.5 && bearing < 247.5) return 'southwest';
+        if (bearing >= 247.5 && bearing < 292.5) return 'west';
+        if (bearing >= 292.5 && bearing < 337.5) return 'northwest';
         
         return 'mixed';
-    }
-    
-    /**
-     * Check if corridors are adjacent
-     */
-    areCorridorsAdjacent(corridor1, corridor2) {
-        if (corridor1 === corridor2) return true;
-        
-        const adjacency = {
-            'north': ['northeast', 'northwest', 'central'],
-            'northeast': ['north', 'east', 'central'],
-            'east': ['northeast', 'southeast', 'central'],
-            'southeast': ['east', 'south', 'central'],
-            'south': ['southeast', 'southwest'],
-            'southwest': ['south', 'west', 'central'],
-            'west': ['southwest', 'northwest', 'central'],
-            'northwest': ['west', 'north', 'central'],
-            'central': ['north', 'east', 'south', 'west']
-        };
-        
-        return adjacency[corridor1]?.includes(corridor2) || false;
-    }
-    
-    /**
-     * Sort parcels by delivery corridor
-     */
-    sortByDeliveryCorridor(parcels) {
-        const corridorOrder = [
-            'north', 'northeast', 'east', 'southeast',
-            'south', 'southwest', 'west', 'northwest', 'central'
-        ];
-        
-        return parcels.sort((a, b) => {
-            const indexA = corridorOrder.indexOf(a._deliveryCorridor);
-            const indexB = corridorOrder.indexOf(b._deliveryCorridor);
-            return indexA - indexB;
-        });
     }
     
     /**
@@ -1090,11 +1348,11 @@ class TumaRouteClustering {
         let total = 0;
         const sequence = this.optimizePickupSequence(cluster);
         
-        // Distance to first pickup
-        const nairobiCenter = { lat: -1.2921, lng: 36.8219 };
-        total += this.calculateDistance(nairobiCenter, sequence[0]._pickup);
+        // Distance to first pickup (from CBD or rider location)
+        const startPoint = { lat: -1.2921, lng: 36.8219 };
+        total += this.calculateDistance(startPoint, sequence[0]._pickup);
         
-        // Pickup to pickup distances (visiting each location once)
+        // Pickup to pickup distances
         const visitedLocations = new Set();
         let lastLocation = sequence[0]._pickup;
         
@@ -1115,17 +1373,12 @@ class TumaRouteClustering {
             total += this.calculateDistance(p._pickup, p._delivery);
         });
         
-        return total;
-    }
-    
-    /**
-     * Calculate route efficiency
-     */
-    calculateRouteEfficiency(cluster) {
-        const directDistance = cluster.reduce((sum, p) => sum + p._distance, 0);
-        const routeDistance = this.calculateClusterDistance(cluster);
+        // Add return distance if applicable
+        if (cluster._metadata?.isReturnTrip) {
+            // Distance between legs is already included
+        }
         
-        return directDistance / Math.max(routeDistance, 1);
+        return total;
     }
 }
 
