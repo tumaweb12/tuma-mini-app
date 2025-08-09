@@ -6,7 +6,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="telegram-web-app" content="true">
-    <title>Tuma - Agent Dashboard</title>
+    <title>Tuma Partner Programme</title>
     
     <!-- 1) Telegram Web App runtime -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
@@ -18,7 +18,10 @@
     <!-- 3) QR Code Library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     
-    <!-- 4) Your config & modules -->
+    <!-- 4) Chart.js for performance visualization -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- 5) Your config & modules -->
     <script src="./config.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
     <script type="module" src="./supabaseClient.js"></script>
@@ -36,6 +39,7 @@
         :root {
             --primary: #0066FF;
             --primary-dark: #0052CC;
+            --primary-light: #3385FF;
             --surface: #0A0A0B;
             --surface-elevated: #141416;
             --surface-high: #1C1C1F;
@@ -44,11 +48,13 @@
             --text-tertiary: #48484A;
             --border: #2C2C2E;
             --success: #34C759;
+            --success-light: #52E578;
             --warning: #FF9F0A;
             --danger: #FF3B30;
-            --express: #FF9800;
-            --smart: #2196F3;
-            --eco: #4CAF50;
+            --tier-bronze: #CD7F32;
+            --tier-silver: #C0C0C0;
+            --tier-gold: #FFD700;
+            --tier-platinum: #E5E4E2;
             --safe-area-top: env(safe-area-inset-top);
             --safe-area-bottom: env(safe-area-inset-bottom);
         }
@@ -103,57 +109,198 @@
             background: rgba(10, 10, 11, 0.98);
         }
 
-        .header-content {
+        .header-top {
             display: flex;
-            align-items: center;
             justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
         }
 
-        .logo-section {
+        .partner-info {
             display: flex;
             align-items: center;
             gap: 12px;
         }
 
-        .logo {
-            width: 40px;
-            height: 40px;
-            position: relative;
-        }
-
-        .logo svg {
-            width: 100%;
-            height: 100%;
-        }
-
-        .app-name {
-            font-size: 24px;
-            font-weight: 700;
-            letter-spacing: -0.5px;
-        }
-
-        .app-subtitle {
-            font-size: 12px;
-            color: var(--text-secondary);
-            margin-top: 2px;
-        }
-
-        .menu-button {
-            width: 36px;
-            height: 36px;
+        .partner-avatar {
+            width: 48px;
+            height: 48px;
             border-radius: 50%;
-            background: var(--surface-elevated);
-            border: none;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
             display: flex;
             align-items: center;
             justify-content: center;
-            cursor: pointer;
-            transition: all 0.2s;
+            font-size: 20px;
+            font-weight: 700;
+            color: white;
+            position: relative;
         }
 
-        .menu-button:active {
-            scale: 0.95;
-            background: var(--surface-high);
+        .partner-avatar.bronze {
+            background: linear-gradient(135deg, var(--tier-bronze), #A0522D);
+        }
+
+        .partner-avatar.silver {
+            background: linear-gradient(135deg, var(--tier-silver), #A8A8A8);
+        }
+
+        .partner-avatar.gold {
+            background: linear-gradient(135deg, var(--tier-gold), #B8860B);
+        }
+
+        .partner-avatar.platinum {
+            background: linear-gradient(135deg, var(--tier-platinum), #CCCCCC);
+        }
+
+        .tier-indicator {
+            position: absolute;
+            bottom: -2px;
+            right: -2px;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: var(--surface);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+        }
+
+        .partner-details {
+            flex: 1;
+        }
+
+        .partner-name {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .partner-tier {
+            display: inline-block;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 3px 8px;
+            border-radius: 12px;
+            background: var(--surface-elevated);
+            color: var(--text-secondary);
+            margin-left: 8px;
+            text-transform: uppercase;
+        }
+
+        .partner-tier.gold {
+            background: linear-gradient(135deg, rgba(255, 215, 0, 0.2), rgba(255, 215, 0, 0.1));
+            color: var(--tier-gold);
+        }
+
+        .partner-code {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-top: 2px;
+            font-family: 'SF Mono', monospace;
+        }
+
+        .telegram-group-btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 10px 16px;
+            background: linear-gradient(135deg, #0088CC, #0099DD);
+            color: white;
+            border: none;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+        }
+
+        .telegram-group-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 136, 204, 0.3);
+        }
+
+        /* Earnings Card */
+        .earnings-card {
+            background: linear-gradient(135deg, var(--surface-elevated), var(--surface-high));
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 16px;
+            border: 1px solid var(--border);
+        }
+
+        .earnings-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .earnings-title {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        .earnings-period {
+            font-size: 12px;
+            color: var(--text-tertiary);
+        }
+
+        .earnings-amount {
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--success);
+            margin-bottom: 8px;
+        }
+
+        .earnings-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .earnings-status.ready {
+            color: var(--success);
+        }
+
+        /* Cash Out Button */
+        .cashout-btn {
+            width: 100%;
+            padding: 16px;
+            background: linear-gradient(135deg, var(--success), var(--success-light));
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+
+        .cashout-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .cashout-btn:not(:disabled):hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(52, 199, 89, 0.3);
+        }
+
+        .cashout-info {
+            font-size: 11px;
+            color: var(--text-tertiary);
+            text-align: center;
+            margin-bottom: 20px;
         }
 
         /* Form Container */
@@ -162,489 +309,659 @@
             padding-bottom: calc(20px + var(--safe-area-bottom));
         }
 
-        /* Hero Section */
-        .hero-section {
-            background: linear-gradient(135deg, #1a1a1a 0%, #0f0f0f 100%);
-            border-radius: 16px;
-            padding: 24px;
+        /* Streak & Activity Section */
+        .activity-section {
             margin-bottom: 24px;
+        }
+
+        .activity-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .activity-card {
+            background: var(--surface-elevated);
+            border-radius: 12px;
+            padding: 16px;
+            border: 1px solid var(--border);
             text-align: center;
-            position: relative;
-            overflow: hidden;
         }
 
-        .hero-section::before {
-            content: '';
-            position: absolute;
-            top: -50%;
-            left: -50%;
-            width: 200%;
-            height: 200%;
-            background: radial-gradient(circle, var(--primary) 0%, transparent 70%);
-            opacity: 0.1;
-            animation: pulse 4s ease-in-out infinite;
-        }
-
-        @keyframes pulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.1); }
-        }
-
-        .hero-title {
+        .activity-icon {
             font-size: 28px;
-            font-weight: 700;
             margin-bottom: 8px;
-            position: relative;
         }
 
-        .hero-subtitle {
-            font-size: 16px;
+        .activity-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+
+        .activity-label {
+            font-size: 12px;
             color: var(--text-secondary);
-            position: relative;
         }
 
-        .agent-code {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            background: var(--primary);
-            color: white;
-            padding: 6px 12px;
-            border-radius: 20px;
+        .streak-fire {
+            animation: fireWiggle 2s ease-in-out infinite;
+        }
+
+        @keyframes fireWiggle {
+            0%, 100% { transform: rotate(-3deg); }
+            50% { transform: rotate(3deg); }
+        }
+
+        /* Weekly Calendar Heat Map */
+        .calendar-card {
+            background: var(--surface-elevated);
+            border-radius: 12px;
+            padding: 16px;
+            border: 1px solid var(--border);
+        }
+
+        .calendar-title {
             font-size: 14px;
             font-weight: 600;
-            margin-top: 16px;
+            margin-bottom: 12px;
+            color: var(--text-primary);
+        }
+
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 8px;
+        }
+
+        .calendar-day {
+            aspect-ratio: 1;
+            border-radius: 8px;
+            background: var(--surface-high);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
             position: relative;
         }
 
-        /* Form Sections */
-        .form-section {
-            margin-bottom: 24px;
-            animation: slideUp 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
-            opacity: 0;
-            transform: translateY(20px);
+        .calendar-day.active {
+            background: linear-gradient(135deg, rgba(52, 199, 89, 0.2), rgba(52, 199, 89, 0.1));
+            border: 1px solid var(--success);
         }
 
-        .form-section:nth-child(1) { animation-delay: 0.1s; }
-        .form-section:nth-child(2) { animation-delay: 0.15s; }
-        .form-section:nth-child(3) { animation-delay: 0.2s; }
-        .form-section:nth-child(4) { animation-delay: 0.25s; }
-        .form-section:nth-child(5) { animation-delay: 0.3s; }
-        .form-section:nth-child(6) { animation-delay: 0.35s; }
-        .form-section:nth-child(7) { animation-delay: 0.4s; }
+        .calendar-day.today {
+            border: 2px solid var(--primary);
+        }
 
-        @keyframes slideUp {
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
+        .day-label {
+            font-size: 10px;
+            color: var(--text-tertiary);
+            margin-bottom: 2px;
+        }
+
+        .day-count {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        /* KPI Cards Section */
+        .kpi-section {
+            margin-bottom: 24px;
         }
 
         .section-title {
-            font-size: 13px;
+            font-size: 16px;
             font-weight: 600;
-            color: var(--text-secondary);
-            margin-bottom: 12px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
+            color: var(--text-primary);
+            margin-bottom: 16px;
         }
 
-        /* Stats Cards */
-        .stats-grid {
+        .kpi-grid {
             display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 12px;
-            margin-bottom: 24px;
+            grid-template-columns: 1fr;
+            gap: 16px;
         }
 
-        .stat-card {
+        .kpi-card {
             background: var(--surface-elevated);
-            border-radius: 14px;
+            border-radius: 12px;
             padding: 20px;
-            text-align: center;
             border: 1px solid var(--border);
             transition: all 0.3s;
         }
 
-        .stat-card.highlight {
-            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+        .kpi-card:hover {
             border-color: var(--primary);
+            transform: translateY(-2px);
         }
 
-        .stat-value {
-            font-size: 32px;
-            font-weight: 700;
-            color: var(--primary);
-            margin-bottom: 4px;
-        }
-
-        .stat-card.highlight .stat-value {
-            color: white;
-        }
-
-        .stat-label {
-            font-size: 14px;
-            color: var(--text-secondary);
-        }
-
-        .stat-card.highlight .stat-label {
-            color: rgba(255, 255, 255, 0.9);
-        }
-
-        /* Referral Section */
-        .referral-box {
-            background: var(--surface-elevated);
-            border-radius: 14px;
-            padding: 20px;
-            border: 1px solid var(--border);
-            margin-bottom: 16px;
-        }
-
-        .referral-link {
-            background: var(--surface-high);
-            padding: 16px;
-            border-radius: 10px;
-            font-family: monospace;
-            font-size: 14px;
-            word-break: break-all;
-            margin-bottom: 16px;
-            color: var(--primary);
-        }
-
-        .referral-actions {
-            display: flex;
-            gap: 12px;
-        }
-
-        .copy-btn, .share-btn {
-            flex: 1;
-            padding: 12px;
-            border: none;
-            border-radius: 10px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .copy-btn {
-            background: var(--primary);
-            color: white;
-        }
-
-        .share-btn {
-            background: var(--surface-high);
-            color: var(--text-primary);
-        }
-
-        .qr-code {
-            display: flex;
-            justify-content: center;
-            padding: 20px;
-            background: white;
-            border-radius: 14px;
-            margin-top: 16px;
-        }
-
-        /* Payout Section */
-        .payout-info {
-            background: var(--surface-elevated);
-            border-radius: 14px;
-            padding: 20px;
-            border: 1px solid var(--border);
-            margin-bottom: 16px;
-        }
-
-        .payout-item {
+        .kpi-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 12px 0;
-            border-bottom: 1px solid var(--border);
+            margin-bottom: 12px;
         }
 
-        .payout-item:last-child {
-            border-bottom: none;
-        }
-
-        .payout-item .amount {
-            font-size: 20px;
-            font-weight: 700;
-            color: var(--success);
-        }
-
-        .payout-item .date {
+        .kpi-title {
+            font-size: 14px;
+            font-weight: 500;
             color: var(--text-secondary);
         }
 
-        .payout-btn {
-            width: 100%;
-            background: var(--success);
-            color: white;
-            border: none;
-            border-radius: 14px;
-            padding: 16px;
-            font-size: 16px;
+        .kpi-value {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .kpi-progress {
+            height: 8px;
+            background: var(--surface-high);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 8px;
+        }
+
+        .kpi-progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, var(--success), var(--success-light));
+            border-radius: 4px;
+            transition: width 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+
+        .kpi-status {
+            font-size: 12px;
+            color: var(--text-tertiary);
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .kpi-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            background: linear-gradient(135deg, rgba(52, 199, 89, 0.2), rgba(52, 199, 89, 0.1));
+            color: var(--success);
+            border-radius: 8px;
+            font-size: 11px;
             font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
         }
 
-        .payout-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
+        /* Personal Progress Section */
+        .progress-section {
+            margin-bottom: 24px;
         }
 
-        /* Performance Metrics */
-        .metrics-grid {
+        .progress-card {
+            background: var(--surface-elevated);
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid var(--border);
+        }
+
+        .progress-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .progress-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .progress-period {
+            font-size: 12px;
+            color: var(--text-secondary);
+            padding: 4px 10px;
+            background: var(--surface-high);
+            border-radius: 12px;
+        }
+
+        .rank-display {
+            display: flex;
+            align-items: center;
+            justify-content: space-around;
+            margin: 20px 0;
+        }
+
+        .rank-metric {
+            text-align: center;
+        }
+
+        .rank-number {
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        .rank-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        .rank-divider {
+            width: 1px;
+            height: 40px;
+            background: var(--border);
+        }
+
+        /* Stats Overview */
+        .stats-section {
+            margin-bottom: 24px;
+        }
+
+        .stats-grid {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
             gap: 12px;
         }
 
-        .metric-card {
+        .stat-card {
             background: var(--surface-elevated);
-            border-radius: 14px;
+            border-radius: 12px;
             padding: 16px;
-            text-align: center;
             border: 1px solid var(--border);
+            text-align: center;
+            transition: all 0.3s;
         }
 
-        .metric-value {
+        .stat-card:hover {
+            transform: translateY(-2px);
+            border-color: var(--primary);
+        }
+
+        .stat-icon {
             font-size: 24px;
+            margin-bottom: 8px;
+        }
+
+        .stat-value {
+            font-size: 22px;
             font-weight: 700;
-            color: var(--primary);
+            color: var(--text-primary);
             margin-bottom: 4px;
         }
 
-        .metric-label {
+        .stat-label {
             font-size: 12px;
             color: var(--text-secondary);
         }
 
-        /* Time Period Selector */
-        .time-selector {
-            display: flex;
-            gap: 8px;
-            margin-bottom: 16px;
-            background: var(--surface-elevated);
-            padding: 4px;
-            border-radius: 10px;
+        .stat-trend {
+            display: inline-block;
+            font-size: 11px;
+            padding: 2px 6px;
+            border-radius: 8px;
+            margin-top: 4px;
+            font-weight: 600;
         }
 
-        .time-option {
-            flex: 1;
-            padding: 8px;
-            border: none;
-            background: transparent;
-            color: var(--text-secondary);
+        .trend-up {
+            background: linear-gradient(135deg, rgba(52, 199, 89, 0.2), rgba(52, 199, 89, 0.1));
+            color: var(--success);
+        }
+
+        .trend-down {
+            background: linear-gradient(135deg, rgba(255, 59, 48, 0.2), rgba(255, 59, 48, 0.1));
+            color: var(--danger);
+        }
+
+        /* Insights Section */
+        .insights-section {
+            margin-bottom: 24px;
+        }
+
+        .insight-card {
+            background: linear-gradient(135deg, var(--surface-elevated), var(--surface-high));
+            border-radius: 12px;
+            padding: 16px;
+            border: 1px solid var(--border);
+            margin-bottom: 12px;
+        }
+
+        .insight-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+
+        .insight-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            background: var(--primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+        }
+
+        .insight-title {
             font-size: 14px;
             font-weight: 600;
-            cursor: pointer;
+            color: var(--text-primary);
+        }
+
+        .insight-content {
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        .insight-action {
+            display: inline-block;
+            margin-top: 8px;
+            padding: 6px 12px;
+            background: var(--surface-high);
             border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--primary);
+            cursor: pointer;
             transition: all 0.2s;
         }
 
-        .time-option.active {
+        .insight-action:hover {
             background: var(--primary);
             color: white;
         }
 
-        /* Transaction List */
-        .transaction-list {
-            background: var(--surface-elevated);
-            border-radius: 14px;
-            overflow: hidden;
+        /* Vendor Performance Section */
+        .vendors-section {
+            margin-bottom: 24px;
         }
 
-        .transaction-item {
+        .vendors-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 16px;
-            border-bottom: 1px solid var(--border);
+            margin-bottom: 16px;
         }
 
-        .transaction-item:last-child {
-            border-bottom: none;
-        }
-
-        .transaction-info {
+        .vendor-filter {
             display: flex;
-            flex-direction: column;
-            gap: 4px;
+            gap: 8px;
         }
 
-        .vendor-name {
+        .filter-btn {
+            padding: 6px 12px;
+            background: var(--surface-elevated);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 12px;
             font-weight: 600;
-            font-size: 16px;
-        }
-
-        .parcel-code {
-            font-size: 12px;
             color: var(--text-secondary);
-            font-family: monospace;
+            cursor: pointer;
+            transition: all 0.2s;
         }
 
-        .transaction-amount {
-            text-align: right;
+        .filter-btn.active {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
         }
 
-        .commission {
-            font-size: 18px;
-            font-weight: 700;
-            color: var(--success);
-        }
-
-        .transaction-date {
-            font-size: 12px;
-            color: var(--text-secondary);
-        }
-
-        /* Vendor List */
         .vendor-list {
             background: var(--surface-elevated);
-            border-radius: 14px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
             overflow: hidden;
         }
 
         .vendor-item {
             padding: 16px;
             border-bottom: 1px solid var(--border);
-            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             transition: all 0.2s;
-        }
-
-        .vendor-item:last-child {
-            border-bottom: none;
+            cursor: pointer;
         }
 
         .vendor-item:hover {
             background: var(--surface-high);
         }
 
-        .vendor-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 8px;
+        .vendor-item:last-child {
+            border-bottom: none;
+        }
+
+        .vendor-info {
+            flex: 1;
         }
 
         .vendor-name {
-            font-size: 16px;
-            font-weight: 600;
-        }
-
-        .vendor-parcels {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            background: var(--surface-high);
-            padding: 4px 12px;
-            border-radius: 20px;
             font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 4px;
         }
 
         .vendor-details {
             display: flex;
-            gap: 16px;
-            font-size: 14px;
+            gap: 12px;
+            font-size: 12px;
             color: var(--text-secondary);
         }
 
-        .vendor-phone {
-            display: flex;
-            align-items: center;
-            gap: 4px;
+        .vendor-stats {
+            text-align: right;
         }
 
-        .vendor-commission {
-            display: flex;
-            align-items: center;
-            gap: 4px;
-            color: var(--success);
+        .vendor-parcels {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--primary);
         }
 
-        .vendor-actions {
-            display: flex;
-            gap: 8px;
-            margin-top: 12px;
+        .vendor-label {
+            font-size: 11px;
+            color: var(--text-secondary);
         }
 
-        .vendor-action-btn {
-            padding: 8px 12px;
-            border: none;
-            border-radius: 8px;
-            font-size: 12px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
+        .vendor-status {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-left: 8px;
         }
 
-        .vendor-action-btn.primary {
-            background: var(--primary);
-            color: white;
+        .status-active {
+            background: var(--success);
         }
 
-        .vendor-action-btn.secondary {
-            background: var(--surface-high);
-            color: var(--text-primary);
+        .status-dormant {
+            background: var(--warning);
         }
 
-        /* Marketing Grid */
-        .marketing-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 12px;
+        .status-inactive {
+            background: var(--danger);
         }
 
-        .marketing-btn {
-            background: var(--surface-elevated);
-            border: 1px solid var(--border);
-            border-radius: 14px;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 8px;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .marketing-btn:hover {
-            background: var(--surface-high);
-            transform: translateY(-2px);
-        }
-
-        .marketing-btn span:first-child {
-            font-size: 32px;
-        }
-
-        .marketing-btn span:last-child {
-            font-size: 14px;
-            font-weight: 600;
-        }
-
-        /* Add Vendor Button */
         .add-vendor-btn {
             width: 100%;
-            background: var(--primary);
-            color: white;
-            border: none;
-            border-radius: 14px;
-            padding: 18px;
-            font-size: 17px;
+            margin-top: 16px;
+            padding: 16px;
+            background: var(--surface-elevated);
+            border: 2px dashed var(--border);
+            border-radius: 12px;
+            color: var(--text-secondary);
+            font-size: 14px;
             font-weight: 600;
             cursor: pointer;
-            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            transition: all 0.2s;
             display: flex;
             align-items: center;
             justify-content: center;
             gap: 8px;
         }
 
-        .add-vendor-btn:active {
-            scale: 0.98;
+        .add-vendor-btn:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+            background: rgba(0, 102, 255, 0.05);
+        }
+
+        /* Leaderboard Section */
+        .leaderboard-section {
+            margin-bottom: 24px;
+        }
+
+        .leaderboard-opt-in {
+            background: var(--surface-elevated);
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid var(--border);
+            text-align: center;
+        }
+
+        .leaderboard-opt-in h3 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .leaderboard-opt-in p {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-bottom: 16px;
+        }
+
+        .opt-in-btn {
+            padding: 10px 24px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .opt-in-btn:hover {
             background: var(--primary-dark);
+        }
+
+        .leaderboard-active {
+            background: var(--surface-elevated);
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid var(--border);
+        }
+
+        .leaderboard-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .leaderboard-title {
+            font-size: 15px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .leaderboard-reset {
+            font-size: 11px;
+            color: var(--text-secondary);
+            padding: 4px 8px;
+            background: var(--surface-high);
+            border-radius: 8px;
+        }
+
+        .leaderboard-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .leaderboard-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            background: var(--surface-high);
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+
+        .leaderboard-item.self {
+            background: linear-gradient(135deg, rgba(0, 102, 255, 0.1), rgba(0, 102, 255, 0.05));
+            border: 1px solid var(--primary);
+        }
+
+        .leaderboard-rank {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--surface-elevated);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 14px;
+            color: var(--text-primary);
+        }
+
+        .rank-1 {
+            background: linear-gradient(135deg, var(--tier-gold), #B8860B);
+            color: white;
+        }
+
+        .rank-2 {
+            background: linear-gradient(135deg, var(--tier-silver), #A8A8A8);
+            color: white;
+        }
+
+        .rank-3 {
+            background: linear-gradient(135deg, var(--tier-bronze), #A0522D);
+            color: white;
+        }
+
+        .leaderboard-info {
+            flex: 1;
+        }
+
+        .leaderboard-name {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .leaderboard-stats {
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin-top: 2px;
+        }
+
+        .leaderboard-parcels {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        .newcomer-badge {
+            display: inline-block;
+            font-size: 10px;
+            padding: 2px 6px;
+            background: var(--success);
+            color: white;
+            border-radius: 8px;
+            margin-left: 6px;
+            font-weight: 600;
         }
 
         /* Modal */
@@ -668,12 +985,18 @@
             width: 100%;
             max-height: 90vh;
             overflow-y: auto;
-            animation: modalBounce 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            animation: modalSlide 0.3s ease-out;
         }
 
-        @keyframes modalBounce {
-            0% { transform: scale(0.5) translateY(50px); opacity: 0; }
-            100% { transform: scale(1) translateY(0); opacity: 1; }
+        @keyframes modalSlide {
+            from {
+                transform: translateY(100px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
         }
 
         .modal-header {
@@ -684,8 +1007,9 @@
         }
 
         .modal-title {
-            font-size: 20px;
-            font-weight: 700;
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-primary);
         }
 
         .close-modal {
@@ -701,138 +1025,72 @@
             color: var(--text-primary);
         }
 
-        /* Input Fields */
-        .input-field {
-            width: 100%;
+        .fee-breakdown {
             background: var(--surface-high);
-            border: 1px solid var(--border);
             border-radius: 12px;
             padding: 16px;
-            font-size: 16px;
-            color: var(--text-primary);
-            margin-bottom: 12px;
-            transition: all 0.3s;
-            outline: none;
+            margin-bottom: 20px;
         }
 
-        .input-field:focus {
-            border-color: var(--primary);
-            transform: translateY(-2px);
-            box-shadow: 0 4px 20px rgba(0, 102, 255, 0.2);
+        .fee-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            font-size: 14px;
+        }
+
+        .fee-item.total {
+            border-top: 1px solid var(--border);
+            padding-top: 12px;
+            margin-top: 8px;
+            font-weight: 600;
+            font-size: 16px;
+        }
+
+        .fee-label {
+            color: var(--text-secondary);
+        }
+
+        .fee-value {
+            color: var(--text-primary);
+            font-weight: 500;
         }
 
         .modal-actions {
-            display: flex;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
             gap: 12px;
-            margin-top: 20px;
         }
 
         .modal-btn {
-            flex: 1;
-            padding: 14px;
-            border-radius: 12px;
+            padding: 12px;
+            border-radius: 8px;
             border: none;
-            font-size: 16px;
+            font-size: 14px;
             font-weight: 600;
             cursor: pointer;
             transition: all 0.2s;
         }
 
         .modal-btn.primary {
-            background: var(--primary);
+            background: var(--success);
             color: white;
         }
 
         .modal-btn.secondary {
             background: var(--surface-high);
             color: var(--text-primary);
+            border: 1px solid var(--border);
         }
 
-        /* Empty State */
-        .empty-state {
-            padding: 48px 24px;
+        .mpesa-notice {
+            font-size: 12px;
+            color: var(--text-secondary);
             text-align: center;
-        }
-
-        .empty-icon {
-            width: 64px;
-            height: 64px;
-            background: var(--surface-high);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto 16px;
-            font-size: 24px;
-        }
-
-        .empty-title {
-            font-size: 18px;
-            font-weight: 600;
-            margin-bottom: 8px;
-        }
-
-        .empty-message {
-            font-size: 14px;
-            color: var(--text-secondary);
-        }
-
-        /* Loading State */
-        .loading-state {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 40px;
-            color: var(--text-secondary);
-        }
-
-        .loading-spinner {
-            width: 40px;
-            height: 40px;
-            border: 3px solid var(--surface-high);
-            border-top-color: var(--primary);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        /* Notification Toast */
-        .notification {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: var(--success);
-            color: white;
-            padding: 12px 20px;
+            margin-top: 12px;
+            padding: 12px;
+            background: rgba(255, 159, 10, 0.1);
             border-radius: 8px;
-            z-index: 3000;
-            font-weight: 600;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-            max-width: 350px;
-            animation: slideIn 0.3s ease-out;
-        }
-
-        .notification.error {
-            background: var(--danger);
-        }
-
-        .notification.warning {
-            background: var(--warning);
-            color: black;
-        }
-
-        @keyframes slideIn {
-            from {
-                transform: translateX(100%);
-                opacity: 0;
-            }
-            to {
-                transform: translateX(0);
-                opacity: 1;
-            }
         }
 
         /* Responsive */
@@ -843,14 +1101,6 @@
                 box-shadow: 0 0 60px rgba(0, 0, 0, 0.5);
             }
         }
-
-        @media (prefers-reduced-motion: reduce) {
-            * {
-                animation-duration: 0.01ms !important;
-                animation-iteration-count: 1 !important;
-                transition-duration: 0.01ms !important;
-            }
-        }
     </style>
 </head>
 <body>
@@ -859,267 +1109,454 @@
         <div class="main-content" id="mainContent">
             <!-- Header -->
             <div class="header" id="header">
-                <div class="header-content">
-                    <div class="logo-section">
-                        <div class="logo">
-                            <svg viewBox="0 0 40 40" fill="none">
-                                <circle cx="20" cy="20" r="18" stroke="#0066FF" stroke-width="2"/>
-                                <path d="M20 8 L20 22 M14 8 L26 8" stroke="#0066FF" stroke-width="3" stroke-linecap="round"/>
-                                <circle cx="20" cy="28" r="3" fill="#0066FF"/>
-                                <path d="M8 20 Q12 16 16 18" stroke="#0066FF" stroke-width="1" opacity="0.5"/>
-                                <path d="M24 18 Q28 16 32 20" stroke="#0066FF" stroke-width="1" opacity="0.5"/>
-                            </svg>
+                <div class="header-top">
+                    <div class="partner-info">
+                        <div class="partner-avatar gold" id="partnerAvatar">
+                            <span id="partnerInitial">J</span>
+                            <div class="tier-indicator">👑</div>
                         </div>
-                        <div>
-                            <h1 class="app-name">Tuma</h1>
-                            <p class="app-subtitle">Agent Dashboard</p>
+                        <div class="partner-details">
+                            <div>
+                                <span class="partner-name" id="partnerName">John Doe</span>
+                                <span class="partner-tier gold" id="partnerTier">GOLD</span>
+                            </div>
+                            <div class="partner-code">Partner ID: <span id="partnerCode">TMA-001</span></div>
                         </div>
                     </div>
-                    <button class="menu-button" aria-label="Home" onclick="window.location.href='auth.html'" style="cursor: pointer;">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
-                            <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
+                    <a href="https://t.me/tumapartners" target="_blank" class="telegram-group-btn">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.14.18-.357.223-.548.223l.188-2.85 5.18-4.68c.223-.198-.054-.308-.346-.11l-6.4 4.02-2.76-.918c-.6-.187-.612-.6.125-.89l10.782-4.156c.5-.18.94.12.78.88z"/>
                         </svg>
-                    </button>
+                        <span>Community</span>
+                    </a>
                 </div>
+
+                <!-- Earnings Card -->
+                <div class="earnings-card">
+                    <div class="earnings-header">
+                        <div class="earnings-title">Available Balance</div>
+                        <div class="earnings-period">Updated live</div>
+                    </div>
+                    <div class="earnings-amount">KES <span id="availableBalance">3,450</span></div>
+                    <div class="earnings-status ready">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>
+                        </svg>
+                        <span>Ready to cash out (Min: KES 100)</span>
+                    </div>
+                </div>
+
+                <button class="cashout-btn" id="cashoutBtn" onclick="showCashoutModal()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1.41 16.09V20h-2.67v-1.93c-1.71-.36-3.16-1.46-3.27-3.4h1.96c.1 1.05.82 1.87 2.65 1.87 1.96 0 2.4-.98 2.4-1.59 0-.83-.44-1.61-2.67-2.14-2.48-.6-4.18-1.62-4.18-3.67 0-1.72 1.39-2.84 3.11-3.21V4h2.67v1.95c1.86.45 2.79 1.86 2.85 3.39H14.3c-.05-1.11-.64-1.87-2.22-1.87-1.5 0-2.4.68-2.4 1.64 0 .84.65 1.39 2.67 1.91s4.18 1.39 4.18 3.91c-.01 1.83-1.38 2.83-3.12 3.16z"/>
+                    </svg>
+                    <span>Cash Out Now</span>
+                </button>
+                <div class="cashout-info">Cash out anytime • M-Pesa fees apply</div>
             </div>
 
             <!-- Form Container -->
-            <form class="form-container">
-                <!-- Hero Section -->
-                <div class="hero-section">
-                    <h2 class="hero-title">Welcome, <span id="agentName">Agent</span></h2>
-                    <p class="hero-subtitle">Manage your vendors and track commissions</p>
-                    <span class="agent-code">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/>
-                        </svg>
-                        <span id="agentCode">Loading...</span>
-                    </span>
-                </div>
-
-                <!-- Referral Link Section -->
-                <div class="form-section">
-                    <h2 class="section-title">My Referral Link</h2>
-                    <div class="referral-box">
-                        <div class="referral-link" id="referralLink">
-                            Loading...
+            <div class="form-container">
+                <!-- Activity & Streaks -->
+                <div class="activity-section">
+                    <div class="activity-grid">
+                        <div class="activity-card">
+                            <div class="activity-icon streak-fire">🔥</div>
+                            <div class="activity-value" id="streakDays">7</div>
+                            <div class="activity-label">Day Streak</div>
                         </div>
-                        <div class="referral-actions">
-                            <button type="button" onclick="copyReferralLink()" class="copy-btn">
-                                Copy Link
-                            </button>
-                            <button type="button" onclick="shareReferralLink()" class="share-btn">
-                                Share
-                            </button>
+                        <div class="activity-card">
+                            <div class="activity-icon">📈</div>
+                            <div class="activity-value" id="weeklyGrowth">+23%</div>
+                            <div class="activity-label">Weekly Growth</div>
                         </div>
                     </div>
-                    <div class="qr-code" id="qrCode"></div>
-                </div>
 
-                <!-- Commission Overview -->
-                <div class="form-section">
-                    <h2 class="section-title">Commission Overview</h2>
-                    <div class="stats-grid">
-                        <div class="stat-card highlight">
-                            <div class="stat-value">KES <span id="totalCommission">0</span></div>
-                            <div class="stat-label">Total Commission</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-value" id="totalParcels">0</div>
-                            <div class="stat-label">Total Parcels</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-value" id="activeVendors">0</div>
-                            <div class="stat-label">Active Vendors</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-value">20%</div>
-                            <div class="stat-label">Commission Rate</div>
+                    <!-- Weekly Activity Calendar -->
+                    <div class="calendar-card">
+                        <div class="calendar-title">This Week's Activity</div>
+                        <div class="calendar-grid">
+                            <div class="calendar-day">
+                                <div class="day-label">Mon</div>
+                                <div class="day-count">12</div>
+                            </div>
+                            <div class="calendar-day active">
+                                <div class="day-label">Tue</div>
+                                <div class="day-count">8</div>
+                            </div>
+                            <div class="calendar-day active">
+                                <div class="day-label">Wed</div>
+                                <div class="day-count">15</div>
+                            </div>
+                            <div class="calendar-day active">
+                                <div class="day-label">Thu</div>
+                                <div class="day-count">6</div>
+                            </div>
+                            <div class="calendar-day active today">
+                                <div class="day-label">Fri</div>
+                                <div class="day-count">11</div>
+                            </div>
+                            <div class="calendar-day">
+                                <div class="day-label">Sat</div>
+                                <div class="day-count">0</div>
+                            </div>
+                            <div class="calendar-day">
+                                <div class="day-label">Sun</div>
+                                <div class="day-count">0</div>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Payout Information -->
-                <div class="form-section">
-                    <h2 class="section-title">Payout Information</h2>
-                    <div class="payout-info">
-                        <div class="payout-item">
-                            <span>Available Balance</span>
-                            <span class="amount">KES <span id="availableBalance">0</span></span>
-                        </div>
-                        <div class="payout-item">
-                            <span>Pending Commission</span>
-                            <span class="amount">KES <span id="pendingCommission">0</span></span>
-                        </div>
-                        <div class="payout-item">
-                            <span>Next Payout</span>
-                            <span class="date" id="nextPayoutDate">Not scheduled</span>
-                        </div>
-                    </div>
-                    <button type="button" onclick="requestPayout()" class="payout-btn" id="payoutBtn">
-                        Request Payout
-                    </button>
-                </div>
-
-                <!-- Performance Metrics -->
-                <div class="form-section">
-                    <h2 class="section-title">Performance Metrics</h2>
-                    <div class="metrics-grid">
-                        <div class="metric-card">
-                            <div class="metric-value"><span id="conversionRate">0</span>%</div>
-                            <div class="metric-label">Conversion Rate</div>
-                        </div>
-                        <div class="metric-card">
-                            <div class="metric-value">KES <span id="avgOrderValue">0</span></div>
-                            <div class="metric-label">Avg Order Value</div>
-                        </div>
-                        <div class="metric-card">
-                            <div class="metric-value"><span id="vendorRetention">0</span>%</div>
-                            <div class="metric-label">Vendor Retention</div>
-                        </div>
-                        <div class="metric-card">
-                            <div class="metric-value"><span id="growthRate">0</span>%</div>
-                            <div class="metric-label">Growth Rate</div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Time Period Selector -->
-                <div class="form-section">
-                    <h2 class="section-title">Transaction History</h2>
-                    <div class="time-selector">
-                        <button type="button" class="time-option active" onclick="selectTimePeriod('today')">Today</button>
-                        <button type="button" class="time-option" onclick="selectTimePeriod('week')">This Week</button>
-                        <button type="button" class="time-option" onclick="selectTimePeriod('month')">This Month</button>
-                        <button type="button" class="time-option" onclick="selectTimePeriod('all')">All Time</button>
-                    </div>
-                    <div class="transaction-list" id="transactionList">
-                        <div class="loading-state">
-                            <div class="loading-spinner"></div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Managed Vendors List -->
-                <div class="form-section">
-                    <h2 class="section-title">My Managed Vendors</h2>
-                    <div class="vendor-list" id="vendorList">
-                        <div class="loading-state">
-                            <div class="loading-spinner"></div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Marketing Tools -->
-                <div class="form-section">
-                    <h2 class="section-title">Marketing Tools</h2>
-                    <div class="marketing-grid">
-                        <button type="button" onclick="downloadFlyer()" class="marketing-btn">
-                            <span>📄</span>
-                            <span>Download Flyer</span>
-                        </button>
-                        <button type="button" onclick="getSocialPosts()" class="marketing-btn">
-                            <span>📱</span>
-                            <span>Social Posts</span>
-                        </button>
-                        <button type="button" onclick="getWhatsAppTemplate()" class="marketing-btn">
-                            <span>💬</span>
-                            <span>WhatsApp</span>
-                        </button>
-                        <button type="button" onclick="sendBulkMessage()" class="marketing-btn">
-                            <span>📢</span>
-                            <span>Bulk Message</span>
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Add Vendor Button -->
-                <div class="form-section">
-                    <button type="button" class="add-vendor-btn" onclick="showAddVendorModal()">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
-                        </svg>
-                        <span>Onboard New Vendor</span>
-                    </button>
-                </div>
-            </form>
-        </div>
-
-        <!-- Add Vendor Modal -->
-        <div class="modal-overlay" id="addVendorModal">
-            <div class="modal">
-                <div class="modal-header">
-                    <h3 class="modal-title">Add New Vendor</h3>
-                    <button class="close-modal" onclick="hideAddVendorModal()">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-                        </svg>
-                    </button>
-                </div>
-                <form id="addVendorForm">
-                    <input type="text" class="input-field" placeholder="Vendor Name" id="vendorName" required>
-                    <input type="tel" class="input-field" placeholder="Phone Number (07XXXXXXXX)" id="vendorPhone" pattern="0[0-9]{9}" required>
-                    <input type="text" class="input-field" placeholder="Business Name (Optional)" id="businessName">
-                    <input type="text" class="input-field" placeholder="Business Location" id="businessLocation" required>
+                <!-- Smart Insights -->
+                <div class="insights-section">
+                    <h2 class="section-title">Smart Insights</h2>
                     
-                    <div class="modal-actions">
-                        <button type="button" class="modal-btn secondary" onclick="hideAddVendorModal()">Cancel</button>
-                        <button type="submit" class="modal-btn primary">Add Vendor</button>
+                    <div class="insight-card">
+                        <div class="insight-header">
+                            <div class="insight-icon">💡</div>
+                            <div class="insight-title">Dormant Vendor Alert</div>
+                        </div>
+                        <div class="insight-content">
+                            Sarah's Boutique hasn't sent parcels in 5 days. They usually send 3-4 daily.
+                        </div>
+                        <span class="insight-action" onclick="contactVendor('sarah')">Send Reminder</span>
                     </div>
-                </form>
-            </div>
-        </div>
 
-        <!-- Vendor Details Modal -->
-        <div class="modal-overlay" id="vendorDetailsModal">
-            <div class="modal">
-                <div class="modal-header">
-                    <h3 class="modal-title">Vendor Details</h3>
-                    <button class="close-modal" onclick="hideVendorDetailsModal()">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-                        </svg>
-                    </button>
-                </div>
-                <div id="vendorDetailsContent">
-                    <!-- Vendor details will be populated here -->
-                </div>
-            </div>
-        </div>
-
-        <!-- Payout Request Modal -->
-        <div class="modal-overlay" id="payoutModal">
-            <div class="modal">
-                <div class="modal-header">
-                    <h3 class="modal-title">Request Payout</h3>
-                    <button class="close-modal" onclick="hidePayoutModal()">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-                        </svg>
-                    </button>
-                </div>
-                <form id="payoutForm">
-                    <div class="payout-info" style="margin-bottom: 20px;">
-                        <div class="payout-item">
-                            <span>Available for Payout</span>
-                            <span class="amount">KES <span id="payoutAmount">0</span></span>
+                    <div class="insight-card">
+                        <div class="insight-header">
+                            <div class="insight-icon">🎯</div>
+                            <div class="insight-title">Peak Hours Opportunity</div>
+                        </div>
+                        <div class="insight-content">
+                            Your vendors are most active 2-4 PM. Schedule check-ins during this time for better response.
                         </div>
                     </div>
-                    <p style="margin-bottom: 20px; color: var(--text-secondary);">
-                        Payout will be sent to your registered M-Pesa number: <strong id="mpesaNumber">Loading...</strong>
-                    </p>
-                    <div class="modal-actions">
-                        <button type="button" class="modal-btn secondary" onclick="hidePayoutModal()">Cancel</button>
-                        <button type="submit" class="modal-btn primary">Confirm Request</button>
+                </div>
+
+                <!-- KPI Progress -->
+                <div class="kpi-section">
+                    <h2 class="section-title">Weekly Targets</h2>
+                    <div class="kpi-grid">
+                        <div class="kpi-card">
+                            <div class="kpi-header">
+                                <div class="kpi-title">Vendor Onboarding</div>
+                                <div class="kpi-value">3 / 5</div>
+                            </div>
+                            <div class="kpi-progress">
+                                <div class="kpi-progress-bar" style="width: 60%"></div>
+                            </div>
+                            <div class="kpi-status">
+                                <span>2 more to reach target</span>
+                                <span class="kpi-badge">On Track</span>
+                            </div>
+                        </div>
+
+                        <div class="kpi-card">
+                            <div class="kpi-header">
+                                <div class="kpi-title">Parcel Generation</div>
+                                <div class="kpi-value">42 / 50</div>
+                            </div>
+                            <div class="kpi-progress">
+                                <div class="kpi-progress-bar" style="width: 84%"></div>
+                            </div>
+                            <div class="kpi-status">
+                                <span>8 parcels to target</span>
+                                <span class="kpi-badge">Almost There!</span>
+                            </div>
+                        </div>
+
+                        <div class="kpi-card">
+                            <div class="kpi-header">
+                                <div class="kpi-title">Vendor Activation</div>
+                                <div class="kpi-value">85%</div>
+                            </div>
+                            <div class="kpi-progress">
+                                <div class="kpi-progress-bar" style="width: 85%"></div>
+                            </div>
+                            <div class="kpi-status">
+                                <span>20 of 24 vendors active</span>
+                                <span class="kpi-badge">Excellent</span>
+                            </div>
+                        </div>
                     </div>
-                </form>
+                </div>
+
+                <!-- Personal Progress -->
+                <div class="progress-section">
+                    <h2 class="section-title">Your Progress</h2>
+                    <div class="progress-card">
+                        <div class="progress-header">
+                            <div class="progress-title">Personal Performance</div>
+                            <div class="progress-period">This Month</div>
+                        </div>
+                        <div class="rank-display">
+                            <div class="rank-metric">
+                                <div class="rank-number">#24</div>
+                                <div class="rank-label">Your Rank</div>
+                            </div>
+                            <div class="rank-divider"></div>
+                            <div class="rank-metric">
+                                <div class="rank-number">156</div>
+                                <div class="rank-label">Total Parcels</div>
+                            </div>
+                            <div class="rank-divider"></div>
+                            <div class="rank-metric">
+                                <div class="rank-number">Top 15%</div>
+                                <div class="rank-label">Percentile</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Performance Stats -->
+                <div class="stats-section">
+                    <h2 class="section-title">Performance Overview</h2>
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-icon">💰</div>
+                            <div class="stat-value">45K</div>
+                            <div class="stat-label">Total Earned</div>
+                            <span class="stat-trend trend-up">+12%</span>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">📦</div>
+                            <div class="stat-value">234</div>
+                            <div class="stat-label">Total Parcels</div>
+                            <span class="stat-trend trend-up">+8%</span>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">👥</div>
+                            <div class="stat-value">24</div>
+                            <div class="stat-label">Vendors</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">✅</div>
+                            <div class="stat-value">92%</div>
+                            <div class="stat-label">Success Rate</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Vendor Performance -->
+                <div class="vendors-section">
+                    <div class="vendors-header">
+                        <h2 class="section-title">Vendor Performance</h2>
+                        <div class="vendor-filter">
+                            <button class="filter-btn active" onclick="filterVendors('all')">All</button>
+                            <button class="filter-btn" onclick="filterVendors('active')">Active</button>
+                            <button class="filter-btn" onclick="filterVendors('dormant')">Dormant</button>
+                        </div>
+                    </div>
+                    
+                    <div class="vendor-list">
+                        <div class="vendor-item" onclick="viewVendorDetails('1')">
+                            <div class="vendor-info">
+                                <div class="vendor-name">
+                                    John's Electronics
+                                    <span class="vendor-status status-active"></span>
+                                </div>
+                                <div class="vendor-details">
+                                    <span>📍 CBD</span>
+                                    <span>⏱️ 2h ago</span>
+                                </div>
+                            </div>
+                            <div class="vendor-stats">
+                                <div class="vendor-parcels">45</div>
+                                <div class="vendor-label">this week</div>
+                            </div>
+                        </div>
+                        
+                        <div class="vendor-item" onclick="viewVendorDetails('2')">
+                            <div class="vendor-info">
+                                <div class="vendor-name">
+                                    Sarah's Boutique
+                                    <span class="vendor-status status-dormant"></span>
+                                </div>
+                                <div class="vendor-details">
+                                    <span>📍 Westlands</span>
+                                    <span>⏱️ 5d ago</span>
+                                </div>
+                            </div>
+                            <div class="vendor-stats">
+                                <div class="vendor-parcels">12</div>
+                                <div class="vendor-label">this week</div>
+                            </div>
+                        </div>
+                        
+                        <div class="vendor-item" onclick="viewVendorDetails('3')">
+                            <div class="vendor-info">
+                                <div class="vendor-name">
+                                    Fresh Foods Market
+                                    <span class="vendor-status status-active"></span>
+                                </div>
+                                <div class="vendor-details">
+                                    <span>📍 Kilimani</span>
+                                    <span>⏱️ 1h ago</span>
+                                </div>
+                            </div>
+                            <div class="vendor-stats">
+                                <div class="vendor-parcels">32</div>
+                                <div class="vendor-label">this week</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button class="add-vendor-btn" onclick="showAddVendorModal()">
+                        <span>+</span>
+                        <span>Add New Vendor</span>
+                    </button>
+                </div>
+
+                <!-- Leaderboard (Opt-in) -->
+                <div class="leaderboard-section">
+                    <h2 class="section-title">Community Rankings</h2>
+                    
+                    <div class="leaderboard-opt-in" id="leaderboardOptIn" style="display: none;">
+                        <h3>Join the Monthly Rankings</h3>
+                        <p>Compare parcel performance with other partners. No earnings data is shared.</p>
+                        <button class="opt-in-btn" onclick="optInToLeaderboard()">Join Rankings</button>
+                    </div>
+
+                    <div class="leaderboard-active" id="leaderboardActive">
+                        <div class="leaderboard-header">
+                            <div class="leaderboard-title">
+                                🏆 Top Partners
+                            </div>
+                            <div class="leaderboard-reset">Resets in 12 days</div>
+                        </div>
+                        
+                        <div class="leaderboard-list">
+                            <div class="leaderboard-item">
+                                <div class="leaderboard-rank rank-1">1</div>
+                                <div class="leaderboard-info">
+                                    <div class="leaderboard-name">Sarah M.</div>
+                                    <div class="leaderboard-stats">42 vendors • Nairobi</div>
+                                </div>
+                                <div class="leaderboard-parcels">287</div>
+                            </div>
+                            
+                            <div class="leaderboard-item">
+                                <div class="leaderboard-rank rank-2">2</div>
+                                <div class="leaderboard-info">
+                                    <div class="leaderboard-name">
+                                        James K.
+                                        <span class="newcomer-badge">NEW</span>
+                                    </div>
+                                    <div class="leaderboard-stats">28 vendors • Westlands</div>
+                                </div>
+                                <div class="leaderboard-parcels">245</div>
+                            </div>
+                            
+                            <div class="leaderboard-item self">
+                                <div class="leaderboard-rank">24</div>
+                                <div class="leaderboard-info">
+                                    <div class="leaderboard-name">You</div>
+                                    <div class="leaderboard-stats">24 vendors • CBD</div>
+                                </div>
+                                <div class="leaderboard-parcels">156</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Cash Out Modal -->
+        <div class="modal-overlay" id="cashoutModal">
+            <div class="modal">
+                <div class="modal-header">
+                    <h3 class="modal-title">Confirm Cash Out</h3>
+                    <button class="close-modal" onclick="hideCashoutModal()">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                        </svg>
+                    </button>
+                </div>
+                
+                <div class="fee-breakdown">
+                    <div class="fee-item">
+                        <span class="fee-label">Available Balance</span>
+                        <span class="fee-value">KES 3,450</span>
+                    </div>
+                    <div class="fee-item">
+                        <span class="fee-label">M-Pesa Transaction Fee</span>
+                        <span class="fee-value">- KES 34</span>
+                    </div>
+                    <div class="fee-item total">
+                        <span class="fee-label">You will receive</span>
+                        <span class="fee-value" style="color: var(--success);">KES 3,416</span>
+                    </div>
+                </div>
+
+                <div class="mpesa-notice">
+                    ℹ️ The KES 34 deduction is the standard M-Pesa transaction fee. Tuma charges no additional fees.
+                </div>
+                
+                <div class="modal-actions">
+                    <button class="modal-btn secondary" onclick="hideCashoutModal()">Cancel</button>
+                    <button class="modal-btn primary" onclick="confirmCashout()">Confirm</button>
+                </div>
             </div>
         </div>
     </div>
 
-    <!-- Add auth check before loading agent.js -->
-    <script src="./auth-check.js"></script>
-    <!-- Module imports -->
-    <script type="module" src="./agent.js"></script>
+    <script>
+        // M-Pesa fee calculation
+        function calculateMpesaFee(amount) {
+            if (amount <= 100) return 0;
+            else if (amount <= 500) return 7;
+            else if (amount <= 1000) return 13;
+            else if (amount <= 1500) return 23;
+            else if (amount <= 2500) return 33;
+            else if (amount <= 3500) return 53;
+            else if (amount <= 5000) return 57;
+            else if (amount <= 7500) return 78;
+            else if (amount <= 10000) return 90;
+            else if (amount <= 15000) return 98;
+            else if (amount <= 20000) return 103;
+            else if (amount <= 35000) return 108;
+            return 108;
+        }
+
+        // Modal functions
+        function showCashoutModal() {
+            const amount = 3450; // Get from actual data
+            const fee = calculateMpesaFee(amount);
+            const modal = document.getElementById('cashoutModal');
+            
+            modal.querySelector('.fee-value').textContent = `KES ${amount.toLocaleString()}`;
+            modal.querySelectorAll('.fee-value')[1].textContent = `- KES ${fee}`;
+            modal.querySelectorAll('.fee-value')[2].textContent = `KES ${(amount - fee).toLocaleString()}`;
+            
+            modal.style.display = 'flex';
+        }
+
+        function hideCashoutModal() {
+            document.getElementById('cashoutModal').style.display = 'none';
+        }
+
+        function confirmCashout() {
+            alert('Processing cash out via M-Pesa...');
+            hideCashoutModal();
+        }
+
+        // Filter vendors
+        function filterVendors(type) {
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            // Implement filtering logic
+        }
+
+        // Initialize
+        window.addEventListener('DOMContentLoaded', () => {
+            // Check leaderboard preference
+            const optedIn = localStorage.getItem('leaderboard_opt_in') === 'true';
+            document.getElementById('leaderboardOptIn').style.display = optedIn ? 'none' : 'block';
+            document.getElementById('leaderboardActive').style.display = optedIn ? 'block' : 'none';
+        });
+    </script>
 </body>
 </html>
