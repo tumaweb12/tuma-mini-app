@@ -2725,16 +2725,49 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Check for route data
         const storedRoute = localStorage.getItem('tuma_active_route');
         console.log('Looking for active route...');
+        console.log('Raw route data exists:', !!storedRoute);
         
         if (storedRoute) {
             try {
                 state.activeRoute = JSON.parse(storedRoute);
-                console.log('Route found:', state.activeRoute);
+                console.log('Route parsed successfully:', state.activeRoute);
+                console.log('Route structure:', {
+                    hasStops: !!state.activeRoute.stops,
+                    stopsCount: state.activeRoute.stops?.length || 0,
+                    hasParcels: !!state.activeRoute.parcels,
+                    parcelsCount: state.activeRoute.parcels?.length || 0,
+                    hasRoutes: !!state.activeRoute.routes,
+                    routesCount: state.activeRoute.routes?.length || 0
+                });
                 
-                // Validate route structure
-                if (!state.activeRoute.parcels || state.activeRoute.parcels.length === 0) {
-                    console.warn('Route has no parcels, checking for alternative structure');
-                    // Handle alternative data structures if needed
+                // Validate and ensure proper structure
+                if (state.activeRoute.stops && state.activeRoute.stops.length > 0) {
+                    console.log('Using existing stops:', state.activeRoute.stops.length);
+                    
+                    // Ensure stops have required fields
+                    state.activeRoute.stops = state.activeRoute.stops.map(stop => ({
+                        ...stop,
+                        location: stop.location || {
+                            lat: parseFloat(stop.lat || -1.2921),
+                            lng: parseFloat(stop.lng || 36.8219)
+                        },
+                        address: stop.address || 'Unknown Location',
+                        customerName: stop.customerName || (stop.type === 'pickup' ? 'Vendor' : 'Recipient'),
+                        customerPhone: stop.customerPhone || '',
+                        verificationCode: stop.verificationCode || 'XXX-XXXX',
+                        parcelCode: stop.parcelCode || 'Unknown',
+                        completed: stop.completed || false
+                    }));
+                } else if (state.activeRoute.parcels && state.activeRoute.parcels.length > 0) {
+                    console.log('No stops found, generating from parcels...');
+                    const optimizedStops = DynamicRouteOptimizer.optimizeRoute(
+                        state.activeRoute.parcels,
+                        state.currentLocation
+                    );
+                    state.activeRoute.stops = optimizedStops;
+                    console.log('Generated', optimizedStops.length, 'stops from parcels');
+                } else {
+                    throw new Error('No valid stops or parcels in route');
                 }
                 
                 // Clear any old cash collection state
@@ -2742,39 +2775,93 @@ document.addEventListener('DOMContentLoaded', async () => {
                 state.totalCashCollected = 0;
                 state.totalCashToCollect = 0;
                 
-                if (config.useDynamicOptimization && state.activeRoute.parcels) {
+                // Don't re-optimize if stops already exist and are valid
+                if (config.useDynamicOptimization && state.activeRoute.parcels && !state.activeRoute.optimized) {
+                    console.log('Applying dynamic optimization...');
                     applyDynamicOptimization();
+                    state.activeRoute.optimized = true;
                     showOptimizationIndicator();
+                } else {
+                    console.log('Using existing stop sequence');
                 }
                 
                 calculateRouteFinancials();
                 calculateCashCollection();
                 
+                console.log('Initializing map...');
                 await initializeMap();
+                
+                console.log('Displaying route info...');
                 displayRouteInfo();
                 updateDynamicHeader();
+                
+                console.log('Plotting route on map...');
                 await plotRoute();
                 
                 // Only show cash widget if there's cash to collect
                 if (state.totalCashToCollect > 0) {
+                    console.log('Showing cash collection widget for KES', state.totalCashToCollect);
                     showCashCollectionWidget();
                 }
+                
+                console.log('✅ Route initialization complete!');
+                console.log('Active route summary:', {
+                    id: state.activeRoute.id,
+                    name: state.activeRoute.name,
+                    stops: state.activeRoute.stops.length,
+                    totalEarnings: state.totalRouteEarnings,
+                    cashToCollect: state.totalCashToCollect
+                });
+                
             } catch (parseError) {
-                console.error('Error parsing route data:', parseError);
-                showNotification('Error loading route data', 'error');
+                console.error('Error processing route:', parseError);
+                console.error('Stack trace:', parseError.stack);
+                showNotification('Error loading route data: ' + parseError.message, 'error');
+                
+                // Show error state
+                ensureNavigationBarExists();
+                const routeTitle = document.getElementById('routeTitle');
+                if (routeTitle) {
+                    routeTitle.textContent = 'Error Loading Route';
+                }
             }
         } else {
             console.log('No active route found in localStorage');
+            console.log('Available localStorage keys:', Object.keys(localStorage).filter(k => k.includes('tuma')));
+            
             // Show "No Active Route" message
             ensureNavigationBarExists();
             const routeTitle = document.getElementById('routeTitle');
             if (routeTitle) {
                 routeTitle.textContent = 'No Active Route';
             }
+            
+            // Show empty state properly
+            const mapContainer = document.getElementById('map');
+            if (mapContainer) {
+                mapContainer.innerHTML = `
+                    <div style="
+                        position: absolute;
+                        top: 50%;
+                        left: 50%;
+                        transform: translate(-50%, -50%);
+                        text-align: center;
+                        background: rgba(0, 0, 0, 0.8);
+                        padding: 40px;
+                        border-radius: 20px;
+                        color: white;
+                    ">
+                        <div style="font-size: 48px; margin-bottom: 20px;">📍</div>
+                        <h2 style="margin: 0 0 10px 0;">No Active Route</h2>
+                        <p style="margin: 0; opacity: 0.8;">Claim a route from the rider dashboard to start navigating</p>
+                    </div>
+                `;
+            }
         }
     } catch (error) {
-        console.error('Error initializing route:', error);
-        showNotification('Error initializing route', 'error');
+        console.error('Fatal error initializing route:', error);
+        console.error('Stack trace:', error.stack);
+        showNotification('Fatal error: ' + error.message, 'error');
     }
 });
 
