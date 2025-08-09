@@ -318,17 +318,17 @@ class CommissionTracker {
             statusBar: `
                 <div class="commission-status ${isWarning ? 'warning' : ''} ${isBlocked ? 'blocked' : ''}">
                     <div class="commission-header">
-                        <span class="commission-title">Platform Commission ${devModeIndicator}</span>
-                        <span class="commission-amount">KES ${summary.unpaid} / ${this.config.maxUnpaid}</span>
+                        <span class="commission-title">Account Balance ${devModeIndicator}</span>
+                        <span class="commission-amount">KES ${summary.unpaid} due</span>
                     </div>
                     <div class="commission-progress">
                         <div class="commission-progress-bar" style="width: ${percentage}%"></div>
                     </div>
                     <div class="commission-actions">
-                        <button type="button" class="commission-pay-button" onclick="openPaymentModal()">
-                            Pay Commission
+                        <button type="button" class="commission-pay-button" onclick="openWalletModal()">
+                            Deposit Funds
                         </button>
-                        <button type="button" class="commission-details-button" onclick="viewCommissionDetails()">
+                        <button type="button" class="commission-details-button" onclick="viewAccountDetails()">
                             View Details
                         </button>
                     </div>
@@ -337,18 +337,18 @@ class CommissionTracker {
             warningMessage: isWarning && !isBlocked ? `
                 <div class="commission-warning">
                     <span class="warning-icon">⚠️</span>
-                    <span>Your unpaid commission is KES ${summary.unpaid}. Please pay soon to avoid account restrictions.</span>
+                    <span>Account balance low. Please deposit funds to continue accepting deliveries.</span>
                 </div>
             ` : null,
             blockedMessage: isBlocked ? `
                 <div class="commission-blocked-overlay">
                     <div class="blocked-content">
-                        <div class="blocked-icon">🚫</div>
-                        <h2>Account Temporarily Restricted</h2>
-                        <p>You've reached the maximum unpaid commission limit of KES ${this.config.maxUnpaid}.</p>
-                        <p class="blocked-amount">Amount Due: KES ${summary.unpaid}</p>
-                        <button class="pay-now-button" onclick="openPaymentModal()">
-                            Pay Now to Continue
+                        <div class="blocked-icon">⏸️</div>
+                        <h2>Account Paused</h2>
+                        <p>Please deposit funds to continue accepting deliveries</p>
+                        <p class="blocked-amount">Minimum Deposit: KES ${summary.unpaid}</p>
+                        <button class="pay-now-button" onclick="openWalletModal()">
+                            Deposit Now
                         </button>
                         <p class="blocked-help">Need help? Contact support at 0700123456</p>
                     </div>
@@ -1129,7 +1129,7 @@ async function checkRouteCompletionStatus() {
                 showUrgentPaymentWarning();
             } else if (commissionResult.warningShown) {
                 showNotification(
-                    `Commission balance: KES ${commissionResult.totalUnpaid}. Please pay soon to avoid restrictions.`,
+                    `Account balance: KES ${commissionResult.totalUnpaid}. Please deposit funds soon.`,
                     'warning'
                 );
             }
@@ -1163,12 +1163,8 @@ function parsePrice(priceValue) {
     return 0;
 }
 
-// Show persistent cash collection reminder
+// Show persistent cash collection reminder (REFINED VERSION)
 function showCashCollectionReminder(totalCashCollected) {
-    // Calculate commission from collected amount
-    const platformCommission = Math.round(totalCashCollected * BUSINESS_CONFIG.commission.platform);
-    const riderKeeps = Math.round(totalCashCollected * BUSINESS_CONFIG.commission.rider);
-    
     // Check if reminder already exists
     if (document.getElementById('cashCollectionReminder')) {
         return;
@@ -1183,13 +1179,11 @@ function showCashCollectionReminder(totalCashCollected) {
         <div class="reminder-content">
             <div class="reminder-icon">💰</div>
             <div class="reminder-text">
-                <div class="reminder-title">Cash Collection Summary</div>
+                <div class="reminder-title">Cash Collection Active</div>
                 <div class="reminder-details">
                     <span>Collected: <strong>KES ${totalCashCollected.toLocaleString()}</strong></span>
                     <span class="separator">•</span>
-                    <span>Your earnings: <strong class="earnings">KES ${riderKeeps.toLocaleString()}</strong></span>
-                    <span class="separator">•</span>
-                    <span>Commission due: <strong class="commission">KES ${platformCommission.toLocaleString()}</strong></span>
+                    <span>Deposit to wallet within 24 hours</span>
                 </div>
             </div>
             <button class="reminder-close" onclick="dismissCashReminder()">
@@ -1218,7 +1212,7 @@ function showCashCollectionReminder(totalCashCollected) {
         style.id = 'cash-reminder-styles';
         style.textContent = `
             .cash-collection-reminder {
-                background: linear-gradient(135deg, rgba(255, 159, 10, 0.95), rgba(255, 140, 0, 0.95));
+                background: linear-gradient(135deg, #007AFF, #0051D5);
                 padding: 16px 20px;
                 margin: 0;
                 box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
@@ -1231,9 +1225,8 @@ function showCashCollectionReminder(totalCashCollected) {
                 transition: transform 0.3s ease-out;
             }
             
-            /* Add padding to body when reminder is shown */
             body.has-cash-reminder {
-                padding-top: 80px;
+                padding-top: 72px;
                 transition: padding-top 0.3s ease-out;
             }
             
@@ -1246,13 +1239,13 @@ function showCashCollectionReminder(totalCashCollected) {
             }
             
             .reminder-icon {
-                font-size: 32px;
+                font-size: 28px;
                 flex-shrink: 0;
             }
             
             .reminder-text {
                 flex: 1;
-                color: black;
+                color: white;
             }
             
             .reminder-title {
@@ -1267,26 +1260,19 @@ function showCashCollectionReminder(totalCashCollected) {
                 align-items: center;
                 flex-wrap: wrap;
                 gap: 8px;
+                opacity: 0.95;
             }
             
             .reminder-details strong {
                 font-weight: 700;
             }
             
-            .reminder-details .earnings {
-                color: #006400;
-            }
-            
-            .reminder-details .commission {
-                color: #8B0000;
-            }
-            
             .separator {
-                opacity: 0.5;
+                opacity: 0.6;
             }
             
             .reminder-close {
-                background: rgba(0, 0, 0, 0.2);
+                background: rgba(255, 255, 255, 0.2);
                 border: none;
                 border-radius: 50%;
                 width: 32px;
@@ -1295,58 +1281,12 @@ function showCashCollectionReminder(totalCashCollected) {
                 align-items: center;
                 justify-content: center;
                 cursor: pointer;
-                color: black;
+                color: white;
                 transition: all 0.2s;
             }
             
             .reminder-close:hover {
-                background: rgba(0, 0, 0, 0.3);
-            }
-            
-            @media (max-width: 600px) {
-                .reminder-content {
-                    flex-wrap: wrap;
-                }
-                
-                .reminder-icon {
-                    font-size: 24px;
-                }
-                
-                .reminder-text {
-                    flex: auto;
-                }
-                
-                .reminder-details {
-                    font-size: 13px;
-                }
-            }
-            
-            @keyframes slideUp {
-                from {
-                    transform: translateY(0);
-                    opacity: 1;
-                }
-                to {
-                    transform: translateY(-100%);
-                    opacity: 0;
-                }
-            }
-            
-            /* Ensure proper stacking */
-            .header {
-                position: relative;
-                z-index: 999;
-            }
-            
-            .main-content {
-                position: relative;
-                z-index: 1;
-            }
-            
-            /* Prevent layout shifts */
-            .hero-section,
-            .form-section {
-                position: relative;
+                background: rgba(255, 255, 255, 0.3);
             }
         `;
         document.head.appendChild(style);
@@ -1362,19 +1302,19 @@ window.dismissCashReminder = function() {
     }
 };
 
-// Show urgent payment warning
+// Show urgent payment warning (REFINED VERSION)
 function showUrgentPaymentWarning() {
     const warning = document.createElement('div');
     warning.className = 'urgent-payment-warning';
     warning.innerHTML = `
         <div class="warning-content">
             <div class="warning-icon">⚠️</div>
-            <h2>Payment Required</h2>
-            <p class="warning-amount">Unpaid Commission: KES ${state.commissionTracker.state.unpaidCommission}</p>
-            <p class="warning-message">You have <span class="timer">60:00</span> to pay or your account will be restricted</p>
+            <h2>Deposit Required</h2>
+            <p class="warning-amount">Account Balance: -KES ${state.commissionTracker.state.unpaidCommission}</p>
+            <p class="warning-message">You have <span class="timer">60:00</span> to deposit funds or your account will be paused</p>
             <div class="warning-actions">
-                <button class="pay-now-btn" onclick="openPaymentModal()">
-                    Pay Now
+                <button class="pay-now-btn" onclick="openWalletModal()">
+                    Deposit Now
                 </button>
                 <button class="later-btn" onclick="dismissWarning()">
                     Later
@@ -1416,6 +1356,180 @@ function showUrgentPaymentWarning() {
 window.dismissWarning = function() {
     document.querySelector('.urgent-payment-warning')?.remove();
     // Countdown continues in background
+};
+
+// Show route completion summary (REFINED VERSION)
+function showRouteCompletionSummary(totalCollected, riderEarnings, deliveryCount) {
+    const summary = document.createElement('div');
+    summary.className = 'route-completion-summary';
+    summary.innerHTML = `
+        <div class="summary-content">
+            <div class="summary-icon">🎉</div>
+            <h2>Route Completed!</h2>
+            
+            <div class="summary-stats">
+                <div class="stat-item">
+                    <span class="stat-label">Deliveries Completed</span>
+                    <span class="stat-value">${deliveryCount}</span>
+                </div>
+                
+                <div class="stat-item highlight-green">
+                    <span class="stat-label">Total Cash Collected</span>
+                    <span class="stat-value cash">KES ${totalCollected.toLocaleString()}</span>
+                </div>
+                
+                <div class="stat-item earnings">
+                    <span class="stat-label">Your Earnings</span>
+                    <span class="stat-value">KES ${Math.round(totalCollected * 0.7).toLocaleString()}</span>
+                </div>
+            </div>
+            
+            <div class="cash-instruction">
+                <div class="instruction-icon">💳</div>
+                <div class="instruction-text">
+                    <p>Please deposit the collected cash to your Tuma wallet within 24 hours</p>
+                </div>
+            </div>
+            
+            <button class="continue-btn" onclick="closeCompletionSummary()">
+                Continue
+            </button>
+        </div>
+    `;
+    
+    document.body.appendChild(summary);
+    
+    // Add styles if not present
+    if (!document.getElementById('completion-summary-styles')) {
+        const style = document.createElement('style');
+        style.id = 'completion-summary-styles';
+        style.textContent = `
+            .route-completion-summary {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0, 0, 0, 0.95);
+                backdrop-filter: blur(20px);
+                z-index: 10001;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 20px;
+                animation: fadeIn 0.3s ease-out;
+            }
+            
+            .summary-content {
+                background: var(--surface-elevated);
+                border-radius: 24px;
+                padding: 32px;
+                max-width: 400px;
+                width: 100%;
+                text-align: center;
+            }
+            
+            .summary-icon {
+                font-size: 64px;
+                margin-bottom: 20px;
+            }
+            
+            .summary-content h2 {
+                font-size: 28px;
+                font-weight: 700;
+                margin-bottom: 24px;
+                color: var(--text-primary);
+            }
+            
+            .summary-stats {
+                display: grid;
+                gap: 12px;
+                margin-bottom: 24px;
+            }
+            
+            .stat-item {
+                background: var(--surface-high);
+                border-radius: 12px;
+                padding: 16px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
+            
+            .stat-item.highlight-green {
+                background: rgba(52, 199, 89, 0.1);
+                border: 2px solid var(--success);
+            }
+            
+            .stat-item.earnings {
+                background: rgba(0, 122, 255, 0.1);
+                border: 1px solid var(--primary);
+            }
+            
+            .stat-label {
+                font-size: 16px;
+                color: var(--text-secondary);
+            }
+            
+            .stat-value {
+                font-size: 24px;
+                font-weight: 700;
+                color: var(--text-primary);
+            }
+            
+            .stat-value.cash {
+                color: var(--success);
+            }
+            
+            .cash-instruction {
+                background: var(--surface-high);
+                border-radius: 12px;
+                padding: 16px;
+                margin-bottom: 24px;
+                display: flex;
+                gap: 12px;
+                align-items: center;
+            }
+            
+            .instruction-icon {
+                font-size: 24px;
+                flex-shrink: 0;
+            }
+            
+            .instruction-text p {
+                font-size: 14px;
+                color: var(--text-secondary);
+                margin: 0;
+                text-align: left;
+                line-height: 1.5;
+            }
+            
+            .continue-btn {
+                width: 100%;
+                background: var(--primary);
+                color: white;
+                border: none;
+                border-radius: 12px;
+                padding: 16px;
+                font-size: 18px;
+                font-weight: 700;
+                cursor: pointer;
+                transition: opacity 0.2s;
+            }
+            
+            .continue-btn:hover {
+                opacity: 0.9;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+}
+
+window.closeCompletionSummary = function() {
+    const summary = document.querySelector('.route-completion-summary');
+    if (summary) {
+        summary.remove();
+    }
 };
 
 // ─── Display Functions ─────────────────────────────────────────────────────
@@ -2590,7 +2704,7 @@ window.verifyCode = async function(type) {
                         );
                     } else if (commissionResult.warningShown) {
                         showNotification(
-                            `Commission balance: KES ${commissionResult.totalUnpaid}. Please pay soon.`,
+                            `Account balance: KES ${commissionResult.totalUnpaid}. Please deposit funds soon.`,
                             'warning'
                         );
                     }
@@ -2717,29 +2831,56 @@ window.navigateToRoute = function() {
     haptic('light');
 };
 
-window.openPaymentModal = function() {
+// New wallet modal (replaces payment modal) - REFINED VERSION
+window.openWalletModal = function() {
     const summary = state.commissionTracker.getSummary();
     
     const modal = document.createElement('div');
     modal.className = 'payment-modal';
     modal.innerHTML = `
         <div class="payment-content">
-            <h2>Pay Commission</h2>
-            <p class="payment-amount">Amount Due: KES ${summary.unpaid}</p>
-            <div class="payment-instructions">
-                <h3>M-Pesa Payment Instructions:</h3>
-                <ol>
-                    <li>Go to M-Pesa on your phone</li>
-                    <li>Select "Lipa na M-Pesa"</li>
-                    <li>Select "Pay Bill"</li>
-                    <li>Enter Business Number: <strong>247247</strong></li>
-                    <li>Enter Account Number: <strong>${state.rider.phone}</strong></li>
-                    <li>Enter Amount: <strong>${summary.unpaid}</strong></li>
-                    <li>Enter your M-Pesa PIN</li>
-                    <li>Wait for confirmation SMS</li>
-                </ol>
+            <h2>Deposit to Wallet</h2>
+            <div class="wallet-balance">
+                <span class="balance-label">Current Balance</span>
+                <span class="balance-amount ${summary.unpaid > 0 ? 'negative' : ''}">
+                    ${summary.unpaid > 0 ? '-' : ''}KES ${Math.abs(summary.unpaid)}
+                </span>
             </div>
-            <button class="modal-close" onclick="closePaymentModal()">Close</button>
+            
+            <div class="deposit-options">
+                <h3>Deposit Options:</h3>
+                
+                <div class="deposit-method">
+                    <div class="method-header">
+                        <span class="method-icon">💵</span>
+                        <span class="method-name">Cash Deposit</span>
+                    </div>
+                    <p class="method-description">
+                        Deposit collected cash at any Tuma agent location
+                    </p>
+                    <button class="method-button" onclick="showAgentLocations()">
+                        Find Agents Near You
+                    </button>
+                </div>
+                
+                <div class="deposit-method">
+                    <div class="method-header">
+                        <span class="method-icon">📱</span>
+                        <span class="method-name">M-Pesa</span>
+                    </div>
+                    <div class="mpesa-instructions">
+                        <ol>
+                            <li>Go to M-Pesa</li>
+                            <li>Select "Lipa na M-Pesa" > "Pay Bill"</li>
+                            <li>Business Number: <strong>247247</strong></li>
+                            <li>Account: <strong>${state.rider.phone}</strong></li>
+                            <li>Amount: <strong>${summary.unpaid}</strong></li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+            
+            <button class="modal-close" onclick="closeWalletModal()">Close</button>
         </div>
     `;
     
@@ -2780,37 +2921,102 @@ window.openPaymentModal = function() {
                 margin-bottom: 16px;
             }
             
-            .payment-amount {
-                font-size: 32px;
-                font-weight: 700;
-                color: var(--warning);
-                text-align: center;
-                margin: 24px 0;
-            }
-            
-            .payment-instructions {
+            .wallet-balance {
                 background: var(--surface-high);
                 border-radius: 12px;
                 padding: 20px;
                 margin-bottom: 24px;
+                text-align: center;
             }
             
-            .payment-instructions h3 {
+            .balance-label {
+                display: block;
+                font-size: 14px;
+                color: var(--text-secondary);
+                margin-bottom: 8px;
+            }
+            
+            .balance-amount {
+                font-size: 32px;
+                font-weight: 700;
+                color: var(--success);
+            }
+            
+            .balance-amount.negative {
+                color: var(--danger);
+            }
+            
+            .deposit-options {
+                margin-bottom: 24px;
+            }
+            
+            .deposit-options h3 {
                 font-size: 16px;
-                margin-bottom: 12px;
-            }
-            
-            .payment-instructions ol {
-                margin-left: 20px;
+                margin-bottom: 16px;
                 color: var(--text-secondary);
             }
             
-            .payment-instructions li {
+            .deposit-method {
+                background: var(--surface-high);
+                border-radius: 12px;
+                padding: 16px;
+                margin-bottom: 12px;
+            }
+            
+            .method-header {
+                display: flex;
+                align-items: center;
+                gap: 12px;
                 margin-bottom: 8px;
+            }
+            
+            .method-icon {
+                font-size: 24px;
+            }
+            
+            .method-name {
+                font-size: 18px;
+                font-weight: 600;
+            }
+            
+            .method-description {
+                color: var(--text-secondary);
+                font-size: 14px;
+                margin-bottom: 12px;
                 line-height: 1.5;
             }
             
-            .payment-instructions strong {
+            .method-button {
+                width: 100%;
+                background: var(--primary);
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 10px;
+                font-size: 14px;
+                font-weight: 600;
+                cursor: pointer;
+            }
+            
+            .mpesa-instructions {
+                background: var(--surface);
+                border-radius: 8px;
+                padding: 12px;
+                margin-top: 12px;
+            }
+            
+            .mpesa-instructions ol {
+                margin: 0;
+                padding-left: 20px;
+                color: var(--text-secondary);
+                font-size: 14px;
+            }
+            
+            .mpesa-instructions li {
+                margin-bottom: 6px;
+            }
+            
+            .mpesa-instructions strong {
                 color: var(--text-primary);
                 font-weight: 600;
             }
@@ -2833,15 +3039,15 @@ window.openPaymentModal = function() {
     haptic('light');
 };
 
-window.viewCommissionDetails = function() {
+window.viewAccountDetails = function() {
     const summary = state.commissionTracker.getSummary();
     
     showNotification(
-        `Commission Details: KES ${summary.unpaid} unpaid from ${summary.pendingCount} deliveries`,
+        `Wallet Balance: ${summary.unpaid > 0 ? '-' : ''}KES ${Math.abs(summary.unpaid)}`,
         'info'
     );
     
-    console.log('Commission details:', {
+    console.log('Account details:', {
         unpaid: summary.unpaid,
         totalPaid: summary.totalPaid,
         pendingCount: summary.pendingCount,
@@ -2852,11 +3058,17 @@ window.viewCommissionDetails = function() {
     haptic('light');
 };
 
-window.closePaymentModal = function() {
+window.closeWalletModal = function() {
     const modal = document.querySelector('.payment-modal');
     if (modal) {
         modal.remove();
     }
+};
+
+window.showAgentLocations = function() {
+    showNotification('Opening agent locations...', 'info');
+    // In production, this would show a map or list of nearby agents
+    haptic('light');
 };
 
 window.goBack = function() {
@@ -2867,245 +3079,6 @@ window.goBack = function() {
     } else {
         // General back navigation
         window.history.back();
-    }
-};
-
-// Show route completion summary with collection details
-function showRouteCompletionSummary(totalCollected, riderEarnings, deliveryCount) {
-    // Calculate platform commission (30% of total)
-    const platformCommission = Math.round(totalCollected * BUSINESS_CONFIG.commission.platform);
-    const riderKeeps = Math.round(totalCollected * BUSINESS_CONFIG.commission.rider);
-    
-    const summary = document.createElement('div');
-    summary.className = 'route-completion-summary';
-    summary.innerHTML = `
-        <div class="summary-content">
-            <div class="summary-icon">🎉</div>
-            <h2>Route Completed!</h2>
-            
-            <div class="summary-stats">
-                <div class="stat-item">
-                    <span class="stat-label">Deliveries Completed</span>
-                    <span class="stat-value">${deliveryCount}</span>
-                </div>
-                
-                <div class="stat-item highlight-green">
-                    <span class="stat-label">Cash Collected</span>
-                    <span class="stat-value cash">KES ${totalCollected.toLocaleString()}</span>
-                </div>
-                
-                <div class="stat-breakdown">
-                    <div class="breakdown-item keep">
-                        <span class="breakdown-label">Your Earnings (70%)</span>
-                        <span class="breakdown-value">KES ${riderKeeps.toLocaleString()}</span>
-                    </div>
-                    
-                    <div class="breakdown-item remit">
-                        <span class="breakdown-label">Platform Commission (30%)</span>
-                        <span class="breakdown-value">KES ${platformCommission.toLocaleString()}</span>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="collection-reminder">
-                <div class="reminder-icon">💰</div>
-                <div class="reminder-text">
-                    <strong>Commission Due:</strong>
-                    <p>From the KES ${totalCollected.toLocaleString()} collected, you keep KES ${riderKeeps.toLocaleString()} as your earnings.</p>
-                    <p class="commission-due">Please remit KES ${platformCommission.toLocaleString()} platform commission.</p>
-                </div>
-            </div>
-            
-            <button class="continue-btn" onclick="closeCompletionSummary()">
-                Continue
-            </button>
-        </div>
-    `;
-    
-    document.body.appendChild(summary);
-    
-    // Add styles if not present
-    if (!document.getElementById('completion-summary-styles')) {
-        const style = document.createElement('style');
-        style.id = 'completion-summary-styles';
-        style.textContent = `
-            .route-completion-summary {
-                position: fixed;
-                top: 0;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                background: rgba(0, 0, 0, 0.95);
-                backdrop-filter: blur(20px);
-                z-index: 10001;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                padding: 20px;
-                animation: fadeIn 0.3s ease-out;
-            }
-            
-            .summary-content {
-                background: var(--surface-elevated);
-                border-radius: 24px;
-                padding: 32px;
-                max-width: 440px;
-                width: 100%;
-                text-align: center;
-            }
-            
-            .summary-icon {
-                font-size: 64px;
-                margin-bottom: 20px;
-            }
-            
-            .summary-content h2 {
-                font-size: 28px;
-                font-weight: 700;
-                margin-bottom: 24px;
-                color: var(--text-primary);
-            }
-            
-            .summary-stats {
-                display: grid;
-                gap: 16px;
-                margin-bottom: 24px;
-            }
-            
-            .stat-item {
-                background: var(--surface-high);
-                border-radius: 12px;
-                padding: 16px;
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-            }
-            
-            .stat-item.highlight-green {
-                background: rgba(52, 199, 89, 0.1);
-                border: 2px solid var(--success);
-            }
-            
-            .stat-label {
-                font-size: 16px;
-                color: var(--text-secondary);
-            }
-            
-            .stat-value {
-                font-size: 24px;
-                font-weight: 700;
-                color: var(--text-primary);
-            }
-            
-            .stat-value.cash {
-                color: var(--success);
-            }
-            
-            .stat-breakdown {
-                display: grid;
-                gap: 12px;
-                margin-top: -8px;
-            }
-            
-            .breakdown-item {
-                background: var(--surface-high);
-                border-radius: 10px;
-                padding: 12px 16px;
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                font-size: 15px;
-            }
-            
-            .breakdown-item.keep {
-                background: rgba(52, 199, 89, 0.05);
-                border: 1px solid rgba(52, 199, 89, 0.3);
-            }
-            
-            .breakdown-item.remit {
-                background: rgba(255, 159, 10, 0.05);
-                border: 1px solid rgba(255, 159, 10, 0.3);
-            }
-            
-            .breakdown-label {
-                color: var(--text-secondary);
-                font-weight: 500;
-            }
-            
-            .breakdown-value {
-                font-weight: 700;
-                color: var(--text-primary);
-            }
-            
-            .breakdown-item.keep .breakdown-value {
-                color: var(--success);
-            }
-            
-            .breakdown-item.remit .breakdown-value {
-                color: var(--warning);
-            }
-            
-            .collection-reminder {
-                background: rgba(255, 159, 10, 0.1);
-                border: 2px solid var(--warning);
-                border-radius: 12px;
-                padding: 16px;
-                margin-bottom: 24px;
-                display: flex;
-                gap: 12px;
-                text-align: left;
-            }
-            
-            .reminder-icon {
-                font-size: 24px;
-                flex-shrink: 0;
-            }
-            
-            .reminder-text strong {
-                color: var(--warning);
-                font-size: 14px;
-                font-weight: 700;
-                display: block;
-                margin-bottom: 4px;
-            }
-            
-            .reminder-text p {
-                font-size: 14px;
-                color: var(--text-secondary);
-                margin: 0 0 4px 0;
-                line-height: 1.5;
-            }
-            
-            .reminder-text .commission-due {
-                font-weight: 600;
-                color: var(--text-primary);
-            }
-            
-            .continue-btn {
-                width: 100%;
-                background: var(--primary);
-                color: white;
-                border: none;
-                border-radius: 12px;
-                padding: 16px;
-                font-size: 18px;
-                font-weight: 700;
-                cursor: pointer;
-                transition: opacity 0.2s;
-            }
-            
-            .continue-btn:hover {
-                opacity: 0.9;
-            }
-        `;
-        document.head.appendChild(style);
-    }
-}
-
-window.closeCompletionSummary = function() {
-    const summary = document.querySelector('.route-completion-summary');
-    if (summary) {
-        summary.remove();
     }
 };
 
