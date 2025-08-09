@@ -1,6 +1,6 @@
 /**
  * Complete Enhanced Route Navigation Module with Dynamic Optimization and Simple POD
- * PART 1 OF 2 - Includes Route Optimizer and Core Functions
+ * PART 1 OF 2 - FIXED VERSION
  */
 
 // ============================================================================
@@ -35,14 +35,14 @@ const DynamicRouteOptimizer = {
             stops.push({
                 id: `${parcel.id}-pickup`,
                 parcelId: parcel.id,
-                parcelCode: parcel.parcel_code,
+                parcelCode: parcel.parcel_code || parcel.code || `P${parcel.id.slice(-6)}`,
                 type: 'pickup',
                 location: pickupLocation,
-                address: this.extractAddress(pickupLocation, parcel),
-                verificationCode: parcel.pickup_code,
-                customerName: parcel.vendor_name || 'Vendor',
-                customerPhone: parcel.vendor_phone || '',
-                price: parseFloat(parcel.price || 0),
+                address: parcel.pickup_address || this.extractAddress(pickupLocation, parcel),
+                verificationCode: parcel.pickup_code || parcel.pickup_verification_code || 'XXX-XXXX',
+                customerName: parcel.vendor_name || parcel.sender_name || 'Vendor',
+                customerPhone: parcel.vendor_phone || parcel.sender_phone || '',
+                price: parseFloat(parcel.price || parcel.amount || 0),
                 completed: false,
                 canComplete: true
             });
@@ -50,14 +50,14 @@ const DynamicRouteOptimizer = {
             stops.push({
                 id: `${parcel.id}-delivery`,
                 parcelId: parcel.id,
-                parcelCode: parcel.parcel_code,
+                parcelCode: parcel.parcel_code || parcel.code || `P${parcel.id.slice(-6)}`,
                 type: 'delivery',
                 location: deliveryLocation,
-                address: this.extractAddress(deliveryLocation, parcel),
-                verificationCode: parcel.delivery_code,
-                customerName: parcel.recipient_name || 'Recipient',
-                customerPhone: parcel.recipient_phone || '',
-                price: parseFloat(parcel.price || 0),
+                address: parcel.delivery_address || this.extractAddress(deliveryLocation, parcel),
+                verificationCode: parcel.delivery_code || parcel.delivery_verification_code || 'XXX-XXXX',
+                customerName: parcel.recipient_name || parcel.receiver_name || 'Recipient',
+                customerPhone: parcel.recipient_phone || parcel.receiver_phone || '',
+                price: parseFloat(parcel.price || parcel.amount || 0),
                 paymentMethod: parcel.payment_method || 'cash',
                 paymentStatus: parcel.payment_status || 'pending',
                 completed: false,
@@ -456,7 +456,6 @@ const state = {
     accuracyCircle: null,
     radiusCircle: null,
     totalRouteEarnings: 0,
-    routeCommission: 0,
     totalCashToCollect: 0,
     totalCashCollected: 0,
     paymentsByStop: {},
@@ -466,15 +465,6 @@ const state = {
 const OPENROUTE_API_KEY = '5b3ce3597851110001cf624841e48578ffb34c6b96dfe3bbe9b3ad4c';
 const SUPABASE_URL = 'https://btxavqfoirdzwpfrvezp.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ0eGF2cWZvaXJkendwZnJ2ZXpwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE0ODcxMTcsImV4cCI6MjA2NzA2MzExN30.kQKpukFGx-cBl1zZRuXmex02ifkZ751WCUfQPogYutk';
-
-const BUSINESS_CONFIG = {
-    commission: {
-        rider: 0.70,
-        platform: 0.30,
-        maxUnpaid: 300,
-        warningThreshold: 250
-    }
-};
 
 // ============================================================================
 // SIMPLE POD SYSTEM INTEGRATION
@@ -703,7 +693,12 @@ window.completeDeliverySimple = async function(stopId) {
         // Update payment status if needed
         const paymentInfo = getPaymentInfoForStop(stop);
         if (paymentInfo.needsCollection) {
-            state.paymentsByStop[stop.id].collected = true;
+            state.paymentsByStop[stop.id] = {
+                amount: paymentInfo.amount,
+                collected: true,
+                timestamp: new Date()
+            };
+            state.totalCashCollected += paymentInfo.amount;
             updateCashCollectionWidget();
         }
         
@@ -1181,7 +1176,7 @@ window.addEventListener('online', () => {
 console.log('Simple POD System integrated - One screen, fast & easy!');
 /**
  * Complete Enhanced Route Navigation Module with Dynamic Optimization and Simple POD
- * PART 2 OF 2 - Includes API functions, UI components, and initialization
+ * PART 2 OF 2 - FIXED VERSION
  */
 
 // ============================================================================
@@ -1299,7 +1294,7 @@ function getPaymentInfoForStop(stop) {
         };
     }
     
-    const amount = parsePrice(parcel.price || parcel.total_price || 0);
+    const amount = parsePrice(parcel.price || parcel.total_price || parcel.amount || 0);
     const method = parcel.payment_method || 'cash';
     const status = parcel.payment_status || 'pending';
     
@@ -1312,8 +1307,10 @@ function getPaymentInfoForStop(stop) {
 }
 
 function calculateCashCollection() {
+    // Clear previous cash data
     state.totalCashToCollect = 0;
     state.totalCashCollected = 0;
+    state.paymentsByStop = {};
     
     if (!state.activeRoute || !state.activeRoute.stops) return;
     
@@ -1366,30 +1363,24 @@ function calculateRouteFinancials() {
     if (!state.activeRoute) return;
     
     state.totalRouteEarnings = 0;
-    state.routeCommission = 0;
     
+    // Calculate only rider earnings (70% of total)
     if (state.activeRoute.parcels && state.activeRoute.parcels.length > 0) {
         state.activeRoute.parcels.forEach(parcel => {
-            const price = parsePrice(parcel.price || parcel.total_price || 500);
-            const riderPayout = price * BUSINESS_CONFIG.commission.rider;
-            const commission = price * BUSINESS_CONFIG.commission.platform;
-            
+            const price = parsePrice(parcel.price || parcel.total_price || parcel.amount || 500);
+            const riderPayout = price * 0.7; // Rider gets 70%
             state.totalRouteEarnings += riderPayout;
-            state.routeCommission += commission;
         });
     } else if (state.activeRoute.total_earnings) {
         const totalPrice = parsePrice(state.activeRoute.total_earnings);
-        state.totalRouteEarnings = totalPrice * BUSINESS_CONFIG.commission.rider;
-        state.routeCommission = totalPrice * BUSINESS_CONFIG.commission.platform;
+        state.totalRouteEarnings = totalPrice * 0.7;
     } else {
         const deliveryCount = state.activeRoute.stops?.filter(s => s.type === 'delivery').length || 0;
-        state.totalRouteEarnings = deliveryCount * 350;
-        state.routeCommission = deliveryCount * 150;
+        state.totalRouteEarnings = deliveryCount * 350; // Default earning per delivery
     }
     
-    console.log('Route financials calculated:', {
-        earnings: state.totalRouteEarnings,
-        commission: state.routeCommission
+    console.log('Route earnings calculated:', {
+        earnings: state.totalRouteEarnings
     });
 }
 
@@ -1476,6 +1467,9 @@ function calculateBounds(stops) {
 function displayRouteInfo() {
     if (!state.activeRoute) return;
     
+    // Create navigation bar if it doesn't exist
+    ensureNavigationBarExists();
+    
     const routeType = document.getElementById('routeType');
     if (routeType) {
         const nextStop = getNextStop();
@@ -1499,9 +1493,46 @@ function displayRouteInfo() {
     displayStops();
 }
 
+function ensureNavigationBarExists() {
+    // Check if navigation elements exist, create if missing
+    if (!document.getElementById('routeType')) {
+        const navBar = document.createElement('div');
+        navBar.className = 'route-navigation-bar';
+        navBar.innerHTML = `
+            <div class="route-header">
+                <h1 id="routeTitle">Loading Route...</h1>
+                <div id="routeType" class="route-badge">Loading...</div>
+            </div>
+            <div class="route-stats">
+                <div class="stat-item">
+                    <span class="stat-label">Stops</span>
+                    <span id="remainingStops" class="stat-value">0</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Distance</span>
+                    <span id="totalDistance" class="stat-value">0</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">ETA</span>
+                    <span id="estimatedTime" class="stat-value">0</span>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(navBar);
+    }
+    
+    // Ensure stops list exists
+    if (!document.getElementById('stopsList')) {
+        const stopsContainer = document.createElement('div');
+        stopsContainer.className = 'stops-container';
+        stopsContainer.innerHTML = '<div id="stopsList"></div>';
+        document.body.appendChild(stopsContainer);
+    }
+}
+
 function getNextStop() {
     if (!state.activeRoute || !state.activeRoute.stops) return null;
-    return state.activeRoute.stops.find(stop => !stop.completed);
+    return state.activeRoute.stops.find(stop => !stop.completed && stop.canComplete !== false);
 }
 
 function updateRouteStats() {
@@ -1521,9 +1552,13 @@ function updateRouteStats() {
         stats.optimizedDistance = analysis.totalDistance;
     }
     
-    document.getElementById('remainingStops').textContent = remainingStops;
-    document.getElementById('totalDistance').textContent = stats.optimizedDistance || totalDistance;
-    document.getElementById('estimatedTime').textContent = estimatedTime;
+    const remainingStopsEl = document.getElementById('remainingStops');
+    const totalDistanceEl = document.getElementById('totalDistance');
+    const estimatedTimeEl = document.getElementById('estimatedTime');
+    
+    if (remainingStopsEl) remainingStopsEl.textContent = remainingStops;
+    if (totalDistanceEl) totalDistanceEl.textContent = `${stats.optimizedDistance || totalDistance}km`;
+    if (estimatedTimeEl) estimatedTimeEl.textContent = `${estimatedTime}min`;
 }
 
 function displayStops() {
@@ -1531,6 +1566,10 @@ function displayStops() {
     if (!stopsList || !state.activeRoute) return;
     
     updateParcelsInPossession();
+    
+    // Remove any existing cash collection widget before recreating
+    const existingWidget = document.querySelector('.cash-collection-widget');
+    if (existingWidget) existingWidget.remove();
     
     let html = '';
     
@@ -1834,6 +1873,9 @@ async function plotRoute() {
     });
     
     state.map.fitBounds(bounds, { padding: [50, 50] });
+    
+    // Draw route with actual roads
+    await drawOptimizedRoute();
 }
 
 function createLeafletIcon(stop) {
@@ -1927,6 +1969,7 @@ function createStopPopup(stop) {
     `;
 }
 
+// Fixed: Draw route with actual road directions
 async function drawOptimizedRoute() {
     if (!state.activeRoute) return;
     
@@ -1942,8 +1985,60 @@ async function drawOptimizedRoute() {
             state.routePolyline = null;
         }
         
-        const coords = stops.map(stop => [stop.location.lat, stop.location.lng]);
+        // Get waypoints
+        const waypoints = stops.map(stop => `${stop.location.lng},${stop.location.lat}`);
         
+        // Add current location if available
+        if (state.currentLocation) {
+            waypoints.unshift(`${state.currentLocation.lng},${state.currentLocation.lat}`);
+        }
+        
+        // Fetch actual road route from OpenRouteService
+        const response = await fetch(
+            `https://api.openrouteservice.org/v2/directions/driving-car?api_key=${OPENROUTE_API_KEY}&start=${waypoints[0]}&end=${waypoints[waypoints.length - 1]}`,
+            {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                }
+            }
+        );
+        
+        if (response.ok) {
+            const data = await response.json();
+            if (data.features && data.features.length > 0) {
+                const coordinates = data.features[0].geometry.coordinates;
+                const latLngs = coordinates.map(coord => [coord[1], coord[0]]);
+                
+                state.routePolyline = L.polyline(latLngs, {
+                    color: '#0066FF',
+                    weight: 6,
+                    opacity: 0.8,
+                    smoothFactor: 1
+                }).addTo(state.map);
+            }
+        } else {
+            // Fallback to straight lines if API fails
+            console.log('Falling back to straight lines');
+            const coords = stops.map(stop => [stop.location.lat, stop.location.lng]);
+            if (state.currentLocation) {
+                coords.unshift([state.currentLocation.lat, state.currentLocation.lng]);
+            }
+            
+            state.routePolyline = L.polyline(coords, {
+                color: '#0066FF',
+                weight: 6,
+                opacity: 0.8,
+                dashArray: '10, 10',
+                smoothFactor: 1
+            }).addTo(state.map);
+        }
+        
+    } catch (error) {
+        console.error('Error drawing route:', error);
+        // Fallback to straight lines
+        const coords = stops.map(stop => [stop.location.lat, stop.location.lng]);
         if (state.currentLocation) {
             coords.unshift([state.currentLocation.lat, state.currentLocation.lng]);
         }
@@ -1952,11 +2047,9 @@ async function drawOptimizedRoute() {
             color: '#0066FF',
             weight: 6,
             opacity: 0.8,
+            dashArray: '10, 10',
             smoothFactor: 1
         }).addTo(state.map);
-        
-    } catch (error) {
-        console.error('Error drawing route:', error);
     }
 }
 
@@ -1965,10 +2058,10 @@ async function handleRouteCompletion() {
     
     const deliveryCount = state.activeRoute.stops.filter(s => s.type === 'delivery').length;
     
+    // Only show rider earnings (no commission info)
     const completionData = {
         completed: true,
         earnings: Math.round(state.totalRouteEarnings),
-        commission: Math.round(state.routeCommission),
         cashCollected: Math.round(state.totalCashCollected),
         deliveries: deliveryCount,
         stops: state.activeRoute.stops.length,
@@ -2149,6 +2242,7 @@ window.selectStop = function(stopId) {
     }
 };
 
+// Fixed: Show only earnings, not commission
 async function completeRoute() {
     console.log('Completing route...');
     
@@ -2210,21 +2304,24 @@ function showNotification(message, type = 'info') {
 
 function updateCashCollectionWidget() {
     calculateCashCollection();
-    const widget = document.querySelector('.cash-collection-widget');
-    if (widget) {
+    // Only show widget if there's cash to collect
+    if (state.totalCashToCollect > 0) {
         showCashCollectionWidget();
     }
 }
 
 function showCashCollectionWidget() {
+    // Remove existing widget first
     const existingWidget = document.querySelector('.cash-collection-widget');
     if (existingWidget) existingWidget.remove();
     
     const pendingAmount = state.totalCashToCollect - state.totalCashCollected;
-    const hasPending = pendingAmount > 0;
+    
+    // Only show if there's still cash to collect
+    if (state.totalCashToCollect === 0) return;
     
     const widget = document.createElement('div');
-    widget.className = `cash-collection-widget ${hasPending ? 'has-pending' : ''}`;
+    widget.className = `cash-collection-widget ${pendingAmount > 0 ? 'has-pending' : ''}`;
     widget.innerHTML = `
         <div class="cash-widget-title">
             <span>💰</span>
@@ -2350,35 +2447,59 @@ document.addEventListener('DOMContentLoaded', async () => {
     await waitForLeaflet();
     
     try {
+        // Check for route data
         const storedRoute = localStorage.getItem('tuma_active_route');
-        console.log('Stored route data:', storedRoute);
+        console.log('Looking for active route...');
         
         if (storedRoute) {
-            state.activeRoute = JSON.parse(storedRoute);
-            console.log('Parsed route:', state.activeRoute);
-            
-            if (config.useDynamicOptimization && state.activeRoute.parcels) {
-                applyDynamicOptimization();
-                showOptimizationIndicator();
-            }
-            
-            calculateRouteFinancials();
-            calculateCashCollection();
-            
-            await initializeMap();
-            displayRouteInfo();
-            updateDynamicHeader();
-            await plotRoute();
-            await drawOptimizedRoute();
-            
-            if (state.totalCashToCollect > 0) {
-                showCashCollectionWidget();
+            try {
+                state.activeRoute = JSON.parse(storedRoute);
+                console.log('Route found:', state.activeRoute);
+                
+                // Validate route structure
+                if (!state.activeRoute.parcels || state.activeRoute.parcels.length === 0) {
+                    console.warn('Route has no parcels, checking for alternative structure');
+                    // Handle alternative data structures if needed
+                }
+                
+                // Clear any old cash collection state
+                state.paymentsByStop = {};
+                state.totalCashCollected = 0;
+                state.totalCashToCollect = 0;
+                
+                if (config.useDynamicOptimization && state.activeRoute.parcels) {
+                    applyDynamicOptimization();
+                    showOptimizationIndicator();
+                }
+                
+                calculateRouteFinancials();
+                calculateCashCollection();
+                
+                await initializeMap();
+                displayRouteInfo();
+                updateDynamicHeader();
+                await plotRoute();
+                
+                // Only show cash widget if there's cash to collect
+                if (state.totalCashToCollect > 0) {
+                    showCashCollectionWidget();
+                }
+            } catch (parseError) {
+                console.error('Error parsing route data:', parseError);
+                showNotification('Error loading route data', 'error');
             }
         } else {
-            console.log('No active route found');
+            console.log('No active route found in localStorage');
+            // Show "No Active Route" message
+            ensureNavigationBarExists();
+            const routeTitle = document.getElementById('routeTitle');
+            if (routeTitle) {
+                routeTitle.textContent = 'No Active Route';
+            }
         }
     } catch (error) {
         console.error('Error initializing route:', error);
+        showNotification('Error initializing route', 'error');
     }
 });
 
@@ -2400,9 +2521,13 @@ window.routeDebug = {
             console.log('Route Analysis:', analysis);
             return analysis;
         }
+    },
+    checkStorage: () => {
+        console.log('LocalStorage keys:', Object.keys(localStorage).filter(k => k.includes('tuma')));
+        console.log('Active route:', localStorage.getItem('tuma_active_route'));
     }
 };
 
-console.log('✅ Integrated Route Navigation with Simple POD loaded successfully!');
-console.log('Features: Dynamic optimization, Simple POD flow, Offline support');
-console.log('Debug: window.routeDebug');
+console.log('✅ Fixed Route Navigation loaded successfully!');
+console.log('Fixes: Route recognition, Commission hiding, Road routing, Cash widget');
+console.log('Debug: window.routeDebug.checkStorage()');
