@@ -1409,7 +1409,36 @@ function decodePolyline(encoded) {
         poly.push([lat / 1E5, lng / 1E5]);
     }
 
-    return poly;/**
+    return poly;
+}
+
+// Add the missing centerOnLocation function
+window.centerOnLocation = function() {
+    if (state.currentLocation && state.map) {
+        state.map.setView([state.currentLocation.lat, state.currentLocation.lng], 16);
+        showNotification('Centered on your location', 'info');
+    } else {
+        showNotification('Getting your location...', 'info');
+        // Start location tracking if not already active
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                position => {
+                    state.currentLocation = {
+                        lat: position.coords.latitude,
+                        lng: position.coords.longitude
+                    };
+                    if (state.map) {
+                        state.map.setView([state.currentLocation.lat, state.currentLocation.lng], 16);
+                    }
+                },
+                error => {
+                    console.error('Location error:', error);
+                    showNotification('Please enable location services', 'warning');
+                }
+            );
+        }
+    }
+};/**
  * Complete Enhanced Route Navigation Module with Dynamic Optimization and Simple POD
  * PART 2 OF 2 - FIXED VERSION
  */
