@@ -1558,10 +1558,13 @@ window.addEventListener('online', () => {
 // ============================================================================
 
 function showCashCollectionWidget() {
+    // Ensure container exists first
+    ensureRequiredDOMElements();
+    
     // Use dedicated container
     const container = document.getElementById('cashWidgetContainer');
     if (!container) {
-        console.error('Cash widget container not found');
+        console.error('Cash widget container not found even after ensuring elements');
         return;
     }
     
@@ -2864,6 +2867,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     console.log('Route.js initializing with dynamic optimization and Simple POD...');
     
+    // CRITICAL: Ensure DOM elements exist
+    ensureRequiredDOMElements();
+    
     // Inject all styles
     injectEnhancedStyles();
     
@@ -2874,6 +2880,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         const routeInitialized = await initializeRoute();
         
         if (routeInitialized) {
+            console.log('Route initialized successfully');
+            
             // Apply optimization if needed
             if (config.useDynamicOptimization && state.activeRoute.parcels && !state.activeRoute.optimized) {
                 console.log('Applying dynamic optimization...');
@@ -2906,6 +2914,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }, 500);
             }, 200);
             
+            // Ensure elements exist before displaying
+            ensureRequiredDOMElements();
+            
             // Display UI elements
             displayRouteInfo();
             updateDynamicHeader();
@@ -2934,12 +2945,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         } else {
             console.log('No active route or initialization failed');
             showNoRouteState();
+            // Show test route creation option
+            console.log('💡 TIP: Create a test route with: window.routeDebug.createTestRoute()');
         }
     } catch (error) {
         console.error('Fatal error initializing route:', error);
         console.error('Stack trace:', error.stack);
         showNotification('Error loading route: ' + error.message, 'error');
         showNoRouteState();
+        console.log('💡 TIP: Create a test route with: window.routeDebug.createTestRoute()');
     }
 });
 
