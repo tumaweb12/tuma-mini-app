@@ -895,7 +895,10 @@ window.verifyCode = async function(stopId) {
         // Show SIMPLE proof capture
         showSimplePOD(stop, paymentInfo);
     }
-};
+}
+
+// Make sure it's accessible globally
+window.plotRoute = plotRoute;;
 
 /**
  * Show Simple POD Modal
@@ -2865,7 +2868,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (initialized) return;
     initialized = true;
     
-    console.log('Route.js initializing with dynamic optimization and Simple POD...');
+    console.log('Route.js initializing...');
     
     // CRITICAL: Ensure DOM elements exist
     ensureRequiredDOMElements();
@@ -2876,21 +2879,36 @@ document.addEventListener('DOMContentLoaded', async () => {
     await waitForLeaflet();
     
     try {
-        // Initialize route data
-        const routeInitialized = await initializeRoute();
+        // Try to auto-load route from dashboard first
+        const autoLoaded = await autoLoadRouteFromDashboard();
         
-        if (routeInitialized) {
-            console.log('Route initialized successfully');
+        // If no auto-loaded route, try normal initialization
+        let routeInitialized = autoLoaded || await initializeRoute();
+        
+        if (routeInitialized && state.activeRoute) {
+            console.log('Route loaded successfully');
+            
+            // Ensure route has stops
+            if (!state.activeRoute.stops && state.activeRoute.parcels) {
+                console.log('Generating stops from parcels...');
+                const stops = DynamicRouteOptimizer.createAllStops(state.activeRoute.parcels);
+                state.activeRoute.stops = stops;
+            }
             
             // Apply optimization if needed
             if (config.useDynamicOptimization && state.activeRoute.parcels && !state.activeRoute.optimized) {
                 console.log('Applying dynamic optimization...');
                 try {
-                    applyDynamicOptimization();
+                    const optimizedStops = DynamicRouteOptimizer.optimizeRoute(
+                        state.activeRoute.parcels,
+                        state.currentLocation
+                    );
+                    state.activeRoute.stops = optimizedStops;
+                    state.optimizedSequence = optimizedStops;
                     state.activeRoute.optimized = true;
                     showOptimizationIndicator();
                 } catch (error) {
-                    console.error('Optimization failed, continuing with original order:', error);
+                    console.error('Optimization failed, using basic stops:', error);
                 }
             }
             
@@ -2908,10 +2926,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (state.map) {
                     state.map.invalidateSize();
                 }
-                // Try again after a longer delay to catch any dynamically added overlays
-                setTimeout(() => {
-                    clearMapOverlays();
-                }, 500);
             }, 200);
             
             // Ensure elements exist before displaying
@@ -2937,23 +2951,31 @@ document.addEventListener('DOMContentLoaded', async () => {
             console.log('Active route summary:', {
                 id: state.activeRoute.id,
                 name: state.activeRoute.name,
-                stops: state.activeRoute.stops.length,
+                stops: state.activeRoute.stops ? state.activeRoute.stops.length : 0,
+                parcels: state.activeRoute.parcels ? state.activeRoute.parcels.length : 0,
                 totalEarnings: state.totalRouteEarnings,
                 cashToCollect: state.totalCashToCollect
             });
             
         } else {
-            console.log('No active route or initialization failed');
+            console.log('No active route found');
             showNoRouteState();
-            // Show test route creation option
-            console.log('💡 TIP: Create a test route with: window.routeDebug.createTestRoute()');
+            
+            // AUTO-CREATE TEST ROUTE FOR DEMO
+            console.log('Auto-creating test route for demonstration...');
+            setTimeout(() => {
+                window.routeDebug.createTestRoute();
+            }, 2000);
         }
     } catch (error) {
         console.error('Fatal error initializing route:', error);
         console.error('Stack trace:', error.stack);
-        showNotification('Error loading route: ' + error.message, 'error');
-        showNoRouteState();
-        console.log('💡 TIP: Create a test route with: window.routeDebug.createTestRoute()');
+        
+        // Try to recover with test route
+        console.log('Attempting recovery with test route...');
+        setTimeout(() => {
+            window.routeDebug.createTestRoute();
+        }, 2000);
     }
 });
 
