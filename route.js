@@ -557,6 +557,11 @@ window.startNavigation = function() {
                 };
                 updateNavigationPanel();
                 updateCurrentLocationMarker();
+                
+                // Redraw route when location updates
+                if (state.activeRoute && state.activeRoute.stops) {
+                    drawOptimizedRoute();
+                }
             },
             error => {
                 console.error('Location error:', error);
@@ -573,6 +578,11 @@ window.startNavigation = function() {
     const nextStop = getNextStop();
     if (nextStop) {
         navigateToStop(nextStop.id);
+    }
+    
+    // Draw the route immediately when navigation starts
+    if (state.activeRoute && state.activeRoute.stops) {
+        drawOptimizedRoute();
     }
 };
 
@@ -1447,17 +1457,45 @@ function updateCashCollectionWidget() {
 }
 
 // ============================================================================
-// MAP OVERLAY FIX
+// MAP OVERLAY FIX (MORE AGGRESSIVE)
 // ============================================================================
 
 function clearMapOverlays() {
     const mapContainer = document.getElementById('map');
     if (mapContainer) {
-        // Remove any overlay divs that might be showing "No Active Route"
+        // Method 1: Remove any overlay divs that might be showing "No Active Route"
         const overlays = mapContainer.querySelectorAll('div[style*="position: absolute"][style*="transform: translate"]');
         overlays.forEach(overlay => {
             if (overlay.textContent.includes('No Active Route')) {
-                console.log('Removing "No Active Route" overlay');
+                console.log('Removing "No Active Route" overlay - Method 1');
+                overlay.remove();
+            }
+        });
+        
+        // Method 2: More aggressive - remove any div with "No Active Route" text
+        const allDivs = mapContainer.querySelectorAll('div');
+        allDivs.forEach(div => {
+            if (div.textContent.includes('No Active Route') && 
+                div.textContent.includes('Claim a route from the rider dashboard')) {
+                console.log('Removing overlay - Method 2 (aggressive)');
+                div.remove();
+            }
+        });
+        
+        // Method 3: Remove by checking specific styling patterns
+        const styledOverlays = mapContainer.querySelectorAll('div[style*="z-index: 1000"]');
+        styledOverlays.forEach(overlay => {
+            if (overlay.innerHTML.includes('No Active Route')) {
+                console.log('Removing overlay - Method 3 (z-index)');
+                overlay.remove();
+            }
+        });
+        
+        // Method 4: Check for overlays with specific background
+        const bgOverlays = mapContainer.querySelectorAll('div[style*="background: rgba(0, 0, 0"]');
+        bgOverlays.forEach(overlay => {
+            if (overlay.innerHTML.includes('No Active Route')) {
+                console.log('Removing overlay - Method 4 (background)');
                 overlay.remove();
             }
         });
@@ -2653,12 +2691,26 @@ window.openVerificationModal = function(stopId) {
                            id="verificationCode" 
                            placeholder="XXX-XXXX"
                            maxlength="8"
-                           autocomplete="off">
-                    <p class="code-hint">Ask the ${stop.type === 'pickup' ? 'sender' : 'recipient'} for their code</p>
+                           autocomplete="off"
+                           style="
+                               width: 100%;
+                               padding: 16px;
+                               font-size: 24px;
+                               text-align: center;
+                               border: 2px solid #ddd;
+                               border-radius: 12px;
+                               margin: 10px 0;
+                               text-transform: uppercase;
+                               letter-spacing: 2px;
+                               font-weight: 600;
+                           ">
+                    <p class="code-hint" style="text-align: center; color: #666; margin-top: 8px;">
+                        Ask the ${stop.type === 'pickup' ? 'sender' : 'recipient'} for their code
+                    </p>
                 </div>
                 
                 ${stop.type === 'delivery' && paymentInfo.needsCollection ? `
-                    <div style="margin-top: 16px; padding: 12px; background: var(--surface-high); border-radius: 8px;">
+                    <div style="margin-top: 16px; padding: 12px; background: #f8f8f8; border-radius: 8px;">
                         <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
                             <input type="checkbox" id="paymentCollected" style="width: 20px; height: 20px; cursor: pointer;">
                             <span style="font-size: 16px;">I have collected KES ${paymentInfo.amount.toLocaleString()} cash</span>
@@ -2666,12 +2718,50 @@ window.openVerificationModal = function(stopId) {
                     </div>
                 ` : ''}
                 
-                <div class="modal-actions">
-                    <button class="modal-btn primary" onclick="verifyCode('${stop.id}')">
+                <!-- FIXED: Added the missing verify button -->
+                <div class="modal-actions" style="
+                    display: flex;
+                    gap: 12px;
+                    margin-top: 20px;
+                ">
+                    <button class="modal-btn primary" 
+                            onclick="verifyCode('${stop.id}')"
+                            style="
+                                flex: 1;
+                                padding: 16px;
+                                background: #0066FF;
+                                color: white;
+                                border: none;
+                                border-radius: 12px;
+                                font-size: 18px;
+                                font-weight: 600;
+                                cursor: pointer;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                gap: 8px;
+                                transition: all 0.2s ease;
+                            "
+                            onmouseover="this.style.background='#0052cc'"
+                            onmouseout="this.style.background='#0066FF'">
                         <span>✓</span>
                         <span>Verify ${stop.type === 'pickup' ? 'Pickup' : 'Delivery'}</span>
                     </button>
-                    <button class="modal-btn secondary" onclick="closeVerificationModal()">
+                    <button class="modal-btn secondary" 
+                            onclick="closeVerificationModal()"
+                            style="
+                                padding: 16px 24px;
+                                background: #f0f0f0;
+                                color: #333;
+                                border: none;
+                                border-radius: 12px;
+                                font-size: 16px;
+                                font-weight: 600;
+                                cursor: pointer;
+                                transition: all 0.2s ease;
+                            "
+                            onmouseover="this.style.background='#e0e0e0'"
+                            onmouseout="this.style.background='#f0f0f0'">
                         Cancel
                     </button>
                 </div>
@@ -3484,6 +3574,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                     if (state.map) {
                         state.map.invalidateSize();
                     }
+                    // Try again after a longer delay to catch any dynamically added overlays
+                    setTimeout(() => {
+                        clearMapOverlays();
+                    }, 500);
                 }, 200);
                 
                 // Display UI elements
