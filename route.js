@@ -1,6 +1,7 @@
 /**
  * Complete Enhanced Route Navigation Module with Dynamic Optimization and Simple POD
- * PART 1 OF 2 - FIXED VERSION
+ * PART 1 OF 2 - FULL VERSION WITH ALL FUNCTIONS
+ * Fixes: No Active Route overlay, Cash widget styling, Details/Navigation buttons
  */
 
 // ============================================================================
@@ -465,6 +466,201 @@ const state = {
 const OPENROUTE_API_KEY = '5b3ce3597851110001cf624841e48578ffb34c6b96dfe3bbe9b3ad4c';
 const SUPABASE_URL = 'https://btxavqfoirdzwpfrvezp.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ0eGF2cWZvaXJkendwZnJ2ZXpwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE0ODcxMTcsImV4cCI6MjA2NzA2MzExN30.kQKpukFGx-cBl1zZRuXmex02ifkZ751WCUfQPogYutk';
+
+// ============================================================================
+// NAVIGATION PANEL (WITH FIXED BUTTONS)
+// ============================================================================
+
+function createNavigationPanel() {
+    // Remove any existing navigation panel
+    const existingPanel = document.querySelector('.navigation-panel');
+    if (existingPanel) existingPanel.remove();
+    
+    const panel = document.createElement('div');
+    panel.className = 'navigation-panel collapsed';
+    panel.innerHTML = `
+        <div class="nav-panel-header" onclick="toggleNavigationPanel()">
+            <div class="nav-panel-title">
+                <span class="nav-icon">🧭</span>
+                <span>Navigation Controls</span>
+            </div>
+            <span class="nav-toggle-icon">▼</span>
+        </div>
+        <div class="nav-panel-content">
+            <div class="nav-actions">
+                <button class="nav-btn primary" onclick="startNavigation()">
+                    <span class="btn-icon">▶️</span>
+                    <span>Start Navigation</span>
+                </button>
+                <button class="nav-btn secondary" onclick="viewRouteDetails()">
+                    <span class="btn-icon">📋</span>
+                    <span>Route Details</span>
+                </button>
+            </div>
+            <div class="nav-stats">
+                <div class="nav-stat">
+                    <span class="stat-label">Next Stop</span>
+                    <span id="nextStopName" class="stat-value">--</span>
+                </div>
+                <div class="nav-stat">
+                    <span class="stat-label">Distance</span>
+                    <span id="nextStopDistance" class="stat-value">--</span>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(panel);
+    updateNavigationPanel();
+}
+
+function toggleNavigationPanel() {
+    const panel = document.querySelector('.navigation-panel');
+    if (panel) {
+        panel.classList.toggle('collapsed');
+        const icon = panel.querySelector('.nav-toggle-icon');
+        icon.textContent = panel.classList.contains('collapsed') ? '▼' : '▲';
+    }
+}
+
+function updateNavigationPanel() {
+    const nextStop = getNextStop();
+    if (nextStop) {
+        const nextStopName = document.getElementById('nextStopName');
+        const nextStopDistance = document.getElementById('nextStopDistance');
+        
+        if (nextStopName) {
+            nextStopName.textContent = getStopShortName(nextStop);
+        }
+        
+        if (nextStopDistance && state.currentLocation) {
+            const distance = DynamicRouteOptimizer.calculateDistance(
+                state.currentLocation,
+                nextStop.location
+            );
+            nextStopDistance.textContent = `${distance.toFixed(1)} km`;
+        }
+    }
+}
+
+window.startNavigation = function() {
+    state.navigationActive = true;
+    showNotification('Navigation started', 'success');
+    
+    // Start tracking location
+    if (navigator.geolocation) {
+        state.locationWatchId = navigator.geolocation.watchPosition(
+            position => {
+                state.currentLocation = {
+                    lat: position.coords.latitude,
+                    lng: position.coords.longitude
+                };
+                updateNavigationPanel();
+                updateCurrentLocationMarker();
+            },
+            error => {
+                console.error('Location error:', error);
+            },
+            {
+                enableHighAccuracy: true,
+                maximumAge: 0,
+                timeout: 5000
+            }
+        );
+    }
+    
+    // Navigate to first uncompleted stop
+    const nextStop = getNextStop();
+    if (nextStop) {
+        navigateToStop(nextStop.id);
+    }
+};
+
+window.viewRouteDetails = function() {
+    if (!state.activeRoute) {
+        showNotification('No active route', 'warning');
+        return;
+    }
+    
+    const modal = document.createElement('div');
+    modal.className = 'route-details-modal';
+    modal.innerHTML = `
+        <div class="modal-overlay" onclick="closeRouteDetails()"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Route Details</h2>
+                <button class="close-btn" onclick="closeRouteDetails()">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="route-summary">
+                    <h3>${state.activeRoute.name || 'Route'}</h3>
+                    <div class="summary-stats">
+                        <div class="stat">
+                            <span class="label">Total Stops</span>
+                            <span class="value">${state.activeRoute.stops.length}</span>
+                        </div>
+                        <div class="stat">
+                            <span class="label">Completed</span>
+                            <span class="value">${state.activeRoute.stops.filter(s => s.completed).length}</span>
+                        </div>
+                        <div class="stat">
+                            <span class="label">Earnings</span>
+                            <span class="value">KES ${Math.round(state.totalRouteEarnings)}</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="stops-timeline">
+                    ${state.activeRoute.stops.map((stop, index) => `
+                        <div class="timeline-item ${stop.completed ? 'completed' : ''} ${stop.type}">
+                            <div class="timeline-marker">
+                                ${stop.completed ? '✓' : index + 1}
+                            </div>
+                            <div class="timeline-content">
+                                <div class="timeline-type">${stop.type.toUpperCase()}</div>
+                                <div class="timeline-address">${stop.address}</div>
+                                <div class="timeline-info">
+                                    <span>${stop.customerName}</span>
+                                    <span>•</span>
+                                    <span>${stop.parcelCode}</span>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+};
+
+window.closeRouteDetails = function() {
+    const modal = document.querySelector('.route-details-modal');
+    if (modal) modal.remove();
+};
+
+function updateCurrentLocationMarker() {
+    if (!state.map || !state.currentLocation) return;
+    
+    if (state.currentLocationMarker) {
+        state.currentLocationMarker.setLatLng([state.currentLocation.lat, state.currentLocation.lng]);
+    } else {
+        state.currentLocationMarker = L.marker([state.currentLocation.lat, state.currentLocation.lng], {
+            icon: L.divIcon({
+                className: 'current-location-marker',
+                html: `
+                    <div class="location-marker-wrapper">
+                        <div class="location-pulse"></div>
+                        <div class="location-dot"></div>
+                    </div>
+                `,
+                iconSize: [30, 30],
+                iconAnchor: [15, 15]
+            })
+        }).addTo(state.map);
+    }
+}
 
 // ============================================================================
 // SIMPLE POD SYSTEM INTEGRATION
@@ -1174,6 +1370,104 @@ window.addEventListener('online', () => {
 });
 
 console.log('Simple POD System integrated - One screen, fast & easy!');
+/**
+ * Complete Enhanced Route Navigation Module with Dynamic Optimization and Simple POD
+ * PART 2 OF 2 - FULL VERSION WITH ALL FUNCTIONS (continued from Part 1)
+ */
+
+// ============================================================================
+// CASH COLLECTION WIDGET (FIXED STYLING)
+// ============================================================================
+
+function showCashCollectionWidget() {
+    // Remove existing widget first
+    const existingWidget = document.querySelector('.cash-collection-widget');
+    if (existingWidget) existingWidget.remove();
+    
+    const pendingAmount = state.totalCashToCollect - state.totalCashCollected;
+    
+    // Only show if there's cash to collect
+    if (state.totalCashToCollect === 0) return;
+    
+    const widget = document.createElement('div');
+    widget.className = `cash-collection-widget ${pendingAmount > 0 ? 'has-pending' : ''}`;
+    widget.innerHTML = `
+        <div class="cash-widget-container">
+            <div class="cash-widget-header">
+                <span class="cash-widget-icon">💰</span>
+                <span class="cash-widget-title">Cash Collection</span>
+            </div>
+            <div class="cash-widget-content">
+                <div class="cash-widget-main-amount">
+                    <span class="amount-label">To Collect:</span>
+                    <span class="amount-value">KES ${pendingAmount.toLocaleString()}</span>
+                </div>
+                <div class="cash-widget-breakdown">
+                    <div class="breakdown-row">
+                        <span class="breakdown-label">Total</span>
+                        <span class="breakdown-value">KES ${state.totalCashToCollect.toLocaleString()}</span>
+                    </div>
+                    <div class="breakdown-row collected">
+                        <span class="breakdown-label">✓ Collected</span>
+                        <span class="breakdown-value">KES ${state.totalCashCollected.toLocaleString()}</span>
+                    </div>
+                    <div class="breakdown-row pending">
+                        <span class="breakdown-label">⏳ Pending</span>
+                        <span class="breakdown-value">KES ${pendingAmount.toLocaleString()}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Find proper container for the widget
+    const stopsContainer = document.querySelector('.stops-container');
+    const stopsList = document.getElementById('stopsList');
+    
+    if (stopsContainer && stopsList) {
+        // Insert before stops list
+        stopsContainer.insertBefore(widget, stopsList);
+    } else if (stopsList) {
+        // Insert before stops list parent
+        stopsList.parentElement.insertBefore(widget, stopsList);
+    } else {
+        // Create container if needed
+        const container = document.createElement('div');
+        container.className = 'stops-container';
+        container.appendChild(widget);
+        document.body.appendChild(container);
+    }
+}
+
+function updateCashCollectionWidget() {
+    calculateCashCollection();
+    if (state.totalCashToCollect > 0) {
+        showCashCollectionWidget();
+    }
+}
+
+// ============================================================================
+// MAP OVERLAY FIX
+// ============================================================================
+
+function clearMapOverlays() {
+    const mapContainer = document.getElementById('map');
+    if (mapContainer) {
+        // Remove any overlay divs that might be showing "No Active Route"
+        const overlays = mapContainer.querySelectorAll('div[style*="position: absolute"][style*="transform: translate"]');
+        overlays.forEach(overlay => {
+            if (overlay.textContent.includes('No Active Route')) {
+                console.log('Removing "No Active Route" overlay');
+                overlay.remove();
+            }
+        });
+    }
+}
+
+// ============================================================================
+// ROUTE DRAWING AND NAVIGATION
+// ============================================================================
+
 // Draw optimized route with multiple fallback options for reliable navigation
 async function drawOptimizedRoute() {
     if (!state.activeRoute) return;
@@ -1438,10 +1732,7 @@ window.centerOnLocation = function() {
             );
         }
     }
-};/**
- * Complete Enhanced Route Navigation Module with Dynamic Optimization and Simple POD
- * PART 2 OF 2 - FIXED VERSION
- */
+};
 
 // ============================================================================
 // API FUNCTIONS
@@ -1646,6 +1937,22 @@ function calculateRouteFinancials() {
     console.log('Route earnings calculated:', {
         earnings: state.totalRouteEarnings
     });
+}
+
+function calculateDistance(point1, point2) {
+    if (!point1 || !point2) return 999;
+    
+    const R = 6371;
+    const dLat = (point2.lat - point1.lat) * Math.PI / 180;
+    const dLon = (point2.lng - point1.lng) * Math.PI / 180;
+    
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(point1.lat * Math.PI / 180) * 
+              Math.cos(point2.lat * Math.PI / 180) *
+              Math.sin(dLon/2) * Math.sin(dLon/2);
+    
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
 }
 
 // ============================================================================
@@ -2233,130 +2540,6 @@ function createStopPopup(stop) {
     `;
 }
 
-// Fixed: Draw route with actual road directions using correct API format
-async function drawOptimizedRoute() {
-    if (!state.activeRoute) return;
-    
-    const stops = state.activeRoute.stops.filter(s => !s.completed);
-    if (stops.length < 2) {
-        console.log('Not enough stops to draw route');
-        return;
-    }
-    
-    try {
-        if (state.routePolyline) {
-            state.routePolyline.remove();
-            state.routePolyline = null;
-        }
-        
-        // Prepare coordinates for the route
-        const coordinates = [];
-        
-        // Add current location if available
-        if (state.currentLocation) {
-            coordinates.push([state.currentLocation.lng, state.currentLocation.lat]);
-        }
-        
-        // Add stop coordinates
-        stops.forEach(stop => {
-            coordinates.push([stop.location.lng, stop.location.lat]);
-        });
-        
-        // Use POST method with correct body format for OpenRouteService
-        const requestBody = {
-            coordinates: coordinates
-        };
-        
-        try {
-            const response = await fetch(
-                `https://api.openrouteservice.org/v2/directions/driving-car/geojson`,
-                {
-                    method: 'POST',
-                    headers: {
-                        'Accept': 'application/json, application/geo+json, application/gpx+xml, img/png; charset=utf-8',
-                        'Authorization': OPENROUTE_API_KEY,
-                        'Content-Type': 'application/json; charset=utf-8'
-                    },
-                    body: JSON.stringify(requestBody)
-                }
-            );
-            
-            if (response.ok) {
-                const data = await response.json();
-                if (data.features && data.features.length > 0) {
-                    const routeCoordinates = data.features[0].geometry.coordinates;
-                    const latLngs = routeCoordinates.map(coord => [coord[1], coord[0]]);
-                    
-                    state.routePolyline = L.polyline(latLngs, {
-                        color: '#0066FF',
-                        weight: 6,
-                        opacity: 0.8,
-                        smoothFactor: 1
-                    }).addTo(state.map);
-                    
-                    console.log('Route drawn with actual roads');
-                    return;
-                }
-            }
-        } catch (apiError) {
-            console.log('OpenRouteService API error, using fallback:', apiError.message);
-        }
-        
-        // Fallback: Draw straight lines between points
-        console.log('Using straight line fallback for route display');
-        const fallbackCoords = stops.map(stop => [stop.location.lat, stop.location.lng]);
-        if (state.currentLocation) {
-            fallbackCoords.unshift([state.currentLocation.lat, state.currentLocation.lng]);
-        }
-        
-        state.routePolyline = L.polyline(fallbackCoords, {
-            color: '#0066FF',
-            weight: 6,
-            opacity: 0.7,
-            dashArray: '12, 8',
-            smoothFactor: 1
-        }).addTo(state.map);
-        
-        // Add decorators to show direction
-        if (L.polylineDecorator) {
-            const decorator = L.polylineDecorator(state.routePolyline, {
-                patterns: [
-                    {
-                        offset: 25,
-                        repeat: 50,
-                        symbol: L.Symbol.arrowHead({
-                            pixelSize: 12,
-                            polygon: false,
-                            pathOptions: { 
-                                stroke: true,
-                                color: '#0066FF',
-                                weight: 3
-                            }
-                        })
-                    }
-                ]
-            }).addTo(state.map);
-        }
-        
-    } catch (error) {
-        console.error('Error drawing route:', error);
-        
-        // Final fallback - just draw straight lines
-        const coords = stops.map(stop => [stop.location.lat, stop.location.lng]);
-        if (state.currentLocation) {
-            coords.unshift([state.currentLocation.lat, state.currentLocation.lng]);
-        }
-        
-        state.routePolyline = L.polyline(coords, {
-            color: '#0066FF',
-            weight: 5,
-            opacity: 0.6,
-            dashArray: '10, 10',
-            smoothFactor: 1
-        }).addTo(state.map);
-    }
-}
-
 async function handleRouteCompletion() {
     console.log('Handling route completion...');
     
@@ -2606,53 +2789,6 @@ function showNotification(message, type = 'info') {
     }, 3000);
 }
 
-function updateCashCollectionWidget() {
-    calculateCashCollection();
-    // Only show widget if there's cash to collect
-    if (state.totalCashToCollect > 0) {
-        showCashCollectionWidget();
-    }
-}
-
-function showCashCollectionWidget() {
-    // Remove existing widget first
-    const existingWidget = document.querySelector('.cash-collection-widget');
-    if (existingWidget) existingWidget.remove();
-    
-    const pendingAmount = state.totalCashToCollect - state.totalCashCollected;
-    
-    // Only show if there's still cash to collect
-    if (state.totalCashToCollect === 0) return;
-    
-    const widget = document.createElement('div');
-    widget.className = `cash-collection-widget ${pendingAmount > 0 ? 'has-pending' : ''}`;
-    widget.innerHTML = `
-        <div class="cash-widget-title">
-            <span>💰</span>
-            <span>Cash Collection</span>
-        </div>
-        <div class="cash-widget-amount">
-            KES ${pendingAmount.toLocaleString()}
-        </div>
-        <div class="cash-widget-breakdown">
-            <div class="cash-breakdown-item">
-                <span class="cash-breakdown-label">Total to collect</span>
-                <span class="cash-breakdown-value">KES ${state.totalCashToCollect.toLocaleString()}</span>
-            </div>
-            <div class="cash-breakdown-item">
-                <span class="cash-breakdown-label">✓ Collected</span>
-                <span class="cash-breakdown-value">KES ${state.totalCashCollected.toLocaleString()}</span>
-            </div>
-            <div class="cash-breakdown-item">
-                <span class="cash-breakdown-label">⏳ Pending</span>
-                <span class="cash-breakdown-value">KES ${pendingAmount.toLocaleString()}</span>
-            </div>
-        </div>
-    `;
-    
-    document.body.appendChild(widget);
-}
-
 function showOptimizationIndicator() {
     const indicator = document.createElement('div');
     indicator.className = 'optimization-indicator';
@@ -2726,7 +2862,503 @@ function injectNavigationStyles() {
 }
 
 // ============================================================================
-// INITIALIZATION
+// ENHANCED STYLES
+// ============================================================================
+
+function injectEnhancedStyles() {
+    const style = document.createElement('style');
+    style.textContent = `
+        /* Fix map container */
+        #map {
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            z-index: 1 !important;
+        }
+        
+        /* Navigation Panel Styles */
+        .navigation-panel {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            z-index: 1000;
+            max-width: 400px;
+            width: 90%;
+            transition: all 0.3s ease;
+        }
+        
+        .navigation-panel.collapsed .nav-panel-content {
+            display: none;
+        }
+        
+        .nav-panel-header {
+            padding: 16px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        
+        .nav-panel-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 600;
+            font-size: 16px;
+        }
+        
+        .nav-icon {
+            font-size: 20px;
+        }
+        
+        .nav-toggle-icon {
+            font-size: 12px;
+            color: #666;
+        }
+        
+        .nav-panel-content {
+            padding: 20px;
+        }
+        
+        .nav-actions {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+        
+        .nav-btn {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all 0.2s ease;
+        }
+        
+        .nav-btn.primary {
+            background: #0066FF;
+            color: white;
+        }
+        
+        .nav-btn.primary:hover {
+            background: #0052cc;
+            transform: scale(1.02);
+        }
+        
+        .nav-btn.secondary {
+            background: #f0f0f0;
+            color: #333;
+        }
+        
+        .nav-btn.secondary:hover {
+            background: #e0e0e0;
+        }
+        
+        .btn-icon {
+            font-size: 16px;
+        }
+        
+        .nav-stats {
+            display: flex;
+            gap: 20px;
+        }
+        
+        .nav-stat {
+            flex: 1;
+        }
+        
+        .nav-stat .stat-label {
+            display: block;
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 4px;
+        }
+        
+        .nav-stat .stat-value {
+            display: block;
+            font-size: 16px;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        /* Cash Collection Widget Styles */
+        .cash-collection-widget {
+            position: relative;
+            margin: 16px;
+            z-index: 100;
+            animation: slideInFromTop 0.3s ease-out;
+        }
+        
+        .cash-widget-container {
+            background: linear-gradient(135deg, #fff 0%, #f8f9fa 100%);
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.05);
+            border: 1px solid rgba(0, 0, 0, 0.08);
+        }
+        
+        .cash-collection-widget.has-pending .cash-widget-container {
+            background: linear-gradient(135deg, #fffbf0 0%, #fff9e6 100%);
+            border: 2px solid #FF9F0A;
+            box-shadow: 0 4px 16px rgba(255, 159, 10, 0.2);
+        }
+        
+        .cash-widget-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+        }
+        
+        .cash-widget-icon {
+            font-size: 24px;
+            animation: bounce 2s infinite;
+        }
+        
+        .cash-widget-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #1C1C1F;
+        }
+        
+        .cash-widget-content {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        
+        .cash-widget-main-amount {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            background: rgba(255, 159, 10, 0.1);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 159, 10, 0.2);
+        }
+        
+        .amount-label {
+            font-size: 16px;
+            color: #636366;
+            font-weight: 500;
+        }
+        
+        .amount-value {
+            font-size: 24px;
+            font-weight: 800;
+            color: #FF9F0A;
+        }
+        
+        .cash-widget-breakdown {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .breakdown-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 12px;
+            background: rgba(0, 0, 0, 0.02);
+            border-radius: 8px;
+            transition: all 0.2s ease;
+        }
+        
+        .breakdown-row:hover {
+            background: rgba(0, 0, 0, 0.04);
+        }
+        
+        .breakdown-row.collected {
+            background: rgba(52, 199, 89, 0.08);
+        }
+        
+        .breakdown-row.collected .breakdown-value {
+            color: #34C759;
+            font-weight: 600;
+        }
+        
+        .breakdown-row.pending {
+            background: rgba(255, 159, 10, 0.08);
+        }
+        
+        .breakdown-row.pending .breakdown-value {
+            color: #FF9F0A;
+            font-weight: 600;
+        }
+        
+        .breakdown-label {
+            font-size: 14px;
+            color: #636366;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .breakdown-value {
+            font-size: 15px;
+            font-weight: 500;
+            color: #1C1C1F;
+        }
+        
+        /* Route Details Modal */
+        .route-details-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 10000;
+            animation: fadeIn 0.3s ease;
+        }
+        
+        .route-details-modal .modal-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.6);
+        }
+        
+        .route-details-modal .modal-content {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            border-radius: 20px;
+            width: 90%;
+            max-width: 500px;
+            max-height: 80vh;
+            overflow: hidden;
+            animation: slideUp 0.3s ease;
+        }
+        
+        .route-details-modal .modal-header {
+            padding: 20px;
+            border-bottom: 1px solid #f0f0f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .route-details-modal .close-btn {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #666;
+        }
+        
+        .route-details-modal .modal-body {
+            padding: 20px;
+            overflow-y: auto;
+            max-height: calc(80vh - 80px);
+        }
+        
+        .route-summary {
+            margin-bottom: 24px;
+        }
+        
+        .summary-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-top: 16px;
+        }
+        
+        .summary-stats .stat {
+            text-align: center;
+            padding: 12px;
+            background: #f8f9fa;
+            border-radius: 12px;
+        }
+        
+        .summary-stats .label {
+            display: block;
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 4px;
+        }
+        
+        .summary-stats .value {
+            display: block;
+            font-size: 20px;
+            font-weight: 700;
+            color: #333;
+        }
+        
+        .stops-timeline {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        
+        .timeline-item {
+            display: flex;
+            gap: 16px;
+            align-items: flex-start;
+        }
+        
+        .timeline-marker {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+        
+        .timeline-item.pickup .timeline-marker {
+            background: #FF9F0A;
+            color: white;
+        }
+        
+        .timeline-item.delivery .timeline-marker {
+            background: #0066FF;
+            color: white;
+        }
+        
+        .timeline-item.completed .timeline-marker {
+            background: #34C759;
+        }
+        
+        .timeline-content {
+            flex: 1;
+            padding-bottom: 16px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        
+        .timeline-type {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            color: #666;
+            margin-bottom: 4px;
+        }
+        
+        .timeline-address {
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 4px;
+        }
+        
+        .timeline-info {
+            font-size: 13px;
+            color: #666;
+        }
+        
+        /* Current location marker */
+        .current-location-marker {
+            z-index: 1000;
+        }
+        
+        .location-marker-wrapper {
+            position: relative;
+            width: 30px;
+            height: 30px;
+        }
+        
+        .location-dot {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 12px;
+            height: 12px;
+            background: #0066FF;
+            border: 2px solid white;
+            border-radius: 50%;
+            box-shadow: 0 2px 8px rgba(0, 102, 255, 0.4);
+        }
+        
+        .location-pulse {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 30px;
+            height: 30px;
+            background: rgba(0, 102, 255, 0.3);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes slideInFromTop {
+            from {
+                transform: translateY(-20px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+        
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-5px); }
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        @keyframes slideUp {
+            from { 
+                transform: translate(-50%, -45%);
+                opacity: 0;
+            }
+            to { 
+                transform: translate(-50%, -50%);
+                opacity: 1;
+            }
+        }
+        
+        @keyframes pulse {
+            0% {
+                transform: translate(-50%, -50%) scale(1);
+                opacity: 1;
+            }
+            100% {
+                transform: translate(-50%, -50%) scale(2.5);
+                opacity: 0;
+            }
+        }
+        
+        /* Ensure stops container is properly positioned */
+        .stops-container {
+            position: relative;
+            z-index: 10;
+            padding-top: 10px;
+        }
+    `;
+    document.head.appendChild(style);
+}
+
+// ============================================================================
+// INITIALIZATION (FIXED)
 // ============================================================================
 
 function waitForLeaflet() {
@@ -2744,14 +3376,47 @@ function waitForLeaflet() {
     });
 }
 
+function showNoRouteState() {
+    ensureNavigationBarExists();
+    const routeTitle = document.getElementById('routeTitle');
+    if (routeTitle) {
+        routeTitle.textContent = 'No Active Route';
+    }
+    
+    const mapContainer = document.getElementById('map');
+    if (mapContainer && !state.activeRoute) {
+        // Only show this if there's truly no route
+        mapContainer.innerHTML = `
+            <div style="
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                text-align: center;
+                background: rgba(0, 0, 0, 0.8);
+                padding: 40px;
+                border-radius: 20px;
+                color: white;
+                z-index: 1000;
+            ">
+                <div style="font-size: 48px; margin-bottom: 20px;">📍</div>
+                <h2 style="margin: 0 0 10px 0;">No Active Route</h2>
+                <p style="margin: 0; opacity: 0.8;">Claim a route from the rider dashboard to start navigating</p>
+            </div>
+        `;
+    }
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('Route.js initializing with dynamic optimization and Simple POD...');
     
+    // Inject all styles
     injectNavigationStyles();
+    injectEnhancedStyles();
+    
     await waitForLeaflet();
     
     try {
-        // Check for route data
         const storedRoute = localStorage.getItem('tuma_active_route');
         console.log('Looking for active route...');
         console.log('Raw route data exists:', !!storedRoute);
@@ -2764,12 +3429,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                     hasStops: !!state.activeRoute.stops,
                     stopsCount: state.activeRoute.stops?.length || 0,
                     hasParcels: !!state.activeRoute.parcels,
-                    parcelsCount: state.activeRoute.parcels?.length || 0,
-                    hasRoutes: !!state.activeRoute.routes,
-                    routesCount: state.activeRoute.routes?.length || 0
+                    parcelsCount: state.activeRoute.parcels?.length || 0
                 });
                 
-                // Validate and ensure proper structure
+                // Process route data
                 if (state.activeRoute.stops && state.activeRoute.stops.length > 0) {
                     console.log('Using existing stops:', state.activeRoute.stops.length);
                     
@@ -2799,35 +3462,41 @@ document.addEventListener('DOMContentLoaded', async () => {
                     throw new Error('No valid stops or parcels in route');
                 }
                 
-                // Clear any old cash collection state
-                state.paymentsByStop = {};
-                state.totalCashCollected = 0;
-                state.totalCashToCollect = 0;
-                
-                // Don't re-optimize if stops already exist and are valid
+                // Apply optimization if needed
                 if (config.useDynamicOptimization && state.activeRoute.parcels && !state.activeRoute.optimized) {
                     console.log('Applying dynamic optimization...');
                     applyDynamicOptimization();
                     state.activeRoute.optimized = true;
                     showOptimizationIndicator();
-                } else {
-                    console.log('Using existing stop sequence');
                 }
                 
+                // Calculate financials
                 calculateRouteFinancials();
                 calculateCashCollection();
                 
+                // Initialize map
                 console.log('Initializing map...');
                 await initializeMap();
                 
-                console.log('Displaying route info...');
+                // IMPORTANT: Clear any blocking overlays after map loads
+                setTimeout(() => {
+                    clearMapOverlays();
+                    if (state.map) {
+                        state.map.invalidateSize();
+                    }
+                }, 200);
+                
+                // Display UI elements
                 displayRouteInfo();
                 updateDynamicHeader();
                 
-                console.log('Plotting route on map...');
+                // Create navigation panel with buttons
+                createNavigationPanel();
+                
+                // Plot route on map
                 await plotRoute();
                 
-                // Only show cash widget if there's cash to collect
+                // Show cash widget if needed
                 if (state.totalCashToCollect > 0) {
                     console.log('Showing cash collection widget for KES', state.totalCashToCollect);
                     showCashCollectionWidget();
@@ -2846,46 +3515,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 console.error('Error processing route:', parseError);
                 console.error('Stack trace:', parseError.stack);
                 showNotification('Error loading route data: ' + parseError.message, 'error');
-                
-                // Show error state
-                ensureNavigationBarExists();
-                const routeTitle = document.getElementById('routeTitle');
-                if (routeTitle) {
-                    routeTitle.textContent = 'Error Loading Route';
-                }
+                showNoRouteState();
             }
         } else {
             console.log('No active route found in localStorage');
             console.log('Available localStorage keys:', Object.keys(localStorage).filter(k => k.includes('tuma')));
-            
-            // Show "No Active Route" message
-            ensureNavigationBarExists();
-            const routeTitle = document.getElementById('routeTitle');
-            if (routeTitle) {
-                routeTitle.textContent = 'No Active Route';
-            }
-            
-            // Show empty state properly
-            const mapContainer = document.getElementById('map');
-            if (mapContainer) {
-                mapContainer.innerHTML = `
-                    <div style="
-                        position: absolute;
-                        top: 50%;
-                        left: 50%;
-                        transform: translate(-50%, -50%);
-                        text-align: center;
-                        background: rgba(0, 0, 0, 0.8);
-                        padding: 40px;
-                        border-radius: 20px;
-                        color: white;
-                    ">
-                        <div style="font-size: 48px; margin-bottom: 20px;">📍</div>
-                        <h2 style="margin: 0 0 10px 0;">No Active Route</h2>
-                        <p style="margin: 0; opacity: 0.8;">Claim a route from the rider dashboard to start navigating</p>
-                    </div>
-                `;
-            }
+            showNoRouteState();
         }
     } catch (error) {
         console.error('Fatal error initializing route:', error);
@@ -2894,10 +3529,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 });
 
+// ============================================================================
+// EXPORT FOR DEBUGGING
+// ============================================================================
+
 // Export for debugging
 window.routeDebug = {
     state,
     optimizer: DynamicRouteOptimizer,
+    clearOverlays: clearMapOverlays,
     reoptimize: () => {
         if (state.activeRoute && state.activeRoute.parcels) {
             applyDynamicOptimization();
@@ -2916,9 +3556,24 @@ window.routeDebug = {
     checkStorage: () => {
         console.log('LocalStorage keys:', Object.keys(localStorage).filter(k => k.includes('tuma')));
         console.log('Active route:', localStorage.getItem('tuma_active_route'));
+    },
+    testNavPanel: () => {
+        createNavigationPanel();
+    },
+    testCashWidget: () => {
+        state.totalCashToCollect = 5000;
+        state.totalCashCollected = 2000;
+        showCashCollectionWidget();
     }
 };
 
-console.log('✅ Fixed Route Navigation loaded successfully!');
-console.log('Fixes: Route recognition, Commission hiding, Road routing, Cash widget');
-console.log('Debug: window.routeDebug.checkStorage()');
+console.log('✅ Complete Route Navigation loaded successfully! (~3000 lines)');
+console.log('Fixes applied: No Active Route overlay, Cash widget styling, Navigation buttons');
+console.log('Debug commands available:');
+console.log('- window.routeDebug.clearOverlays() - Clear map overlays');
+console.log('- window.routeDebug.checkStorage() - Check localStorage');
+console.log('- window.routeDebug.testNavPanel() - Test navigation panel');
+console.log('- window.routeDebug.testCashWidget() - Test cash widget');
+console.log('- window.routeDebug.reoptimize() - Re-optimize route');
+console.log('- window.routeDebug.analyzeRoute() - Analyze current route');
+console.log('Simple POD System integrated - One screen, fast & easy!');
