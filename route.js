@@ -708,13 +708,13 @@ window.verifyCode = async function(stopId) {
         return;
     }
     
-    // DELIVERY: Show simple POD
+    // DELIVERY: Check cash if needed, then show POD
     if (stop.type === 'delivery') {
-        // Check cash first
-        if (paymentInfo.needsCollection) {
+        // Check cash ONLY if it's a cash payment that needs collection
+        if (paymentInfo.needsCollection && paymentInfo.amount > 0) {
             const paymentCheckbox = document.getElementById('paymentCollected');
             if (paymentCheckbox && !paymentCheckbox.checked) {
-                showNotification('Please confirm cash collection', 'warning');
+                showNotification('Please confirm cash collection first', 'warning');
                 return;
             }
         }
