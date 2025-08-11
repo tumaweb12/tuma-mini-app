@@ -2783,30 +2783,55 @@ function showNoRouteState() {
 // FIXED: Improved route initialization with better error handling
 async function initializeRoute() {
     try {
+        console.log('🔄 Initializing route from localStorage...');
+        
         const storedRoute = localStorage.getItem('tuma_active_route');
-        if (!storedRoute) {
-            console.log('No route found in localStorage');
+        
+        // Log what we find
+        if (storedRoute) {
+            console.log('📦 Found stored route, length:', storedRoute.length);
+            console.log('📋 First 200 chars:', storedRoute.substring(0, 200));
+        } else {
+            console.log('❌ No route found in localStorage');
+            
+            // Check for other route-related keys
+            const routeKeys = Object.keys(localStorage).filter(k => 
+                k.includes('route') || k.includes('Route')
+            );
+            console.log('🔍 Other route-related keys:', routeKeys);
+            
             return false;
         }
         
         let routeData;
         try {
             routeData = JSON.parse(storedRoute);
+            console.log('✅ Successfully parsed route data');
         } catch (e) {
-            console.error('Invalid route data:', e);
+            console.error('❌ Failed to parse route data:', e);
+            console.log('Raw data that failed to parse:', storedRoute);
             localStorage.removeItem('tuma_active_route');
             return false;
         }
         
         // Validate route data structure
-        if (!routeData || (!routeData.stops && !routeData.parcels)) {
-            console.error('Invalid route structure');
+        if (!routeData || typeof routeData !== 'object') {
+            console.error('❌ Invalid route structure - not an object');
             return false;
         }
         
+        console.log('📊 Route structure:', {
+            hasId: !!routeData.id,
+            hasName: !!routeData.name,
+            hasStops: !!routeData.stops,
+            hasParcels: !!routeData.parcels,
+            stopsLength: routeData.stops ? routeData.stops.length : 0,
+            parcelsLength: routeData.parcels ? routeData.parcels.length : 0
+        });
+        
         // Check if all stops are marked as completed (stale data issue)
         if (routeData.stops && routeData.stops.length > 0 && routeData.stops.every(s => s.completed)) {
-            console.log('Resetting completed stops (stale data detected)');
+            console.log('🔧 Resetting completed stops (stale data detected)');
             // Reset completion status for testing
             routeData.stops.forEach(stop => {
                 stop.completed = false;
@@ -2818,7 +2843,7 @@ async function initializeRoute() {
         
         // Process route data
         if (state.activeRoute.stops && state.activeRoute.stops.length > 0) {
-            console.log('Using existing stops:', state.activeRoute.stops.length);
+            console.log('✅ Using existing stops:', state.activeRoute.stops.length);
             
             // Ensure stops have required fields
             state.activeRoute.stops = state.activeRoute.stops.map(stop => ({
@@ -2836,7 +2861,7 @@ async function initializeRoute() {
                 canComplete: stop.canComplete !== undefined ? stop.canComplete : (stop.type === 'pickup' ? true : false)
             }));
         } else if (state.activeRoute.parcels && state.activeRoute.parcels.length > 0) {
-            console.log('No stops found, generating from parcels...');
+            console.log('🔧 No stops found, generating from parcels...');
             try {
                 const optimizedStops = DynamicRouteOptimizer.optimizeRoute(
                     state.activeRoute.parcels,
@@ -2844,21 +2869,25 @@ async function initializeRoute() {
                 );
                 state.activeRoute.stops = optimizedStops;
                 state.optimizedSequence = optimizedStops;
-                console.log('Generated', optimizedStops.length, 'stops from parcels');
+                console.log('✅ Generated', optimizedStops.length, 'stops from parcels');
             } catch (error) {
-                console.error('Optimization failed, using basic generation:', error);
+                console.error('❌ Optimization failed, using basic generation:', error);
                 // Fallback to basic stop generation
                 const basicStops = DynamicRouteOptimizer.createAllStops(state.activeRoute.parcels);
                 state.activeRoute.stops = basicStops;
+                console.log('✅ Generated', basicStops.length, 'basic stops');
             }
         } else {
-            throw new Error('No valid stops or parcels in route');
+            console.error('❌ No valid stops or parcels in route');
+            return false;
         }
         
+        console.log('✅ Route initialized successfully');
         return true;
         
     } catch (error) {
-        console.error('Failed to initialize route:', error);
+        console.error('❌ Failed to initialize route:', error);
+        console.error('Stack trace:', error.stack);
         return false;
     }
 }
