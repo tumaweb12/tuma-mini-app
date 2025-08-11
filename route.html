@@ -376,6 +376,233 @@
             color: var(--text-secondary);
         }
 
+        /* Enhanced Stop Card */
+        .stop-card {
+            background: var(--surface-high);
+            border-radius: 14px;
+            padding: 16px;
+            display: flex;
+            align-items: stretch;
+            gap: 12px;
+            border: 1px solid var(--border);
+            transition: all 0.3s;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stop-card:hover:not(.completed):not(.blocked) {
+            border-color: var(--primary);
+            transform: translateX(4px);
+            box-shadow: 0 4px 12px rgba(0, 102, 255, 0.2);
+        }
+
+        .stop-card.completed {
+            background: rgba(52, 199, 89, 0.05);
+            border-color: rgba(52, 199, 89, 0.3);
+        }
+
+        .stop-card.active {
+            border-color: var(--primary);
+            background: rgba(0, 102, 255, 0.05);
+            box-shadow: 0 0 0 2px rgba(0, 102, 255, 0.2);
+        }
+
+        .stop-card.blocked {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .stop-number-badge {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 16px;
+            flex-shrink: 0;
+            background: var(--surface);
+            color: white;
+            border: 2px solid var(--border);
+        }
+
+        .stop-number-badge.pickup {
+            background: var(--warning);
+            border-color: var(--warning);
+            color: black;
+        }
+
+        .stop-number-badge.delivery {
+            background: var(--success);
+            border-color: var(--success);
+        }
+
+        .stop-card.completed .stop-number-badge {
+            background: var(--surface-high);
+            border-color: var(--success);
+            color: var(--success);
+        }
+
+        .stop-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .stop-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 8px;
+        }
+
+        .stop-address {
+            font-size: 16px;
+            font-weight: 600;
+            line-height: 1.3;
+            margin: 0;
+            color: var(--text-primary);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+        }
+
+        .stop-distance {
+            font-size: 14px;
+            color: var(--text-secondary);
+            flex-shrink: 0;
+            margin-left: 8px;
+        }
+
+        .stop-details {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .detail-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .detail-icon {
+            font-size: 16px;
+            width: 20px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+
+        .detail-row.instructions {
+            background: rgba(255, 159, 10, 0.1);
+            padding: 8px;
+            border-radius: 8px;
+            border-left: 3px solid var(--warning);
+            margin-top: 4px;
+        }
+
+        .stop-status {
+            margin-top: 8px;
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            text-align: center;
+        }
+
+        .stop-status.completed {
+            background: rgba(52, 199, 89, 0.1);
+            color: var(--success);
+        }
+
+        .stop-status.active {
+            background: rgba(0, 102, 255, 0.1);
+            color: var(--primary);
+        }
+
+        .stop-status.blocked {
+            background: rgba(255, 59, 48, 0.1);
+            color: var(--danger);
+        }
+
+        .stop-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-left: 12px;
+        }
+
+        .action-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: none;
+            background: var(--surface);
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+            font-size: 18px;
+        }
+
+        .action-btn:hover {
+            background: var(--primary);
+            color: white;
+            transform: scale(1.1);
+        }
+
+        .action-btn:active {
+            transform: scale(0.95);
+        }
+
+        /* Loading State */
+        .loading-state {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            z-index: 10;
+            padding: 40px;
+            background: var(--surface-elevated);
+            border-radius: 20px;
+            max-width: 300px;
+        }
+
+        .loading-spinner {
+            width: 60px;
+            height: 60px;
+            margin: 0 auto 20px;
+            border: 4px solid var(--border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .loading-title {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .loading-message {
+            font-size: 16px;
+            color: var(--text-secondary);
+            line-height: 1.4;
+        }
+
         /* Location Button */
         .location-button {
             position: fixed;
@@ -481,6 +708,338 @@
             color: var(--primary);
         }
 
+        /* Enhanced Stop Details Modal */
+        .stop-details-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: modalFadeIn 0.3s ease-out;
+        }
+
+        .stop-details-modal .modal-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+
+        .stop-details-modal .modal-content {
+            position: relative;
+            background: var(--surface-elevated);
+            border-radius: 24px;
+            max-width: 420px;
+            width: 90%;
+            max-height: 85vh;
+            overflow: hidden;
+            animation: modalSlideUp 0.3s ease-out;
+        }
+
+        /* Enhanced Modal Header */
+        .modal-header {
+            position: relative;
+            padding: 24px;
+            text-align: center;
+            color: white;
+            overflow: hidden;
+        }
+
+        .modal-header.pickup {
+            background: linear-gradient(135deg, var(--warning) 0%, #ff8c00 100%);
+        }
+
+        .modal-header.delivery {
+            background: linear-gradient(135deg, var(--success) 0%, #2ec659 100%);
+        }
+
+        .modal-header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+            animation: shimmer 3s infinite;
+        }
+
+        @keyframes shimmer {
+            0%, 100% { transform: rotate(0deg); }
+            50% { transform: rotate(180deg); }
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            z-index: 1;
+        }
+
+        .modal-close:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.1);
+        }
+
+        .modal-icon {
+            font-size: 56px;
+            margin-bottom: 12px;
+            display: block;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+        }
+
+        .modal-header h2 {
+            font-size: 24px;
+            font-weight: 700;
+            margin: 0;
+            position: relative;
+        }
+
+        .modal-header .stop-number {
+            font-size: 14px;
+            opacity: 0.9;
+            margin-top: 4px;
+        }
+
+        /* Enhanced Modal Body */
+        .modal-body {
+            padding: 24px;
+            overflow-y: auto;
+            max-height: calc(85vh - 120px);
+        }
+
+        /* Info Cards in Modal */
+        .info-card {
+            background: var(--surface-high);
+            border-radius: 16px;
+            padding: 16px;
+            margin-bottom: 16px;
+            border: 1px solid var(--border);
+            transition: all 0.2s;
+        }
+
+        .info-card:hover {
+            border-color: var(--primary);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 102, 255, 0.1);
+        }
+
+        .info-card-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .info-card-icon {
+            width: 40px;
+            height: 40px;
+            background: var(--surface);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+        }
+
+        .info-card-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .info-card-content {
+            margin-left: 52px;
+        }
+
+        .info-value {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+
+        .info-subvalue {
+            font-size: 14px;
+            color: var(--text-secondary);
+            line-height: 1.4;
+        }
+
+        /* Special Instructions Card */
+        .instructions-card {
+            background: linear-gradient(135deg, rgba(255, 159, 10, 0.1) 0%, rgba(255, 159, 10, 0.05) 100%);
+            border: 1px solid rgba(255, 159, 10, 0.3);
+            border-left: 4px solid var(--warning);
+        }
+
+        .instructions-card .info-card-icon {
+            background: rgba(255, 159, 10, 0.2);
+            color: var(--warning);
+        }
+
+        /* Customer Info Card */
+        .customer-card {
+            background: linear-gradient(135deg, rgba(0, 102, 255, 0.05) 0%, transparent 100%);
+            border: 1px solid rgba(0, 102, 255, 0.2);
+        }
+
+        .customer-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .customer-action-btn {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .customer-action-btn.call {
+            background: var(--success);
+            color: white;
+        }
+
+        .customer-action-btn.message {
+            background: var(--primary);
+            color: white;
+        }
+
+        .customer-action-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        /* Verification Code Display */
+        .verification-display {
+            background: var(--surface);
+            border-radius: 16px;
+            padding: 20px;
+            text-align: center;
+            margin-bottom: 16px;
+            border: 2px dashed var(--border);
+        }
+
+        .verification-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+
+        .verification-code {
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--primary);
+            letter-spacing: 4px;
+            font-family: 'SF Mono', 'Monaco', 'Courier New', monospace;
+        }
+
+        /* Modal Actions */
+        .modal-actions {
+            padding: 0 24px 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .modal-btn {
+            width: 100%;
+            padding: 16px;
+            border-radius: 12px;
+            border: none;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .modal-btn.primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .modal-btn.secondary {
+            background: var(--surface-high);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
+
+        .modal-btn.success {
+            background: var(--success);
+            color: white;
+        }
+
+        .modal-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .modal-btn:active {
+            transform: translateY(0);
+        }
+
+        /* Order Items List */
+        .order-items {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid var(--border);
+        }
+
+        .order-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            font-size: 14px;
+        }
+
+        .order-item-name {
+            color: var(--text-primary);
+            flex: 1;
+        }
+
+        .order-item-qty {
+            color: var(--text-secondary);
+            margin-left: 12px;
+            font-weight: 600;
+        }
+
         /* Notification styles */
         .notification {
             position: fixed;
@@ -518,8 +1077,46 @@
             color: white;
         }
 
-        .notification.hiding {
-            animation: slideOut 0.3s ease-out;
+        .notification-icon {
+            font-size: 20px;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 380px) {
+            .stop-details-modal .modal-content {
+                max-width: 95%;
+                border-radius: 20px;
+            }
+            
+            .modal-header {
+                padding: 20px;
+            }
+            
+            .modal-icon {
+                font-size: 48px;
+            }
+            
+            .verification-code {
+                font-size: 28px;
+                letter-spacing: 3px;
+            }
+        }
+
+        /* Animations */
+        @keyframes modalFadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes modalSlideUp {
+            from {
+                transform: translateY(50px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
         }
 
         @keyframes slideIn {
@@ -533,19 +1130,20 @@
             }
         }
 
-        @keyframes slideOut {
-            from {
-                transform: translateX(0);
-                opacity: 1;
-            }
-            to {
-                transform: translateX(100%);
-                opacity: 0;
-            }
+        /* Waze-style Navigation (keeping existing styles) */
+        .enhanced-navigation {
+            pointer-events: none !important;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 1000;
         }
 
-        .notification-icon {
-            font-size: 20px;
+        /* Pulse effect for current location */
+        .pulse-circle {
+            animation: pulse 2s infinite;
         }
 
         /* Responsive */
@@ -598,6 +1196,13 @@
             </svg>
         </button>
 
+        <!-- Loading State (initially shown) -->
+        <div class="loading-state" id="loadingState">
+            <div class="loading-spinner"></div>
+            <h3 class="loading-title">Loading Route</h3>
+            <p class="loading-message">Fetching route details...</p>
+        </div>
+
         <!-- Route Panel -->
         <div class="route-panel" id="routePanel" style="display: none;">
             <div class="panel-handle"></div>
@@ -639,21 +1244,7 @@
         </div>
     </div>
 
-    <!-- Add helper functions -->
-    <script>
-        function goBack() {
-            window.location.href = './rider.html';
-        }
-        
-        function toggleRoutePanel() {
-            const panel = document.getElementById('routePanel');
-            if (panel) {
-                panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-            }
-        }
-    </script>
-
-    <!-- Load the enhanced route.js module -->
+    <!-- Enhanced route.js module will handle all the functionality -->
     <script src="./route.js"></script>
 </body>
 </html>
