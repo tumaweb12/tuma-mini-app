@@ -1482,6 +1482,340 @@ const Utils = {
 // ============================================================================
 // ROUTE MODULE - Complete with Dynamic Optimization Algorithm (CONTINUED)
 // ============================================================================
+// ============================================================================
+// ROUTE MODULE - Complete with Dynamic Optimization Algorithm
+// ============================================================================
+
+const RouteModule = {
+    // Initialize route from storage
+    async initialize() {
+        console.log('RouteModule: Initializing...');
+        
+        // Try to load route from various sources
+        let routeData = null;
+        
+        // 1. Check URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const routeId = urlParams.get('id');
+        
+        if (routeId) {
+            console.log(`Loading route by ID: ${routeId}`);
+            // In production, load from API
+            // routeData = await this.loadFromAPI(routeId);
+        }
+        
+        // 2. Check localStorage for active route
+        if (!routeData) {
+            const storedRoute = localStorage.getItem('tuma_active_route');
+            if (storedRoute) {
+                try {
+                    routeData = JSON.parse(storedRoute);
+                    console.log('Loaded route from localStorage');
+                } catch (e) {
+                    console.error('Failed to parse stored route:', e);
+                }
+            }
+        }
+        
+        // 3. Check sessionStorage for claimed route
+        if (!routeData) {
+            const claimedRoute = sessionStorage.getItem('tuma_claimed_route');
+            if (claimedRoute) {
+                try {
+                    routeData = JSON.parse(claimedRoute);
+                    console.log('Loaded route from sessionStorage');
+                } catch (e) {
+                    console.error('Failed to parse claimed route:', e);
+                }
+            }
+        }
+        
+        // 4. Use demo route for development
+        if (!routeData && CONFIG.dev.isDevelopment) {
+            routeData = this.createDemoRoute();
+            console.log('Using demo route for development');
+        }
+        
+        if (!routeData) {
+            console.log('No route data found');
+            return false;
+        }
+        
+        // Process and store route
+        GlobalState.route = this.processRouteData(routeData);
+        
+        // Run dynamic optimization if enabled
+        if (CONFIG.navigation.useDynamicOptimization && GlobalState.route.stops) {
+            this.optimizeRoute();
+        }
+        
+        return true;
+    },
+
+    // Process raw route data
+    processRouteData(routeData) {
+        const processed = {
+            id: routeData.id || routeData.route_id || `route-${Date.now()}`,
+            name: routeData.name || routeData.route_name || 'Delivery Route',
+            status: routeData.status || 'active',
+            stops: [],
+            parcels: routeData.parcels || [],
+            distance: 0,
+            duration: 0,
+            optimized: false
+        };
+        
+        // Process stops
+        if (routeData.stops) {
+            processed.stops = routeData.stops.map(stop => this.processStop(stop));
+        } else if (routeData.parcels) {
+            // Generate stops from parcels
+            processed.stops = this.generateStopsFromParcels(routeData.parcels);
+        }
+        
+        // Restore completion state if available
+        if (routeData.lastUpdated) {
+            processed.lastUpdated = routeData.lastUpdated;
+            if (routeData.parcelsInPossession) {
+                GlobalState.parcels.inPossession = routeData.parcelsInPossession;
+            }
+            if (routeData.cashCollected !== undefined) {
+                GlobalState.parcels.cashCollected = routeData.cashCollected;
+            }
+            if (routeData.paymentsByStop) {
+                GlobalState.parcels.paymentsByStop = routeData.paymentsByStop;
+            }
+        }
+        
+        return processed;
+    },
+
+    // Process individual stop
+    processStop(stop) {
+        return {
+            id: stop.id || `stop-${Date.now()}-${Math.random()}`,
+            type: stop.type || stop.stop_type || 'delivery',
+            parcelId: stop.parcel_id || stop.parcelId,
+            parcelCode: stop.parcel_code || stop.parcelCode || 'N/A',
+            address: stop.address || stop.location_name || 'Unknown Location',
+            location: Utils.parseLocation(stop.location || stop.coordinates),
+            customerName: stop.customer_name || stop.recipient_name || stop.sender_name || 'Customer',
+            customerPhone: stop.customer_phone || stop.recipient_phone || stop.sender_phone || '',
+            specialInstructions: stop.special_instructions || stop.notes || '',
+            verificationCode: stop.verification_code || stop.code || '',
+            paymentMethod: stop.payment_method || 'cash',
+            price: Utils.parsePrice(stop.price || stop.amount || 0),
+            completed: stop.completed || false,
+            timestamp: stop.timestamp || null,
+            canComplete: stop.type === 'pickup' ? true : false,
+            sequenceNumber: stop.sequence_number || stop.order || 0,
+            isEfficientPair: false,
+            allowDynamic: false
+        };
+    },
+
+    // Generate stops from parcels
+    generateStopsFromParcels(parcels) {
+        const stops = [];
+        
+        parcels.forEach((parcel, index) => {
+            // Create pickup stop
+            if (parcel.pickup_location || parcel.sender_location) {
+                stops.push({
+                    id: `pickup-${parcel.id}`,
+                    type: 'pickup',
+                    parcelId: parcel.id,
+                    parcelCode: parcel.parcel_code || parcel.tracking_code || `PKG${index + 1}`,
+                    address: parcel.pickup_address || parcel.sender_address || 'Pickup Location',
+                    location: Utils.parseLocation(parcel.pickup_location || parcel.sender_location),
+                    customerName: parcel.sender_name || 'Sender',
+                    customerPhone: parcel.sender_phone || '',
+                    specialInstructions: parcel.pickup_instructions || '',
+                    verificationCode: parcel.pickup_code || '',
+                    paymentMethod: parcel.payment_method || 'cash',
+                    price: 0,
+                    completed: parcel.pickup_completed || false,
+                    timestamp: parcel.pickup_timestamp || null,
+                    canComplete: true,
+                    sequenceNumber: index * 2
+                });
+            }
+            
+            // Create delivery stop
+            stops.push({
+                id: `delivery-${parcel.id}`,
+                type: 'delivery',
+                parcelId: parcel.id,
+                parcelCode: parcel.parcel_code || parcel.tracking_code || `PKG${index + 1}`,
+                address: parcel.delivery_address || parcel.recipient_address || 'Delivery Location',
+                location: Utils.parseLocation(parcel.delivery_location || parcel.recipient_location),
+                customerName: parcel.recipient_name || 'Recipient',
+                customerPhone: parcel.recipient_phone || '',
+                specialInstructions: parcel.delivery_instructions || '',
+                verificationCode: parcel.delivery_code || '',
+                paymentMethod: parcel.payment_method || 'cash',
+                price: Utils.parsePrice(parcel.price || parcel.total_price || 0),
+                completed: parcel.delivery_completed || false,
+                timestamp: parcel.delivery_timestamp || null,
+                canComplete: false,
+                sequenceNumber: index * 2 + 1
+            });
+        });
+        
+        return stops;
+    },
+
+    // Create demo route for testing
+    createDemoRoute() {
+        return {
+            id: 'demo-route-1',
+            name: 'Demo Delivery Route',
+            status: 'active',
+            parcels: [
+                {
+                    id: 'demo-parcel-1',
+                    parcel_code: 'PKG001',
+                    sender_name: 'Electronics Store',
+                    sender_phone: '0712345678',
+                    pickup_address: 'Westlands, Nairobi',
+                    pickup_location: { lat: -1.2669, lng: 36.8099 },
+                    recipient_name: 'John Doe',
+                    recipient_phone: '0723456789',
+                    delivery_address: 'Kilimani, Nairobi',
+                    delivery_location: { lat: -1.2921, lng: 36.7875 },
+                    price: 1500,
+                    payment_method: 'cash',
+                    pickup_code: 'PICK123',
+                    delivery_code: 'DROP456'
+                },
+                {
+                    id: 'demo-parcel-2',
+                    parcel_code: 'PKG002',
+                    sender_name: 'Fashion Boutique',
+                    sender_phone: '0734567890',
+                    pickup_address: 'Karen, Nairobi',
+                    pickup_location: { lat: -1.3167, lng: 36.7000 },
+                    recipient_name: 'Jane Smith',
+                    recipient_phone: '0745678901',
+                    delivery_address: 'Lavington, Nairobi',
+                    delivery_location: { lat: -1.2833, lng: 36.7667 },
+                    price: 2000,
+                    payment_method: 'online',
+                    pickup_code: 'PICK789',
+                    delivery_code: 'DROP012'
+                }
+            ]
+        };
+    },
+
+    // Optimize route using dynamic algorithm
+    optimizeRoute() {
+        if (!GlobalState.route?.stops) return;
+        
+        console.log('Optimizing route for efficiency...');
+        
+        const stops = [...GlobalState.route.stops];
+        const completed = stops.filter(s => s.completed);
+        const pending = stops.filter(s => !s.completed);
+        
+        if (pending.length === 0) return;
+        
+        // Group pickups and deliveries
+        const pickups = pending.filter(s => s.type === 'pickup');
+        const deliveries = pending.filter(s => s.type === 'delivery');
+        
+        // Find efficient pickup-delivery pairs (close to each other)
+        const efficientPairs = [];
+        
+        pickups.forEach(pickup => {
+            const correspondingDelivery = deliveries.find(d => d.parcelId === pickup.parcelId);
+            if (correspondingDelivery) {
+                const distance = Utils.calculateDistance(pickup.location, correspondingDelivery.location);
+                if (distance < 2) { // Less than 2km
+                    pickup.isEfficientPair = true;
+                    correspondingDelivery.isEfficientPair = true;
+                    correspondingDelivery.canComplete = true; // Allow immediate delivery
+                    correspondingDelivery.allowDynamic = true;
+                    efficientPairs.push({ pickup, delivery: correspondingDelivery, distance });
+                }
+            }
+        });
+        
+        // Sort pairs by distance (shortest first)
+        efficientPairs.sort((a, b) => a.distance - b.distance);
+        
+        console.log(`Found ${efficientPairs.length} efficient pickup-delivery pairs`);
+        
+        // Create optimized sequence
+        const optimizedSequence = [...completed];
+        const processedStops = new Set(completed.map(s => s.id));
+        
+        // Add efficient pairs first
+        efficientPairs.forEach(pair => {
+            if (!processedStops.has(pair.pickup.id)) {
+                optimizedSequence.push(pair.pickup);
+                processedStops.add(pair.pickup.id);
+            }
+            if (!processedStops.has(pair.delivery.id)) {
+                optimizedSequence.push(pair.delivery);
+                processedStops.add(pair.delivery.id);
+            }
+        });
+        
+        // Add remaining pickups
+        pickups.forEach(pickup => {
+            if (!processedStops.has(pickup.id)) {
+                optimizedSequence.push(pickup);
+                processedStops.add(pickup.id);
+            }
+        });
+        
+        // Add remaining deliveries
+        deliveries.forEach(delivery => {
+            if (!processedStops.has(delivery.id)) {
+                optimizedSequence.push(delivery);
+                processedStops.add(delivery.id);
+            }
+        });
+        
+        // Store optimized sequence
+        GlobalState.optimizedSequence = optimizedSequence;
+        GlobalState.route.optimized = true;
+        
+        console.log('Route optimization complete');
+    },
+
+    // Get next stop
+    getNextStop() {
+        if (!GlobalState.route?.stops) return null;
+        
+        // Use optimized sequence if available
+        const sequence = GlobalState.optimizedSequence || GlobalState.route.stops;
+        
+        // Find first incomplete stop that can be completed
+        return sequence.find(stop => 
+            !stop.completed && this.canCompleteStop(stop)
+        );
+    },
+
+    // Check if stop can be completed
+    canCompleteStop(stop) {
+        if (!stop || stop.completed) return false;
+        
+        // Pickups can always be completed
+        if (stop.type === 'pickup') return true;
+        
+        // Check if delivery has dynamic flag
+        if (stop.allowDynamic) return true;
+        
+        // For deliveries, check if pickup was completed
+        const pickupStop = GlobalState.route.stops.find(s => 
+            s.type === 'pickup' && 
+            s.parcelId === stop.parcelId
+        );
+        
+        return pickupStop && pickupStop.completed;
+    },
 
     // Mark stop as completed (continued from where it cut off)
     completeStop(stopId) {
