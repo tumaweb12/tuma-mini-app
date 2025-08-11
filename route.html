@@ -5,140 +5,478 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Tuma - Route Navigation</title>
     
     <!-- Leaflet CSS -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" 
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" 
+          crossorigin=""/>
     
     <style>
-        body {
+        * {
             margin: 0;
             padding: 0;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: #0A0A0B;
-            color: white;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
         }
-        
+
+        :root {
+            --primary: #0066FF;
+            --primary-dark: #0052CC;
+            --success: #34C759;
+            --warning: #FF9F0A;
+            --danger: #FF3B30;
+            --surface: #1C1C1E;
+            --surface-elevated: #2C2C2E;
+            --surface-high: #3A3A3C;
+            --text-primary: #FFFFFF;
+            --text-secondary: #8E8E93;
+            --text-tertiary: #636366;
+            --border: #48484A;
+            --safe-area-bottom: env(safe-area-inset-bottom);
+        }
+
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+            background: #0A0A0B;
+            color: var(--text-primary);
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        /* Map Container - Critical */
+        .map-container {
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            z-index: 1 !important;
+        }
+
         #map {
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            z-index: 1 !important;
+        }
+
+        .leaflet-container {
+            background: #f0f0f0 !important;
+            font-family: inherit;
+        }
+
+        .leaflet-control-attribution {
+            display: none !important;
+        }
+
+        /* Loading State */
+        .loading-container {
             position: fixed;
             top: 0;
             left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 1;
+            right: 0;
+            bottom: 0;
+            background: #0A0A0B;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            transition: opacity 0.3s ease;
         }
-        
-        .loading {
+
+        .loading-spinner {
+            width: 60px;
+            height: 60px;
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-top-color: #0066FF;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            font-size: 18px;
+            color: rgba(255, 255, 255, 0.8);
+            font-weight: 600;
+        }
+
+        /* Route Panel */
+        .route-panel {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(to top, rgba(28, 28, 30, 0.98), rgba(28, 28, 30, 0.95));
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 24px 24px 0 0;
+            padding: 20px;
+            padding-bottom: calc(20px + var(--safe-area-bottom));
+            max-height: 70vh;
+            overflow-y: auto;
+            z-index: 100;
+            transform: translateY(0);
+            transition: transform 0.3s ease, height 0.3s ease;
+            box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .panel-handle {
+            width: 40px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 2px;
+            margin: 0 auto 16px auto;
+            cursor: grab;
+        }
+
+        .route-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .route-header h2 {
+            font-size: 24px;
+            font-weight: 700;
+            margin: 0;
+        }
+
+        .route-badge {
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .route-badge.verify-btn {
+            background: linear-gradient(135deg, #0066FF, #0052cc);
+            color: white;
+        }
+
+        .route-badge.verify-btn.pickup {
+            background: linear-gradient(135deg, #FF9F0A, #ff8c00);
+            color: black;
+        }
+
+        .route-badge.verify-btn.delivery {
+            background: linear-gradient(135deg, #0066FF, #0052cc);
+            color: white;
+        }
+
+        .route-badge.completed {
+            background: linear-gradient(135deg, #34C759, #30d158);
+            color: white;
+            cursor: default;
+        }
+
+        .route-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin-bottom: 24px;
+            padding: 16px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+        }
+
+        .route-stats .stat {
+            text-align: center;
+        }
+
+        .stat-label {
+            display: block;
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.6);
+            margin-bottom: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .stat-value {
+            display: block;
+            font-size: 20px;
+            font-weight: 700;
+            color: #0066FF;
+        }
+
+        .stops-list {
+            max-height: 400px;
+            overflow-y: auto;
+            padding-right: 8px;
+        }
+
+        /* Navigation Controls */
+        .nav-controls {
+            position: fixed;
+            bottom: calc(20px + var(--safe-area-bottom));
+            right: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            z-index: 99;
+        }
+
+        .nav-button {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: rgba(28, 28, 30, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 20px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+        }
+
+        .nav-button.primary {
+            background: linear-gradient(135deg, #0066FF, #0052cc);
+            border: none;
+        }
+
+        .nav-button.secondary {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .nav-button:hover {
+            transform: scale(1.05);
+        }
+
+        .nav-button:active {
+            transform: scale(0.95);
+        }
+
+        .nav-button span {
+            display: block;
+        }
+
+        .nav-button span:last-child {
+            font-size: 10px;
+            margin-top: 2px;
+        }
+
+        /* Empty State */
+        .empty-content {
             position: fixed;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
             text-align: center;
-            z-index: 1000;
-            background: #0A0A0B;
-            padding: 20px;
-            border-radius: 10px;
-        }
-        
-        .error {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: #FF3B30;
-            color: white;
-            padding: 15px;
-            border-radius: 8px;
+            z-index: 100;
+            padding: 40px;
+            background: var(--surface-elevated);
+            border-radius: 20px;
             max-width: 300px;
-            z-index: 1000;
         }
+
+        .empty-icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+        }
+
+        .empty-content h2 {
+            margin-bottom: 12px;
+            color: var(--text-primary);
+        }
+
+        .empty-content p {
+            color: var(--text-secondary);
+            margin-bottom: 24px;
+        }
+
+        .empty-content button {
+            padding: 12px 24px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        /* Error State */
+        .error-content {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            z-index: 100;
+            padding: 40px;
+            background: var(--surface-elevated);
+            border-radius: 20px;
+            max-width: 400px;
+        }
+
+        .error-icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+        }
+
+        .error-content h2 {
+            margin-bottom: 12px;
+            color: var(--text-primary);
+        }
+
+        .error-content p {
+            color: var(--text-secondary);
+            margin-bottom: 24px;
+        }
+
+        .error-content button {
+            padding: 12px 24px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin: 0 6px;
+        }
+
+        /* Stop Cards - Will be styled by route.js */
+        .stop-card {
+            background: var(--surface-high);
+            border-radius: 14px;
+            padding: 16px;
+            display: flex;
+            align-items: stretch;
+            gap: 12px;
+            border: 1px solid var(--border);
+            transition: all 0.3s;
+            margin-bottom: 12px;
+        }
+
+        /* Ensure proper z-index hierarchy */
+        #map { z-index: 1 !important; }
+        .leaflet-popup { z-index: 700 !important; }
+        .route-panel { z-index: 1000 !important; }
+        .nav-controls { z-index: 999 !important; }
+        .notification { z-index: 10000 !important; }
+        .verification-modal { z-index: 10001 !important; }
     </style>
 </head>
 <body>
-    <div id="map"></div>
-    <div id="loading" class="loading">Loading Route...</div>
+    <!-- Loading State -->
+    <div id="loadingContainer" class="loading-container">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Loading Route...</div>
+    </div>
+    
+    <!-- Map Container -->
+    <div class="map-container">
+        <div id="map"></div>
+    </div>
+    
+    <!-- These elements will be populated by route.js but need to exist in the DOM -->
+    <div id="routePanel" class="route-panel" style="display: none;"></div>
+    <div id="navControls" class="nav-controls" style="display: none;"></div>
+    <div id="emptyState" class="empty-content" style="display: none;"></div>
     
     <!-- Leaflet JS -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" 
+            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" 
+            crossorigin=""></script>
     
-    <!-- Debug script to check what's happening -->
+    <!-- Your route.js module -->
+    <script src="./route.js"></script>
+    
+    <!-- Fix Script to ensure UI shows -->
     <script>
-        console.log('🔍 Starting route.html initialization...');
-        
-        // Check if Leaflet loaded
-        window.addEventListener('DOMContentLoaded', function() {
-            console.log('✅ DOM loaded');
-            console.log('📦 Leaflet available:', typeof L !== 'undefined');
+        // Hide loading and show UI after initialization
+        window.addEventListener('load', function() {
+            console.log('Page loaded, waiting for route module...');
             
-            // Try to load route.js with error handling
-            const script = document.createElement('script');
-            script.src = './route.js';
-            script.onload = function() {
-                console.log('✅ route.js loaded successfully');
-                
-                // Check what's available
-                console.log('🔍 Checking available objects:');
-                console.log('- window.TumaRouteNavigation:', typeof window.TumaRouteNavigation);
-                console.log('- window.initializeRouteNavigation:', typeof window.initializeRouteNavigation);
-                console.log('- window.RouteModule:', typeof window.RouteModule);
-                console.log('- window.GlobalState:', typeof window.GlobalState);
-                console.log('- window.CONFIG:', typeof window.CONFIG);
-                
-                // Try to initialize
-                if (typeof window.initializeRouteNavigation === 'function') {
-                    console.log('🚀 Calling initializeRouteNavigation()...');
-                    try {
-                        window.initializeRouteNavigation();
-                    } catch (e) {
-                        console.error('❌ Error initializing:', e);
-                        showError(e.message);
-                    }
-                } else if (window.TumaRouteNavigation && typeof window.TumaRouteNavigation.initialize === 'function') {
-                    console.log('🚀 Calling TumaRouteNavigation.initialize()...');
-                    try {
-                        window.TumaRouteNavigation.initialize();
-                    } catch (e) {
-                        console.error('❌ Error initializing:', e);
-                        showError(e.message);
-                    }
-                } else {
-                    console.error('❌ No initialization function found!');
-                    showError('Route module not properly loaded');
+            setTimeout(function() {
+                // Hide loading screen
+                const loader = document.getElementById('loadingContainer');
+                if (loader) {
+                    loader.style.opacity = '0';
+                    setTimeout(function() {
+                        loader.style.display = 'none';
+                    }, 300);
                 }
                 
-                // Hide loading after a bit
-                setTimeout(() => {
-                    document.getElementById('loading').style.display = 'none';
-                }, 1000);
-            };
-            
-            script.onerror = function(e) {
-                console.error('❌ Failed to load route.js:', e);
-                showError('Failed to load route.js - check file path');
-            };
-            
-            document.head.appendChild(script);
+                // Force show UI elements if route exists
+                if (window.GlobalState && GlobalState.route) {
+                    console.log('Route found, showing UI...');
+                    
+                    const routePanel = document.getElementById('routePanel');
+                    if (routePanel) {
+                        routePanel.style.display = 'block';
+                        console.log('Route panel shown');
+                    }
+                    
+                    const navControls = document.getElementById('navControls');
+                    if (navControls) {
+                        navControls.style.display = 'flex';
+                        console.log('Navigation controls shown');
+                    }
+                    
+                    // Hide empty state
+                    const emptyState = document.getElementById('emptyState');
+                    if (emptyState) {
+                        emptyState.style.display = 'none';
+                    }
+                } else {
+                    console.log('No route found, showing empty state');
+                    
+                    // Show empty state
+                    const emptyState = document.getElementById('emptyState');
+                    if (emptyState) {
+                        emptyState.style.display = 'block';
+                        emptyState.innerHTML = `
+                            <div class="empty-icon">📦</div>
+                            <h2>No Active Route</h2>
+                            <p>You don't have any active deliveries</p>
+                            <button onclick="window.location.href='./rider.html'">
+                                Back to Dashboard
+                            </button>
+                        `;
+                    }
+                }
+                
+                // Refresh map size
+                if (window.GlobalState && GlobalState.map) {
+                    GlobalState.map.invalidateSize();
+                }
+            }, 2000);
         });
         
-        function showError(message) {
-            const errorDiv = document.createElement('div');
-            errorDiv.className = 'error';
-            errorDiv.innerHTML = `
-                <strong>Error:</strong> ${message}<br>
-                <small>Check console for details</small>
-            `;
-            document.body.appendChild(errorDiv);
-            
-            // Hide loading
-            const loading = document.getElementById('loading');
-            if (loading) loading.style.display = 'none';
-        }
-        
-        // Catch any global errors
+        // Error handler
         window.addEventListener('error', function(e) {
-            console.error('🔴 Global error caught:', e);
-            if (e.filename && e.filename.includes('route.js')) {
-                showError(`Syntax error in route.js at line ${e.lineno}: ${e.message}`);
-            }
+            console.error('Global error:', e);
         });
     </script>
 </body>
