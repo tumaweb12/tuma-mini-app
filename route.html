@@ -170,6 +170,12 @@
             cursor: default;
         }
 
+        .route-badge.verify-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
         /* Navigation Bar */
         .route-navigation-bar {
             position: fixed;
@@ -293,13 +299,6 @@
         }
 
         /* Enhanced Route Stats */
-        .route-stats {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 12px;
-            margin-bottom: 20px;
-        }
-
         .stat-box {
             background: var(--surface-high);
             border-radius: 12px;
@@ -314,18 +313,6 @@
             transform: translateY(-2px);
         }
 
-        .stat-value {
-            font-size: 20px;
-            font-weight: 700;
-            color: var(--primary);
-            margin-bottom: 4px;
-        }
-
-        .stat-label {
-            font-size: 12px;
-            color: var(--text-secondary);
-        }
-
         /* Cash Widget Container */
         #cashWidgetContainer {
             margin-bottom: 16px;
@@ -338,6 +325,35 @@
         .cash-collection-widget.has-pending {
             border-color: var(--warning);
             box-shadow: 0 0 20px rgba(255, 159, 10, 0.2);
+        }
+
+        .cash-widget-container {
+            padding: 16px;
+            background: linear-gradient(135deg, rgba(255, 159, 10, 0.2), rgba(255, 149, 0, 0.1));
+            border: 2px solid var(--warning);
+            border-radius: 12px;
+        }
+
+        .cash-widget-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .cash-widget-icon {
+            font-size: 24px;
+        }
+
+        .cash-widget-title {
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .cash-widget-content {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
         }
 
         /* Enhanced Stops List */
@@ -1146,8 +1162,34 @@
             max-height: calc(80vh - 80px);
         }
 
+        .close-btn {
+            background: none;
+            border: none;
+            color: var(--text-primary);
+            font-size: 24px;
+            cursor: pointer;
+            padding: 0;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: background 0.2s;
+        }
+
+        .close-btn:hover {
+            background: var(--surface-high);
+        }
+
         .route-summary {
             margin-bottom: 20px;
+        }
+
+        .route-summary h3 {
+            margin: 0 0 12px 0;
+            font-size: 20px;
+            color: var(--text-primary);
         }
 
         .summary-stats {
@@ -1155,6 +1197,25 @@
             grid-template-columns: repeat(3, 1fr);
             gap: 12px;
             margin-top: 12px;
+        }
+
+        .summary-stats .stat {
+            background: var(--surface-high);
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .summary-stats .label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+        }
+
+        .summary-stats .value {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--primary);
         }
 
         .stops-timeline {
@@ -1259,6 +1320,43 @@
             text-align: center;
             max-width: 400px;
             animation: slideUp 0.4s ease;
+        }
+
+        .route-complete-content h1 {
+            margin: 20px 0;
+            font-size: 28px;
+            color: var(--text-primary);
+        }
+
+        .route-complete-content p {
+            margin: 16px 0;
+            color: var(--text-secondary);
+            font-size: 16px;
+        }
+
+        .route-stats {
+            display: flex;
+            justify-content: space-around;
+            margin: 32px 0;
+            padding: 20px;
+            background: var(--surface-high);
+            border-radius: 16px;
+        }
+
+        .route-stats .stat {
+            text-align: center;
+        }
+
+        .route-stats .stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 4px;
+        }
+
+        .route-stats .stat-label {
+            font-size: 14px;
+            color: var(--text-secondary);
         }
         
         .complete-icon {
@@ -1521,6 +1619,37 @@
             }
         }
 
+        /* Loading State */
+        .loading-container {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            z-index: 100;
+        }
+
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 3px solid var(--border);
+            border-top: 3px solid var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            color: var(--text-primary);
+            font-size: 18px;
+            font-weight: 600;
+        }
+
         /* Responsive adjustments */
         @media (max-width: 380px) {
             .modal-content {
@@ -1539,6 +1668,19 @@
             .verification-input {
                 font-size: 20px;
                 letter-spacing: 1px;
+            }
+
+            .route-navigation-bar {
+                padding: 12px 16px;
+            }
+
+            #routeTitle {
+                font-size: 16px;
+            }
+
+            .route-badge {
+                font-size: 11px;
+                padding: 4px 8px;
             }
         }
 
@@ -1565,6 +1707,35 @@
             .navigation-panel,
             .tracking-indicator {
                 display: none !important;
+            }
+        }
+
+        /* Ensure all interactive elements are accessible */
+        button:focus,
+        .nav-button:focus,
+        .action-btn:focus,
+        .modal-btn:focus {
+            outline: 2px solid var(--primary);
+            outline-offset: 2px;
+        }
+
+        /* High contrast mode support */
+        @media (prefers-contrast: high) {
+            :root {
+                --primary: #0080FF;
+                --border: #666;
+                --text-secondary: #AAA;
+            }
+        }
+
+        /* Reduce motion for accessibility */
+        @media (prefers-reduced-motion: reduce) {
+            *,
+            *::before,
+            *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
             }
         }
     </style>
@@ -1662,6 +1833,6 @@
     </div>
 
     <!-- Enhanced route.js module will handle all the functionality -->
-    <script src="./route.js"></script>
+    <script src="./route.js" defer></script>
 </body>
 </html>
