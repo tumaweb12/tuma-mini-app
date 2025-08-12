@@ -747,60 +747,9 @@
             transform: scale(0.95);
         }
 
-        /* Custom Scrollbar */
-        .panel-content::-webkit-scrollbar {
-            width: 6px;
-        }
-
-        .panel-content::-webkit-scrollbar-track {
-            background: var(--glass);
-            border-radius: 3px;
-        }
-
-        .panel-content::-webkit-scrollbar-thumb {
-            background: var(--glass-border);
-            border-radius: 3px;
-        }
-
-        /* Vendor Info Card */
-        .vendor-info {
-            background: var(--glass);
-            backdrop-filter: blur(10px);
-            border: 1px solid var(--glass-border);
-            border-radius: 12px;
-            padding: 12px;
-            margin-bottom: 16px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .vendor-avatar {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, var(--primary), var(--purple));
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: 700;
-            font-size: 18px;
-        }
-
-        .vendor-details {
-            flex: 1;
-        }
-
-        .vendor-name {
-            font-size: 14px;
-            font-weight: 600;
-            color: var(--text-primary);
-        }
-
-        .vendor-phone {
-            font-size: 13px;
-            color: var(--text-secondary);
+        .verify-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
         }
 
         /* Loading Overlay */
@@ -854,6 +803,109 @@
             filter: brightness(0.6) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3) brightness(0.7);
         }
 
+        /* Custom Scrollbar */
+        .panel-content::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .panel-content::-webkit-scrollbar-track {
+            background: var(--glass);
+            border-radius: 3px;
+        }
+
+        .panel-content::-webkit-scrollbar-thumb {
+            background: var(--glass-border);
+            border-radius: 3px;
+        }
+
+        /* Vendor Info Card */
+        .vendor-info {
+            background: var(--glass);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            padding: 12px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .vendor-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary), var(--purple));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 700;
+            font-size: 18px;
+        }
+
+        .vendor-details {
+            flex: 1;
+        }
+
+        .vendor-name {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .vendor-phone {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        /* Empty State */
+        .empty-state {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            padding: 40px;
+            background: var(--glass);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            z-index: 100;
+            box-shadow: var(--shadow-xl);
+        }
+
+        .empty-icon {
+            font-size: 72px;
+            margin-bottom: 20px;
+            filter: grayscale(0.5);
+        }
+
+        .empty-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+        }
+
+        .empty-message {
+            color: var(--text-secondary);
+            margin-bottom: 24px;
+        }
+
+        .empty-action {
+            padding: 14px 28px;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+            border: none;
+            border-radius: 16px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 20px rgba(0, 102, 255, 0.3);
+        }
+
         /* Responsive */
         @media (min-width: 428px) {
             .cash-widget {
@@ -876,325 +928,26 @@
         <div id="map"></div>
     </div>
     
-    <!-- Top Header -->
-    <div class="top-header">
-        <div class="header-content">
-            <button class="back-button" onclick="goBack()">
-                ←
-            </button>
-            <div class="route-info-header">
-                <div class="route-title">Toi Main Market → City Market</div>
-                <div class="route-stats-bar">
-                    <div class="stat-item">
-                        <span class="stat-value">2</span>
-                        <span>stops</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-value">KES 225</span>
-                        <span>cash</span>
-                    </div>
-                </div>
-            </div>
-            <button class="verify-button pickup" onclick="verifyPickup()">
-                ✓ Verify Pickup
-            </button>
-            <button class="theme-toggle" onclick="toggleTheme()">
-                🌓
-            </button>
-        </div>
-    </div>
-    
-    <!-- Cash Collection Widget -->
-    <div class="cash-widget">
-        <div class="cash-header">
-            <div class="cash-title">
-                💰 Cash Collection
-            </div>
-        </div>
-        <div class="cash-stats">
-            <div class="cash-stat">
-                <span class="label">Total</span>
-                <span class="value">KES 225</span>
-            </div>
-            <div class="cash-stat">
-                <span class="label">Collected</span>
-                <span class="value">KES 0</span>
-            </div>
-            <div class="cash-stat">
-                <span class="label">Pending</span>
-                <span class="value">KES 225</span>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Toggle Details Button -->
-    <button class="toggle-details-btn" onclick="toggleRoutePanel()">
-        📋 Route Details
-    </button>
-    
-    <!-- Bottom Navigation Bar -->
-    <div class="bottom-nav" id="bottomNav">
-        <div class="nav-actions">
-            <button class="nav-button secondary" onclick="toggleRoutePanel()">
-                📋 Details
-            </button>
-            <button class="nav-button primary" onclick="startNavigation()">
-                🧭 Start Navigation
-            </button>
-        </div>
-    </div>
-    
-    <!-- Route Details Panel -->
-    <div class="route-panel hidden" id="routePanel">
-        <div class="panel-handle" id="panelHandle"></div>
-        <div class="panel-header">
-            <div class="panel-title">Route Details</div>
-        </div>
-        <div class="panel-content">
-            <!-- Pickup Stop -->
-            <div class="stop-card active">
-                <div class="stop-indicator pickup">P</div>
-                <div class="stop-details">
-                    <span class="stop-type pickup">PICKUP</span>
-                    <div class="stop-address">Toi Main Market</div>
-                    <div class="vendor-info">
-                        <div class="vendor-avatar">JD</div>
-                        <div class="vendor-details">
-                            <div class="vendor-name">John Doe Electronics</div>
-                            <div class="vendor-phone">0712345678</div>
-                        </div>
-                    </div>
-                    <div class="stop-info">
-                        <div class="info-row">
-                            <span>📦</span>
-                            <span>Parcel Code: PKG-2024-001</span>
-                        </div>
-                        <div class="info-row">
-                            <span>📱</span>
-                            <span>Small package</span>
-                        </div>
-                    </div>
-                </div>
-                <div class="stop-actions">
-                    <button class="action-btn" onclick="navigate()">🧭</button>
-                    <a href="tel:0712345678" class="action-btn">📞</a>
-                </div>
-            </div>
-            
-            <!-- Delivery Stop -->
-            <div class="stop-card">
-                <div class="stop-indicator delivery">D</div>
-                <div class="stop-details">
-                    <span class="stop-type delivery">DELIVERY</span>
-                    <div class="stop-address">City Market, Nairobi</div>
-                    <div class="stop-info">
-                        <div class="info-row">
-                            <span>👤</span>
-                            <span>Jane Smith</span>
-                        </div>
-                        <div class="info-row">
-                            <span>📞</span>
-                            <span>0798765432</span>
-                        </div>
-                        <div class="info-row">
-                            <span>📝</span>
-                            <span>Near main entrance</span>
-                        </div>
-                    </div>
-                    <div class="payment-badge">
-                        <span>💵</span>
-                        <span>COLLECT: KES 225</span>
-                    </div>
-                </div>
-                <div class="stop-actions">
-                    <button class="action-btn" onclick="navigate()">🧭</button>
-                    <a href="tel:0798765432" class="action-btn">📞</a>
-                </div>
-            </div>
-        </div>
-    </div>
+    <!-- UI elements will be dynamically created by route.js -->
     
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" 
             integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" 
             crossorigin=""></script>
     
+    <!-- Load the complete route.js module from your paste.txt -->
+    <script src="./route.js"></script>
+    
+    <!-- Initialize the route navigation -->
     <script>
-        // Initialize map
-        let map;
-        let isDarkMode = true;
-        let routePanelVisible = false;
+        // The route.js module will handle everything
+        console.log('Premium Route Navigation HTML loaded');
+        console.log('Waiting for route.js to initialize...');
         
-        function initMap() {
-            // Hide loading overlay
-            document.getElementById('loadingOverlay').style.display = 'none';
-            
-            // Initialize map centered on Nairobi
-            map = L.map('map').setView([-1.2921, 36.8219], 13);
-            
-            // Add tile layer
-            updateMapTiles();
-            
-            // Add markers for stops
-            const pickupIcon = L.divIcon({
-                className: 'custom-marker',
-                html: '<div style="background: linear-gradient(135deg, #FF9F0A, #ff8c00); color: white; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 18px; box-shadow: 0 4px 12px rgba(255,159,10,0.5);">P</div>',
-                iconSize: [40, 40],
-                iconAnchor: [20, 20]
-            });
-            
-            const deliveryIcon = L.divIcon({
-                className: 'custom-marker',
-                html: '<div style="background: linear-gradient(135deg, #0066FF, #0052CC); color: white; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 18px; box-shadow: 0 4px 12px rgba(0,102,255,0.5);">D</div>',
-                iconSize: [40, 40],
-                iconAnchor: [20, 20]
-            });
-            
-            // Add markers
-            L.marker([-1.3121, 36.7845], {icon: pickupIcon})
-                .addTo(map)
-                .bindPopup('<b>Pickup</b><br>Toi Main Market');
-            
-            L.marker([-1.2851, 36.8260], {icon: deliveryIcon})
-                .addTo(map)
-                .bindPopup('<b>Delivery</b><br>City Market');
-            
-            // Draw route line
-            const routeCoords = [
-                [-1.3121, 36.7845],
-                [-1.3080, 36.7920],
-                [-1.3020, 36.8010],
-                [-1.2950, 36.8120],
-                [-1.2900, 36.8200],
-                [-1.2851, 36.8260]
-            ];
-            
-            L.polyline(routeCoords, {
-                color: '#0066FF',
-                weight: 4,
-                opacity: 0.8,
-                smoothFactor: 1
-            }).addTo(map);
-            
-            // Fit bounds to show entire route
-            const bounds = L.latLngBounds(routeCoords);
-            map.fitBounds(bounds, { padding: [50, 50] });
-        }
-        
-        function updateMapTiles() {
-            // Remove existing tile layers
-            map.eachLayer(layer => {
-                if (layer instanceof L.TileLayer) {
-                    map.removeLayer(layer);
-                }
-            });
-            
-            // Add appropriate tile layer based on theme
-            if (isDarkMode) {
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                    maxZoom: 19,
-                    attribution: '© OpenStreetMap'
-                }).addTo(map);
-            } else {
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                    maxZoom: 19,
-                    attribution: '© OpenStreetMap'
-                }).addTo(map);
-            }
-        }
-        
-        function toggleTheme() {
-            isDarkMode = !isDarkMode;
-            document.body.classList.toggle('light-mode');
-            
-            if (map) {
-                updateMapTiles();
-            }
-        }
-        
-        function toggleRoutePanel() {
-            const panel = document.getElementById('routePanel');
-            const bottomNav = document.getElementById('bottomNav');
-            
-            routePanelVisible = !routePanelVisible;
-            
-            if (routePanelVisible) {
-                panel.classList.remove('hidden');
-                bottomNav.classList.add('hidden');
-                setTimeout(() => {
-                    panel.classList.add('expanded');
-                }, 10);
-            } else {
-                panel.classList.remove('expanded');
-                bottomNav.classList.remove('hidden');
-                setTimeout(() => {
-                    panel.classList.add('hidden');
-                }, 300);
-            }
-        }
-        
-        function startNavigation() {
-            alert('Starting navigation...');
-            // Implement navigation logic here
-        }
-        
-        function verifyPickup() {
-            alert('Opening verification modal...');
-            // Implement verification logic here
-        }
-        
-        function navigate() {
-            alert('Opening navigation to stop...');
-            // Implement navigation to specific stop
-        }
-        
-        function goBack() {
-            window.history.back();
-        }
-        
-        // Panel drag handling
-        document.addEventListener('DOMContentLoaded', () => {
-            initMap();
-            
-            const panel = document.getElementById('routePanel');
-            const handle = document.getElementById('panelHandle');
-            let isDragging = false;
-            let startY = 0;
-            let currentY = 0;
-            let panelHeight = 0;
-            
-            handle.addEventListener('touchstart', startDrag, { passive: true });
-            handle.addEventListener('mousedown', startDrag);
-            
-            function startDrag(e) {
-                isDragging = true;
-                startY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
-                panelHeight = panel.offsetHeight;
-            }
-            
-            document.addEventListener('touchmove', drag, { passive: false });
-            document.addEventListener('mousemove', drag);
-            
-            function drag(e) {
-                if (!isDragging) return;
-                e.preventDefault();
-                
-                currentY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
-                const deltaY = startY - currentY;
-                const newHeight = Math.max(60, Math.min(window.innerHeight * 0.7, panelHeight + deltaY));
-                
-                if (newHeight < 200) {
-                    panel.classList.remove('expanded');
-                } else {
-                    panel.classList.add('expanded');
-                }
-            }
-            
-            document.addEventListener('touchend', stopDrag);
-            document.addEventListener('mouseup', stopDrag);
-            
-            function stopDrag() {
-                isDragging = false;
+        // Export debug interface for testing
+        window.addEventListener('load', () => {
+            if (window.RouteDebug) {
+                console.log('✅ Route system ready. Debug available at window.RouteDebug');
             }
         });
     </script>
