@@ -6,7 +6,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>Tuma - Route Navigation</title>
+    <title>Tuma - Premium Route Navigation</title>
     
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" 
@@ -34,11 +34,12 @@
             --purple: #9B59B6;
             --purple-light: rgba(155, 89, 182, 0.1);
             
-            --surface: #1C1C1E;
-            --surface-elevated: rgba(44, 44, 46, 0.95);
-            --surface-high: rgba(58, 58, 60, 0.95);
+            --surface: #0A0A0B;
+            --surface-elevated: rgba(20, 20, 22, 0.95);
+            --surface-high: rgba(28, 28, 31, 0.95);
             --glass: rgba(255, 255, 255, 0.05);
             --glass-border: rgba(255, 255, 255, 0.1);
+            --glass-heavy: rgba(10, 10, 11, 0.85);
             
             --text-primary: #FFFFFF;
             --text-secondary: rgba(255, 255, 255, 0.7);
@@ -54,11 +55,22 @@
             --shadow-xl: 0 20px 60px rgba(0, 0, 0, 0.5);
         }
 
+        /* Light Mode Theme */
+        body.light-mode {
+            --surface: #F5F5F7;
+            --surface-elevated: rgba(255, 255, 255, 0.95);
+            --surface-high: rgba(255, 255, 255, 0.98);
+            --glass: rgba(0, 0, 0, 0.03);
+            --glass-border: rgba(0, 0, 0, 0.1);
+            --glass-heavy: rgba(255, 255, 255, 0.9);
+            --text-primary: #1C1C1E;
+            --text-secondary: rgba(0, 0, 0, 0.6);
+            --text-tertiary: rgba(0, 0, 0, 0.4);
+            --border: rgba(0, 0, 0, 0.1);
+        }
+
         html, body {
             height: 100%;
-            margin: 0;
-            padding: 0;
-            overflow: hidden;
             font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
             background: #000;
             color: var(--text-primary);
@@ -66,6 +78,7 @@
             width: 100%;
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
+            overflow: hidden;
         }
 
         /* Map Container */
@@ -84,80 +97,16 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: #0A0A0B;
+            background: var(--surface);
         }
 
         .leaflet-container {
-            background: #0A0A0B !important;
+            background: var(--surface) !important;
             font-family: inherit;
         }
 
         .leaflet-control-attribution {
             display: none !important;
-        }
-
-        /* Loading Overlay */
-        .loading-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: linear-gradient(135deg, #0A0A0B 0%, #1a1a2e 100%);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            z-index: 10000;
-            transition: opacity 0.5s ease;
-        }
-
-        .loading-content {
-            text-align: center;
-        }
-
-        .loading-logo {
-            width: 80px;
-            height: 80px;
-            margin: 0 auto 24px;
-            background: linear-gradient(135deg, var(--primary), var(--purple));
-            border-radius: 20px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 36px;
-            animation: logoFloat 3s ease-in-out infinite;
-        }
-
-        @keyframes logoFloat {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-10px); }
-        }
-
-        .loading-spinner {
-            width: 60px;
-            height: 60px;
-            border: 3px solid var(--glass-border);
-            border-top-color: var(--primary);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 20px;
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        .loading-text {
-            font-size: 18px;
-            font-weight: 600;
-            color: var(--text-primary);
-            margin-bottom: 8px;
-        }
-
-        .loading-subtext {
-            font-size: 14px;
-            color: var(--text-secondary);
         }
 
         /* Top Header */
@@ -166,16 +115,13 @@
             top: 0;
             left: 0;
             right: 0;
-            background: linear-gradient(to bottom, 
-                rgba(10, 10, 11, 0.98) 0%,
-                rgba(10, 10, 11, 0.9) 50%,
-                rgba(10, 10, 11, 0) 100%
-            );
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
+            background: var(--glass-heavy);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
             z-index: 100;
             padding: 12px 16px;
             padding-top: calc(12px + var(--safe-area-top));
+            border-bottom: 1px solid var(--border);
         }
 
         .header-content {
@@ -189,18 +135,19 @@
             height: 40px;
             border-radius: 50%;
             background: var(--glass);
+            backdrop-filter: blur(10px);
             border: 1px solid var(--glass-border);
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            transition: all 0.3s ease;
+            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
             color: var(--text-primary);
-            border: none;
         }
 
         .back-button:active {
             transform: scale(0.95);
+            background: var(--primary);
         }
 
         .route-info-header {
@@ -209,19 +156,17 @@
         }
 
         .route-title {
-            font-size: 16px;
-            font-weight: 600;
+            font-size: 18px;
+            font-weight: 700;
             color: var(--text-primary);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
             margin-bottom: 4px;
+            letter-spacing: -0.5px;
         }
 
         .route-stats-bar {
             display: flex;
             gap: 16px;
-            font-size: 12px;
+            font-size: 13px;
             color: var(--text-secondary);
         }
 
@@ -236,35 +181,199 @@
             font-weight: 600;
         }
 
-        .verify-button {
-            padding: 10px 20px;
-            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-            color: white;
-            border: none;
-            border-radius: 20px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
+        /* Theme Toggle */
+        .theme-toggle {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--glass);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--glass-border);
             display: flex;
             align-items: center;
-            gap: 6px;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            color: var(--text-primary);
+        }
+
+        .theme-toggle:active {
+            transform: scale(0.95);
+        }
+
+        /* Cash Collection Widget - Premium Money Theme */
+        .cash-widget {
+            position: fixed;
+            top: calc(80px + var(--safe-area-top));
+            left: 16px;
+            right: 16px;
+            background: linear-gradient(135deg, 
+                rgba(34, 197, 94, 0.95),  /* Rich green */
+                rgba(22, 163, 74, 0.85),   /* Forest green */
+                rgba(5, 46, 22, 0.9)       /* Deep black-green */
+            );
+            background-size: 200% 200%;
+            animation: moneyShimmer 8s ease infinite;
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid rgba(34, 197, 94, 0.4);
+            border-radius: 16px;
+            padding: 16px;
+            z-index: 90;
+            box-shadow: 
+                0 4px 20px rgba(34, 197, 94, 0.3),
+                0 8px 32px rgba(0, 0, 0, 0.4),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            position: relative;
+            overflow: hidden;
+        }
+
+        @keyframes moneyShimmer {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        /* Premium money texture overlay */
+        .cash-widget::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                repeating-linear-gradient(
+                    45deg,
+                    transparent,
+                    transparent 10px,
+                    rgba(255, 255, 255, 0.02) 10px,
+                    rgba(255, 255, 255, 0.02) 20px
+                );
+            pointer-events: none;
+        }
+
+        /* Floating money particles effect */
+        .cash-widget::after {
+            content: '💵';
+            position: absolute;
+            top: -20px;
+            right: 20px;
+            font-size: 40px;
+            opacity: 0.1;
+            animation: floatMoney 6s ease-in-out infinite;
+            pointer-events: none;
+        }
+
+        @keyframes floatMoney {
+            0%, 100% { transform: translateY(0) rotate(-5deg); }
+            50% { transform: translateY(10px) rotate(5deg); }
+        }
+
+        .cash-widget:hover {
+            transform: translateY(-2px);
+            box-shadow: 
+                0 6px 24px rgba(34, 197, 94, 0.4),
+                0 12px 40px rgba(0, 0, 0, 0.5),
+                inset 0 1px 0 rgba(255, 255, 255, 0.15);
+        }
+
+        .cash-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .cash-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 16px;
+            font-weight: 700;
+            color: #ffffff;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+            letter-spacing: 0.5px;
+        }
+
+        .cash-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .cash-stat {
+            text-align: center;
+            padding: 10px 8px;
+            background: linear-gradient(135deg,
+                rgba(0, 0, 0, 0.4),
+                rgba(0, 0, 0, 0.2)
+            );
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            border-radius: 12px;
+            backdrop-filter: blur(10px);
             transition: all 0.3s ease;
-            box-shadow: 0 4px 12px rgba(0, 102, 255, 0.3);
+            position: relative;
+            overflow: hidden;
         }
 
-        .verify-button.pickup {
-            background: linear-gradient(135deg, var(--warning), #ff8c00);
-            box-shadow: 0 4px 12px rgba(255, 159, 10, 0.3);
+        .cash-stat::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg,
+                transparent,
+                rgba(255, 255, 255, 0.2),
+                transparent
+            );
         }
 
-        .verify-button.completed {
-            background: linear-gradient(135deg, var(--success), #2ecc71);
-            box-shadow: 0 4px 12px rgba(52, 199, 89, 0.3);
+        .cash-stat:hover {
+            background: linear-gradient(135deg,
+                rgba(0, 0, 0, 0.5),
+                rgba(0, 0, 0, 0.3)
+            );
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
         }
 
-        .verify-button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
+        .cash-stat .label {
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.7);
+            margin-bottom: 6px;
+            display: block;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: 600;
+        }
+
+        .cash-stat .value {
+            font-size: 22px;
+            font-weight: 800;
+            color: #ffffff;
+            letter-spacing: -0.5px;
+            text-shadow: 
+                0 2px 4px rgba(0, 0, 0, 0.4),
+                0 0 20px rgba(34, 197, 94, 0.3);
+            font-family: 'SF Mono', Monaco, Consolas, monospace;
+        }
+
+        /* Special styling for collected amount */
+        .cash-stat:nth-child(2) .value {
+            color: #86efac; /* Lighter green for collected */
+        }
+
+        /* Special styling for pending amount */
+        .cash-stat:nth-child(3) .value {
+            color: #fbbf24; /* Gold/yellow for pending */
         }
 
         /* Floating Action Buttons */
@@ -283,17 +392,16 @@
             height: 56px;
             border-radius: 50%;
             background: var(--glass);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
             border: 1px solid var(--glass-border);
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            transition: all 0.3s ease;
+            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
             box-shadow: var(--shadow-md);
             color: var(--text-primary);
-            border: none;
         }
 
         .fab:active {
@@ -307,31 +415,37 @@
             box-shadow: 0 6px 20px rgba(0, 102, 255, 0.4);
         }
 
-        /* Bottom Navigation */
+        /* Bottom Navigation Bar */
         .bottom-nav {
             position: fixed;
             bottom: 0;
             left: 0;
             right: 0;
-            background: var(--glass);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
+            background: var(--glass-heavy);
+            backdrop-filter: blur(30px) saturate(180%);
+            -webkit-backdrop-filter: blur(30px) saturate(180%);
             border-top: 1px solid var(--glass-border);
             padding: 12px 16px;
             padding-bottom: calc(12px + var(--safe-area-bottom));
             z-index: 100;
+            transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+
+        .bottom-nav.hidden {
+            transform: translateY(100%);
         }
 
         .nav-actions {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
+            display: flex;
             gap: 12px;
         }
 
         .nav-button {
+            flex: 1;
             background: var(--glass);
+            backdrop-filter: blur(10px);
             border: 1px solid var(--glass-border);
-            border-radius: 16px;
+            border-radius: 14px;
             padding: 14px;
             color: var(--text-primary);
             font-size: 15px;
@@ -341,7 +455,7 @@
             align-items: center;
             justify-content: center;
             gap: 8px;
-            transition: all 0.3s ease;
+            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
         }
 
         .nav-button:active {
@@ -349,26 +463,29 @@
         }
 
         .nav-button.primary {
-            grid-column: span 2;
             background: linear-gradient(135deg, var(--primary), var(--primary-dark));
             border: none;
             color: white;
             box-shadow: 0 4px 20px rgba(0, 102, 255, 0.3);
         }
 
-        /* Route Panel */
+        .nav-button.secondary {
+            background: var(--glass);
+        }
+
+        /* Route Details Panel */
         .route-panel {
             position: fixed;
             bottom: 0;
             left: 0;
             right: 0;
-            background: var(--glass);
-            backdrop-filter: blur(30px);
-            -webkit-backdrop-filter: blur(30px);
+            background: var(--glass-heavy);
+            backdrop-filter: blur(30px) saturate(180%);
+            -webkit-backdrop-filter: blur(30px) saturate(180%);
             border: 1px solid var(--glass-border);
             border-radius: 24px 24px 0 0;
             max-height: 70vh;
-            transform: translateY(calc(100% - 140px));
+            transform: translateY(calc(100% - 60px));
             transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             z-index: 200;
             box-shadow: var(--shadow-xl);
@@ -377,6 +494,10 @@
 
         .route-panel.expanded {
             transform: translateY(0);
+        }
+
+        .route-panel.hidden {
+            transform: translateY(100%);
         }
 
         .panel-handle {
@@ -389,6 +510,11 @@
             transition: all 0.3s ease;
         }
 
+        .panel-handle:active {
+            cursor: grabbing;
+            background: var(--primary);
+        }
+
         .panel-header {
             padding: 0 20px 16px;
             border-bottom: 1px solid var(--glass-border);
@@ -399,109 +525,34 @@
             font-weight: 700;
             color: var(--text-primary);
             margin-bottom: 12px;
-        }
-
-        .route-progress {
-            display: flex;
-            gap: 12px;
-            margin-bottom: 16px;
-        }
-
-        .progress-item {
-            flex: 1;
-            background: var(--glass);
-            border: 1px solid var(--glass-border);
-            border-radius: 12px;
-            padding: 12px;
-            text-align: center;
-        }
-
-        .progress-icon {
-            font-size: 24px;
-            margin-bottom: 4px;
-        }
-
-        .progress-label {
-            font-size: 11px;
-            color: var(--text-secondary);
-            margin-bottom: 2px;
-        }
-
-        .progress-value {
-            font-size: 18px;
-            font-weight: 700;
-            color: var(--text-primary);
+            letter-spacing: -0.5px;
         }
 
         .panel-content {
             padding: 20px;
             overflow-y: auto;
-            max-height: calc(70vh - 180px);
-        }
-
-        /* Cash Widget */
-        .cash-widget {
-            background: linear-gradient(135deg, 
-                rgba(255, 159, 10, 0.1),
-                rgba(255, 159, 10, 0.05)
-            );
-            border: 1px solid rgba(255, 159, 10, 0.3);
-            border-radius: 16px;
-            padding: 16px;
-            margin-bottom: 20px;
-            backdrop-filter: blur(10px);
-        }
-
-        .cash-header {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            margin-bottom: 12px;
-            font-size: 16px;
-            font-weight: 600;
-            color: var(--warning);
-        }
-
-        .cash-stats {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 12px;
-        }
-
-        .cash-stat {
-            text-align: center;
-        }
-
-        .cash-stat .label {
-            font-size: 11px;
-            color: var(--text-secondary);
-            margin-bottom: 4px;
-            display: block;
-        }
-
-        .cash-stat .value {
-            font-size: 20px;
-            font-weight: 700;
-            color: var(--warning);
+            max-height: calc(70vh - 100px);
+            -webkit-overflow-scrolling: touch;
         }
 
         /* Stop Cards */
-        .stops-container {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-
         .stop-card {
             background: var(--glass);
+            backdrop-filter: blur(10px);
             border: 1px solid var(--glass-border);
             border-radius: 16px;
             padding: 16px;
+            margin-bottom: 12px;
             display: flex;
             gap: 12px;
             position: relative;
             overflow: hidden;
-            transition: all 0.3s ease;
+            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+
+        .stop-card:hover {
+            transform: translateX(4px);
+            box-shadow: var(--shadow-md);
         }
 
         .stop-card.active {
@@ -555,13 +606,6 @@
             min-width: 0;
         }
 
-        .stop-header {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            margin-bottom: 8px;
-        }
-
         .stop-type {
             display: inline-block;
             padding: 4px 8px;
@@ -570,6 +614,7 @@
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.5px;
+            margin-bottom: 8px;
         }
 
         .stop-type.pickup {
@@ -587,9 +632,7 @@
             font-weight: 600;
             color: var(--text-primary);
             margin-bottom: 8px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+            line-height: 1.4;
         }
 
         .stop-info {
@@ -634,6 +677,7 @@
             height: 40px;
             border-radius: 50%;
             background: var(--glass);
+            backdrop-filter: blur(10px);
             border: 1px solid var(--glass-border);
             display: flex;
             align-items: center;
@@ -644,113 +688,63 @@
             text-decoration: none;
         }
 
-        /* Empty State */
-        .empty-state {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            text-align: center;
-            padding: 40px;
-            background: var(--glass);
-            backdrop-filter: blur(20px);
-            border: 1px solid var(--glass-border);
-            border-radius: 24px;
-            z-index: 100;
-            box-shadow: var(--shadow-xl);
-        }
-
-        .empty-icon {
-            font-size: 72px;
-            margin-bottom: 20px;
-            filter: grayscale(0.5);
-        }
-
-        .empty-title {
-            font-size: 24px;
-            font-weight: 700;
-            color: var(--text-primary);
-            margin-bottom: 8px;
-        }
-
-        .empty-message {
-            color: var(--text-secondary);
-            margin-bottom: 24px;
-        }
-
-        .empty-action {
-            padding: 14px 28px;
-            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+        .action-btn:hover {
+            background: var(--primary);
             color: white;
-            border: none;
-            border-radius: 16px;
-            font-size: 16px;
+        }
+
+        /* Toggle Button */
+        .toggle-details-btn {
+            position: fixed;
+            bottom: calc(80px + var(--safe-area-bottom));
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--glass-heavy);
+            backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            padding: 8px 16px;
+            color: var(--text-primary);
+            font-size: 14px;
             font-weight: 600;
             cursor: pointer;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 20px rgba(0, 102, 255, 0.3);
-        }
-
-        /* Connection Status */
-        .connection-status {
-            position: fixed;
-            top: calc(80px + var(--safe-area-top));
-            left: 50%;
-            transform: translateX(-50%);
-            background: var(--warning);
-            color: black;
-            padding: 4px 12px;
-            border-radius: 12px;
-            font-size: 11px;
-            font-weight: 600;
-            z-index: 90;
-            display: none;
-        }
-
-        .connection-status.offline {
-            display: block;
-        }
-
-        /* Tracking Indicator */
-        .tracking-indicator {
-            position: fixed;
-            top: calc(80px + var(--safe-area-top));
-            left: 50%;
-            transform: translateX(-50%);
-            background: linear-gradient(135deg, var(--success), #2ecc71);
-            color: white;
-            padding: 6px 16px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
             display: flex;
             align-items: center;
             gap: 6px;
-            z-index: 90;
-            box-shadow: 0 4px 12px rgba(52, 199, 89, 0.3);
-            animation: pulseGlow 2s infinite;
+            transition: all 0.3s;
+            z-index: 95;
+            box-shadow: var(--shadow-md);
         }
 
-        @keyframes pulseGlow {
-            0%, 100% { 
-                box-shadow: 0 4px 12px rgba(52, 199, 89, 0.3);
-            }
-            50% { 
-                box-shadow: 0 4px 20px rgba(52, 199, 89, 0.5);
-            }
+        .toggle-details-btn:hover {
+            background: var(--primary);
+            color: white;
         }
 
-        .tracking-dot {
-            width: 6px;
-            height: 6px;
-            background: white;
-            border-radius: 50%;
-            animation: blink 1s infinite;
+        /* Verify Button in Header */
+        .verify-button {
+            padding: 10px 20px;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+            border: none;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            box-shadow: 0 4px 12px rgba(0, 102, 255, 0.3);
         }
 
-        @keyframes blink {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.3; }
+        .verify-button.pickup {
+            background: linear-gradient(135deg, var(--warning), #ff8c00);
+            box-shadow: 0 4px 12px rgba(255, 159, 10, 0.3);
+        }
+
+        .verify-button:active {
+            transform: scale(0.95);
         }
 
         /* Custom Scrollbar */
@@ -767,22 +761,114 @@
             background: var(--glass-border);
             border-radius: 3px;
         }
+
+        /* Vendor Info Card */
+        .vendor-info {
+            background: var(--glass);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            padding: 12px;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .vendor-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary), var(--purple));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 700;
+            font-size: 18px;
+        }
+
+        .vendor-details {
+            flex: 1;
+        }
+
+        .vendor-name {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .vendor-phone {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        /* Loading Overlay */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: var(--surface);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            transition: opacity 0.5s ease;
+        }
+
+        .loading-content {
+            text-align: center;
+        }
+
+        .loading-spinner {
+            width: 60px;
+            height: 60px;
+            border: 3px solid var(--glass-border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+        }
+
+        /* Light Mode Map Tiles */
+        body.light-mode .leaflet-tile {
+            filter: none !important;
+        }
+
+        /* Dark Mode Map Tiles */
+        body:not(.light-mode) .leaflet-tile {
+            filter: brightness(0.6) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3) brightness(0.7);
+        }
+
+        /* Responsive */
+        @media (min-width: 428px) {
+            .cash-widget {
+                max-width: 400px;
+            }
+        }
     </style>
 </head>
 <body>
     <!-- Loading Overlay -->
     <div id="loadingOverlay" class="loading-overlay">
         <div class="loading-content">
-            <div class="loading-logo">📦</div>
             <div class="loading-spinner"></div>
             <div class="loading-text">Loading Route</div>
-            <div class="loading-subtext">Preparing navigation...</div>
         </div>
-    </div>
-    
-    <!-- Connection Status -->
-    <div id="connectionStatus" class="connection-status">
-        Working offline - changes will sync
     </div>
     
     <!-- Map Container -->
@@ -790,14 +876,327 @@
         <div id="map"></div>
     </div>
     
-    <!-- UI will be injected by JavaScript -->
+    <!-- Top Header -->
+    <div class="top-header">
+        <div class="header-content">
+            <button class="back-button" onclick="goBack()">
+                ←
+            </button>
+            <div class="route-info-header">
+                <div class="route-title">Toi Main Market → City Market</div>
+                <div class="route-stats-bar">
+                    <div class="stat-item">
+                        <span class="stat-value">2</span>
+                        <span>stops</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value">KES 225</span>
+                        <span>cash</span>
+                    </div>
+                </div>
+            </div>
+            <button class="verify-button pickup" onclick="verifyPickup()">
+                ✓ Verify Pickup
+            </button>
+            <button class="theme-toggle" onclick="toggleTheme()">
+                🌓
+            </button>
+        </div>
+    </div>
+    
+    <!-- Cash Collection Widget -->
+    <div class="cash-widget">
+        <div class="cash-header">
+            <div class="cash-title">
+                💰 Cash Collection
+            </div>
+        </div>
+        <div class="cash-stats">
+            <div class="cash-stat">
+                <span class="label">Total</span>
+                <span class="value">KES 225</span>
+            </div>
+            <div class="cash-stat">
+                <span class="label">Collected</span>
+                <span class="value">KES 0</span>
+            </div>
+            <div class="cash-stat">
+                <span class="label">Pending</span>
+                <span class="value">KES 225</span>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Toggle Details Button -->
+    <button class="toggle-details-btn" onclick="toggleRoutePanel()">
+        📋 Route Details
+    </button>
+    
+    <!-- Bottom Navigation Bar -->
+    <div class="bottom-nav" id="bottomNav">
+        <div class="nav-actions">
+            <button class="nav-button secondary" onclick="toggleRoutePanel()">
+                📋 Details
+            </button>
+            <button class="nav-button primary" onclick="startNavigation()">
+                🧭 Start Navigation
+            </button>
+        </div>
+    </div>
+    
+    <!-- Route Details Panel -->
+    <div class="route-panel hidden" id="routePanel">
+        <div class="panel-handle" id="panelHandle"></div>
+        <div class="panel-header">
+            <div class="panel-title">Route Details</div>
+        </div>
+        <div class="panel-content">
+            <!-- Pickup Stop -->
+            <div class="stop-card active">
+                <div class="stop-indicator pickup">P</div>
+                <div class="stop-details">
+                    <span class="stop-type pickup">PICKUP</span>
+                    <div class="stop-address">Toi Main Market</div>
+                    <div class="vendor-info">
+                        <div class="vendor-avatar">JD</div>
+                        <div class="vendor-details">
+                            <div class="vendor-name">John Doe Electronics</div>
+                            <div class="vendor-phone">0712345678</div>
+                        </div>
+                    </div>
+                    <div class="stop-info">
+                        <div class="info-row">
+                            <span>📦</span>
+                            <span>Parcel Code: PKG-2024-001</span>
+                        </div>
+                        <div class="info-row">
+                            <span>📱</span>
+                            <span>Small package</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="stop-actions">
+                    <button class="action-btn" onclick="navigate()">🧭</button>
+                    <a href="tel:0712345678" class="action-btn">📞</a>
+                </div>
+            </div>
+            
+            <!-- Delivery Stop -->
+            <div class="stop-card">
+                <div class="stop-indicator delivery">D</div>
+                <div class="stop-details">
+                    <span class="stop-type delivery">DELIVERY</span>
+                    <div class="stop-address">City Market, Nairobi</div>
+                    <div class="stop-info">
+                        <div class="info-row">
+                            <span>👤</span>
+                            <span>Jane Smith</span>
+                        </div>
+                        <div class="info-row">
+                            <span>📞</span>
+                            <span>0798765432</span>
+                        </div>
+                        <div class="info-row">
+                            <span>📝</span>
+                            <span>Near main entrance</span>
+                        </div>
+                    </div>
+                    <div class="payment-badge">
+                        <span>💵</span>
+                        <span>COLLECT: KES 225</span>
+                    </div>
+                </div>
+                <div class="stop-actions">
+                    <button class="action-btn" onclick="navigate()">🧭</button>
+                    <a href="tel:0798765432" class="action-btn">📞</a>
+                </div>
+            </div>
+        </div>
+    </div>
     
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" 
             integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" 
             crossorigin=""></script>
     
-    <!-- Route Navigation System -->
-    <script src="./route.js"></script>
+    <script>
+        // Initialize map
+        let map;
+        let isDarkMode = true;
+        let routePanelVisible = false;
+        
+        function initMap() {
+            // Hide loading overlay
+            document.getElementById('loadingOverlay').style.display = 'none';
+            
+            // Initialize map centered on Nairobi
+            map = L.map('map').setView([-1.2921, 36.8219], 13);
+            
+            // Add tile layer
+            updateMapTiles();
+            
+            // Add markers for stops
+            const pickupIcon = L.divIcon({
+                className: 'custom-marker',
+                html: '<div style="background: linear-gradient(135deg, #FF9F0A, #ff8c00); color: white; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 18px; box-shadow: 0 4px 12px rgba(255,159,10,0.5);">P</div>',
+                iconSize: [40, 40],
+                iconAnchor: [20, 20]
+            });
+            
+            const deliveryIcon = L.divIcon({
+                className: 'custom-marker',
+                html: '<div style="background: linear-gradient(135deg, #0066FF, #0052CC); color: white; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 18px; box-shadow: 0 4px 12px rgba(0,102,255,0.5);">D</div>',
+                iconSize: [40, 40],
+                iconAnchor: [20, 20]
+            });
+            
+            // Add markers
+            L.marker([-1.3121, 36.7845], {icon: pickupIcon})
+                .addTo(map)
+                .bindPopup('<b>Pickup</b><br>Toi Main Market');
+            
+            L.marker([-1.2851, 36.8260], {icon: deliveryIcon})
+                .addTo(map)
+                .bindPopup('<b>Delivery</b><br>City Market');
+            
+            // Draw route line
+            const routeCoords = [
+                [-1.3121, 36.7845],
+                [-1.3080, 36.7920],
+                [-1.3020, 36.8010],
+                [-1.2950, 36.8120],
+                [-1.2900, 36.8200],
+                [-1.2851, 36.8260]
+            ];
+            
+            L.polyline(routeCoords, {
+                color: '#0066FF',
+                weight: 4,
+                opacity: 0.8,
+                smoothFactor: 1
+            }).addTo(map);
+            
+            // Fit bounds to show entire route
+            const bounds = L.latLngBounds(routeCoords);
+            map.fitBounds(bounds, { padding: [50, 50] });
+        }
+        
+        function updateMapTiles() {
+            // Remove existing tile layers
+            map.eachLayer(layer => {
+                if (layer instanceof L.TileLayer) {
+                    map.removeLayer(layer);
+                }
+            });
+            
+            // Add appropriate tile layer based on theme
+            if (isDarkMode) {
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    maxZoom: 19,
+                    attribution: '© OpenStreetMap'
+                }).addTo(map);
+            } else {
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    maxZoom: 19,
+                    attribution: '© OpenStreetMap'
+                }).addTo(map);
+            }
+        }
+        
+        function toggleTheme() {
+            isDarkMode = !isDarkMode;
+            document.body.classList.toggle('light-mode');
+            
+            if (map) {
+                updateMapTiles();
+            }
+        }
+        
+        function toggleRoutePanel() {
+            const panel = document.getElementById('routePanel');
+            const bottomNav = document.getElementById('bottomNav');
+            
+            routePanelVisible = !routePanelVisible;
+            
+            if (routePanelVisible) {
+                panel.classList.remove('hidden');
+                bottomNav.classList.add('hidden');
+                setTimeout(() => {
+                    panel.classList.add('expanded');
+                }, 10);
+            } else {
+                panel.classList.remove('expanded');
+                bottomNav.classList.remove('hidden');
+                setTimeout(() => {
+                    panel.classList.add('hidden');
+                }, 300);
+            }
+        }
+        
+        function startNavigation() {
+            alert('Starting navigation...');
+            // Implement navigation logic here
+        }
+        
+        function verifyPickup() {
+            alert('Opening verification modal...');
+            // Implement verification logic here
+        }
+        
+        function navigate() {
+            alert('Opening navigation to stop...');
+            // Implement navigation to specific stop
+        }
+        
+        function goBack() {
+            window.history.back();
+        }
+        
+        // Panel drag handling
+        document.addEventListener('DOMContentLoaded', () => {
+            initMap();
+            
+            const panel = document.getElementById('routePanel');
+            const handle = document.getElementById('panelHandle');
+            let isDragging = false;
+            let startY = 0;
+            let currentY = 0;
+            let panelHeight = 0;
+            
+            handle.addEventListener('touchstart', startDrag, { passive: true });
+            handle.addEventListener('mousedown', startDrag);
+            
+            function startDrag(e) {
+                isDragging = true;
+                startY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
+                panelHeight = panel.offsetHeight;
+            }
+            
+            document.addEventListener('touchmove', drag, { passive: false });
+            document.addEventListener('mousemove', drag);
+            
+            function drag(e) {
+                if (!isDragging) return;
+                e.preventDefault();
+                
+                currentY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
+                const deltaY = startY - currentY;
+                const newHeight = Math.max(60, Math.min(window.innerHeight * 0.7, panelHeight + deltaY));
+                
+                if (newHeight < 200) {
+                    panel.classList.remove('expanded');
+                } else {
+                    panel.classList.add('expanded');
+                }
+            }
+            
+            document.addEventListener('touchend', stopDrag);
+            document.addEventListener('mouseup', stopDrag);
+            
+            function stopDrag() {
+                isDragging = false;
+            }
+        });
+    </script>
 </body>
 </html>
