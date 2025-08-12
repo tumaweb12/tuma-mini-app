@@ -24,18 +24,34 @@
         :root {
             --primary: #0066FF;
             --primary-dark: #0052CC;
+            --primary-light: rgba(0, 102, 255, 0.1);
             --success: #34C759;
+            --success-light: rgba(52, 199, 89, 0.1);
             --warning: #FF9F0A;
+            --warning-light: rgba(255, 159, 10, 0.1);
             --danger: #FF3B30;
+            --danger-light: rgba(255, 59, 48, 0.1);
+            --purple: #9B59B6;
+            --purple-light: rgba(155, 89, 182, 0.1);
+            
             --surface: #1C1C1E;
-            --surface-elevated: #2C2C2E;
-            --surface-high: #3A3A3C;
+            --surface-elevated: rgba(44, 44, 46, 0.95);
+            --surface-high: rgba(58, 58, 60, 0.95);
+            --glass: rgba(255, 255, 255, 0.05);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            
             --text-primary: #FFFFFF;
-            --text-secondary: #8E8E93;
-            --text-tertiary: #636366;
-            --border: #48484A;
+            --text-secondary: rgba(255, 255, 255, 0.7);
+            --text-tertiary: rgba(255, 255, 255, 0.5);
+            --border: rgba(255, 255, 255, 0.1);
+            
             --safe-area-bottom: env(safe-area-inset-bottom);
             --safe-area-top: env(safe-area-inset-top);
+            
+            --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.2);
+            --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.3);
+            --shadow-lg: 0 10px 40px rgba(0, 0, 0, 0.4);
+            --shadow-xl: 0 20px 60px rgba(0, 0, 0, 0.5);
         }
 
         html, body {
@@ -43,20 +59,17 @@
             margin: 0;
             padding: 0;
             overflow: hidden;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
-            background: #0A0A0B;
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
+            background: #000;
             color: var(--text-primary);
             position: fixed;
             width: 100%;
-            height: 100%;
             -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
         }
 
-        /* Map Container - Full Screen */
-        #map {
+        /* Map Container */
+        .map-container {
             position: fixed;
             top: 0;
             left: 0;
@@ -65,37 +78,70 @@
             z-index: 1;
         }
 
+        #map {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #0A0A0B;
+        }
+
         .leaflet-container {
-            background: #1a1a1a !important;
+            background: #0A0A0B !important;
+            font-family: inherit;
         }
 
         .leaflet-control-attribution {
             display: none !important;
         }
 
-        /* Loading State */
-        .loading-container {
+        /* Beautiful Loading State */
+        .loading-overlay {
             position: fixed;
             top: 0;
             left: 0;
             right: 0;
             bottom: 0;
-            background: #0A0A0B;
+            background: linear-gradient(135deg, #0A0A0B 0%, #1a1a2e 100%);
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
             z-index: 10000;
+            transition: opacity 0.5s ease;
+        }
+
+        .loading-content {
+            text-align: center;
+        }
+
+        .loading-logo {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 24px;
+            background: linear-gradient(135deg, var(--primary), var(--purple));
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 36px;
+            animation: logoFloat 3s ease-in-out infinite;
+        }
+
+        @keyframes logoFloat {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
         }
 
         .loading-spinner {
             width: 60px;
             height: 60px;
-            border: 3px solid rgba(255, 255, 255, 0.1);
-            border-top-color: #0066FF;
+            border: 3px solid var(--glass-border);
+            border-top-color: var(--primary);
             border-radius: 50%;
             animation: spin 1s linear infinite;
-            margin-bottom: 20px;
+            margin: 0 auto 20px;
         }
 
         @keyframes spin {
@@ -104,150 +150,212 @@
 
         .loading-text {
             font-size: 18px;
-            color: rgba(255, 255, 255, 0.8);
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 8px;
         }
 
-        /* Top Bar - Minimal and Clean */
-        .top-bar {
+        .loading-subtext {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        /* Glassmorphic Top Header */
+        .top-header {
             position: fixed;
             top: 0;
             left: 0;
             right: 0;
-            background: linear-gradient(to bottom, rgba(0, 0, 0, 0.9), rgba(0, 0, 0, 0.7));
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
+            background: linear-gradient(to bottom, 
+                rgba(10, 10, 11, 0.98) 0%,
+                rgba(10, 10, 11, 0.9) 50%,
+                rgba(10, 10, 11, 0) 100%
+            );
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            z-index: 100;
             padding: 12px 16px;
             padding-top: calc(12px + var(--safe-area-top));
-            z-index: 100;
         }
 
-        .top-bar-content {
+        .header-content {
             display: flex;
             align-items: center;
-            justify-content: space-between;
+            gap: 12px;
         }
 
-        .back-btn {
+        .back-button {
             width: 40px;
             height: 40px;
             border-radius: 50%;
-            background: rgba(255, 255, 255, 0.1);
-            border: none;
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            color: white;
+            transition: all 0.3s ease;
+            color: var(--text-primary);
         }
 
-        .route-info {
+        .back-button:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: scale(1.05);
+        }
+
+        .back-button:active {
+            transform: scale(0.95);
+        }
+
+        .route-info-header {
             flex: 1;
-            text-align: center;
-            padding: 0 12px;
+            min-width: 0;
         }
 
-        .route-name {
+        .route-title {
             font-size: 16px;
             font-weight: 600;
-            color: white;
+            color: var(--text-primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
             margin-bottom: 4px;
         }
 
-        .route-stats-mini {
+        .route-stats-bar {
             display: flex;
-            justify-content: center;
             gap: 16px;
             font-size: 12px;
-            color: rgba(255, 255, 255, 0.7);
+            color: var(--text-secondary);
         }
 
-        .stat-mini {
+        .stat-item {
             display: flex;
             align-items: center;
             gap: 4px;
         }
 
-        .verify-btn {
+        .stat-value {
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        .verify-button {
             padding: 10px 20px;
-            background: var(--primary);
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
             color: white;
             border: none;
             border-radius: 20px;
             font-size: 14px;
             font-weight: 600;
             cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(0, 102, 255, 0.3);
         }
 
-        .verify-btn.pickup {
-            background: var(--warning);
-            color: black;
+        .verify-button.pickup {
+            background: linear-gradient(135deg, var(--warning), #ff8c00);
+            box-shadow: 0 4px 12px rgba(255, 159, 10, 0.3);
         }
 
-        .verify-btn.completed {
-            background: var(--success);
+        .verify-button.completed {
+            background: linear-gradient(135deg, var(--success), #2ecc71);
+            box-shadow: 0 4px 12px rgba(52, 199, 89, 0.3);
         }
 
-        /* Map Action Buttons - Right Side */
-        .map-actions {
+        .verify-button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 102, 255, 0.4);
+        }
+
+        .verify-button:active:not(:disabled) {
+            transform: translateY(0);
+        }
+
+        .verify-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Floating Action Buttons */
+        .fab-container {
             position: fixed;
-            right: 16px;
-            top: 50%;
-            transform: translateY(-50%);
+            right: 20px;
+            bottom: calc(100px + var(--safe-area-bottom));
             display: flex;
             flex-direction: column;
             gap: 12px;
             z-index: 90;
         }
 
-        .map-btn {
-            width: 48px;
-            height: 48px;
+        .fab {
+            width: 56px;
+            height: 56px;
             border-radius: 50%;
-            background: white;
-            border: none;
+            background: var(--glass);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-            color: #333;
+            transition: all 0.3s ease;
+            box-shadow: var(--shadow-md);
+            color: var(--text-primary);
         }
 
-        .map-btn:active {
+        .fab:hover {
+            transform: scale(1.1);
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .fab:active {
             transform: scale(0.95);
         }
 
-        .map-btn.active {
-            background: var(--primary);
+        .fab.primary {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            border: none;
             color: white;
+            box-shadow: 0 6px 20px rgba(0, 102, 255, 0.4);
         }
 
-        /* Bottom Navigation - Main Actions */
+        .fab svg {
+            width: 24px;
+            height: 24px;
+        }
+
+        /* Bottom Navigation Bar */
         .bottom-nav {
             position: fixed;
             bottom: 0;
             left: 0;
             right: 0;
-            background: linear-gradient(to top, rgba(0, 0, 0, 0.95), rgba(0, 0, 0, 0.85));
+            background: var(--glass);
             backdrop-filter: blur(20px);
             -webkit-backdrop-filter: blur(20px);
-            padding: 16px;
-            padding-bottom: calc(16px + var(--safe-area-bottom));
+            border-top: 1px solid var(--glass-border);
+            padding: 12px 16px;
+            padding-bottom: calc(12px + var(--safe-area-bottom));
             z-index: 100;
         }
 
-        .nav-buttons {
+        .nav-actions {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 12px;
         }
 
-        .nav-btn {
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 12px;
+        .nav-button {
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
             padding: 14px;
-            color: white;
+            color: var(--text-primary);
             font-size: 15px;
             font-weight: 600;
             cursor: pointer;
@@ -255,87 +363,129 @@
             align-items: center;
             justify-content: center;
             gap: 8px;
-            transition: all 0.2s;
+            transition: all 0.3s ease;
         }
 
-        .nav-btn:active {
-            transform: scale(0.98);
+        .nav-button:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: translateY(-2px);
         }
 
-        .nav-btn.primary {
-            background: var(--primary);
-            border-color: var(--primary);
+        .nav-button:active {
+            transform: translateY(0);
+        }
+
+        .nav-button.primary {
             grid-column: span 2;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            border: none;
+            color: white;
+            box-shadow: 0 4px 20px rgba(0, 102, 255, 0.3);
         }
 
-        .nav-btn svg {
-            width: 20px;
-            height: 20px;
+        .nav-button.primary:hover {
+            box-shadow: 0 6px 30px rgba(0, 102, 255, 0.4);
         }
 
-        /* Sliding Panel - Route Details */
+        /* Route Panel - Glassmorphic */
         .route-panel {
             position: fixed;
             bottom: 0;
             left: 0;
             right: 0;
-            background: #1C1C1E;
-            border-radius: 20px 20px 0 0;
-            padding: 20px;
-            padding-bottom: calc(20px + var(--safe-area-bottom));
-            max-height: 75vh;
-            overflow-y: auto;
+            background: var(--glass);
+            backdrop-filter: blur(30px);
+            -webkit-backdrop-filter: blur(30px);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px 24px 0 0;
+            max-height: 70vh;
+            transform: translateY(calc(100% - 140px));
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             z-index: 200;
-            transform: translateY(100%);
-            transition: transform 0.3s ease;
-            box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.4);
+            box-shadow: var(--shadow-xl);
+            overflow: hidden;
         }
 
-        .route-panel.show {
+        .route-panel.expanded {
             transform: translateY(0);
         }
 
         .panel-handle {
             width: 40px;
             height: 4px;
-            background: rgba(255, 255, 255, 0.3);
+            background: var(--glass-border);
             border-radius: 2px;
-            margin: 0 auto 20px;
+            margin: 12px auto;
+            cursor: grab;
+            transition: all 0.3s ease;
+        }
+
+        .panel-handle:hover {
+            background: rgba(255, 255, 255, 0.3);
+            width: 60px;
         }
 
         .panel-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
+            padding: 0 20px 16px;
+            border-bottom: 1px solid var(--glass-border);
         }
 
         .panel-title {
             font-size: 20px;
             font-weight: 700;
-            color: white;
+            color: var(--text-primary);
+            margin-bottom: 12px;
         }
 
-        .close-panel {
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            background: rgba(255, 255, 255, 0.1);
-            border: none;
-            color: white;
-            cursor: pointer;
+        .route-progress {
             display: flex;
-            align-items: center;
-            justify-content: center;
+            gap: 12px;
+            margin-bottom: 16px;
         }
 
-        /* Cash Widget */
-        .cash-widget {
-            background: linear-gradient(135deg, rgba(255, 159, 10, 0.2), rgba(255, 159, 10, 0.1));
-            border: 1px solid var(--warning);
+        .progress-item {
+            flex: 1;
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
             border-radius: 12px;
+            padding: 12px;
+            text-align: center;
+        }
+
+        .progress-icon {
+            font-size: 24px;
+            margin-bottom: 4px;
+        }
+
+        .progress-label {
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin-bottom: 2px;
+        }
+
+        .progress-value {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .panel-content {
+            padding: 20px;
+            overflow-y: auto;
+            max-height: calc(70vh - 180px);
+        }
+
+        /* Cash Widget - Glassmorphic */
+        .cash-widget {
+            background: linear-gradient(135deg, 
+                rgba(255, 159, 10, 0.1),
+                rgba(255, 159, 10, 0.05)
+            );
+            border: 1px solid rgba(255, 159, 10, 0.3);
+            border-radius: 16px;
             padding: 16px;
-            margin-bottom: 16px;
+            margin-bottom: 20px;
+            backdrop-filter: blur(10px);
         }
 
         .cash-header {
@@ -343,13 +493,18 @@
             align-items: center;
             gap: 8px;
             margin-bottom: 12px;
+            font-size: 16px;
             font-weight: 600;
+            color: var(--warning);
         }
 
         .cash-stats {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
             gap: 12px;
+        }
+
+        .cash-stat {
             text-align: center;
         }
 
@@ -361,90 +516,197 @@
         }
 
         .cash-stat .value {
-            font-size: 18px;
+            font-size: 20px;
             font-weight: 700;
             color: var(--warning);
         }
 
-        /* Stops List */
-        .stops-list {
+        /* Stop Cards - Modern Glass Design */
+        .stops-container {
             display: flex;
             flex-direction: column;
             gap: 12px;
         }
 
         .stop-card {
-            background: var(--surface-elevated);
-            border-radius: 12px;
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
             padding: 16px;
             display: flex;
             gap: 12px;
-            border-left: 3px solid var(--border);
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .stop-card:hover {
+            transform: translateX(4px);
+            background: rgba(255, 255, 255, 0.08);
         }
 
         .stop-card.active {
-            border-left-color: var(--primary);
-            background: rgba(0, 102, 255, 0.1);
+            background: linear-gradient(135deg,
+                rgba(0, 102, 255, 0.1),
+                rgba(0, 102, 255, 0.05)
+            );
+            border-color: rgba(0, 102, 255, 0.3);
         }
 
         .stop-card.completed {
             opacity: 0.6;
-            border-left-color: var(--success);
+            background: linear-gradient(135deg,
+                rgba(52, 199, 89, 0.05),
+                transparent
+            );
         }
 
-        .stop-number {
-            width: 40px;
-            height: 40px;
+        .stop-card.efficient {
+            background: linear-gradient(135deg,
+                rgba(155, 89, 182, 0.1),
+                rgba(155, 89, 182, 0.05)
+            );
+            border-color: rgba(155, 89, 182, 0.3);
+        }
+
+        .stop-indicator {
+            width: 44px;
+            height: 44px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             font-weight: 700;
+            font-size: 16px;
             flex-shrink: 0;
-            background: var(--surface-high);
+            transition: all 0.3s ease;
+        }
+
+        .stop-indicator.pickup {
+            background: linear-gradient(135deg, var(--warning), #ff8c00);
             color: white;
+            box-shadow: 0 4px 12px rgba(255, 159, 10, 0.3);
         }
 
-        .stop-number.pickup {
-            background: var(--warning);
-            color: black;
+        .stop-indicator.delivery {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+            box-shadow: 0 4px 12px rgba(0, 102, 255, 0.3);
         }
 
-        .stop-number.delivery {
-            background: var(--primary);
+        .stop-indicator.completed {
+            background: linear-gradient(135deg, var(--success), #2ecc71);
+            box-shadow: 0 4px 12px rgba(52, 199, 89, 0.3);
         }
 
-        .stop-content {
+        .stop-indicator.efficient {
+            background: linear-gradient(135deg, var(--purple), #8e44ad);
+            box-shadow: 0 4px 12px rgba(155, 89, 182, 0.3);
+        }
+
+        .stop-details {
             flex: 1;
+            min-width: 0;
+        }
+
+        .stop-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        .stop-type {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .stop-type.pickup {
+            background: var(--warning-light);
+            color: var(--warning);
+        }
+
+        .stop-type.delivery {
+            background: var(--primary-light);
+            color: var(--primary);
+        }
+
+        .stop-eta {
+            margin-left: auto;
+            font-size: 12px;
+            color: var(--text-secondary);
         }
 
         .stop-address {
             font-size: 16px;
             font-weight: 600;
+            color: var(--text-primary);
             margin-bottom: 8px;
-            color: white;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
-        .stop-details {
-            font-size: 14px;
-            color: var(--text-secondary);
+        .stop-info {
             display: flex;
             flex-direction: column;
             gap: 4px;
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .info-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
         }
 
         .payment-badge {
             display: inline-flex;
             align-items: center;
             gap: 6px;
-            background: rgba(255, 159, 10, 0.2);
-            border: 1px solid var(--warning);
+            background: linear-gradient(135deg,
+                rgba(255, 159, 10, 0.2),
+                rgba(255, 159, 10, 0.1)
+            );
+            border: 1px solid rgba(255, 159, 10, 0.5);
             border-radius: 20px;
             padding: 6px 12px;
             margin-top: 8px;
             font-size: 13px;
             font-weight: 600;
             color: var(--warning);
+        }
+
+        .stop-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .action-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            color: var(--text-primary);
+            text-decoration: none;
+        }
+
+        .action-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: scale(1.1);
         }
 
         /* Empty State */
@@ -455,47 +717,59 @@
             transform: translate(-50%, -50%);
             text-align: center;
             padding: 40px;
-            background: var(--surface-elevated);
-            border-radius: 20px;
+            background: var(--glass);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
             z-index: 100;
+            box-shadow: var(--shadow-xl);
         }
 
         .empty-icon {
-            font-size: 64px;
-            margin-bottom: 16px;
+            font-size: 72px;
+            margin-bottom: 20px;
+            filter: grayscale(0.5);
         }
 
-        .empty-state h2 {
+        .empty-title {
             font-size: 24px;
+            font-weight: 700;
+            color: var(--text-primary);
             margin-bottom: 8px;
-            color: white;
         }
 
-        .empty-state p {
+        .empty-message {
             color: var(--text-secondary);
             margin-bottom: 24px;
         }
 
-        .empty-state button {
+        .empty-action {
             padding: 14px 28px;
-            background: var(--primary);
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
             color: white;
             border: none;
-            border-radius: 12px;
+            border-radius: 16px;
             font-size: 16px;
             font-weight: 600;
             cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 20px rgba(0, 102, 255, 0.3);
         }
 
-        /* Live Tracking Pill */
-        .tracking-pill {
+        .empty-action:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 30px rgba(0, 102, 255, 0.4);
+        }
+
+        /* Live Tracking Indicator */
+        .tracking-indicator {
             position: fixed;
             top: calc(80px + var(--safe-area-top));
             left: 50%;
             transform: translateX(-50%);
-            background: var(--success);
+            background: linear-gradient(135deg, var(--success), #2ecc71);
             color: white;
-            padding: 6px 12px;
+            padding: 6px 16px;
             border-radius: 20px;
             font-size: 12px;
             font-weight: 600;
@@ -503,12 +777,17 @@
             align-items: center;
             gap: 6px;
             z-index: 90;
-            animation: pulse 2s infinite;
+            box-shadow: 0 4px 12px rgba(52, 199, 89, 0.3);
+            animation: pulseGlow 2s infinite;
         }
 
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.7; }
+        @keyframes pulseGlow {
+            0%, 100% { 
+                box-shadow: 0 4px 12px rgba(52, 199, 89, 0.3);
+            }
+            50% { 
+                box-shadow: 0 4px 20px rgba(52, 199, 89, 0.5);
+            }
         }
 
         .tracking-dot {
@@ -521,256 +800,68 @@
 
         @keyframes blink {
             0%, 100% { opacity: 1; }
-            50% { opacity: 0; }
+            50% { opacity: 0.3; }
+        }
+
+        /* Responsive Design */
+        @media (max-width: 380px) {
+            .route-stats-bar {
+                font-size: 11px;
+            }
+            
+            .verify-button {
+                padding: 8px 16px;
+                font-size: 13px;
+            }
+        }
+
+        /* Custom Scrollbar */
+        .panel-content::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .panel-content::-webkit-scrollbar-track {
+            background: var(--glass);
+            border-radius: 3px;
+        }
+
+        .panel-content::-webkit-scrollbar-thumb {
+            background: var(--glass-border);
+            border-radius: 3px;
+        }
+
+        .panel-content::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.2);
         }
     </style>
 </head>
 <body>
-    <!-- Loading -->
-    <div id="loadingContainer" class="loading-container">
-        <div class="loading-spinner"></div>
-        <div class="loading-text">Loading Route...</div>
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="loading-content">
+            <div class="loading-logo">📦</div>
+            <div class="loading-spinner"></div>
+            <div class="loading-text">Loading Route</div>
+            <div class="loading-subtext">Optimizing for efficiency...</div>
+        </div>
     </div>
     
-    <!-- Map -->
-    <div id="map"></div>
-
-    <!-- Top Bar -->
-    <div class="top-bar" id="topBar">
-        <div class="top-bar-content">
-            <button class="back-btn" onclick="goBack()">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
-                    <path d="M15 19l-7-7 7-7"/>
-                </svg>
-            </button>
-            <div class="route-info">
-                <div class="route-name" id="routeName">Loading...</div>
-                <div class="route-stats-mini">
-                    <div class="stat-mini">
-                        <span id="stopsLeft">0</span> stops
-                    </div>
-                    <div class="stat-mini">
-                        <span id="distance">0</span> km
-                    </div>
-                    <div class="stat-mini">
-                        <span id="eta">0</span> min
-                    </div>
-                </div>
-            </div>
-            <button class="verify-btn" id="verifyBtn" onclick="openQuickVerification()">
-                Verify
-            </button>
-        </div>
-    </div>
-
-    <!-- Live Tracking Indicator -->
-    <div class="tracking-pill" id="trackingPill" style="display: none;">
-        <div class="tracking-dot"></div>
-        <span>Live</span>
-    </div>
-
-    <!-- Map Action Buttons -->
-    <div class="map-actions">
-        <button class="map-btn" onclick="centerOnLocation()">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3c-.46-4.17-3.77-7.48-7.94-7.94V1h-2v2.06C6.83 3.52 3.52 6.83 3.06 11H1v2h2.06c.46 4.17 3.77 7.48 7.94 7.94V23h2v-2.06c4.17-.46 7.48-3.77 7.94-7.94H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/>
-            </svg>
-        </button>
-        <button class="map-btn" onclick="callCustomer()">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M20.01 15.38c-1.23 0-2.42-.2-3.53-.56-.35-.12-.74-.03-1.01.24l-1.57 1.97c-2.83-1.35-5.48-3.9-6.89-6.83l1.95-1.66c.27-.28.35-.67.24-1.02-.37-1.11-.56-2.3-.56-3.53 0-.54-.45-.99-.99-.99H4.19C3.65 3 3 3.24 3 3.99 3 13.28 10.73 21 20.01 21c.71 0 .99-.63.99-1.18v-3.45c0-.54-.45-.99-.99-.99z"/>
-            </svg>
-        </button>
-        <button class="map-btn" onclick="refreshMap()">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
-            </svg>
-        </button>
-    </div>
-
-    <!-- Bottom Navigation -->
-    <div class="bottom-nav" id="bottomNav">
-        <div class="nav-buttons">
-            <button class="nav-btn" onclick="togglePanel()">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"/>
-                </svg>
-                Details
-            </button>
-            <button class="nav-btn" onclick="toggleOptimize()">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M13 3v9h9c0-4.97-4.03-9-9-9zm-2 0C6.03 3 2 7.03 2 12s4.03 9 9 9c1.83 0 3.54-.55 4.95-1.48l-3.54-3.54c-.46.17-.96.27-1.41.27-2.49 0-4.5-2.01-4.5-4.5S8.51 7.25 11 7.25c.45 0 .95.1 1.41.27l3.54-3.54C14.54 3.55 12.83 3 11 3z"/>
-                </svg>
-                Optimize
-            </button>
-            <button class="nav-btn primary" onclick="startNavigation()">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/>
-                </svg>
-                Start Navigation
-            </button>
-        </div>
-    </div>
-
-    <!-- Route Details Panel -->
-    <div class="route-panel" id="routePanel">
-        <div class="panel-handle"></div>
-        <div class="panel-header">
-            <h2 class="panel-title">Route Details</h2>
-            <button class="close-panel" onclick="togglePanel()">×</button>
-        </div>
-        
-        <!-- Cash Widget -->
-        <div id="cashWidgetContainer"></div>
-        
-        <!-- Stops List -->
-        <div id="stopsList" class="stops-list"></div>
-    </div>
-
-    <!-- Empty State -->
-    <div id="emptyState" class="empty-state" style="display: none;">
-        <div class="empty-icon">📦</div>
-        <h2>No Active Route</h2>
-        <p>You don't have any active deliveries</p>
-        <button onclick="window.location.href='./rider.html'">
-            Back to Dashboard
-        </button>
+    <!-- Map Container -->
+    <div class="map-container">
+        <div id="map"></div>
     </div>
     
-    <!-- Leaflet JS -->
+    <!-- Dynamic UI will be injected here by JavaScript -->
+    
+    <!-- Scripts -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="./route-navigation.js"></script>
     
-    <!-- Route Module -->
-    <script src="./route.js"></script>
-    
-    <!-- UI Logic -->
     <script>
-        // Initialize after load
-        window.addEventListener('load', function() {
-            setTimeout(function() {
-                // Hide loading
-                const loader = document.getElementById('loadingContainer');
-                if (loader) {
-                    loader.style.opacity = '0';
-                    setTimeout(() => loader.style.display = 'none', 300);
-                }
-                
-                // Check for route
-                if (window.GlobalState && GlobalState.route) {
-                    // Update UI
-                    document.getElementById('routeName').textContent = GlobalState.route.name || 'Active Route';
-                    document.getElementById('trackingPill').style.display = 'flex';
-                    
-                    updateStats();
-                    updateVerifyButton();
-                    
-                    // Initialize UI if available
-                    if (typeof UIModule !== 'undefined') {
-                        UIModule.displayStops();
-                        UIModule.updateRouteStats();
-                    }
-                    
-                    // Draw route
-                    if (typeof MapModule !== 'undefined') {
-                        MapModule.plotRoute();
-                        MapModule.drawOptimizedRoute();
-                    }
-                } else {
-                    // Show empty state
-                    document.getElementById('topBar').style.display = 'none';
-                    document.getElementById('bottomNav').style.display = 'none';
-                    document.getElementById('emptyState').style.display = 'block';
-                }
-            }, 2000);
+        // Initialize the route navigation system
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM loaded, waiting for route navigation to initialize...');
         });
-
-        function updateStats() {
-            if (GlobalState && GlobalState.route) {
-                const remaining = GlobalState.route.stops?.filter(s => !s.completed).length || 0;
-                document.getElementById('stopsLeft').textContent = remaining;
-                document.getElementById('distance').textContent = GlobalState.route.distance?.toFixed(1) || 0;
-                document.getElementById('eta').textContent = GlobalState.route.duration || 0;
-            }
-        }
-
-        function updateVerifyButton() {
-            if (typeof RouteModule !== 'undefined') {
-                const nextStop = RouteModule.getNextStop();
-                const btn = document.getElementById('verifyBtn');
-                
-                if (nextStop) {
-                    btn.textContent = nextStop.type === 'pickup' ? '📦 Pickup' : '📍 Deliver';
-                    btn.className = `verify-btn ${nextStop.type}`;
-                    btn.disabled = false;
-                } else {
-                    btn.textContent = '✓ Complete';
-                    btn.className = 'verify-btn completed';
-                    btn.disabled = true;
-                }
-            }
-        }
-
-        function goBack() {
-            if (confirm('Leave this route?')) {
-                window.location.href = './rider.html';
-            }
-        }
-
-        function centerOnLocation() {
-            if (GlobalState?.location && GlobalState.map) {
-                GlobalState.map.setView([GlobalState.location.lat, GlobalState.location.lng], 16);
-            }
-        }
-
-        function callCustomer() {
-            if (typeof RouteModule !== 'undefined') {
-                const nextStop = RouteModule.getNextStop();
-                if (nextStop?.customerPhone) {
-                    window.location.href = `tel:${nextStop.customerPhone}`;
-                }
-            }
-        }
-
-        function refreshMap() {
-            if (typeof MapModule !== 'undefined') {
-                MapModule.plotRoute();
-                MapModule.drawOptimizedRoute();
-            }
-            updateStats();
-        }
-
-        function togglePanel() {
-            const panel = document.getElementById('routePanel');
-            panel.classList.toggle('show');
-        }
-
-        function toggleOptimize() {
-            if (typeof RouteModule !== 'undefined') {
-                RouteModule.optimizeRoute();
-                if (typeof UIModule !== 'undefined') {
-                    UIModule.refresh();
-                }
-                refreshMap();
-            }
-        }
-
-        function startNavigation() {
-            if (typeof NavigationModule !== 'undefined' && typeof RouteModule !== 'undefined') {
-                const nextStop = RouteModule.getNextStop();
-                if (nextStop) {
-                    NavigationModule.startNavigation(nextStop);
-                }
-            }
-        }
-
-        function openQuickVerification() {
-            if (typeof VerificationModule !== 'undefined' && typeof RouteModule !== 'undefined') {
-                const nextStop = RouteModule.getNextStop();
-                if (nextStop) {
-                    VerificationModule.showModal(nextStop);
-                }
-            }
-        }
     </script>
 </body>
 </html>
