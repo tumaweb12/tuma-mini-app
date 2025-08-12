@@ -6,12 +6,10 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>Tuma - Premium Route Navigation</title>
+    <title>Tuma - Route Navigation</title>
     
     <!-- Leaflet CSS -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" 
-          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" 
-          crossorigin=""/>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     
     <style>
         * {
@@ -24,89 +22,66 @@
         :root {
             --primary: #0066FF;
             --primary-dark: #0052CC;
-            --primary-light: rgba(0, 102, 255, 0.1);
             --success: #34C759;
-            --success-light: rgba(52, 199, 89, 0.1);
             --warning: #FF9F0A;
-            --warning-light: rgba(255, 159, 10, 0.1);
             --danger: #FF3B30;
-            --danger-light: rgba(255, 59, 48, 0.1);
-            --purple: #9B59B6;
-            --purple-light: rgba(155, 89, 182, 0.1);
-            
             --surface: #0A0A0B;
             --surface-elevated: rgba(20, 20, 22, 0.95);
             --surface-high: rgba(28, 28, 31, 0.95);
             --glass: rgba(255, 255, 255, 0.05);
             --glass-border: rgba(255, 255, 255, 0.1);
             --glass-heavy: rgba(10, 10, 11, 0.85);
-            
             --text-primary: #FFFFFF;
             --text-secondary: rgba(255, 255, 255, 0.7);
             --text-tertiary: rgba(255, 255, 255, 0.5);
             --border: rgba(255, 255, 255, 0.1);
-            
             --safe-area-bottom: env(safe-area-inset-bottom);
             --safe-area-top: env(safe-area-inset-top);
-            
-            --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.2);
-            --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.3);
-            --shadow-lg: 0 10px 40px rgba(0, 0, 0, 0.4);
-            --shadow-xl: 0 20px 60px rgba(0, 0, 0, 0.5);
         }
 
-        /* Light Mode Theme */
-        body.light-mode {
-            --surface: #F5F5F7;
-            --surface-elevated: rgba(255, 255, 255, 0.95);
-            --surface-high: rgba(255, 255, 255, 0.98);
-            --glass: rgba(0, 0, 0, 0.03);
-            --glass-border: rgba(0, 0, 0, 0.1);
-            --glass-heavy: rgba(255, 255, 255, 0.9);
-            --text-primary: #1C1C1E;
-            --text-secondary: rgba(0, 0, 0, 0.6);
-            --text-tertiary: rgba(0, 0, 0, 0.4);
-            --border: rgba(0, 0, 0, 0.1);
-        }
-
-        html, body {
-            height: 100%;
+        body {
             font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
             background: #000;
             color: var(--text-primary);
             position: fixed;
             width: 100%;
-            -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
+            height: 100%;
             overflow: hidden;
         }
 
-        /* Map Container */
-        .map-container {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 1;
-        }
-
+        /* Map Container - CRITICAL */
         #map {
-            position: absolute;
+            position: absolute !important;
             top: 0;
             left: 0;
-            width: 100%;
-            height: 100%;
+            width: 100% !important;
+            height: 100% !important;
+            z-index: 1;
             background: var(--surface);
         }
 
-        .leaflet-container {
-            background: var(--surface) !important;
-            font-family: inherit;
+        /* Loading Overlay */
+        .loading-overlay {
+            position: fixed;
+            inset: 0;
+            background: var(--surface);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
         }
 
-        .leaflet-control-attribution {
-            display: none !important;
+        .loading-spinner {
+            width: 60px;
+            height: 60px;
+            border: 3px solid var(--glass-border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
         }
 
         /* Top Header */
@@ -116,8 +91,7 @@
             left: 0;
             right: 0;
             background: var(--glass-heavy);
-            backdrop-filter: blur(20px) saturate(180%);
-            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            backdrop-filter: blur(20px);
             z-index: 100;
             padding: 12px 16px;
             padding-top: calc(12px + var(--safe-area-top));
@@ -135,32 +109,22 @@
             height: 40px;
             border-radius: 50%;
             background: var(--glass);
-            backdrop-filter: blur(10px);
             border: 1px solid var(--glass-border);
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
             color: var(--text-primary);
-        }
-
-        .back-button:active {
-            transform: scale(0.95);
-            background: var(--primary);
         }
 
         .route-info-header {
             flex: 1;
-            min-width: 0;
         }
 
         .route-title {
             font-size: 18px;
             font-weight: 700;
-            color: var(--text-primary);
             margin-bottom: 4px;
-            letter-spacing: -0.5px;
         }
 
         .route-stats-bar {
@@ -170,558 +134,11 @@
             color: var(--text-secondary);
         }
 
-        .stat-item {
-            display: flex;
-            align-items: center;
-            gap: 4px;
-        }
-
         .stat-value {
             color: var(--text-primary);
             font-weight: 600;
         }
 
-        /* Theme Toggle */
-        .theme-toggle {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background: var(--glass);
-            backdrop-filter: blur(10px);
-            border: 1px solid var(--glass-border);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: all 0.3s;
-            color: var(--text-primary);
-        }
-
-        .theme-toggle:active {
-            transform: scale(0.95);
-        }
-
-        /* Cash Collection Widget - Premium Money Theme */
-        .cash-widget {
-            position: fixed;
-            top: calc(80px + var(--safe-area-top));
-            left: 16px;
-            right: 16px;
-            background: linear-gradient(135deg, 
-                rgba(34, 197, 94, 0.95),  /* Rich green */
-                rgba(22, 163, 74, 0.85),   /* Forest green */
-                rgba(5, 46, 22, 0.9)       /* Deep black-green */
-            );
-            background-size: 200% 200%;
-            animation: moneyShimmer 8s ease infinite;
-            backdrop-filter: blur(20px) saturate(180%);
-            -webkit-backdrop-filter: blur(20px) saturate(180%);
-            border: 1px solid rgba(34, 197, 94, 0.4);
-            border-radius: 16px;
-            padding: 16px;
-            z-index: 90;
-            box-shadow: 
-                0 4px 20px rgba(34, 197, 94, 0.3),
-                0 8px 32px rgba(0, 0, 0, 0.4),
-                inset 0 1px 0 rgba(255, 255, 255, 0.1);
-            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-            position: relative;
-            overflow: hidden;
-        }
-
-        @keyframes moneyShimmer {
-            0% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-            100% { background-position: 0% 50%; }
-        }
-
-        /* Premium money texture overlay */
-        .cash-widget::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: 
-                repeating-linear-gradient(
-                    45deg,
-                    transparent,
-                    transparent 10px,
-                    rgba(255, 255, 255, 0.02) 10px,
-                    rgba(255, 255, 255, 0.02) 20px
-                );
-            pointer-events: none;
-        }
-
-        /* Floating money particles effect */
-        .cash-widget::after {
-            content: '💵';
-            position: absolute;
-            top: -20px;
-            right: 20px;
-            font-size: 40px;
-            opacity: 0.1;
-            animation: floatMoney 6s ease-in-out infinite;
-            pointer-events: none;
-        }
-
-        @keyframes floatMoney {
-            0%, 100% { transform: translateY(0) rotate(-5deg); }
-            50% { transform: translateY(10px) rotate(5deg); }
-        }
-
-        .cash-widget:hover {
-            transform: translateY(-2px);
-            box-shadow: 
-                0 6px 24px rgba(34, 197, 94, 0.4),
-                0 12px 40px rgba(0, 0, 0, 0.5),
-                inset 0 1px 0 rgba(255, 255, 255, 0.15);
-        }
-
-        .cash-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 12px;
-            position: relative;
-            z-index: 1;
-        }
-
-        .cash-title {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 16px;
-            font-weight: 700;
-            color: #ffffff;
-            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-            letter-spacing: 0.5px;
-        }
-
-        .cash-stats {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 12px;
-            position: relative;
-            z-index: 1;
-        }
-
-        .cash-stat {
-            text-align: center;
-            padding: 10px 8px;
-            background: linear-gradient(135deg,
-                rgba(0, 0, 0, 0.4),
-                rgba(0, 0, 0, 0.2)
-            );
-            border: 1px solid rgba(34, 197, 94, 0.3);
-            border-radius: 12px;
-            backdrop-filter: blur(10px);
-            transition: all 0.3s ease;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .cash-stat::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 1px;
-            background: linear-gradient(90deg,
-                transparent,
-                rgba(255, 255, 255, 0.2),
-                transparent
-            );
-        }
-
-        .cash-stat:hover {
-            background: linear-gradient(135deg,
-                rgba(0, 0, 0, 0.5),
-                rgba(0, 0, 0, 0.3)
-            );
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-        }
-
-        .cash-stat .label {
-            font-size: 11px;
-            color: rgba(255, 255, 255, 0.7);
-            margin-bottom: 6px;
-            display: block;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            font-weight: 600;
-        }
-
-        .cash-stat .value {
-            font-size: 22px;
-            font-weight: 800;
-            color: #ffffff;
-            letter-spacing: -0.5px;
-            text-shadow: 
-                0 2px 4px rgba(0, 0, 0, 0.4),
-                0 0 20px rgba(34, 197, 94, 0.3);
-            font-family: 'SF Mono', Monaco, Consolas, monospace;
-        }
-
-        /* Special styling for collected amount */
-        .cash-stat:nth-child(2) .value {
-            color: #86efac; /* Lighter green for collected */
-        }
-
-        /* Special styling for pending amount */
-        .cash-stat:nth-child(3) .value {
-            color: #fbbf24; /* Gold/yellow for pending */
-        }
-
-        /* Floating Action Buttons */
-        .fab-container {
-            position: fixed;
-            right: 20px;
-            bottom: calc(100px + var(--safe-area-bottom));
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            z-index: 90;
-        }
-
-        .fab {
-            width: 56px;
-            height: 56px;
-            border-radius: 50%;
-            background: var(--glass);
-            backdrop-filter: blur(20px) saturate(180%);
-            -webkit-backdrop-filter: blur(20px) saturate(180%);
-            border: 1px solid var(--glass-border);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-            box-shadow: var(--shadow-md);
-            color: var(--text-primary);
-        }
-
-        .fab:active {
-            transform: scale(0.95);
-        }
-
-        .fab.primary {
-            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-            border: none;
-            color: white;
-            box-shadow: 0 6px 20px rgba(0, 102, 255, 0.4);
-        }
-
-        /* Bottom Navigation Bar */
-        .bottom-nav {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            background: var(--glass-heavy);
-            backdrop-filter: blur(30px) saturate(180%);
-            -webkit-backdrop-filter: blur(30px) saturate(180%);
-            border-top: 1px solid var(--glass-border);
-            padding: 12px 16px;
-            padding-bottom: calc(12px + var(--safe-area-bottom));
-            z-index: 100;
-            transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-        }
-
-        .bottom-nav.hidden {
-            transform: translateY(100%);
-        }
-
-        .nav-actions {
-            display: flex;
-            gap: 12px;
-        }
-
-        .nav-button {
-            flex: 1;
-            background: var(--glass);
-            backdrop-filter: blur(10px);
-            border: 1px solid var(--glass-border);
-            border-radius: 14px;
-            padding: 14px;
-            color: var(--text-primary);
-            font-size: 15px;
-            font-weight: 600;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-        }
-
-        .nav-button:active {
-            transform: scale(0.98);
-        }
-
-        .nav-button.primary {
-            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-            border: none;
-            color: white;
-            box-shadow: 0 4px 20px rgba(0, 102, 255, 0.3);
-        }
-
-        .nav-button.secondary {
-            background: var(--glass);
-        }
-
-        /* Route Details Panel */
-        .route-panel {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            background: var(--glass-heavy);
-            backdrop-filter: blur(30px) saturate(180%);
-            -webkit-backdrop-filter: blur(30px) saturate(180%);
-            border: 1px solid var(--glass-border);
-            border-radius: 24px 24px 0 0;
-            max-height: 70vh;
-            transform: translateY(calc(100% - 60px));
-            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            z-index: 200;
-            box-shadow: var(--shadow-xl);
-            overflow: hidden;
-        }
-
-        .route-panel.expanded {
-            transform: translateY(0);
-        }
-
-        .route-panel.hidden {
-            transform: translateY(100%);
-        }
-
-        .panel-handle {
-            width: 40px;
-            height: 4px;
-            background: var(--glass-border);
-            border-radius: 2px;
-            margin: 12px auto;
-            cursor: grab;
-            transition: all 0.3s ease;
-        }
-
-        .panel-handle:active {
-            cursor: grabbing;
-            background: var(--primary);
-        }
-
-        .panel-header {
-            padding: 0 20px 16px;
-            border-bottom: 1px solid var(--glass-border);
-        }
-
-        .panel-title {
-            font-size: 20px;
-            font-weight: 700;
-            color: var(--text-primary);
-            margin-bottom: 12px;
-            letter-spacing: -0.5px;
-        }
-
-        .panel-content {
-            padding: 20px;
-            overflow-y: auto;
-            max-height: calc(70vh - 100px);
-            -webkit-overflow-scrolling: touch;
-        }
-
-        /* Stop Cards */
-        .stop-card {
-            background: var(--glass);
-            backdrop-filter: blur(10px);
-            border: 1px solid var(--glass-border);
-            border-radius: 16px;
-            padding: 16px;
-            margin-bottom: 12px;
-            display: flex;
-            gap: 12px;
-            position: relative;
-            overflow: hidden;
-            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-        }
-
-        .stop-card:hover {
-            transform: translateX(4px);
-            box-shadow: var(--shadow-md);
-        }
-
-        .stop-card.active {
-            background: linear-gradient(135deg,
-                rgba(0, 102, 255, 0.1),
-                rgba(0, 102, 255, 0.05)
-            );
-            border-color: rgba(0, 102, 255, 0.3);
-        }
-
-        .stop-card.completed {
-            opacity: 0.6;
-            background: linear-gradient(135deg,
-                rgba(52, 199, 89, 0.05),
-                transparent
-            );
-        }
-
-        .stop-indicator {
-            width: 44px;
-            height: 44px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 700;
-            font-size: 16px;
-            flex-shrink: 0;
-            transition: all 0.3s ease;
-        }
-
-        .stop-indicator.pickup {
-            background: linear-gradient(135deg, var(--warning), #ff8c00);
-            color: white;
-            box-shadow: 0 4px 12px rgba(255, 159, 10, 0.3);
-        }
-
-        .stop-indicator.delivery {
-            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-            color: white;
-            box-shadow: 0 4px 12px rgba(0, 102, 255, 0.3);
-        }
-
-        .stop-indicator.completed {
-            background: linear-gradient(135deg, var(--success), #2ecc71);
-            box-shadow: 0 4px 12px rgba(52, 199, 89, 0.3);
-        }
-
-        .stop-details {
-            flex: 1;
-            min-width: 0;
-        }
-
-        .stop-type {
-            display: inline-block;
-            padding: 4px 8px;
-            border-radius: 6px;
-            font-size: 10px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-bottom: 8px;
-        }
-
-        .stop-type.pickup {
-            background: var(--warning-light);
-            color: var(--warning);
-        }
-
-        .stop-type.delivery {
-            background: var(--primary-light);
-            color: var(--primary);
-        }
-
-        .stop-address {
-            font-size: 16px;
-            font-weight: 600;
-            color: var(--text-primary);
-            margin-bottom: 8px;
-            line-height: 1.4;
-        }
-
-        .stop-info {
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-            font-size: 14px;
-            color: var(--text-secondary);
-        }
-
-        .info-row {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .payment-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            background: linear-gradient(135deg,
-                rgba(255, 159, 10, 0.2),
-                rgba(255, 159, 10, 0.1)
-            );
-            border: 1px solid rgba(255, 159, 10, 0.5);
-            border-radius: 20px;
-            padding: 6px 12px;
-            margin-top: 8px;
-            font-size: 13px;
-            font-weight: 600;
-            color: var(--warning);
-        }
-
-        .stop-actions {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        .action-btn {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background: var(--glass);
-            backdrop-filter: blur(10px);
-            border: 1px solid var(--glass-border);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            color: var(--text-primary);
-            text-decoration: none;
-        }
-
-        .action-btn:hover {
-            background: var(--primary);
-            color: white;
-        }
-
-        /* Toggle Button */
-        .toggle-details-btn {
-            position: fixed;
-            bottom: calc(80px + var(--safe-area-bottom));
-            left: 50%;
-            transform: translateX(-50%);
-            background: var(--glass-heavy);
-            backdrop-filter: blur(20px) saturate(180%);
-            border: 1px solid var(--glass-border);
-            border-radius: 20px;
-            padding: 8px 16px;
-            color: var(--text-primary);
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            transition: all 0.3s;
-            z-index: 95;
-            box-shadow: var(--shadow-md);
-        }
-
-        .toggle-details-btn:hover {
-            background: var(--primary);
-            color: white;
-        }
-
-        /* Verify Button in Header */
         .verify-button {
             padding: 10px 20px;
             background: linear-gradient(135deg, var(--primary), var(--primary-dark));
@@ -734,17 +151,10 @@
             display: flex;
             align-items: center;
             gap: 6px;
-            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-            box-shadow: 0 4px 12px rgba(0, 102, 255, 0.3);
         }
 
         .verify-button.pickup {
             background: linear-gradient(135deg, var(--warning), #ff8c00);
-            box-shadow: 0 4px 12px rgba(255, 159, 10, 0.3);
-        }
-
-        .verify-button:active {
-            transform: scale(0.95);
         }
 
         .verify-button:disabled {
@@ -752,204 +162,730 @@
             cursor: not-allowed;
         }
 
-        /* Loading Overlay */
-        .loading-overlay {
+        /* Premium Cash Widget */
+        .cash-widget {
             position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: var(--surface);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            z-index: 10000;
-            transition: opacity 0.5s ease;
+            top: calc(80px + var(--safe-area-top));
+            left: 16px;
+            right: 16px;
+            max-width: 400px;
+            background: linear-gradient(135deg, 
+                rgba(34, 197, 94, 0.95),
+                rgba(22, 163, 74, 0.85),
+                rgba(5, 46, 22, 0.9)
+            );
+            background-size: 200% 200%;
+            animation: moneyShimmer 8s ease infinite;
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(34, 197, 94, 0.4);
+            border-radius: 16px;
+            padding: 16px;
+            z-index: 90;
+            box-shadow: 
+                0 4px 20px rgba(34, 197, 94, 0.3),
+                0 8px 32px rgba(0, 0, 0, 0.4);
+            position: relative;
+            overflow: hidden;
         }
 
-        .loading-content {
-            text-align: center;
+        @keyframes moneyShimmer {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
         }
 
-        .loading-spinner {
-            width: 60px;
-            height: 60px;
-            border: 3px solid var(--glass-border);
-            border-top-color: var(--primary);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 20px;
+        .cash-widget::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: repeating-linear-gradient(
+                45deg,
+                transparent,
+                transparent 10px,
+                rgba(255, 255, 255, 0.02) 10px,
+                rgba(255, 255, 255, 0.02) 20px
+            );
+            pointer-events: none;
         }
 
-        @keyframes spin {
-            to { transform: rotate(360deg); }
+        .cash-widget::after {
+            content: '💵';
+            position: absolute;
+            top: -20px;
+            right: 20px;
+            font-size: 40px;
+            opacity: 0.1;
+            animation: floatMoney 6s ease-in-out infinite;
         }
 
-        .loading-text {
-            font-size: 18px;
-            font-weight: 600;
-            color: var(--text-primary);
-            margin-bottom: 8px;
+        @keyframes floatMoney {
+            0%, 100% { transform: translateY(0) rotate(-5deg); }
+            50% { transform: translateY(10px) rotate(5deg); }
         }
 
-        /* Light Mode Map Tiles */
-        body.light-mode .leaflet-tile {
-            filter: none !important;
-        }
-
-        /* Dark Mode Map Tiles */
-        body:not(.light-mode) .leaflet-tile {
-            filter: brightness(0.6) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3) brightness(0.7);
-        }
-
-        /* Custom Scrollbar */
-        .panel-content::-webkit-scrollbar {
-            width: 6px;
-        }
-
-        .panel-content::-webkit-scrollbar-track {
-            background: var(--glass);
-            border-radius: 3px;
-        }
-
-        .panel-content::-webkit-scrollbar-thumb {
-            background: var(--glass-border);
-            border-radius: 3px;
-        }
-
-        /* Vendor Info Card */
-        .vendor-info {
-            background: var(--glass);
-            backdrop-filter: blur(10px);
-            border: 1px solid var(--glass-border);
-            border-radius: 12px;
-            padding: 12px;
-            margin-bottom: 8px;
+        .cash-header {
             display: flex;
             align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+            font-size: 16px;
+            font-weight: 700;
+            color: white;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .cash-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
             gap: 12px;
         }
 
-        .vendor-avatar {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, var(--primary), var(--purple));
+        .cash-stat {
+            text-align: center;
+            padding: 10px;
+            background: linear-gradient(135deg, rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.2));
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            border-radius: 12px;
+        }
+
+        .cash-stat .label {
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.7);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            display: block;
+            margin-bottom: 6px;
+        }
+
+        .cash-stat .value {
+            font-size: 22px;
+            font-weight: 800;
+            color: white;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+            font-family: 'SF Mono', Monaco, monospace;
+        }
+
+        .cash-stat:nth-child(2) .value {
+            color: #86efac;
+        }
+
+        .cash-stat:nth-child(3) .value {
+            color: #fbbf24;
+        }
+
+        /* Bottom Nav */
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--glass-heavy);
+            backdrop-filter: blur(30px);
+            border-top: 1px solid var(--glass-border);
+            padding: 12px 16px;
+            padding-bottom: calc(12px + var(--safe-area-bottom));
+            z-index: 100;
+        }
+
+        .nav-actions {
+            display: flex;
+            gap: 12px;
+        }
+
+        .nav-button {
+            flex: 1;
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            border-radius: 14px;
+            padding: 14px;
+            color: var(--text-primary);
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
-            color: white;
-            font-weight: 700;
-            font-size: 18px;
+            gap: 8px;
         }
 
-        .vendor-details {
+        .nav-button.primary {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            border: none;
+            color: white;
+        }
+
+        /* Route Panel */
+        .route-panel {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--glass-heavy);
+            backdrop-filter: blur(30px);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px 24px 0 0;
+            max-height: 70vh;
+            transform: translateY(100%);
+            transition: transform 0.3s;
+            z-index: 200;
+            overflow: hidden;
+        }
+
+        .route-panel.visible {
+            transform: translateY(0);
+        }
+
+        .panel-handle {
+            width: 40px;
+            height: 4px;
+            background: var(--glass-border);
+            border-radius: 2px;
+            margin: 12px auto;
+        }
+
+        .panel-header {
+            padding: 0 20px 16px;
+            border-bottom: 1px solid var(--glass-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .panel-content {
+            padding: 20px;
+            overflow-y: auto;
+            max-height: calc(70vh - 100px);
+        }
+
+        .stop-card {
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            padding: 16px;
+            margin-bottom: 12px;
+            display: flex;
+            gap: 12px;
+        }
+
+        .stop-indicator {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            color: white;
+        }
+
+        .stop-indicator.pickup {
+            background: linear-gradient(135deg, var(--warning), #ff8c00);
+        }
+
+        .stop-indicator.delivery {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+        }
+
+        .stop-details {
             flex: 1;
         }
 
-        .vendor-name {
-            font-size: 14px;
+        .stop-address {
+            font-size: 16px;
             font-weight: 600;
-            color: var(--text-primary);
-        }
-
-        .vendor-phone {
-            font-size: 13px;
-            color: var(--text-secondary);
-        }
-
-        /* Empty State */
-        .empty-state {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            text-align: center;
-            padding: 40px;
-            background: var(--glass);
-            backdrop-filter: blur(20px);
-            border: 1px solid var(--glass-border);
-            border-radius: 24px;
-            z-index: 100;
-            box-shadow: var(--shadow-xl);
-        }
-
-        .empty-icon {
-            font-size: 72px;
-            margin-bottom: 20px;
-            filter: grayscale(0.5);
-        }
-
-        .empty-title {
-            font-size: 24px;
-            font-weight: 700;
-            color: var(--text-primary);
             margin-bottom: 8px;
         }
 
-        .empty-message {
+        .stop-info {
+            font-size: 14px;
             color: var(--text-secondary);
-            margin-bottom: 24px;
         }
 
-        .empty-action {
-            padding: 14px 28px;
-            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+        .payment-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(255, 159, 10, 0.1);
+            border: 1px solid rgba(255, 159, 10, 0.5);
+            border-radius: 20px;
+            padding: 6px 12px;
+            margin-top: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--warning);
+        }
+
+        /* Verification Modal */
+        .verification-modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            padding: 20px;
+        }
+
+        .modal-content {
+            background: var(--surface-elevated);
+            border-radius: 24px;
+            max-width: 420px;
+            width: 90%;
+            overflow: hidden;
+        }
+
+        .modal-header {
+            padding: 24px;
+            text-align: center;
             color: white;
+        }
+
+        .modal-header.pickup {
+            background: linear-gradient(135deg, #FF9F0A, #ff8c00);
+        }
+
+        .modal-header.delivery {
+            background: linear-gradient(135deg, #0066FF, #0052cc);
+        }
+
+        .modal-body {
+            padding: 24px;
+        }
+
+        .verification-input {
+            width: 100%;
+            padding: 16px;
+            font-size: 24px;
+            text-align: center;
+            background: var(--glass);
+            border: 2px solid var(--glass-border);
+            border-radius: 12px;
+            color: var(--text-primary);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin: 20px 0;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 12px;
+        }
+
+        .modal-btn {
+            flex: 1;
+            padding: 16px;
             border: none;
-            border-radius: 16px;
+            border-radius: 12px;
             font-size: 16px;
             font-weight: 600;
             cursor: pointer;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 20px rgba(0, 102, 255, 0.3);
         }
 
-        /* Responsive */
-        @media (min-width: 428px) {
-            .cash-widget {
-                max-width: 400px;
-            }
+        .modal-btn.cancel {
+            background: var(--glass);
+            color: var(--text-primary);
+            border: 1px solid var(--glass-border);
+        }
+
+        .modal-btn.verify {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+        }
+
+        /* Hide Leaflet attribution */
+        .leaflet-control-attribution {
+            display: none !important;
+        }
+
+        /* Dark map tiles */
+        .leaflet-tile {
+            filter: brightness(0.6) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3) brightness(0.7);
         }
     </style>
 </head>
 <body>
+    <!-- Map Container -->
+    <div id="map"></div>
+    
     <!-- Loading Overlay -->
     <div id="loadingOverlay" class="loading-overlay">
-        <div class="loading-content">
-            <div class="loading-spinner"></div>
-            <div class="loading-text">Loading Route</div>
-        </div>
+        <div class="loading-spinner"></div>
     </div>
-    
-    <!-- Map Container -->
-    <div class="map-container">
-        <div id="map"></div>
-    </div>
-    
-    <!-- UI elements will be dynamically created by route.js -->
     
     <!-- Leaflet JS -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" 
-            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" 
-            crossorigin=""></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     
-    <!-- Load the complete route.js module from your paste.txt -->
-    <script src="./route.js"></script>
-    
-    <!-- Initialize the route navigation -->
+    <!-- Route Navigation System -->
     <script>
-        // The route.js module will handle everything
-        console.log('Premium Route Navigation HTML loaded');
-        console.log('Waiting for route.js to initialize...');
-        
-        // Export debug interface for testing
-        window.addEventListener('load', () => {
-            if (window.RouteDebug) {
-                console.log('✅ Route system ready. Debug available at window.RouteDebug');
+        // Configuration
+        const CONFIG = {
+            api: {
+                SUPABASE_URL: 'https://btxavqfoirdzwpfrvezp.supabase.co',
+                SUPABASE_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ0eGF2cWZvaXJkendwZnJ2ZXpwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE0ODcxMTcsImV4cCI6MjA2NzA2MzExN30.kQKpukFGx-cBl1zZRuXmex02ifkZ751WCUfQPogYutk'
+            },
+            defaults: {
+                nairobi: { lat: -1.2921, lng: 36.8219 }
             }
-        });
+        };
+
+        // Global State
+        const GlobalState = {
+            route: null,
+            map: null,
+            markers: [],
+            cash: {
+                total: 0,
+                collected: 0,
+                pending: 0
+            },
+            currentStop: null,
+            nextStop: null
+        };
+
+        // Initialize System
+        async function initialize() {
+            console.log('Initializing Route Navigation...');
+            
+            // Load route from localStorage
+            const storedRoute = localStorage.getItem('tuma_active_route');
+            if (!storedRoute) {
+                showEmptyState();
+                return;
+            }
+            
+            try {
+                GlobalState.route = JSON.parse(storedRoute);
+                console.log('Route loaded:', GlobalState.route.name);
+                
+                // Process stops
+                if (!GlobalState.route.stops && GlobalState.route.parcels) {
+                    GlobalState.route.stops = generateStopsFromParcels(GlobalState.route.parcels);
+                }
+                
+                // Find next stop
+                GlobalState.nextStop = GlobalState.route.stops.find(s => !s.completed);
+                
+                // Calculate cash
+                calculateCash();
+                
+                // Initialize map
+                initMap();
+                
+                // Create UI
+                createUI();
+                
+                // Hide loading
+                document.getElementById('loadingOverlay').style.display = 'none';
+                
+            } catch (error) {
+                console.error('Error loading route:', error);
+                showEmptyState();
+            }
+        }
+
+        function generateStopsFromParcels(parcels) {
+            const stops = [];
+            
+            parcels.forEach(parcel => {
+                // Pickup
+                stops.push({
+                    id: `pickup-${parcel.id}`,
+                    type: 'pickup',
+                    parcelId: parcel.id,
+                    parcelCode: parcel.parcel_code || 'PKG-XXX',
+                    address: parcel.sender_address || 'Pickup Location',
+                    location: {
+                        lat: parseFloat(parcel.pickup_lat) || CONFIG.defaults.nairobi.lat,
+                        lng: parseFloat(parcel.pickup_lng) || CONFIG.defaults.nairobi.lng
+                    },
+                    customerName: parcel.sender_name || 'Sender',
+                    customerPhone: parcel.sender_phone || '',
+                    completed: false
+                });
+                
+                // Delivery
+                stops.push({
+                    id: `delivery-${parcel.id}`,
+                    type: 'delivery',
+                    parcelId: parcel.id,
+                    parcelCode: parcel.parcel_code || 'PKG-XXX',
+                    address: parcel.recipient_address || 'Delivery Location',
+                    location: {
+                        lat: parseFloat(parcel.delivery_lat) || CONFIG.defaults.nairobi.lat + 0.01,
+                        lng: parseFloat(parcel.delivery_lng) || CONFIG.defaults.nairobi.lng + 0.01
+                    },
+                    customerName: parcel.recipient_name || 'Recipient',
+                    customerPhone: parcel.recipient_phone || '',
+                    paymentMethod: parcel.payment_method || 'cash',
+                    price: parseFloat(parcel.price) || 0,
+                    completed: false
+                });
+            });
+            
+            return stops;
+        }
+
+        function calculateCash() {
+            GlobalState.cash.total = 0;
+            GlobalState.cash.collected = 0;
+            
+            GlobalState.route.stops?.forEach(stop => {
+                if (stop.type === 'delivery' && stop.paymentMethod === 'cash') {
+                    GlobalState.cash.total += stop.price || 0;
+                    if (stop.completed) {
+                        GlobalState.cash.collected += stop.price || 0;
+                    }
+                }
+            });
+            
+            GlobalState.cash.pending = GlobalState.cash.total - GlobalState.cash.collected;
+        }
+
+        function initMap() {
+            // Initialize Leaflet map
+            GlobalState.map = L.map('map').setView([CONFIG.defaults.nairobi.lat, CONFIG.defaults.nairobi.lng], 13);
+            
+            // Add tile layer
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19
+            }).addTo(GlobalState.map);
+            
+            // Plot stops
+            GlobalState.route.stops?.forEach((stop, index) => {
+                const icon = L.divIcon({
+                    className: 'custom-marker',
+                    html: `<div style="
+                        background: ${stop.type === 'pickup' ? '#FF9F0A' : '#0066FF'};
+                        color: white;
+                        width: 40px;
+                        height: 40px;
+                        border-radius: 50%;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        font-weight: bold;
+                        border: 3px solid white;
+                        box-shadow: 0 3px 10px rgba(0,0,0,0.3);
+                    ">${stop.completed ? '✓' : index + 1}</div>`,
+                    iconSize: [40, 40],
+                    iconAnchor: [20, 20]
+                });
+                
+                const marker = L.marker([stop.location.lat, stop.location.lng], {icon})
+                    .addTo(GlobalState.map)
+                    .bindPopup(`
+                        <b>${stop.type.toUpperCase()}</b><br>
+                        ${stop.address}<br>
+                        <small>${stop.customerName}</small>
+                    `);
+                
+                GlobalState.markers.push(marker);
+            });
+            
+            // Draw route line
+            if (GlobalState.route.stops?.length > 1) {
+                const coords = GlobalState.route.stops.map(s => [s.location.lat, s.location.lng]);
+                L.polyline(coords, {
+                    color: '#0066FF',
+                    weight: 4,
+                    opacity: 0.7
+                }).addTo(GlobalState.map);
+                
+                // Fit bounds
+                const bounds = L.latLngBounds(coords);
+                GlobalState.map.fitBounds(bounds, {padding: [50, 50]});
+            }
+        }
+
+        function createUI() {
+            // Header
+            const header = document.createElement('div');
+            header.className = 'top-header';
+            header.innerHTML = `
+                <div class="header-content">
+                    <button class="back-button" onclick="goBack()">←</button>
+                    <div class="route-info-header">
+                        <div class="route-title">${GlobalState.route?.name || 'Route'}</div>
+                        <div class="route-stats-bar">
+                            <div><span class="stat-value">${GlobalState.route?.stops?.length || 0}</span> stops</div>
+                            <div><span class="stat-value">KES ${GlobalState.cash.pending}</span> cash</div>
+                        </div>
+                    </div>
+                    <button class="verify-button ${GlobalState.nextStop?.type || ''}" 
+                            onclick="showVerification()" 
+                            ${!GlobalState.nextStop ? 'disabled' : ''}>
+                        ✓ Verify ${GlobalState.nextStop?.type || ''}
+                    </button>
+                </div>
+            `;
+            document.body.appendChild(header);
+            
+            // Cash Widget
+            if (GlobalState.cash.total > 0) {
+                const cashWidget = document.createElement('div');
+                cashWidget.className = 'cash-widget';
+                cashWidget.innerHTML = `
+                    <div class="cash-header">
+                        💰 Cash Collection
+                    </div>
+                    <div class="cash-stats">
+                        <div class="cash-stat">
+                            <span class="label">Total</span>
+                            <span class="value">KES ${GlobalState.cash.total}</span>
+                        </div>
+                        <div class="cash-stat">
+                            <span class="label">Collected</span>
+                            <span class="value">KES ${GlobalState.cash.collected}</span>
+                        </div>
+                        <div class="cash-stat">
+                            <span class="label">Pending</span>
+                            <span class="value">KES ${GlobalState.cash.pending}</span>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(cashWidget);
+            }
+            
+            // Bottom Nav
+            const bottomNav = document.createElement('div');
+            bottomNav.className = 'bottom-nav';
+            bottomNav.innerHTML = `
+                <div class="nav-actions">
+                    <button class="nav-button" onclick="togglePanel()">📋 Details</button>
+                    <button class="nav-button primary" onclick="startNavigation()">🧭 Start Navigation</button>
+                </div>
+            `;
+            document.body.appendChild(bottomNav);
+            
+            // Route Panel
+            const panel = document.createElement('div');
+            panel.className = 'route-panel';
+            panel.id = 'routePanel';
+            panel.innerHTML = `
+                <div class="panel-handle"></div>
+                <div class="panel-header">
+                    <h2 style="margin: 0; font-size: 20px;">Route Details</h2>
+                    <button onclick="togglePanel()" style="background: none; border: none; color: var(--text-primary); font-size: 24px; cursor: pointer;">×</button>
+                </div>
+                <div class="panel-content">
+                    ${GlobalState.route?.stops?.map((stop, i) => `
+                        <div class="stop-card">
+                            <div class="stop-indicator ${stop.type}">
+                                ${stop.completed ? '✓' : i + 1}
+                            </div>
+                            <div class="stop-details">
+                                <div class="stop-address">${stop.address}</div>
+                                <div class="stop-info">
+                                    👤 ${stop.customerName}<br>
+                                    📋 ${stop.parcelCode}
+                                </div>
+                                ${stop.type === 'delivery' && stop.paymentMethod === 'cash' ? `
+                                    <div class="payment-badge">
+                                        💰 Collect KES ${stop.price}
+                                    </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                    `).join('') || '<p>No stops</p>'}
+                </div>
+            `;
+            document.body.appendChild(panel);
+        }
+
+        function showVerification() {
+            if (!GlobalState.nextStop) return;
+            
+            const modal = document.createElement('div');
+            modal.className = 'verification-modal';
+            modal.innerHTML = `
+                <div class="modal-content">
+                    <div class="modal-header ${GlobalState.nextStop.type}">
+                        <h2>${GlobalState.nextStop.type === 'pickup' ? '📦 Pickup' : '📍 Delivery'} Verification</h2>
+                        <p>${GlobalState.nextStop.address}</p>
+                    </div>
+                    <div class="modal-body">
+                        <h3>Stop Details</h3>
+                        <p>Customer: ${GlobalState.nextStop.customerName}</p>
+                        <p>Parcel: ${GlobalState.nextStop.parcelCode}</p>
+                        
+                        <label style="display: block; margin-top: 20px; margin-bottom: 8px;">
+                            Enter ${GlobalState.nextStop.type} Code:
+                        </label>
+                        <input type="text" 
+                               class="verification-input" 
+                               id="verifyCode" 
+                               placeholder="ENTER CODE"
+                               autocomplete="off">
+                        
+                        <!-- NEVER show the actual code - removed for security -->
+                        
+                        <div class="modal-actions">
+                            <button class="modal-btn cancel" onclick="closeModal()">Cancel</button>
+                            <button class="modal-btn verify" onclick="verifyStop()">Verify</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            document.getElementById('verifyCode').focus();
+        }
+
+        function closeModal() {
+            document.querySelector('.verification-modal')?.remove();
+        }
+
+        function verifyStop() {
+            const code = document.getElementById('verifyCode')?.value;
+            if (code && code.length > 0) {
+                // Mark stop as complete
+                if (GlobalState.nextStop) {
+                    GlobalState.nextStop.completed = true;
+                    GlobalState.nextStop.timestamp = new Date().toISOString();
+                    
+                    // Save to localStorage
+                    localStorage.setItem('tuma_active_route', JSON.stringify(GlobalState.route));
+                    
+                    // Recalculate and refresh
+                    calculateCash();
+                    location.reload();
+                }
+            }
+        }
+
+        function togglePanel() {
+            const panel = document.getElementById('routePanel');
+            if (panel) {
+                panel.classList.toggle('visible');
+            }
+        }
+
+        function startNavigation() {
+            alert('Starting navigation to next stop...');
+            // Navigation implementation
+        }
+
+        function goBack() {
+            window.location.href = './rider.html';
+        }
+
+        function showEmptyState() {
+            document.getElementById('loadingOverlay').style.display = 'none';
+            document.body.innerHTML = `
+                <div style="display: flex; align-items: center; justify-content: center; height: 100%; text-align: center; padding: 20px;">
+                    <div>
+                        <div style="font-size: 72px; margin-bottom: 20px;">📦</div>
+                        <h2>No Active Route</h2>
+                        <p style="color: var(--text-secondary); margin: 20px 0;">Please claim a route from the dashboard</p>
+                        <button onclick="goBack()" style="padding: 14px 28px; background: var(--primary); color: white; border: none; border-radius: 12px; font-size: 16px; cursor: pointer;">
+                            Back to Dashboard
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Initialize on load
+        window.addEventListener('DOMContentLoaded', initialize);
     </script>
 </body>
 </html>
