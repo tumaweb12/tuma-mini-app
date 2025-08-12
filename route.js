@@ -1,335 +1,150 @@
 /**
- * ENHANCED ROUTE NAVIGATION MODULE - PART 1
- * Complete Supabase Integration, Modern Glassmorphic UI, Dynamic Route Optimization
- * Core Infrastructure, Configuration, and Data Management
+ * COMPLETE MERGED ROUTE NAVIGATION SYSTEM - PART 1 OF 2
+ * Full version combining dynamic routing from Paste 1/2 with ALL enhanced features from Paste 3
+ * Includes payment tracking, proof of delivery, Waze-style navigation, and dynamic stop generation
  */
 
 // ============================================================================
-// INITIALIZATION GUARD
+// DEVELOPMENT CONFIGURATION (from Paste 3)
 // ============================================================================
-let routeNavigationInitialized = false;
+
+const DEV_CONFIG = {
+    isDevelopment: window.location.hostname === 'localhost' || 
+                   window.location.hostname === '127.0.0.1' ||
+                   window.location.hostname.includes('github.io'),
+    testRider: {
+        id: 'ef5438ef-0cc0-4e35-8d1b-be18dbce7fe4',
+        name: 'Bobby G',
+        phone: '0725046880'
+    },
+    verboseLogging: true,
+    ignoreRiderNotFound: true
+};
 
 // ============================================================================
-// GLOBAL CONFIGURATION WITH SUPABASE
+// CONFIGURATION (Combined from all versions)
 // ============================================================================
 
 const CONFIG = {
     api: {
-        OPENROUTE_KEY: '5b3ce3597851110001cf624841e48578ffb34c6b96dfe3bbe9b3ad4c',
         SUPABASE_URL: 'https://btxavqfoirdzwpfrvezp.supabase.co',
         SUPABASE_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ0eGF2cWZvaXJkendwZnJ2ZXpwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE0ODcxMTcsImV4cCI6MjA2NzA2MzExN30.kQKpukFGx-cBl1zZRuXmex02ifkZ751WCUfQPogYutk',
-        SUPABASE_HEADERS: {
-            'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ0eGF2cWZvaXJkendwZnJ2ZXpwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE0ODcxMTcsImV4cCI6MjA2NzA2MzExN30.kQKpukFGx-cBl1zZRuXmex02ifkZ751WCUfQPogYutk',
-            'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ0eGF2cWZvaXJkendwZnJ2ZXpwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE0ODcxMTcsImV4cCI6MjA2NzA2MzExN30.kQKpukFGx-cBl1zZRuXmex02ifkZ751WCUfQPogYutk',
-            'Content-Type': 'application/json',
-            'Prefer': 'return=representation'
-        }
+        OPENROUTE_KEY: '5b3ce3597851110001cf624841e48578ffb34c6b96dfe3bbe9b3ad4c'
     },
-    business: {
-        riderCommission: 0.70,
-        platformCommission: 0.30,
-        maxUnpaid: 300,
-        warningThreshold: 250
+    navigation: {
+        proximityRadius: 50, // meters
+        arrivalRadius: 30, // meters
+        updateInterval: 5000, // ms
+        headingUp: false,
+        smoothMovement: true,
+        autoZoom: true,
+        mapRotatable: true
     },
     defaults: {
         nairobi: { lat: -1.2921, lng: 36.8219 }
     },
-    dev: {
-        isDevelopment: window.location.hostname === 'localhost' || 
-                       window.location.hostname === '127.0.0.1' ||
-                       window.location.hostname.includes('github.io'),
-        testRider: {
-            id: 'ef5438ef-0cc0-4e35-8d1b-be18dbce7fe4',
-            name: 'Bobby G',
-            phone: '0725046880'
-        },
-        verboseLogging: true,
-        ignoreRiderNotFound: true,
-        useLocalStorage: true
-    },
-    navigation: {
-        headingUp: false,
-        smoothMovement: true,
-        autoZoom: true,
-        mapRotatable: true,
-        useDynamicOptimization: true,
-        proximityRadius: 50, // meters
-        arrivalRadius: 30 // meters
-    },
-    ui: {
-        theme: 'glassmorphic',
-        animations: true,
-        hapticFeedback: true
+    business: {
+        commission: {
+            rider: 0.70,      // 70% of delivery fee goes to rider
+            platform: 0.30,   // 30% platform fee
+            maxUnpaid: 300,   // Max unpaid commission before blocking
+            warningThreshold: 250  // Show warning at this amount
+        }
     }
 };
 
 // ============================================================================
-// GLOBAL STATE MANAGEMENT
+// GLOBAL STATE (Enhanced from Paste 3 with dynamic routing support)
 // ============================================================================
 
 const GlobalState = {
+    // Core route data
     route: null,
     rider: null,
     map: null,
     markers: [],
     polylines: [],
+    routePolyline: null,
+    directionsPolyline: null,
+    
+    // Location tracking
     location: null,
-    lastLocation: null,
-    lastLocationTime: null,
-    tracking: {
-        watchId: null,
-        isActive: false,
-        heading: 0,
-        speed: 0,
-        accuracy: 0,
-        interval: null,
-        proximityNotified: false,
-        lastUpdate: null
-    },
-    navigation: {
-        isActive: false,
-        isFollowing: true,
-        currentInstruction: null,
-        directionsPolyline: null,
-        mapBearing: 0,
-        lastMapRotation: 0,
-        targetStop: null,
-        routeGeometry: null
-    },
-    ui: {
-        panelVisible: true,
-        panelExpanded: false,
-        pickupPhaseCompleted: false,
-        loadingVisible: true
-    },
-    parcels: {
-        inPossession: [],
-        cashToCollect: 0,
-        cashCollected: 0,
-        paymentsByStop: {},
-        all: []
-    },
-    verification: {
-        currentStop: null,
-        podData: null,
-        verificationCode: null
-    },
-    offline: {
-        proofs: [],
-        pendingUpdates: [],
-        lastSync: null
-    },
-    earnings: {
-        totalRouteEarnings: 0,
-        routeCommission: 0,
-        completedEarnings: 0
-    },
     locationMarker: null,
     accuracyCircle: null,
     radiusCircle: null,
+    lastLocation: null,
+    lastLocationTime: null,
+    locationWatchId: null,
+    
+    // Tracking state
+    tracking: {
+        watchId: null,
+        isActive: false,
+        lastUpdate: null,
+        heading: 0,
+        speed: 0,
+        accuracy: 0,
+        interval: null
+    },
+    
+    // UI state
+    ui: {
+        panelExpanded: false,
+        panelVisible: true,
+        loadingVisible: true,
+        navigationActive: false
+    },
+    
+    // Offline support
+    offline: {
+        queue: [],
+        isOffline: false
+    },
+    
+    // Cash collection tracking
+    cash: {
+        totalToCollect: 0,
+        totalCollected: 0,
+        byDelivery: {},
+        paymentsByStop: {}
+    },
+    
+    // Parcel tracking
+    parcels: {
+        inPossession: []
+    },
+    
+    // Current state
+    currentStop: null,
+    nextStop: null,
+    currentStopIndex: 0,
+    
+    // Navigation state (from Paste 3)
+    proximityNotified: false,
     routeControl: null,
-    optimizedSequence: null,
-    supabase: {
-        connected: false,
-        lastFetch: null,
-        retryCount: 0
-    }
+    pickupPhaseCompleted: false,
+    isFollowingUser: true,
+    lastMapRotation: 0,
+    smoothLocationInterval: null,
+    mapBearing: 0,
+    
+    // Financial tracking
+    totalRouteEarnings: 0,
+    routeCommission: 0
 };
 
 // ============================================================================
-// SUPABASE MODULE - Database Integration
+// SUPABASE API MODULE (Enhanced with POD support)
 // ============================================================================
 
-const SupabaseModule = {
-    // Initialize connection
-    async initialize() {
-        try {
-            console.log('🔌 Connecting to Supabase...');
-            
-            // Test connection
-            const response = await fetch(`${CONFIG.api.SUPABASE_URL}/rest/v1/`, {
-                headers: CONFIG.api.SUPABASE_HEADERS
-            });
-            
-            if (response.ok) {
-                GlobalState.supabase.connected = true;
-                console.log('✅ Supabase connected successfully');
-                return true;
-            } else {
-                console.error('❌ Supabase connection failed:', response.status);
-                return false;
-            }
-        } catch (error) {
-            console.error('❌ Supabase connection error:', error);
-            return false;
-        }
+const SupabaseAPI = {
+    headers: {
+        'apikey': CONFIG.api.SUPABASE_KEY,
+        'Authorization': `Bearer ${CONFIG.api.SUPABASE_KEY}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=representation'
     },
 
-    // Fetch active route for rider
-    async fetchActiveRoute(riderId) {
-        if (!riderId && CONFIG.dev.isDevelopment) {
-            riderId = CONFIG.dev.testRider.id;
-        }
-        
-        if (!riderId) {
-            console.error('No rider ID provided');
-            return this.createDemoRoute();
-        }
-
-        try {
-            console.log(`📥 Fetching active route for rider: ${riderId}`);
-            
-            // First, get the active route
-            const routeResponse = await fetch(
-                `${CONFIG.api.SUPABASE_URL}/rest/v1/routes?rider_id=eq.${riderId}&status=eq.active&select=*`,
-                { headers: CONFIG.api.SUPABASE_HEADERS }
-            );
-
-            if (!routeResponse.ok) {
-                throw new Error(`Route fetch failed: ${routeResponse.status}`);
-            }
-
-            const routes = await routeResponse.json();
-            
-            if (!routes || routes.length === 0) {
-                console.log('No active routes found, using demo route');
-                return this.createDemoRoute();
-            }
-
-            const activeRoute = routes[0];
-            console.log('📍 Active route found:', activeRoute.name);
-
-            // Fetch parcels for this route
-            const parcelsResponse = await fetch(
-                `${CONFIG.api.SUPABASE_URL}/rest/v1/parcels?route_id=eq.${activeRoute.id}&select=*`,
-                { headers: CONFIG.api.SUPABASE_HEADERS }
-            );
-
-            if (!parcelsResponse.ok) {
-                throw new Error(`Parcels fetch failed: ${parcelsResponse.status}`);
-            }
-
-            const parcels = await parcelsResponse.json();
-            console.log(`📦 Found ${parcels.length} parcels for route`);
-
-            // Combine route with parcels
-            activeRoute.parcels = parcels;
-            
-            // Store in state
-            GlobalState.supabase.lastFetch = new Date().toISOString();
-            
-            return activeRoute;
-
-        } catch (error) {
-            console.error('Error fetching route from Supabase:', error);
-            GlobalState.supabase.retryCount++;
-            
-            // Try to load from local storage as fallback
-            if (CONFIG.dev.useLocalStorage) {
-                const localRoute = this.loadFromLocalStorage();
-                if (localRoute) return localRoute;
-            }
-            
-            // Use demo route as last resort
-            return this.createDemoRoute();
-        }
-    },
-
-    // Create demo route for testing
-    createDemoRoute() {
-        console.log('🎮 Creating demo route for testing...');
-        return {
-            id: 'demo-route-' + Date.now(),
-            name: 'Westlands to Kilimani Express',
-            status: 'active',
-            rider_id: CONFIG.dev.testRider.id,
-            created_at: new Date().toISOString(),
-            parcels: [
-                {
-                    id: 'demo-parcel-1',
-                    parcel_code: 'PKG001',
-                    tracking_code: 'TUM-001-WK',
-                    sender_name: 'Electronics Hub',
-                    sender_phone: '0712345678',
-                    sender_address: 'Sarit Centre, Westlands',
-                    pickup_lat: -1.2634,
-                    pickup_lng: 36.8031,
-                    recipient_name: 'Jane Muthoni',
-                    recipient_phone: '0723456789',
-                    recipient_address: 'Yaya Centre, Kilimani',
-                    delivery_lat: -1.2921,
-                    delivery_lng: 36.7875,
-                    price: 1500,
-                    payment_method: 'cash',
-                    payment_status: 'pending',
-                    status: 'assigned',
-                    pickup_code: 'PICK123',
-                    delivery_code: 'DROP456',
-                    special_instructions: 'Fragile electronics - handle with care'
-                },
-                {
-                    id: 'demo-parcel-2',
-                    parcel_code: 'PKG002',
-                    tracking_code: 'TUM-002-KL',
-                    sender_name: 'Fashion Forward',
-                    sender_phone: '0734567890',
-                    sender_address: 'The Mall, Westlands',
-                    pickup_lat: -1.2669,
-                    pickup_lng: 36.8099,
-                    recipient_name: 'John Kamau',
-                    recipient_phone: '0745678901',
-                    recipient_address: 'Prestige Plaza, Ngong Road',
-                    delivery_lat: -1.2998,
-                    delivery_lng: 36.7825,
-                    price: 2000,
-                    payment_method: 'online',
-                    payment_status: 'paid',
-                    status: 'assigned',
-                    pickup_code: 'PICK789',
-                    delivery_code: 'DROP012',
-                    special_instructions: 'Call customer on arrival'
-                },
-                {
-                    id: 'demo-parcel-3',
-                    parcel_code: 'PKG003',
-                    tracking_code: 'TUM-003-LV',
-                    sender_name: 'Organic Foods Kenya',
-                    sender_phone: '0756789012',
-                    sender_address: 'Village Market, Gigiri',
-                    pickup_lat: -1.2285,
-                    pickup_lng: 36.8073,
-                    recipient_name: 'Mary Wanjiru',
-                    recipient_phone: '0767890123',
-                    recipient_address: 'Lavington Green, Lavington',
-                    delivery_lat: -1.2833,
-                    delivery_lng: 36.7667,
-                    price: 1800,
-                    payment_method: 'cash',
-                    payment_status: 'pending',
-                    status: 'assigned',
-                    pickup_code: 'PICK345',
-                    delivery_code: 'DROP678',
-                    special_instructions: 'Perishable items - deliver ASAP'
-                }
-            ]
-        };
-    },
-
-    // Load from local storage (fallback)
-    loadFromLocalStorage() {
-        try {
-            const storedRoute = localStorage.getItem('tuma_active_route');
-            if (storedRoute) {
-                console.log('📂 Loading route from local storage');
-                return JSON.parse(storedRoute);
-            }
-        } catch (error) {
-            console.error('Error loading from localStorage:', error);
-        }
-        return null;
-    },
-
-    // Update parcel status in database
     async updateParcelStatus(parcelId, status, additionalData = {}) {
         try {
             const updateData = {
@@ -342,7 +157,7 @@ const SupabaseModule = {
                 `${CONFIG.api.SUPABASE_URL}/rest/v1/parcels?id=eq.${parcelId}`,
                 {
                     method: 'PATCH',
-                    headers: CONFIG.api.SUPABASE_HEADERS,
+                    headers: this.headers,
                     body: JSON.stringify(updateData)
                 }
             );
@@ -357,8 +172,8 @@ const SupabaseModule = {
         } catch (error) {
             console.error('Error updating parcel:', error);
             
-            // Store for offline sync
-            GlobalState.offline.pendingUpdates.push({
+            // Queue for offline sync
+            GlobalState.offline.queue.push({
                 type: 'parcel_update',
                 parcelId,
                 data: { status, ...additionalData },
@@ -369,18 +184,20 @@ const SupabaseModule = {
         }
     },
 
-    // Create proof of delivery record
     async createProofOfDelivery(stopId, podData) {
         try {
             const pod = {
                 stop_id: stopId,
-                route_id: GlobalState.route.id,
-                rider_id: GlobalState.rider?.id || CONFIG.dev.testRider.id,
-                photo_url: podData.photoUrl || null,
-                delivery_type: podData.deliveryType,
+                route_id: GlobalState.route?.id,
+                rider_id: GlobalState.rider?.id,
+                delivery_type: podData.deliveryType || 'handed_to_customer',
                 recipient_name: podData.recipientName || null,
                 notes: podData.notes || null,
-                location: podData.location,
+                location: podData.location ? {
+                    lat: podData.location.lat,
+                    lng: podData.location.lng
+                } : null,
+                photo_data: podData.photo || null,
                 created_at: new Date().toISOString()
             };
 
@@ -388,12 +205,17 @@ const SupabaseModule = {
                 `${CONFIG.api.SUPABASE_URL}/rest/v1/delivery_proofs`,
                 {
                     method: 'POST',
-                    headers: CONFIG.api.SUPABASE_HEADERS,
+                    headers: this.headers,
                     body: JSON.stringify(pod)
                 }
             );
 
             if (!response.ok) {
+                const errorText = await response.text();
+                if (errorText.includes('relation') && errorText.includes('does not exist')) {
+                    console.log('Delivery proofs table not found - skipping POD save');
+                    return true;
+                }
                 throw new Error(`POD creation failed: ${response.status}`);
             }
 
@@ -403,685 +225,295 @@ const SupabaseModule = {
         } catch (error) {
             console.error('Error creating POD:', error);
             
-            // Store for offline sync
-            GlobalState.offline.proofs.push({
-                ...podData,
+            GlobalState.offline.queue.push({
+                type: 'pod_create',
+                data: podData,
                 stopId,
                 timestamp: new Date().toISOString()
             });
             
-            return false;
+            return true;
         }
     },
 
-    // Sync offline data
-    async syncOfflineData() {
-        if (!navigator.onLine || GlobalState.offline.pendingUpdates.length === 0) {
-            return;
-        }
-
-        console.log('🔄 Syncing offline data...');
+    async syncOfflineQueue() {
+        if (GlobalState.offline.queue.length === 0) return;
         
-        const updates = [...GlobalState.offline.pendingUpdates];
-        GlobalState.offline.pendingUpdates = [];
-
-        for (const update of updates) {
+        console.log('🔄 Syncing offline queue...');
+        const queue = [...GlobalState.offline.queue];
+        GlobalState.offline.queue = [];
+        
+        for (const item of queue) {
             try {
-                if (update.type === 'parcel_update') {
-                    await this.updateParcelStatus(update.parcelId, update.data.status, update.data);
+                if (item.type === 'parcel_update') {
+                    await this.updateParcelStatus(item.parcelId, item.data.status, item.data);
+                } else if (item.type === 'pod_create') {
+                    await this.createProofOfDelivery(item.stopId, item.data);
                 }
             } catch (error) {
                 console.error('Sync error:', error);
-                GlobalState.offline.pendingUpdates.push(update);
+                GlobalState.offline.queue.push(item);
             }
-        }
-
-        // Sync PODs
-        const proofs = [...GlobalState.offline.proofs];
-        GlobalState.offline.proofs = [];
-
-        for (const proof of proofs) {
-            try {
-                await this.createProofOfDelivery(proof.stopId, proof);
-            } catch (error) {
-                console.error('POD sync error:', error);
-                GlobalState.offline.proofs.push(proof);
-            }
-        }
-
-        GlobalState.offline.lastSync = new Date().toISOString();
-        console.log('✅ Offline sync complete');
-    }
-};
-
-// ============================================================================
-// UTILITY MODULE - Enhanced Helpers
-// ============================================================================
-
-const Utils = {
-    // Calculate distance between two points (Haversine formula)
-    calculateDistance(point1, point2) {
-        if (!point1 || !point2) return 999;
-        
-        const R = 6371; // Earth's radius in km
-        const dLat = (point2.lat - point1.lat) * Math.PI / 180;
-        const dLon = (point2.lng - point1.lng) * Math.PI / 180;
-        
-        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                  Math.cos(point1.lat * Math.PI / 180) * 
-                  Math.cos(point2.lat * Math.PI / 180) *
-                  Math.sin(dLon/2) * Math.sin(dLon/2);
-        
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-        return R * c;
-    },
-
-    // Parse various location formats
-    parseLocation(locationData) {
-        if (!locationData) return CONFIG.defaults.nairobi;
-        
-        // Handle direct lat/lng
-        if (locationData.lat !== undefined && locationData.lng !== undefined) {
-            return {
-                lat: parseFloat(locationData.lat),
-                lng: parseFloat(locationData.lng)
-            };
-        }
-        
-        // Handle pickup/delivery specific coordinates
-        if (locationData.pickup_lat !== undefined && locationData.pickup_lng !== undefined) {
-            return {
-                lat: parseFloat(locationData.pickup_lat),
-                lng: parseFloat(locationData.pickup_lng)
-            };
-        }
-        
-        if (locationData.delivery_lat !== undefined && locationData.delivery_lng !== undefined) {
-            return {
-                lat: parseFloat(locationData.delivery_lat),
-                lng: parseFloat(locationData.delivery_lng)
-            };
-        }
-        
-        // Handle string coordinates
-        if (typeof locationData === 'string') {
-            if (locationData.includes(',')) {
-                const parts = locationData.split(',').map(s => s.trim());
-                const lat = parseFloat(parts[0]);
-                const lng = parseFloat(parts[1]);
-                if (!isNaN(lat) && !isNaN(lng)) {
-                    return { lat, lng };
-                }
-            }
-            
-            try {
-                const parsed = JSON.parse(locationData);
-                return this.parseLocation(parsed);
-            } catch {
-                return CONFIG.defaults.nairobi;
-            }
-        }
-        
-        return CONFIG.defaults.nairobi;
-    },
-
-    // Parse price from various formats
-    parsePrice(priceValue) {
-        if (typeof priceValue === 'number') return priceValue;
-        if (typeof priceValue === 'string') {
-            const cleaned = priceValue.replace(/[^0-9.-]+/g, '');
-            const parsed = parseFloat(cleaned);
-            return isNaN(parsed) ? 0 : parsed;
-        }
-        if (priceValue && typeof priceValue === 'object' && priceValue.amount) {
-            return this.parsePrice(priceValue.amount);
-        }
-        return 0;
-    },
-
-    // Format time ago
-    formatTimeAgo(timestamp) {
-        if (!timestamp) return '';
-        
-        try {
-            const date = new Date(timestamp);
-            if (isNaN(date.getTime())) return '';
-            
-            const minutes = Math.floor((Date.now() - date.getTime()) / 60000);
-            
-            if (minutes < 1) return 'just now';
-            if (minutes === 1) return '1 min ago';
-            if (minutes < 60) return `${minutes} min ago`;
-            
-            const hours = Math.floor(minutes / 60);
-            if (hours === 1) return '1 hour ago';
-            if (hours < 24) return `${hours} hours ago`;
-            
-            const days = Math.floor(hours / 24);
-            if (days === 1) return '1 day ago';
-            return `${days} days ago`;
-        } catch {
-            return '';
-        }
-    },
-
-    // Show glassmorphic notification
-    showNotification(message, type = 'info', duration = 3000) {
-        const notification = document.createElement('div');
-        notification.className = 'notification-toast';
-        notification.style.cssText = `
-            position: fixed;
-            top: 100px;
-            right: 20px;
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            color: white;
-            padding: 16px 20px;
-            border-radius: 16px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            z-index: 10000;
-            animation: slideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            max-width: 350px;
-            font-size: 14px;
-            font-weight: 500;
-        `;
-
-        const colors = {
-            success: 'linear-gradient(135deg, rgba(52, 199, 89, 0.2), rgba(52, 199, 89, 0.1))',
-            error: 'linear-gradient(135deg, rgba(255, 59, 48, 0.2), rgba(255, 59, 48, 0.1))',
-            warning: 'linear-gradient(135deg, rgba(255, 159, 10, 0.2), rgba(255, 159, 10, 0.1))',
-            info: 'linear-gradient(135deg, rgba(0, 102, 255, 0.2), rgba(0, 102, 255, 0.1))'
-        };
-
-        const icons = {
-            success: '✓',
-            error: '✗',
-            warning: '⚠',
-            info: 'ℹ'
-        };
-
-        notification.style.background = colors[type] || colors.info;
-        notification.innerHTML = `
-            <span style="font-size: 20px;">${icons[type] || icons.info}</span>
-            <span>${message}</span>
-        `;
-        
-        document.body.appendChild(notification);
-        
-        // Add slide in animation
-        const style = document.createElement('style');
-        style.textContent = `
-            @keyframes slideIn {
-                from {
-                    transform: translateX(100%);
-                    opacity: 0;
-                }
-                to {
-                    transform: translateX(0);
-                    opacity: 1;
-                }
-            }
-            @keyframes slideOut {
-                from {
-                    transform: translateX(0);
-                    opacity: 1;
-                }
-                to {
-                    transform: translateX(100%);
-                    opacity: 0;
-                }
-            }
-        `;
-        if (!document.querySelector('style[data-notification-animations]')) {
-            style.setAttribute('data-notification-animations', 'true');
-            document.head.appendChild(style);
-        }
-        
-        // Auto-dismiss
-        setTimeout(() => {
-            notification.style.animation = 'slideOut 0.3s ease-out';
-            setTimeout(() => notification.remove(), 300);
-        }, duration);
-
-        // Haptic feedback if enabled
-        if (CONFIG.ui.hapticFeedback) {
-            this.vibrate(type === 'error' ? [200, 100, 200] : [100]);
-        }
-    },
-
-    // Calculate bearing between two points
-    calculateBearing(start, end) {
-        if (!start || !end) return 0;
-        
-        const dLng = (end.lng - start.lng) * Math.PI / 180;
-        const lat1 = start.lat * Math.PI / 180;
-        const lat2 = end.lat * Math.PI / 180;
-        
-        const y = Math.sin(dLng) * Math.cos(lat2);
-        const x = Math.cos(lat1) * Math.sin(lat2) - 
-                  Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLng);
-        
-        const bearing = Math.atan2(y, x) * 180 / Math.PI;
-        return (bearing + 360) % 360;
-    },
-
-    // Format currency
-    formatCurrency(amount) {
-        return `KES ${Math.round(amount).toLocaleString()}`;
-    },
-
-    // Calculate ETA
-    calculateETA(distanceKm, speedKmh = 30) {
-        const timeInMinutes = Math.round(distanceKm / speedKmh * 60);
-        const now = new Date();
-        const eta = new Date(now.getTime() + timeInMinutes * 60000);
-        
-        return eta.toLocaleTimeString('en-US', { 
-            hour: 'numeric', 
-            minute: '2-digit',
-            hour12: true 
-        });
-    },
-
-    // Vibrate device if supported
-    vibrate(pattern = [100]) {
-        if (navigator.vibrate && CONFIG.ui.hapticFeedback) {
-            navigator.vibrate(pattern);
-        }
-    },
-
-    // Store data with encryption (for sensitive data)
-    secureStore(key, data) {
-        try {
-            const encrypted = btoa(JSON.stringify(data));
-            localStorage.setItem(`tuma_secure_${key}`, encrypted);
-            return true;
-        } catch (error) {
-            console.error('Secure storage failed:', error);
-            return false;
-        }
-    },
-
-    // Retrieve encrypted data
-    secureRetrieve(key) {
-        try {
-            const encrypted = localStorage.getItem(`tuma_secure_${key}`);
-            if (!encrypted) return null;
-            return JSON.parse(atob(encrypted));
-        } catch (error) {
-            console.error('Secure retrieval failed:', error);
-            return null;
-        }
-    },
-
-    // Clear secure storage
-    secureClear(key) {
-        try {
-            if (key) {
-                localStorage.removeItem(`tuma_secure_${key}`);
-            } else {
-                // Clear all secure items
-                Object.keys(localStorage).forEach(k => {
-                    if (k.startsWith('tuma_secure_')) {
-                        localStorage.removeItem(k);
-                    }
-                });
-            }
-            return true;
-        } catch (error) {
-            console.error('Secure clear failed:', error);
-            return false;
         }
     }
 };
 
-console.log('✅ Route Navigation Part 1 loaded: Core Infrastructure & Supabase Integration');
-/**
- * ENHANCED ROUTE NAVIGATION MODULE - PART 2
- * Route Management, Map Integration, Location Tracking, Navigation System
- * Complete implementation with dynamic optimization and real-time tracking
- */
+// Direct API functions (from Paste 3)
+async function supabaseQuery(table, options = {}) {
+    const { select = '*', filter = '', order = '', limit } = options;
+    
+    let url = `${CONFIG.api.SUPABASE_URL}/rest/v1/${table}?select=${select}`;
+    if (filter) url += `&${filter}`;
+    if (order) url += `&order=${order}`;
+    if (limit) url += `&limit=${limit}`;
+    
+    const response = await fetch(url, {
+        headers: SupabaseAPI.headers
+    });
+    
+    if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`API Error: ${response.status} ${errorText}`);
+        throw new Error(`API Error: ${response.status}`);
+    }
+    
+    return await response.json();
+}
+
+async function supabaseUpdate(table, filter, data) {
+    const response = await fetch(`${CONFIG.api.SUPABASE_URL}/rest/v1/${table}?${filter}`, {
+        method: 'PATCH',
+        headers: SupabaseAPI.headers,
+        body: JSON.stringify(data)
+    });
+    
+    if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`Update Error: ${response.status} ${errorText}`);
+        throw new Error(`Update Error: ${response.status}`);
+    }
+    
+    return await response.json();
+}
 
 // ============================================================================
-// ROUTE MODULE - Complete with Dynamic Optimization
+// HELPER FUNCTIONS (from Paste 3)
+// ============================================================================
+
+function parsePrice(priceValue) {
+    if (typeof priceValue === 'number') return priceValue;
+    if (typeof priceValue === 'string') {
+        const cleaned = priceValue.replace(/[^0-9.-]+/g, '');
+        return parseFloat(cleaned) || 0;
+    }
+    return 0;
+}
+
+function getPaymentInfoForStop(stop) {
+    if (!GlobalState.route || !GlobalState.route.parcels) {
+        return {
+            amount: 0,
+            method: 'unknown',
+            status: 'unknown',
+            needsCollection: false
+        };
+    }
+    
+    const parcel = GlobalState.route.parcels.find(p => p.id === stop.parcelId);
+    if (!parcel) {
+        return {
+            amount: 0,
+            method: 'unknown',
+            status: 'unknown',
+            needsCollection: false
+        };
+    }
+    
+    const amount = parsePrice(parcel.price || parcel.total_price || 0);
+    const method = parcel.payment_method || 'cash';
+    const status = parcel.payment_status || 'pending';
+    
+    return {
+        amount: amount,
+        method: method,
+        status: status,
+        needsCollection: stop.type === 'delivery' && method === 'cash' && status === 'pending'
+    };
+}
+
+// ============================================================================
+// ROUTE MODULE (Dynamic stop generation from Paste 1/2 + enhancements from Paste 3)
 // ============================================================================
 
 const RouteModule = {
-    // Initialize route from Supabase or fallback sources
-    async initialize() {
-        console.log('🚀 RouteModule: Initializing...');
+    async loadRoute() {
+        console.log('📥 Loading route data...');
+        
+        const storedRoute = localStorage.getItem('tuma_active_route');
+        if (!storedRoute) {
+            console.log('No active route found');
+            return false;
+        }
         
         try {
-            // Get rider ID from URL or use test rider
-            const urlParams = new URLSearchParams(window.location.search);
-            const riderId = urlParams.get('rider_id') || 
-                           sessionStorage.getItem('tuma_rider_id') ||
-                           (CONFIG.dev.isDevelopment ? CONFIG.dev.testRider.id : null);
+            const routeData = JSON.parse(storedRoute);
+            console.log('📍 Route loaded:', routeData.name);
             
-            // Initialize Supabase connection
-            await SupabaseModule.initialize();
-            
-            // Fetch active route from Supabase
-            const routeData = await SupabaseModule.fetchActiveRoute(riderId);
-            
-            if (!routeData) {
-                console.log('No route data available');
-                return false;
-            }
-            
-            // Process and store route
+            // Process route data with dynamic stop generation
             GlobalState.route = this.processRouteData(routeData);
             
             // Calculate financials
-            this.calculateFinancials();
+            this.calculateRouteFinancials();
+            this.calculateCashCollection();
             
-            // Run dynamic optimization if enabled
-            if (CONFIG.navigation.useDynamicOptimization && GlobalState.route.stops) {
-                await this.optimizeRoute();
-            }
-            
-            // Save to local storage for offline access
-            this.saveRoute();
-            
-            console.log(`✅ Route loaded: ${GlobalState.route.name}`);
-            console.log(`📦 ${GlobalState.route.stops.length} stops to complete`);
+            // Get rider info
+            const riderId = sessionStorage.getItem('tuma_rider_id') || 
+                           new URLSearchParams(window.location.search).get('rider_id');
+            GlobalState.rider = { id: riderId };
             
             return true;
             
         } catch (error) {
-            console.error('Error initializing route:', error);
+            console.error('Error loading route:', error);
             return false;
         }
     },
-
-    // Process raw route data into structured format
+    
     processRouteData(routeData) {
-        const processed = {
-            id: routeData.id || routeData.route_id || `route-${Date.now()}`,
-            name: routeData.name || routeData.route_name || 'Delivery Route',
-            status: routeData.status || 'active',
-            stops: [],
-            parcels: routeData.parcels || [],
-            distance: 0,
-            duration: 0,
-            optimized: false,
-            created_at: routeData.created_at,
-            rider_id: routeData.rider_id
-        };
-        
-        // Generate stops from parcels
-        if (routeData.parcels && routeData.parcels.length > 0) {
-            processed.stops = this.generateStopsFromParcels(routeData.parcels);
+        // Dynamic stop generation if stops don't exist
+        if (!routeData.stops && routeData.parcels) {
+            routeData.stops = this.generateStopsFromParcels(routeData.parcels);
         }
         
-        // Restore completion state if available
-        const savedState = localStorage.getItem(`tuma_route_state_${processed.id}`);
-        if (savedState) {
-            try {
-                const state = JSON.parse(savedState);
-                processed.stops.forEach(stop => {
-                    const savedStop = state.stops?.find(s => s.id === stop.id);
-                    if (savedStop) {
-                        stop.completed = savedStop.completed;
-                        stop.timestamp = savedStop.timestamp;
-                    }
-                });
-                GlobalState.parcels.cashCollected = state.cashCollected || 0;
-                GlobalState.parcels.paymentsByStop = state.paymentsByStop || {};
-            } catch (e) {
-                console.error('Error restoring route state:', e);
-            }
-        }
+        // Find next uncompleted stop using dynamic routing logic
+        GlobalState.nextStop = routeData.stops.find(s => !s.completed && this.canCompleteStop(s, routeData.stops));
         
-        return processed;
+        return routeData;
     },
-
-    // Generate stops from parcels
+    
     generateStopsFromParcels(parcels) {
         const stops = [];
-        let stopIndex = 0;
         
-        parcels.forEach((parcel, index) => {
-            // Create pickup stop
-            const pickupLocation = {
-                lat: parcel.pickup_lat,
-                lng: parcel.pickup_lng
-            };
-            
+        parcels.forEach(parcel => {
+            // Pickup stop
             stops.push({
                 id: `pickup-${parcel.id}`,
                 type: 'pickup',
                 parcelId: parcel.id,
-                parcelCode: parcel.parcel_code || parcel.tracking_code || `PKG${index + 1}`,
-                address: parcel.sender_address || parcel.pickup_address || 'Pickup Location',
-                location: Utils.parseLocation(pickupLocation),
+                parcelCode: parcel.parcel_code || parcel.tracking_code,
+                address: parcel.sender_address || 'Pickup Location',
+                location: {
+                    lat: parseFloat(parcel.pickup_lat) || CONFIG.defaults.nairobi.lat,
+                    lng: parseFloat(parcel.pickup_lng) || CONFIG.defaults.nairobi.lng
+                },
                 customerName: parcel.sender_name || 'Sender',
                 customerPhone: parcel.sender_phone || '',
-                specialInstructions: parcel.special_instructions || parcel.pickup_instructions || '',
-                verificationCode: parcel.pickup_code || 'PICK123',
-                paymentMethod: parcel.payment_method || 'cash',
-                paymentStatus: parcel.payment_status || 'pending',
-                price: 0,
-                completed: parcel.status === 'picked' || parcel.status === 'in_transit' || parcel.status === 'delivered',
-                timestamp: parcel.pickup_timestamp || null,
-                canComplete: true,
-                sequenceNumber: stopIndex++,
-                estimatedDuration: 5, // minutes
-                parcelData: parcel
+                verificationCode: parcel.pickup_code || 'PICKUP',
+                completed: false,
+                canComplete: true
             });
             
-            // Create delivery stop
-            const deliveryLocation = {
-                lat: parcel.delivery_lat,
-                lng: parcel.delivery_lng
-            };
-            
+            // Delivery stop with dependency on its pickup
             stops.push({
                 id: `delivery-${parcel.id}`,
                 type: 'delivery',
                 parcelId: parcel.id,
-                parcelCode: parcel.parcel_code || parcel.tracking_code || `PKG${index + 1}`,
-                address: parcel.recipient_address || parcel.delivery_address || 'Delivery Location',
-                location: Utils.parseLocation(deliveryLocation),
+                parcelCode: parcel.parcel_code || parcel.tracking_code,
+                address: parcel.recipient_address || 'Delivery Location',
+                location: {
+                    lat: parseFloat(parcel.delivery_lat) || CONFIG.defaults.nairobi.lat,
+                    lng: parseFloat(parcel.delivery_lng) || CONFIG.defaults.nairobi.lng
+                },
                 customerName: parcel.recipient_name || 'Recipient',
                 customerPhone: parcel.recipient_phone || '',
-                specialInstructions: parcel.special_instructions || parcel.delivery_instructions || '',
-                verificationCode: parcel.delivery_code || 'DROP123',
+                verificationCode: parcel.delivery_code || 'DELIVERY',
                 paymentMethod: parcel.payment_method || 'cash',
                 paymentStatus: parcel.payment_status || 'pending',
-                price: Utils.parsePrice(parcel.price || parcel.total_price || 0),
-                completed: parcel.status === 'delivered',
-                timestamp: parcel.delivery_timestamp || null,
+                price: parseFloat(parcel.price) || 0,
+                completed: false,
                 canComplete: false,
-                sequenceNumber: stopIndex++,
-                estimatedDuration: 5, // minutes
-                parcelData: parcel
+                dependsOn: `pickup-${parcel.id}` // Dynamic dependency
             });
         });
         
         return stops;
     },
-
-    // Optimize route using dynamic algorithm
-    async optimizeRoute() {
-        if (!GlobalState.route?.stops) return;
-        
-        console.log('🔄 Optimizing route for efficiency...');
-        
-        const stops = [...GlobalState.route.stops];
-        const completed = stops.filter(s => s.completed);
-        const pending = stops.filter(s => !s.completed);
-        
-        if (pending.length === 0) {
-            console.log('All stops completed');
-            return;
-        }
-        
-        // Group pickups and deliveries
-        const pickups = pending.filter(s => s.type === 'pickup');
-        const deliveries = pending.filter(s => s.type === 'delivery');
-        
-        // Find efficient pickup-delivery pairs (close to each other)
-        const efficientPairs = [];
-        
-        pickups.forEach(pickup => {
-            const correspondingDelivery = deliveries.find(d => d.parcelId === pickup.parcelId);
-            if (correspondingDelivery) {
-                const distance = Utils.calculateDistance(pickup.location, correspondingDelivery.location);
-                if (distance < 2) { // Less than 2km
-                    pickup.isEfficientPair = true;
-                    correspondingDelivery.isEfficientPair = true;
-                    correspondingDelivery.canComplete = true; // Allow immediate delivery
-                    correspondingDelivery.allowDynamic = true;
-                    efficientPairs.push({ pickup, delivery: correspondingDelivery, distance });
-                }
-            }
-        });
-        
-        // Sort pairs by distance (shortest first)
-        efficientPairs.sort((a, b) => a.distance - b.distance);
-        
-        console.log(`⚡ Found ${efficientPairs.length} efficient pickup-delivery pairs`);
-        
-        // Create optimized sequence using nearest neighbor algorithm
-        const optimizedSequence = [...completed];
-        const processedStops = new Set(completed.map(s => s.id));
-        let currentLocation = GlobalState.location || CONFIG.defaults.nairobi;
-        
-        // Process efficient pairs first
-        efficientPairs.forEach(pair => {
-            if (!processedStops.has(pair.pickup.id)) {
-                pair.pickup.optimizationReason = 'Efficient pair - close delivery';
-                optimizedSequence.push(pair.pickup);
-                processedStops.add(pair.pickup.id);
-                currentLocation = pair.pickup.location;
-            }
-            if (!processedStops.has(pair.delivery.id)) {
-                pair.delivery.optimizationReason = 'Efficient pair - nearby pickup';
-                optimizedSequence.push(pair.delivery);
-                processedStops.add(pair.delivery.id);
-                currentLocation = pair.delivery.location;
-            }
-        });
-        
-        // Add remaining stops using nearest neighbor
-        const remainingStops = pending.filter(s => !processedStops.has(s.id));
-        
-        while (remainingStops.length > 0) {
-            let nearestStop = null;
-            let nearestDistance = Infinity;
-            
-            remainingStops.forEach(stop => {
-                // Check if this stop can be completed
-                if (stop.type === 'delivery') {
-                    const pickupCompleted = optimizedSequence.some(s => 
-                        s.type === 'pickup' && s.parcelId === stop.parcelId
-                    );
-                    if (!pickupCompleted) return; // Skip deliveries without completed pickups
-                }
-                
-                const distance = Utils.calculateDistance(currentLocation, stop.location);
-                if (distance < nearestDistance) {
-                    nearestDistance = distance;
-                    nearestStop = stop;
-                }
-            });
-            
-            if (nearestStop) {
-                optimizedSequence.push(nearestStop);
-                processedStops.add(nearestStop.id);
-                currentLocation = nearestStop.location;
-                const index = remainingStops.indexOf(nearestStop);
-                remainingStops.splice(index, 1);
-                
-                // If this was a pickup, enable its delivery
-                if (nearestStop.type === 'pickup') {
-                    const delivery = remainingStops.find(s => 
-                        s.type === 'delivery' && s.parcelId === nearestStop.parcelId
-                    );
-                    if (delivery) {
-                        delivery.canComplete = true;
-                    }
-                }
-            } else {
-                // No valid stops found, add remaining pickups
-                const remainingPickups = remainingStops.filter(s => s.type === 'pickup');
-                optimizedSequence.push(...remainingPickups);
-                remainingPickups.forEach(p => {
-                    processedStops.add(p.id);
-                    const index = remainingStops.indexOf(p);
-                    remainingStops.splice(index, 1);
-                });
-            }
-        }
-        
-        // Calculate estimated times
-        let totalDuration = 0;
-        let totalDistance = 0;
-        currentLocation = GlobalState.location || CONFIG.defaults.nairobi;
-        
-        optimizedSequence.forEach((stop, index) => {
-            if (!stop.completed) {
-                const distance = Utils.calculateDistance(currentLocation, stop.location);
-                totalDistance += distance;
-                totalDuration += (distance / 30) * 60; // Assuming 30 km/h average speed
-                totalDuration += stop.estimatedDuration || 5; // Time at stop
-                
-                stop.estimatedDistance = distance;
-                stop.estimatedArrival = Utils.calculateETA(distance);
-                stop.optimizedOrder = index;
-                
-                currentLocation = stop.location;
-            }
-        });
-        
-        // Store optimized sequence
-        GlobalState.optimizedSequence = optimizedSequence;
-        GlobalState.route.optimized = true;
-        GlobalState.route.distance = totalDistance;
-        GlobalState.route.duration = Math.round(totalDuration);
-        
-        console.log(`✅ Route optimized: ${totalDistance.toFixed(1)}km, ~${Math.round(totalDuration)} minutes`);
-    },
-
-    // Get next stop
-    getNextStop() {
-        if (!GlobalState.route?.stops) return null;
-        
-        // Use optimized sequence if available
-        const sequence = GlobalState.optimizedSequence || GlobalState.route.stops;
-        
-        // Find first incomplete stop that can be completed
-        return sequence.find(stop => 
-            !stop.completed && this.canCompleteStop(stop)
-        );
-    },
-
-    // Check if stop can be completed
-    canCompleteStop(stop) {
-        if (!stop || stop.completed) return false;
+    
+    // DYNAMIC ROUTING LOGIC - Each delivery only needs its pickup completed
+    canCompleteStop(stop, allStops) {
+        if (!stop) return false;
+        if (stop.completed) return false;
         
         // Pickups can always be completed
         if (stop.type === 'pickup') return true;
         
-        // Check if delivery has dynamic flag
-        if (stop.allowDynamic) return true;
+        // Deliveries only require their specific pickup to be completed
+        if (stop.type === 'delivery' && stop.dependsOn) {
+            const pickupStop = allStops.find(s => s.id === stop.dependsOn);
+            return pickupStop && pickupStop.completed;
+        }
         
-        // For deliveries, check if pickup was completed
-        const pickupStop = GlobalState.route.stops.find(s => 
-            s.type === 'pickup' && 
-            s.parcelId === stop.parcelId
-        );
-        
-        return pickupStop && pickupStop.completed;
+        return true;
     },
-
-    // Mark stop as completed
+    
+    calculateRouteFinancials() {
+        GlobalState.totalRouteEarnings = 0;
+        GlobalState.routeCommission = 0;
+        
+        if (!GlobalState.route?.parcels) return;
+        
+        GlobalState.route.parcels.forEach(parcel => {
+            const price = parsePrice(parcel.price || parcel.total_price || 500);
+            const riderPayout = price * CONFIG.business.commission.rider;
+            const commission = price * CONFIG.business.commission.platform;
+            
+            GlobalState.totalRouteEarnings += riderPayout;
+            GlobalState.routeCommission += commission;
+        });
+        
+        console.log('Route financials calculated:', {
+            earnings: GlobalState.totalRouteEarnings,
+            commission: GlobalState.routeCommission
+        });
+    },
+    
+    calculateCashCollection() {
+        GlobalState.cash.totalToCollect = 0;
+        GlobalState.cash.totalCollected = 0;
+        
+        if (!GlobalState.route?.stops) return;
+        
+        GlobalState.route.stops.forEach(stop => {
+            if (stop.type === 'delivery') {
+                const paymentInfo = getPaymentInfoForStop(stop);
+                
+                if (paymentInfo.needsCollection) {
+                    GlobalState.cash.totalToCollect += paymentInfo.amount;
+                    
+                    if (stop.completed) {
+                        GlobalState.cash.totalCollected += paymentInfo.amount;
+                        GlobalState.cash.paymentsByStop[stop.id] = {
+                            amount: paymentInfo.amount,
+                            collected: true,
+                            timestamp: stop.timestamp
+                        };
+                    } else {
+                        GlobalState.cash.paymentsByStop[stop.id] = {
+                            amount: paymentInfo.amount,
+                            collected: false
+                        };
+                    }
+                }
+            }
+        });
+        
+        console.log('Cash collection calculated:', {
+            total: GlobalState.cash.totalToCollect,
+            collected: GlobalState.cash.totalCollected,
+            pending: GlobalState.cash.totalToCollect - GlobalState.cash.totalCollected
+        });
+    },
+    
     async completeStop(stopId) {
         const stop = GlobalState.route.stops.find(s => s.id === stopId);
         if (!stop) return false;
@@ -1090,172 +522,129 @@ const RouteModule = {
         stop.timestamp = new Date().toISOString();
         
         // Update parcel status in Supabase
-        const newStatus = stop.type === 'pickup' ? 'in_transit' : 'delivered';
-        await SupabaseModule.updateParcelStatus(stop.parcelId, newStatus, {
-            [`${stop.type}_timestamp`]: stop.timestamp,
-            [`${stop.type}_completed`]: true
+        const newStatus = stop.type === 'pickup' ? 'picked' : 'delivered';
+        await SupabaseAPI.updateParcelStatus(stop.parcelId, newStatus, {
+            [`${stop.type}_timestamp`]: stop.timestamp
         });
         
-        // If this is a pickup, update parcel possession
+        // Handle cash collection for deliveries
+        if (stop.type === 'delivery' && stop.paymentMethod === 'cash' && stop.paymentStatus === 'pending') {
+            GlobalState.cash.totalCollected += stop.price;
+            
+            // Update payment status
+            await SupabaseAPI.updateParcelStatus(stop.parcelId, 'delivered', {
+                payment_status: 'collected',
+                payment_collected_at: stop.timestamp
+            });
+        }
+        
+        // Update parcels in possession
         if (stop.type === 'pickup') {
-            const parcel = stop.parcelData;
+            const parcel = GlobalState.route.parcels?.find(p => p.id === stop.parcelId);
             if (parcel) {
                 GlobalState.parcels.inPossession.push({
-                    ...parcel,
-                    pickupTime: stop.timestamp
+                    parcelId: stop.parcelId,
+                    parcelCode: stop.parcelCode,
+                    pickupTime: stop.timestamp,
+                    destination: GlobalState.route.stops.find(s => 
+                        s.type === 'delivery' && s.parcelId === stop.parcelId
+                    )?.address
                 });
-                
-                // Enable the corresponding delivery
-                const deliveryStop = GlobalState.route.stops.find(s => 
-                    s.type === 'delivery' && s.parcelId === stop.parcelId
-                );
-                if (deliveryStop) {
-                    deliveryStop.canComplete = true;
-                }
             }
-        }
-        
-        // If this is a delivery, remove from possession and update cash
-        if (stop.type === 'delivery') {
-            GlobalState.parcels.inPossession = GlobalState.parcels.inPossession.filter(
-                p => p.id !== stop.parcelId
-            );
             
-            // Update cash collected if COD
-            if ((stop.paymentMethod === 'cash' || stop.paymentMethod === 'Cash on Delivery') && 
-                stop.paymentStatus === 'pending') {
-                GlobalState.parcels.cashCollected += stop.price;
-                GlobalState.parcels.paymentsByStop[stop.id] = {
-                    amount: stop.price,
-                    collected: true,
-                    timestamp: stop.timestamp
-                };
-                
-                // Update payment status in Supabase
-                await SupabaseModule.updateParcelStatus(stop.parcelId, 'delivered', {
-                    payment_status: 'collected',
-                    payment_collected_at: stop.timestamp
-                });
+            // Enable corresponding delivery (dynamic routing)
+            const deliveryStop = GlobalState.route.stops.find(s => 
+                s.type === 'delivery' && s.parcelId === stop.parcelId
+            );
+            if (deliveryStop) {
+                deliveryStop.canComplete = true;
             }
+        } else if (stop.type === 'delivery') {
+            GlobalState.parcels.inPossession = GlobalState.parcels.inPossession.filter(
+                p => p.parcelId !== stop.parcelId
+            );
         }
-        
-        // Update earnings
-        this.updateEarnings(stop);
         
         // Save updated route
         this.saveRoute();
         
-        // Re-optimize if needed
-        if (CONFIG.navigation.useDynamicOptimization && !RouteModule.isRouteComplete()) {
-            await this.optimizeRoute();
-        }
+        // Find next stop using dynamic routing logic
+        GlobalState.nextStop = GlobalState.route.stops.find(s => 
+            !s.completed && this.canCompleteStop(s, GlobalState.route.stops)
+        );
         
         return true;
     },
-
-    // Update earnings after completing stop
-    updateEarnings(stop) {
-        if (stop.type === 'delivery') {
-            const commission = stop.price * CONFIG.business.riderCommission;
-            GlobalState.earnings.completedEarnings += commission;
-        }
-    },
-
-    // Save route to localStorage
+    
     saveRoute() {
-        try {
-            const routeData = {
-                ...GlobalState.route,
-                lastUpdated: new Date().toISOString()
-            };
-            
-            // Save route
-            localStorage.setItem('tuma_active_route', JSON.stringify(routeData));
-            
-            // Save state
-            const state = {
-                stops: GlobalState.route.stops.map(s => ({
-                    id: s.id,
-                    completed: s.completed,
-                    timestamp: s.timestamp
-                })),
-                cashCollected: GlobalState.parcels.cashCollected,
-                paymentsByStop: GlobalState.parcels.paymentsByStop,
-                parcelsInPossession: GlobalState.parcels.inPossession
-            };
-            
-            localStorage.setItem(`tuma_route_state_${GlobalState.route.id}`, JSON.stringify(state));
-            
-            return true;
-        } catch (error) {
-            console.error('Failed to save route:', error);
-            return false;
-        }
+        localStorage.setItem('tuma_active_route', JSON.stringify(GlobalState.route));
     },
-
-    // Check if route is complete
+    
     isRouteComplete() {
-        if (!GlobalState.route?.stops) return false;
-        return GlobalState.route.stops.every(stop => stop.completed);
+        return GlobalState.route?.stops?.every(s => s.completed) || false;
     },
-
-    // Clear route data
+    
+    async handleRouteCompletion() {
+        console.log('Handling route completion...');
+        
+        // Calculate final earnings
+        const deliveryCount = GlobalState.route.stops.filter(s => s.type === 'delivery').length;
+        
+        // Create completion data
+        const completionData = {
+            completed: true,
+            earnings: Math.round(GlobalState.totalRouteEarnings),
+            commission: Math.round(GlobalState.routeCommission),
+            cashCollected: Math.round(GlobalState.cash.totalCollected),
+            deliveries: deliveryCount,
+            stops: GlobalState.route.stops.length,
+            timestamp: new Date().toISOString(),
+            routeId: GlobalState.route.id,
+            parcels: GlobalState.route.parcels || []
+        };
+        
+        console.log('Storing completion data:', completionData);
+        
+        // Store completion data for rider.js to process
+        localStorage.setItem('tuma_route_completion', JSON.stringify(completionData));
+        
+        // Clear active route
+        localStorage.removeItem('tuma_active_route');
+        
+        // Update parcels in database if not demo route
+        if (!GlobalState.route.id?.startsWith('demo-')) {
+            try {
+                for (const parcel of (GlobalState.route.parcels || [])) {
+                    await supabaseUpdate('parcels',
+                        `id=eq.${parcel.id}`,
+                        {
+                            status: 'delivered',
+                            delivery_timestamp: new Date().toISOString(),
+                            payment_status: parcel.payment_method === 'cash' ? 'collected' : parcel.payment_status
+                        }
+                    );
+                }
+            } catch (error) {
+                console.error('Error updating parcel status:', error);
+            }
+        }
+        
+        return completionData;
+    },
+    
     clearRoute() {
         localStorage.removeItem('tuma_active_route');
-        if (GlobalState.route?.id) {
-            localStorage.removeItem(`tuma_route_state_${GlobalState.route.id}`);
-        }
         GlobalState.route = null;
-        GlobalState.parcels = {
-            inPossession: [],
-            cashToCollect: 0,
-            cashCollected: 0,
-            paymentsByStop: {},
-            all: []
-        };
-    },
-
-    // Calculate route financials
-    calculateFinancials() {
-        if (!GlobalState.route) return;
-        
-        GlobalState.earnings.totalRouteEarnings = 0;
-        GlobalState.earnings.routeCommission = 0;
-        GlobalState.parcels.cashToCollect = 0;
-        
-        GlobalState.route.stops.forEach(stop => {
-            if (stop.type === 'delivery') {
-                const price = stop.price;
-                const riderPayout = price * CONFIG.business.riderCommission;
-                const commission = price * CONFIG.business.platformCommission;
-                
-                GlobalState.earnings.totalRouteEarnings += riderPayout;
-                GlobalState.earnings.routeCommission += commission;
-                
-                // Check if cash collection needed
-                if ((stop.paymentMethod === 'cash' || stop.paymentMethod === 'Cash on Delivery') && 
-                    stop.paymentStatus === 'pending' && !stop.completed) {
-                    GlobalState.parcels.cashToCollect += price;
-                }
-            }
-        });
-        
-        console.log('💰 Route financials calculated:', {
-            earnings: GlobalState.earnings.totalRouteEarnings,
-            commission: GlobalState.earnings.routeCommission,
-            cashToCollect: GlobalState.parcels.cashToCollect
-        });
     }
 };
 
 // ============================================================================
-// MAP MODULE - Complete Map Integration
+// MAP MODULE (Enhanced from all versions)
 // ============================================================================
 
 const MapModule = {
-    // Initialize map
     async initialize() {
-        console.log('🗺️ MapModule: Initializing map...');
+        console.log('🗺️ Initializing map with rotation support...');
         
         const mapContainer = document.getElementById('map');
         if (!mapContainer) {
@@ -1263,25 +652,34 @@ const MapModule = {
             return false;
         }
         
+        // Force proper dimensions
+        mapContainer.style.width = '100%';
+        mapContainer.style.height = '100%';
+        
         // Calculate center from route
         let center = CONFIG.defaults.nairobi;
         if (GlobalState.route?.stops?.length > 0) {
-            const bounds = this.calculateBounds(GlobalState.route.stops);
-            center = {
-                lat: (bounds.north + bounds.south) / 2,
-                lng: (bounds.east + bounds.west) / 2
-            };
+            const firstStop = GlobalState.route.stops.find(s => !s.completed) || GlobalState.route.stops[0];
+            center = firstStop.location;
         }
         
-        // Create map
+        // Create map with rotation support
         GlobalState.map = L.map('map', {
             center: [center.lat, center.lng],
-            zoom: 13,
+            zoom: 14,
             zoomControl: false,
+            rotate: true,
+            bearing: 0,
+            touchRotate: true,
+            shiftKeyRotate: true,
+            rotateControl: {
+                closeOnZeroBearing: false,
+                position: 'topleft'
+            },
             attributionControl: false
         });
         
-        // Add dark tile layer for glassmorphic theme
+        // Add dark tile layer
         L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
             maxZoom: 19,
             subdomains: 'abcd'
@@ -1292,41 +690,26 @@ const MapModule = {
             position: 'bottomright'
         }).addTo(GlobalState.map);
         
+        // Add scale
+        L.control.scale({
+            position: 'bottomleft',
+            imperial: false
+        }).addTo(GlobalState.map);
+        
+        // Enable two-finger rotation on mobile if available
+        if (L.Browser.touch && GlobalState.map.touchRotate) {
+            GlobalState.map.touchRotate.enable();
+        }
+        
         // Force resize
         setTimeout(() => {
             GlobalState.map.invalidateSize();
         }, 100);
         
-        console.log('✅ Map initialized successfully');
+        console.log('✅ Map initialized');
         return true;
     },
-
-    // Calculate bounds from stops
-    calculateBounds(stops) {
-        let north = -90, south = 90, east = -180, west = 180;
-        
-        stops.forEach(stop => {
-            if (stop.location) {
-                north = Math.max(north, stop.location.lat);
-                south = Math.min(south, stop.location.lat);
-                east = Math.max(east, stop.location.lng);
-                west = Math.min(west, stop.location.lng);
-            }
-        });
-        
-        // Add padding
-        const latPadding = (north - south) * 0.1;
-        const lngPadding = (east - west) * 0.1;
-        
-        return {
-            north: north + latPadding,
-            south: south - latPadding,
-            east: east + lngPadding,
-            west: west - lngPadding
-        };
-    },
-
-    // Plot route stops on map
+    
     async plotRoute() {
         if (!GlobalState.map || !GlobalState.route?.stops) return;
         
@@ -1335,16 +718,18 @@ const MapModule = {
         GlobalState.markers = [];
         
         const bounds = L.latLngBounds();
-        const sequence = GlobalState.optimizedSequence || GlobalState.route.stops;
         
         // Add markers for each stop
-        sequence.forEach((stop, index) => {
+        GlobalState.route.stops.forEach((stop, index) => {
+            const icon = this.createStopIcon(stop, index + 1);
+            
             const marker = L.marker([stop.location.lat, stop.location.lng], {
-                icon: this.createStopIcon(stop, index + 1),
+                icon: icon,
                 zIndexOffset: stop.completed ? 0 : 100
-            })
-            .addTo(GlobalState.map)
-            .bindPopup(this.createStopPopup(stop));
+            }).addTo(GlobalState.map);
+            
+            // Add popup
+            marker.bindPopup(this.createStopPopup(stop));
             
             GlobalState.markers.push(marker);
             bounds.extend([stop.location.lat, stop.location.lng]);
@@ -1355,52 +740,43 @@ const MapModule = {
             GlobalState.map.fitBounds(bounds, { padding: [50, 50] });
         }
     },
-
-    // Create stop icon
+    
     createStopIcon(stop, number) {
-        const isCompleted = stop.completed;
-        const isNext = RouteModule.getNextStop()?.id === stop.id;
-        const isEfficient = stop.isEfficientPair || stop.allowDynamic;
-        const type = stop.type;
+        const isNext = GlobalState.nextStop?.id === stop.id;
+        const canComplete = RouteModule.canCompleteStop(stop, GlobalState.route.stops);
         
-        let bgColor, symbol, iconClass;
+        let bgColor, symbol;
         
-        if (isCompleted) {
-            bgColor = 'linear-gradient(135deg, #34C759, #2ecc71)';
+        if (stop.completed) {
+            bgColor = '#34C759';
             symbol = '✓';
-            iconClass = 'completed';
-        } else if (isEfficient) {
-            bgColor = 'linear-gradient(135deg, #9B59B6, #8e44ad)';
-            symbol = '⚡';
-            iconClass = 'efficient';
-        } else if (type === 'pickup') {
-            bgColor = 'linear-gradient(135deg, #FF9F0A, #ff8c00)';
+        } else if (stop.type === 'pickup') {
+            bgColor = '#FF9F0A';
             symbol = number;
-            iconClass = 'pickup';
+        } else if (!canComplete) {
+            bgColor = '#48484A';
+            symbol = '🔒';
         } else {
-            bgColor = 'linear-gradient(135deg, #0066FF, #0052cc)';
+            bgColor = '#0066FF';
             symbol = number;
-            iconClass = 'delivery';
         }
         
         return L.divIcon({
             className: 'custom-map-marker',
             html: `
-                <div class="marker-wrapper ${iconClass} ${isNext ? 'active' : ''}" style="
+                <div style="
                     position: relative;
                     width: 44px;
                     height: 44px;
                 ">
-                    ${isNext ? '<div class="marker-pulse" style="
+                    ${isNext ? `<div style="
                         position: absolute;
-                        top: 0;
-                        left: 0;
-                        right: 0;
-                        bottom: 0;
+                        width: 44px;
+                        height: 44px;
                         border: 2px solid #00FF00;
                         border-radius: 50%;
                         animation: pulse 2s infinite;
-                    "></div>' : ''}
+                    "></div>` : ''}
                     <div style="
                         background: ${bgColor};
                         width: 44px;
@@ -1410,7 +786,7 @@ const MapModule = {
                         align-items: center;
                         justify-content: center;
                         box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-                        border: 3px solid ${isNext ? '#00FF00' : 'white'};
+                        border: 3px solid white;
                         font-weight: bold;
                         font-size: 18px;
                         color: white;
@@ -1429,134 +805,249 @@ const MapModule = {
             popupAnchor: [0, -22]
         });
     },
-
-    // Create popup content
+    
     createStopPopup(stop) {
-        const paymentInfo = stop.paymentMethod === 'cash' && stop.paymentStatus === 'pending' ? 
-            `<div style="margin-top: 8px; padding: 8px; background: rgba(255, 159, 10, 0.1); border-radius: 8px; border: 1px solid #FF9F0A;">
-                💰 Collect: ${Utils.formatCurrency(stop.price)}
-            </div>` : '';
+        const canComplete = RouteModule.canCompleteStop(stop, GlobalState.route.stops);
+        const paymentInfo = getPaymentInfoForStop(stop);
+        
+        let cashInfo = '';
+        if (stop.type === 'delivery' && paymentInfo.needsCollection) {
+            cashInfo = `
+                <div style="margin-top: 8px; padding: 8px; background: rgba(255, 159, 10, 0.1); border-radius: 8px; border: 1px solid #FF9F0A;">
+                    💰 Collect: KES ${paymentInfo.amount}
+                </div>
+            `;
+        }
         
         return `
             <div style="min-width: 250px;">
-                <div style="padding: 12px; background: linear-gradient(135deg, ${stop.type === 'pickup' ? '#FF9F0A, #ff8c00' : '#0066FF, #0052cc'}); color: white; margin: -10px -10px 10px -10px; border-radius: 10px 10px 0 0;">
-                    <strong>${stop.type.toUpperCase()}</strong> - ${stop.parcelCode}
-                </div>
-                <div style="padding: 0 12px 12px;">
-                    <h4 style="margin: 0 0 8px 0;">${stop.address}</h4>
-                    <div style="color: #666; font-size: 14px;">
-                        <div>👤 ${stop.customerName}</div>
-                        <div>📞 ${stop.customerPhone}</div>
-                        ${stop.specialInstructions ? `<div>💬 ${stop.specialInstructions}</div>` : ''}
-                    </div>
-                    ${paymentInfo}
-                    ${stop.completed ? 
-                        `<div style="margin-top: 8px; color: #34C759;">✓ Completed ${Utils.formatTimeAgo(stop.timestamp)}</div>` :
-                        RouteModule.canCompleteStop(stop) ? 
-                            `<button onclick="VerificationModule.showModal('${stop.id}')" style="
-                                margin-top: 12px;
-                                width: 100%;
-                                padding: 10px;
-                                background: linear-gradient(135deg, #0066FF, #0052cc);
-                                color: white;
-                                border: none;
-                                border-radius: 8px;
-                                font-weight: 600;
-                                cursor: pointer;
-                            ">Verify ${stop.type}</button>` :
-                            `<div style="margin-top: 8px; color: #999;">🔒 Complete pickup first</div>`
-                    }
-                </div>
+                <h4>${stop.type.toUpperCase()} - ${stop.parcelCode}</h4>
+                <p>${stop.address}</p>
+                <p>Customer: ${stop.customerName}</p>
+                ${stop.customerPhone ? `<p>Phone: ${stop.customerPhone}</p>` : ''}
+                ${cashInfo}
+                ${stop.completed ? 
+                    '<p style="color: #34C759;">✓ Completed</p>' :
+                    canComplete ? 
+                        `<button onclick="UIModule.showVerificationModal('${stop.id}')" style="
+                            margin-top: 8px;
+                            padding: 8px 16px;
+                            background: #0066FF;
+                            color: white;
+                            border: none;
+                            border-radius: 8px;
+                            cursor: pointer;
+                        ">Verify ${stop.type}</button>` :
+                        '<p style="color: #999;">Complete pickup first</p>'
+                }
             </div>
         `;
     },
-
-    // Draw optimized route
+    
+    updateLocationMarker(location) {
+        if (!GlobalState.map || !location) return;
+        
+        // Create or update location marker
+        if (!GlobalState.locationMarker) {
+            GlobalState.locationMarker = L.marker(
+                [location.lat, location.lng],
+                { 
+                    icon: this.createLocationIcon(),
+                    zIndexOffset: 1000
+                }
+            ).addTo(GlobalState.map);
+            
+            // Add accuracy circle
+            GlobalState.accuracyCircle = L.circle(
+                [location.lat, location.lng],
+                {
+                    radius: GlobalState.tracking.accuracy || 50,
+                    color: '#0066FF',
+                    fillColor: '#0066FF',
+                    fillOpacity: 0.1,
+                    weight: 1,
+                    opacity: 0.3
+                }
+            ).addTo(GlobalState.map);
+        } else {
+            // Update position
+            GlobalState.locationMarker.setLatLng([location.lat, location.lng]);
+            
+            if (GlobalState.accuracyCircle) {
+                GlobalState.accuracyCircle.setLatLng([location.lat, location.lng]);
+                GlobalState.accuracyCircle.setRadius(GlobalState.tracking.accuracy || 50);
+            }
+        }
+        
+        // Update icon rotation if heading available
+        if (GlobalState.tracking.heading) {
+            const icon = this.createLocationIcon(GlobalState.tracking.heading);
+            GlobalState.locationMarker.setIcon(icon);
+        }
+    },
+    
+    createLocationIcon(heading = 0) {
+        return L.divIcon({
+            className: 'current-location-marker',
+            html: `
+                <div style="
+                    position: relative;
+                    width: 60px;
+                    height: 60px;
+                ">
+                    <div style="
+                        position: absolute;
+                        top: 50%;
+                        left: 50%;
+                        width: 60px;
+                        height: 60px;
+                        background: rgba(0, 102, 255, 0.2);
+                        border-radius: 50%;
+                        transform: translate(-50%, -50%);
+                        animation: pulse 2s infinite;
+                    "></div>
+                    <div style="
+                        position: absolute;
+                        top: 50%;
+                        left: 50%;
+                        width: 40px;
+                        height: 40px;
+                        transform: translate(-50%, -50%) rotate(${heading}deg);
+                    ">
+                        ${heading ? `
+                            <div style="
+                                position: absolute;
+                                top: -15px;
+                                left: 50%;
+                                width: 0;
+                                height: 0;
+                                border-left: 8px solid transparent;
+                                border-right: 8px solid transparent;
+                                border-bottom: 20px solid rgba(0, 102, 255, 0.6);
+                                transform: translateX(-50%);
+                            "></div>
+                        ` : ''}
+                        <div style="
+                            position: absolute;
+                            top: 50%;
+                            left: 50%;
+                            width: 16px;
+                            height: 16px;
+                            background: #0066FF;
+                            border: 3px solid white;
+                            border-radius: 50%;
+                            transform: translate(-50%, -50%);
+                            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+                        "></div>
+                    </div>
+                </div>
+            `,
+            iconSize: [60, 60],
+            iconAnchor: [30, 30]
+        });
+    },
+    
+    centerOnLocation() {
+        if (GlobalState.map && GlobalState.location) {
+            GlobalState.map.panTo([GlobalState.location.lat, GlobalState.location.lng], {
+                animate: true,
+                duration: 1
+            });
+        }
+    },
+    
+    focusOnStop(stop) {
+        if (!GlobalState.map || !stop) return;
+        
+        GlobalState.map.setView([stop.location.lat, stop.location.lng], 16, {
+            animate: true,
+            duration: 1
+        });
+    },
+    
     async drawOptimizedRoute() {
-        if (!GlobalState.route?.stops) return;
+        if (!GlobalState.route) return;
         
-        const sequence = GlobalState.optimizedSequence || GlobalState.route.stops;
-        const activeStops = sequence.filter(s => !s.completed);
-        
-        if (activeStops.length < 2) return;
+        const stops = GlobalState.route.stops.filter(s => !s.completed);
+        if (stops.length < 2) {
+            console.log('Not enough stops to draw route');
+            return;
+        }
         
         try {
-            // Remove existing polylines
-            GlobalState.polylines.forEach(p => GlobalState.map.removeLayer(p));
-            GlobalState.polylines = [];
-            
-            // Build coordinates
-            const coordinates = activeStops.map(stop => 
-                [stop.location.lng, stop.location.lat]
-            );
-            
-            // Add current location if available
-            if (GlobalState.location) {
-                coordinates.unshift([GlobalState.location.lng, GlobalState.location.lat]);
+            if (GlobalState.routePolyline) {
+                GlobalState.routePolyline.remove();
+                GlobalState.routePolyline = null;
             }
             
-            // Get route from OpenRoute
+            let coordinates = [];
+            if (GlobalState.location && GlobalState.ui.navigationActive) {
+                coordinates.push([GlobalState.location.lng, GlobalState.location.lat]);
+            }
+            
+            coordinates = coordinates.concat(stops.map(stop => [stop.location.lng, stop.location.lat]));
+            
             const response = await fetch('https://api.openrouteservice.org/v2/directions/driving-car', {
                 method: 'POST',
                 headers: {
-                    'Accept': 'application/json',
+                    'Accept': 'application/json, application/geo+json, application/gpx+xml, img/png; charset=utf-8',
                     'Content-Type': 'application/json',
                     'Authorization': CONFIG.api.OPENROUTE_KEY
                 },
                 body: JSON.stringify({
                     coordinates: coordinates,
                     continue_straight: false,
+                    elevation: false,
+                    extra_info: [],
                     geometry: true,
                     instructions: false,
-                    preference: 'recommended'
+                    preference: 'recommended',
+                    units: 'km'
                 })
             });
             
-            if (response.ok) {
-                const data = await response.json();
-                if (data.routes && data.routes.length > 0) {
-                    const route = data.routes[0];
-                    const decodedCoords = this.decodePolyline(route.geometry);
-                    
-                    // Draw route with gradient effect
-                    const polyline = L.polyline(decodedCoords, {
-                        color: '#0066FF',
-                        weight: 6,
-                        opacity: 0.8,
-                        smoothFactor: 1,
-                        className: 'route-polyline'
-                    }).addTo(GlobalState.map);
-                    
-                    GlobalState.polylines.push(polyline);
-                }
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('OpenRouteService error:', errorText);
+                throw new Error('OpenRouteService API error');
+            }
+            
+            const data = await response.json();
+            
+            if (data.routes && data.routes.length > 0) {
+                const route = data.routes[0];
+                const decodedCoords = this.decodePolyline(route.geometry);
+                
+                GlobalState.routePolyline = L.polyline(decodedCoords, {
+                    color: '#0066FF',
+                    weight: 6,
+                    opacity: 0.8,
+                    smoothFactor: 1
+                }).addTo(GlobalState.map);
             }
         } catch (error) {
-            console.error('Error drawing route:', error);
-            // Fallback to straight lines
-            this.drawFallbackRoute(activeStops);
+            console.error('Error getting route:', error);
+            this.drawFallbackRoute(stops);
         }
     },
-
-    // Draw fallback route
+    
     drawFallbackRoute(stops) {
+        console.log('Drawing fallback route');
         const coords = stops.map(stop => [stop.location.lat, stop.location.lng]);
         
-        if (GlobalState.location) {
+        if (GlobalState.location && GlobalState.ui.navigationActive) {
             coords.unshift([GlobalState.location.lat, GlobalState.location.lng]);
         }
         
-        const polyline = L.polyline(coords, {
+        GlobalState.routePolyline = L.polyline(coords, {
             color: '#0066FF',
             weight: 4,
             opacity: 0.6,
             dashArray: '10, 10',
             smoothFactor: 1
         }).addTo(GlobalState.map);
-        
-        GlobalState.polylines.push(polyline);
     },
-
-    // Decode polyline from OpenRoute
+    
     decodePolyline(encoded) {
         const poly = [];
         let index = 0;
@@ -1593,69 +1084,24 @@ const MapModule = {
         }
 
         return poly;
-    },
-
-    // Focus on specific stop
-    focusOnStop(stop) {
-        if (!GlobalState.map || !stop) return;
-        
-        GlobalState.map.setView([stop.location.lat, stop.location.lng], 16, {
-            animate: true,
-            duration: 1
-        });
-        
-        // Open popup
-        const marker = GlobalState.markers.find(m => {
-            const latLng = m.getLatLng();
-            return Math.abs(latLng.lat - stop.location.lat) < 0.0001 && 
-                   Math.abs(latLng.lng - stop.location.lng) < 0.0001;
-        });
-        
-        if (marker) {
-            marker.openPopup();
-        }
-    },
-
-    // Center on location
-    centerOnLocation(location) {
-        if (!GlobalState.map || !location) return;
-        
-        GlobalState.map.panTo([location.lat, location.lng], {
-            animate: true,
-            duration: 1
-        });
-    },
-
-    // Fit route bounds
-    fitRouteBounds() {
-        if (!GlobalState.map || !GlobalState.route?.stops) return;
-        
-        const bounds = L.latLngBounds();
-        GlobalState.route.stops.forEach(stop => {
-            if (stop.location) {
-                bounds.extend([stop.location.lat, stop.location.lng]);
-            }
-        });
-        
-        if (bounds.isValid()) {
-            GlobalState.map.fitBounds(bounds, { padding: [50, 50] });
-        }
     }
 };
 
+// Continue in Part 2...
+// PART 2 OF 2 - Continued from Part 1
+
 // ============================================================================
-// LOCATION MODULE - Real-time Location Tracking
+// LOCATION MODULE (from Paste 1/2 with enhancements)
 // ============================================================================
 
 const LocationModule = {
-    // Start location tracking
     startTracking() {
         if (!navigator.geolocation) {
-            Utils.showNotification('Location services not available', 'warning');
+            console.error('Geolocation not supported');
             return;
         }
         
-        console.log('📍 LocationModule: Starting location tracking...');
+        console.log('📍 Starting location tracking...');
         
         const options = {
             enableHighAccuracy: true,
@@ -1665,15 +1111,8 @@ const LocationModule = {
         
         // Get initial position
         navigator.geolocation.getCurrentPosition(
-            position => {
-                this.updateLocation(position);
-                GlobalState.tracking.isActive = true;
-                Utils.showNotification('Location tracking active', 'success');
-            },
-            error => {
-                console.error('Location error:', error);
-                Utils.showNotification('Please enable location services', 'warning');
-            },
+            position => this.updateLocation(position),
+            error => console.error('Location error:', error),
             options
         );
         
@@ -1683,281 +1122,267 @@ const LocationModule = {
             error => console.error('Location update error:', error),
             options
         );
+        
+        GlobalState.tracking.isActive = true;
     },
-
-    // Update current location
+    
     updateLocation(position) {
         const newLocation = {
             lat: position.coords.latitude,
             lng: position.coords.longitude
         };
         
-        // Check if location has significantly changed
+        // Check if location has changed significantly
         if (GlobalState.location) {
-            const distance = Utils.calculateDistance(GlobalState.location, newLocation);
-            if (distance < 0.005) return; // Ignore small movements (< 5 meters)
+            const distance = this.calculateDistance(GlobalState.location, newLocation);
+            if (distance < 0.005) return; // Ignore small movements
         }
         
-        // Store last location
-        GlobalState.lastLocation = GlobalState.location;
-        GlobalState.lastLocationTime = GlobalState.lastLocationTime || Date.now();
-        
-        // Update current location
         GlobalState.location = newLocation;
-        
-        // Update tracking info
         GlobalState.tracking.accuracy = position.coords.accuracy;
+        GlobalState.tracking.lastUpdate = new Date().toISOString();
         
-        if (position.coords.heading !== null) {
+        if (position.coords.heading !== null && position.coords.heading !== undefined) {
             GlobalState.tracking.heading = position.coords.heading;
         } else if (GlobalState.lastLocation) {
-            GlobalState.tracking.heading = Utils.calculateBearing(GlobalState.lastLocation, GlobalState.location);
+            GlobalState.tracking.heading = this.calculateBearing(GlobalState.lastLocation, GlobalState.location);
         }
         
         if (position.coords.speed !== null) {
             GlobalState.tracking.speed = Math.round(position.coords.speed * 3.6); // m/s to km/h
-        } else if (GlobalState.lastLocation && GlobalState.lastLocationTime) {
-            const timeDiff = (Date.now() - GlobalState.lastLocationTime) / 1000; // seconds
-            const distance = Utils.calculateDistance(GlobalState.lastLocation, GlobalState.location);
-            GlobalState.tracking.speed = Math.round((distance / timeDiff) * 3600); // km/h
         }
         
-        GlobalState.lastLocationTime = Date.now();
-        GlobalState.tracking.lastUpdate = new Date().toISOString();
-        
         // Update map marker
-        this.updateLocationMarker();
+        MapModule.updateLocationMarker(newLocation);
+        
+        // Drone follow mode
+        if (GlobalState.ui.navigationActive && GlobalState.isFollowingUser) {
+            GlobalState.map.panTo([newLocation.lat, newLocation.lng], {
+                animate: true,
+                duration: 1,
+                noMoveStart: true
+            });
+            
+            // Adjust zoom based on speed
+            const targetZoom = this.calculateZoomFromSpeed(GlobalState.tracking.speed);
+            const currentZoom = GlobalState.map.getZoom();
+            if (Math.abs(currentZoom - targetZoom) > 0.5) {
+                GlobalState.map.setZoom(targetZoom, {
+                    animate: true,
+                    duration: 1
+                });
+            }
+        }
+        
+        GlobalState.lastLocation = GlobalState.location;
+        GlobalState.lastLocationTime = Date.now();
         
         // Check proximity to stops
         this.checkProximity();
         
-        // Update UI
-        UIModule.updateLocationInfo();
-    },
-
-    // Update location marker on map
-    updateLocationMarker() {
-        if (!GlobalState.map || !GlobalState.location) return;
-        
-        // Create or update location marker
-        if (!GlobalState.locationMarker) {
-            const locationIcon = this.createLocationIcon();
-            GlobalState.locationMarker = L.marker(
-                [GlobalState.location.lat, GlobalState.location.lng],
-                { 
-                    icon: locationIcon,
-                    zIndexOffset: 1000
-                }
-            ).addTo(GlobalState.map);
-            
-            // Add accuracy circle
-            GlobalState.accuracyCircle = L.circle(
-                [GlobalState.location.lat, GlobalState.location.lng],
-                {
-                    radius: GlobalState.tracking.accuracy || 50,
-                    color: '#0066FF',
-                    fillColor: '#0066FF',
-                    fillOpacity: 0.1,
-                    weight: 1,
-                    opacity: 0.3
-                }
-            ).addTo(GlobalState.map);
-        } else {
-            // Update position
-            GlobalState.locationMarker.setLatLng([GlobalState.location.lat, GlobalState.location.lng]);
-            
-            // Update accuracy circle
-            if (GlobalState.accuracyCircle) {
-                GlobalState.accuracyCircle.setLatLng([GlobalState.location.lat, GlobalState.location.lng]);
-                GlobalState.accuracyCircle.setRadius(GlobalState.tracking.accuracy || 50);
-            }
-            
-            // Update icon with new heading
-            const locationIcon = this.createLocationIcon();
-            GlobalState.locationMarker.setIcon(locationIcon);
-        }
-        
-        // Follow mode
-        if (GlobalState.navigation.isFollowing && GlobalState.navigation.isActive) {
-            MapModule.centerOnLocation(GlobalState.location);
+        // Update navigation if active
+        if (GlobalState.ui.navigationActive) {
+            NavigationModule.updateNavigation();
         }
     },
-
-    // Create location icon
-    createLocationIcon() {
-        const heading = GlobalState.tracking.heading || 0;
-        const isMoving = GlobalState.tracking.speed > 2;
-        
-        return L.divIcon({
-            className: 'current-location-marker',
-            html: `
-                <div style="
-                    position: relative;
-                    width: 60px;
-                    height: 60px;
-                ">
-                    <div style="
-                        position: absolute;
-                        top: 50%;
-                        left: 50%;
-                        width: 60px;
-                        height: 60px;
-                        background: rgba(0, 102, 255, 0.2);
-                        border-radius: 50%;
-                        transform: translate(-50%, -50%);
-                        animation: pulse 2s infinite;
-                    "></div>
-                    ${isMoving ? `
-                        <div style="
-                            position: absolute;
-                            top: 50%;
-                            left: 50%;
-                            width: 40px;
-                            height: 40px;
-                            transform: translate(-50%, -50%) rotate(${heading}deg);
-                        ">
-                            <div style="
-                                width: 0;
-                                height: 0;
-                                border-left: 8px solid transparent;
-                                border-right: 8px solid transparent;
-                                border-bottom: 20px solid #0066FF;
-                                position: absolute;
-                                top: -10px;
-                                left: 50%;
-                                transform: translateX(-50%);
-                            "></div>
-                        </div>
-                    ` : ''}
-                    <div style="
-                        position: absolute;
-                        top: 50%;
-                        left: 50%;
-                        width: 16px;
-                        height: 16px;
-                        background: #0066FF;
-                        border: 3px solid white;
-                        border-radius: 50%;
-                        transform: translate(-50%, -50%);
-                        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-                    "></div>
-                </div>
-                <style>
-                    @keyframes pulse {
-                        0% {
-                            transform: translate(-50%, -50%) scale(0.8);
-                            opacity: 0.8;
-                        }
-                        50% {
-                            transform: translate(-50%, -50%) scale(1.2);
-                            opacity: 0.4;
-                        }
-                        100% {
-                            transform: translate(-50%, -50%) scale(0.8);
-                            opacity: 0.8;
-                        }
-                    }
-                </style>
-            `,
-            iconSize: [60, 60],
-            iconAnchor: [30, 30]
-        });
-    },
-
-    // Check proximity to stops
+    
     checkProximity() {
-        if (!GlobalState.location || !GlobalState.route?.stops) return;
+        if (!GlobalState.location || !GlobalState.nextStop) return;
         
-        const nextStop = RouteModule.getNextStop();
-        if (!nextStop) return;
-        
-        const distance = Utils.calculateDistance(GlobalState.location, nextStop.location);
+        const distance = this.calculateDistance(GlobalState.location, GlobalState.nextStop.location);
         const distanceMeters = distance * 1000;
         
-        // Near stop
-        if (distanceMeters < CONFIG.navigation.proximityRadius && !GlobalState.tracking.proximityNotified) {
-            GlobalState.tracking.proximityNotified = true;
+        // Check if arrived at stop
+        if (distanceMeters < CONFIG.navigation.arrivalRadius && !GlobalState.proximityNotified) {
+            GlobalState.proximityNotified = true;
             
-            const paymentInfo = nextStop.paymentMethod === 'cash' && nextStop.paymentStatus === 'pending';
-            if (nextStop.type === 'delivery' && paymentInfo) {
-                Utils.showNotification(
-                    `💰 Approaching delivery - Collect ${Utils.formatCurrency(nextStop.price)}`,
-                    'warning',
-                    5000
+            // Check if it's a cash collection delivery
+            const paymentInfo = getPaymentInfoForStop(GlobalState.nextStop);
+            if (GlobalState.nextStop.type === 'delivery' && paymentInfo.needsCollection) {
+                UIModule.showNotification(
+                    `💰 Arrived! Remember to collect KES ${paymentInfo.amount.toLocaleString()}`,
+                    'warning'
                 );
+                
+                // Show payment reminder overlay
+                const reminderDiv = document.createElement('div');
+                reminderDiv.className = 'payment-reminder';
+                reminderDiv.innerHTML = `💰 Collect KES ${paymentInfo.amount.toLocaleString()}`;
+                document.body.appendChild(reminderDiv);
+                
+                // Remove after 5 seconds
+                setTimeout(() => reminderDiv.remove(), 5000);
             } else {
-                Utils.showNotification(
-                    `Approaching ${nextStop.type} - ${Math.round(distanceMeters)}m away`,
-                    'info'
-                );
+                UIModule.showNotification(`Arrived at ${GlobalState.nextStop.type} location!`, 'success');
             }
             
             // Reset notification flag after 5 minutes
             setTimeout(() => {
-                GlobalState.tracking.proximityNotified = false;
+                GlobalState.proximityNotified = false;
             }, 300000);
         }
-        
-        // At stop
-        if (distanceMeters < CONFIG.navigation.arrivalRadius && GlobalState.navigation.isActive) {
-            NavigationModule.handleArrival(nextStop);
-        }
     },
-
-    // Stop tracking
+    
+    calculateDistance(point1, point2) {
+        const R = 6371; // Earth's radius in km
+        const dLat = (point2.lat - point1.lat) * Math.PI / 180;
+        const dLon = (point2.lng - point1.lng) * Math.PI / 180;
+        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(point1.lat * Math.PI / 180) * Math.cos(point2.lat * Math.PI / 180) *
+                Math.sin(dLon/2) * Math.sin(dLon/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        return R * c;
+    },
+    
+    calculateBearing(start, end) {
+        const dLng = (end.lng - start.lng) * Math.PI / 180;
+        const lat1 = start.lat * Math.PI / 180;
+        const lat2 = end.lat * Math.PI / 180;
+        
+        const y = Math.sin(dLng) * Math.cos(lat2);
+        const x = Math.cos(lat1) * Math.sin(lat2) - 
+                  Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLng);
+        
+        const bearing = Math.atan2(y, x) * 180 / Math.PI;
+        return (bearing + 360) % 360;
+    },
+    
+    calculateZoomFromSpeed(speed) {
+        if (speed > 60) return 15;
+        if (speed > 40) return 16;
+        if (speed > 20) return 17;
+        if (speed > 5) return 18;
+        return 18;
+    },
+    
     stopTracking() {
         if (GlobalState.tracking.watchId) {
             navigator.geolocation.clearWatch(GlobalState.tracking.watchId);
             GlobalState.tracking.watchId = null;
         }
-        
         GlobalState.tracking.isActive = false;
-        console.log('📍 Location tracking stopped');
     }
 };
 
 // ============================================================================
-// NAVIGATION MODULE - Turn-by-turn Navigation
+// NAVIGATION MODULE (Waze-style from Paste 3)
 // ============================================================================
 
 const NavigationModule = {
-    // Start navigation to stop
-    async startNavigation(stop) {
-        if (!stop) {
-            stop = RouteModule.getNextStop();
-        }
-        
-        if (!stop) {
-            Utils.showNotification('No stops to navigate to', 'warning');
+    async startNavigation() {
+        const nextStop = GlobalState.nextStop;
+        if (!nextStop) {
+            UIModule.showNotification('No stops to navigate to', 'warning');
             return;
         }
         
-        if (!GlobalState.location) {
-            Utils.showNotification('Waiting for GPS location...', 'info');
-            return;
+        GlobalState.ui.navigationActive = true;
+        GlobalState.isFollowingUser = true;
+        
+        // Hide panels
+        const routePanel = document.getElementById('routePanel');
+        if (routePanel) {
+            routePanel.style.display = 'none';
+            GlobalState.ui.panelVisible = false;
         }
         
-        console.log('🧭 Starting navigation to:', stop.address);
-        
-        GlobalState.navigation.isActive = true;
-        GlobalState.navigation.isFollowing = true;
-        GlobalState.navigation.targetStop = stop;
+        // Show navigation UI
+        this.showNavigationUI(nextStop);
         
         // Get directions
-        await this.getDirections(stop);
-        
-        // Update UI
-        UIModule.showNavigationMode();
+        await this.getDirections(nextStop);
         
         // Start continuous updates
-        this.startContinuousUpdates();
-        
-        Utils.showNotification(`Navigating to ${stop.type} location`, 'info');
+        this.startNavigationUpdates();
     },
-
-    // Get directions from OpenRoute
+    
+    showNavigationUI(targetStop) {
+        const existingNav = document.querySelector('.enhanced-navigation');
+        if (existingNav) existingNav.remove();
+        
+        const navUI = document.createElement('div');
+        navUI.className = 'enhanced-navigation waze-style';
+        navUI.style.cssText = 'pointer-events: none !important;';
+        navUI.innerHTML = `
+            <!-- Top instruction bar -->
+            <div class="waze-nav-top">
+                <div class="waze-instruction-bar">
+                    <button class="waze-close-btn" onclick="NavigationModule.exitNavigation()">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                        </svg>
+                    </button>
+                    
+                    <div class="waze-direction-icon">
+                        <span class="direction-arrow">⬆️</span>
+                    </div>
+                    
+                    <div class="waze-instruction-text">
+                        <div class="waze-distance">-- m</div>
+                        <div class="waze-street">Starting navigation...</div>
+                    </div>
+                    
+                    <button class="waze-menu-btn" onclick="NavigationModule.toggleMenu()">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Bottom info pills -->
+            <div class="waze-bottom-pills">
+                <div class="waze-pill eta-pill">
+                    <span class="pill-icon">⏱</span>
+                    <span class="pill-value">--:--</span>
+                    <span class="pill-label">ETA</span>
+                </div>
+                
+                <div class="waze-pill distance-pill">
+                    <span class="pill-icon">📍</span>
+                    <span class="pill-value">-- km</span>
+                    <span class="pill-label">left</span>
+                </div>
+                
+                <div class="waze-pill speed-pill">
+                    <span class="pill-value">0</span>
+                    <span class="pill-label">km/h</span>
+                </div>
+            </div>
+            
+            <!-- Floating action button -->
+            <button class="waze-fab" onclick="NavigationModule.toggleMenu()">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/>
+                </svg>
+            </button>
+            
+            <!-- Navigation menu -->
+            <div class="waze-nav-menu" id="navMenu" style="display: none;">
+                <button class="nav-menu-item" onclick="NavigationModule.toggleMenu(); UIModule.togglePanel();">
+                    <span class="menu-icon">📋</span>
+                    <span>Route Details</span>
+                </button>
+                <button class="nav-menu-item" onclick="NavigationModule.toggleFollowMode()">
+                    <span class="menu-icon">🎯</span>
+                    <span id="followModeText">Following On</span>
+                </button>
+                <button class="nav-menu-item" onclick="UIModule.handleVerifyClick()">
+                    <span class="menu-icon">✓</span>
+                    <span>Verify Stop</span>
+                </button>
+                <button class="nav-menu-item" onclick="window.location.href='tel:${targetStop.customerPhone}'">
+                    <span class="menu-icon">📞</span>
+                    <span>Call Customer</span>
+                </button>
+            </div>
+        `;
+        
+        document.body.appendChild(navUI);
+    },
+    
     async getDirections(targetStop) {
-        if (!GlobalState.location || !targetStop) return;
+        if (!GlobalState.location) return;
         
         try {
             const response = await fetch('https://api.openrouteservice.org/v2/directions/driving-car', {
@@ -1981,1061 +1406,251 @@ const NavigationModule = {
                 const data = await response.json();
                 if (data.routes && data.routes.length > 0) {
                     const route = data.routes[0];
-                    GlobalState.navigation.routeGeometry = route;
                     
-                    // Draw navigation route
-                    this.drawNavigationRoute(route);
+                    if (GlobalState.directionsPolyline) {
+                        GlobalState.directionsPolyline.remove();
+                    }
                     
-                    // Process instructions
-                    this.processInstructions(route);
+                    const decodedCoords = MapModule.decodePolyline(route.geometry);
+                    GlobalState.directionsPolyline = L.polyline(decodedCoords, {
+                        color: '#0066FF',
+                        weight: 6,
+                        opacity: 0.9,
+                        className: 'navigation-route'
+                    }).addTo(GlobalState.map);
+                    
+                    this.updateNavigationInstructions(route);
                 }
             }
         } catch (error) {
             console.error('Error getting directions:', error);
-            Utils.showNotification('Navigation error - using straight line', 'warning');
         }
     },
-
-    // Draw navigation route
-    drawNavigationRoute(route) {
-        // Remove existing navigation polyline
-        if (GlobalState.navigation.directionsPolyline) {
-            GlobalState.map.removeLayer(GlobalState.navigation.directionsPolyline);
-        }
-        
-        const decodedCoords = MapModule.decodePolyline(route.geometry);
-        
-        GlobalState.navigation.directionsPolyline = L.polyline(decodedCoords, {
-            color: '#00FF00',
-            weight: 8,
-            opacity: 0.9,
-            className: 'navigation-route'
-        }).addTo(GlobalState.map);
-        
-        // Fit to route
-        const bounds = L.latLngBounds(decodedCoords);
-        GlobalState.map.fitBounds(bounds, { padding: [100, 100] });
-    },
-
-    // Process navigation instructions
-    processInstructions(route) {
+    
+    updateNavigationInstructions(route) {
         if (!route.segments || route.segments.length === 0) return;
         
         const segment = route.segments[0];
         if (!segment.steps || segment.steps.length === 0) return;
         
-        GlobalState.navigation.currentInstruction = {
-            steps: segment.steps,
-            currentStep: 0,
-            totalDistance: route.summary.distance,
-            totalDuration: route.summary.duration
-        };
+        const currentStep = segment.steps[0];
         
-        this.updateNavigationDisplay();
-    },
-
-    // Update navigation display
-    updateNavigationDisplay() {
-        const instruction = GlobalState.navigation.currentInstruction;
-        if (!instruction || !instruction.steps) return;
+        const distanceEl = document.querySelector('.waze-distance');
+        const streetEl = document.querySelector('.waze-street');
+        const arrowEl = document.querySelector('.direction-arrow');
         
-        const currentStep = instruction.steps[instruction.currentStep] || instruction.steps[0];
-        const distance = currentStep.distance;
-        const text = currentStep.instruction;
-        
-        UIModule.updateNavigationInstruction({
-            distance: distance < 1000 ? `${Math.round(distance)}m` : `${(distance/1000).toFixed(1)}km`,
-            instruction: text,
-            type: currentStep.type
-        });
-    },
-
-    // Start continuous navigation updates
-    startContinuousUpdates() {
-        if (GlobalState.navigation.interval) {
-            clearInterval(GlobalState.navigation.interval);
+        if (distanceEl) {
+            const dist = currentStep.distance;
+            distanceEl.textContent = dist < 1000 ? 
+                `${Math.round(dist)} m` : 
+                `${(dist / 1000).toFixed(1)} km`;
         }
         
-        GlobalState.navigation.interval = setInterval(() => {
-            if (!GlobalState.navigation.isActive) {
-                clearInterval(GlobalState.navigation.interval);
-                return;
-            }
-            
+        if (streetEl) {
+            const instruction = currentStep.instruction.replace(/Continue straight on|Continue on|Drive along/, '');
+            streetEl.textContent = instruction.length > 30 ? 
+                instruction.substring(0, 30) + '...' : 
+                instruction;
+        }
+        
+        if (arrowEl) {
+            arrowEl.textContent = this.getDirectionEmoji(currentStep.type);
+        }
+    },
+    
+    getDirectionEmoji(type) {
+        const emojis = {
+            0: '⬅️',   // Left
+            1: '➡️',   // Right  
+            2: '↩️',   // Sharp left
+            3: '↪️',   // Sharp right
+            4: '↖️',   // Slight left
+            5: '↗️',   // Slight right
+            6: '⬆️',   // Straight
+            7: '🔄',   // Enter roundabout
+            8: '🔄',   // Exit roundabout
+            9: '⤴️',   // U-turn
+            10: '🏁',  // Goal
+            11: '🚦',  // Depart
+            12: '⬅️',  // Keep left
+            13: '➡️'   // Keep right
+        };
+        
+        return emojis[type] || '⬆️';
+    },
+    
+    updateNavigation() {
+        if (!GlobalState.location || !GlobalState.nextStop) return;
+        
+        const distance = LocationModule.calculateDistance(GlobalState.location, GlobalState.nextStop.location);
+        const eta = this.calculateETA(distance);
+        
+        const etaPill = document.querySelector('.eta-pill .pill-value');
+        const distancePill = document.querySelector('.distance-pill .pill-value');
+        const speedPill = document.querySelector('.speed-pill .pill-value');
+        
+        if (etaPill) etaPill.textContent = eta;
+        
+        if (distancePill) {
+            distancePill.textContent = distance < 1 ? 
+                `${Math.round(distance * 1000)} m` : 
+                `${distance.toFixed(1)} km`;
+        }
+        
+        if (speedPill && GlobalState.tracking.speed !== undefined) {
+            speedPill.textContent = GlobalState.tracking.speed || 0;
+        }
+        
+        // Check if arrived
+        if (distance < 0.05) {
+            this.showArrivalNotification(GlobalState.nextStop);
+        }
+    },
+    
+    calculateETA(distance) {
+        const avgSpeed = 30; // km/h
+        const timeInHours = distance / avgSpeed;
+        const timeInMinutes = Math.round(timeInHours * 60);
+        
+        const now = new Date();
+        const eta = new Date(now.getTime() + timeInMinutes * 60000);
+        
+        return eta.toLocaleTimeString('en-US', { 
+            hour: 'numeric', 
+            minute: '2-digit',
+            hour12: true 
+        });
+    },
+    
+    showArrivalNotification(targetStop) {
+        const distanceEl = document.querySelector('.waze-distance');
+        const streetEl = document.querySelector('.waze-street');
+        const arrowEl = document.querySelector('.direction-arrow');
+        const paymentInfo = getPaymentInfoForStop(targetStop);
+        
+        if (distanceEl) distanceEl.textContent = 'Arrived';
+        if (streetEl) streetEl.textContent = `${targetStop.type} location reached`;
+        if (arrowEl) arrowEl.textContent = '✅';
+        
+        if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+        
+        // Show payment reminder for cash collection
+        if (targetStop.type === 'delivery' && paymentInfo.needsCollection) {
+            UIModule.showNotification(
+                `⚠️ Remember to collect KES ${paymentInfo.amount.toLocaleString()} from customer`,
+                'warning'
+            );
+        }
+        
+        // Auto-open verification after 2 seconds
+        setTimeout(() => {
+            UIModule.handleVerifyClick();
+        }, 2000);
+    },
+    
+    startNavigationUpdates() {
+        if (GlobalState.tracking.interval) {
+            clearInterval(GlobalState.tracking.interval);
+        }
+        
+        GlobalState.tracking.interval = setInterval(() => {
             this.updateNavigation();
         }, 2000);
     },
-
-    // Update navigation
-    updateNavigation() {
-        if (!GlobalState.location || !GlobalState.navigation.targetStop) return;
-        
-        const distance = Utils.calculateDistance(GlobalState.location, GlobalState.navigation.targetStop.location);
-        const eta = Utils.calculateETA(distance, GlobalState.tracking.speed || 30);
-        
-        UIModule.updateNavigationStats({
-            distance: distance < 1 ? `${Math.round(distance * 1000)}m` : `${distance.toFixed(1)}km`,
-            eta: eta,
-            speed: GlobalState.tracking.speed || 0
-        });
-        
-        // Check for arrival
-        if (distance * 1000 < CONFIG.navigation.arrivalRadius) {
-            this.handleArrival(GlobalState.navigation.targetStop);
+    
+    toggleMenu() {
+        const menu = document.getElementById('navMenu');
+        if (menu) {
+            menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
         }
     },
-
-    // Handle arrival at stop
-    handleArrival(stop) {
-        if (!stop || GlobalState.navigation.arrivedNotified) return;
-        
-        GlobalState.navigation.arrivedNotified = true;
-        
-        Utils.showNotification(`Arrived at ${stop.type} location!`, 'success', 5000);
-        Utils.vibrate([100, 50, 100, 50, 200]);
-        
-        // Check for payment reminder
-        if (stop.type === 'delivery' && stop.paymentMethod === 'cash' && stop.paymentStatus === 'pending') {
-            setTimeout(() => {
-                Utils.showNotification(
-                    `Remember to collect ${Utils.formatCurrency(stop.price)} cash`,
-                    'warning',
-                    10000
-                );
-            }, 2000);
+    
+    toggleFollowMode() {
+        GlobalState.isFollowingUser = !GlobalState.isFollowingUser;
+        const followText = document.getElementById('followModeText');
+        if (followText) {
+            followText.textContent = GlobalState.isFollowingUser ? 'Following On' : 'Following Off';
         }
         
-        // Auto-open verification after 3 seconds
-        setTimeout(() => {
-            VerificationModule.showModal(stop);
-            this.exitNavigation();
-        }, 3000);
+        if (GlobalState.isFollowingUser && GlobalState.location) {
+            GlobalState.map.panTo([GlobalState.location.lat, GlobalState.location.lng], {
+                animate: true,
+                duration: 1
+            });
+        }
+        
+        UIModule.showNotification(
+            GlobalState.isFollowingUser ? 'Following mode enabled' : 'Following mode disabled',
+            'info'
+        );
     },
-
-    // Exit navigation
+    
     exitNavigation() {
-        GlobalState.navigation.isActive = false;
-        GlobalState.navigation.isFollowing = false;
-        GlobalState.navigation.targetStop = null;
-        GlobalState.navigation.arrivedNotified = false;
+        const nav = document.querySelector('.enhanced-navigation');
+        if (nav) nav.remove();
         
-        // Clear interval
-        if (GlobalState.navigation.interval) {
-            clearInterval(GlobalState.navigation.interval);
-            GlobalState.navigation.interval = null;
+        GlobalState.ui.navigationActive = false;
+        GlobalState.isFollowingUser = false;
+        
+        if (GlobalState.tracking.interval) {
+            clearInterval(GlobalState.tracking.interval);
+            GlobalState.tracking.interval = null;
         }
         
-        // Clear navigation polyline
-        if (GlobalState.navigation.directionsPolyline) {
-            GlobalState.map.removeLayer(GlobalState.navigation.directionsPolyline);
-            GlobalState.navigation.directionsPolyline = null;
+        // Show route panel again
+        const routePanel = document.getElementById('routePanel');
+        if (routePanel) {
+            routePanel.style.display = 'none';
+            GlobalState.ui.panelVisible = false;
         }
         
-        // Update UI
-        UIModule.hideNavigationMode();
-        
-        // Zoom out to show route
-        MapModule.fitRouteBounds();
-    }
-};
-
-console.log('✅ Route Navigation Part 2 loaded: Route, Map, Location & Navigation modules');
-/**
- * ENHANCED ROUTE NAVIGATION MODULE - PART 3
- * Verification System, UI Management, and Complete Initialization
- * Modern glassmorphic UI with full feature implementation
- */
-
-// ============================================================================
-// VERIFICATION MODULE - Complete POD and Verification System
-// ============================================================================
-
-const VerificationModule = {
-    // Show verification modal for stop
-    async showModal(stopId) {
-        // Handle both stop object and stop ID
-        let stop;
-        if (typeof stopId === 'string') {
-            stop = GlobalState.route?.stops?.find(s => s.id === stopId);
-        } else {
-            stop = stopId;
+        // Show nav controls
+        const navControls = document.getElementById('navControls');
+        if (navControls) {
+            navControls.style.display = 'flex';
         }
         
-        if (!stop) return;
-        
-        GlobalState.verification.currentStop = stop;
-        
-        const isPickup = stop.type === 'pickup';
-        const needsPayment = stop.paymentMethod === 'cash' && stop.paymentStatus === 'pending' && !isPickup;
-        
-        const modal = document.createElement('div');
-        modal.className = 'verification-modal';
-        modal.style.cssText = `
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            z-index: 10000;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-            animation: fadeIn 0.3s ease;
-        `;
-        
-        modal.innerHTML = `
-            <div class="modal-overlay" onclick="VerificationModule.closeModal()" style="
-                position: absolute;
-                top: 0;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                background: rgba(0, 0, 0, 0.85);
-                backdrop-filter: blur(10px);
-                -webkit-backdrop-filter: blur(10px);
-            "></div>
-            <div class="modal-content" style="
-                position: relative;
-                background: rgba(255, 255, 255, 0.1);
-                backdrop-filter: blur(30px);
-                -webkit-backdrop-filter: blur(30px);
-                border: 1px solid rgba(255, 255, 255, 0.2);
-                border-radius: 24px;
-                max-width: 420px;
-                width: 90%;
-                max-height: 85vh;
-                overflow: hidden;
-                z-index: 1;
-                animation: slideUp 0.3s ease;
-                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-            ">
-                <div class="modal-header" style="
-                    padding: 24px;
-                    text-align: center;
-                    position: relative;
-                    overflow: hidden;
-                    background: linear-gradient(135deg, ${isPickup ? '#FF9F0A, #ff8c00' : '#0066FF, #0052cc'});
-                    color: white;
-                ">
-                    <span class="modal-icon" style="font-size: 48px; display: block; margin-bottom: 12px;">
-                        ${isPickup ? '📦' : '📍'}
-                    </span>
-                    <h2 style="margin: 0; font-size: 24px; font-weight: 700;">
-                        ${isPickup ? 'Pickup Verification' : 'Delivery Verification'}
-                    </h2>
-                    <p style="margin: 8px 0 0; opacity: 0.9; font-size: 14px;">${stop.address}</p>
-                </div>
-                <div class="modal-body" style="padding: 24px; color: white;">
-                    <div class="stop-summary" style="
-                        background: rgba(255, 255, 255, 0.05);
-                        border: 1px solid rgba(255, 255, 255, 0.1);
-                        border-radius: 12px;
-                        padding: 16px;
-                        margin-bottom: 20px;
-                    ">
-                        <h3 style="margin: 0 0 12px 0; font-size: 18px;">Stop Details</h3>
-                        <div style="display: flex; flex-direction: column; gap: 8px; font-size: 14px;">
-                            <div style="display: flex; justify-content: space-between;">
-                                <span style="opacity: 0.7;">Customer:</span>
-                                <span style="font-weight: 600;">${stop.customerName || 'N/A'}</span>
-                            </div>
-                            <div style="display: flex; justify-content: space-between;">
-                                <span style="opacity: 0.7;">Phone:</span>
-                                <span style="font-weight: 600;">
-                                    ${stop.customerPhone ? 
-                                        `<a href="tel:${stop.customerPhone}" style="color: #0066FF; text-decoration: none;">${stop.customerPhone}</a>` : 
-                                        'Not provided'}
-                                </span>
-                            </div>
-                            <div style="display: flex; justify-content: space-between;">
-                                <span style="opacity: 0.7;">Parcel Code:</span>
-                                <span style="font-weight: 600;">${stop.parcelCode}</span>
-                            </div>
-                            ${stop.specialInstructions ? `
-                                <div style="display: flex; justify-content: space-between;">
-                                    <span style="opacity: 0.7;">Instructions:</span>
-                                    <span style="font-weight: 600; text-align: right; max-width: 60%;">
-                                        ${stop.specialInstructions}
-                                    </span>
-                                </div>
-                            ` : ''}
-                        </div>
-                    </div>
-
-                    ${needsPayment ? `
-                        <div style="
-                            background: linear-gradient(135deg, rgba(255, 159, 10, 0.2), rgba(255, 159, 10, 0.1));
-                            border: 2px solid #FF9F0A;
-                            border-radius: 12px;
-                            padding: 16px;
-                            margin: 16px 0;
-                            text-align: center;
-                        ">
-                            <div style="font-size: 24px; margin-bottom: 8px;">💰</div>
-                            <div style="font-size: 20px; font-weight: 700; color: #FF9F0A;">
-                                Collect ${Utils.formatCurrency(stop.price)}
-                            </div>
-                            <div style="margin-top: 4px; font-size: 14px; opacity: 0.9;">
-                                Cash on Delivery
-                            </div>
-                        </div>
-                    ` : !isPickup && stop.paymentStatus === 'paid' ? `
-                        <div style="
-                            background: linear-gradient(135deg, rgba(52, 199, 89, 0.2), rgba(52, 199, 89, 0.1));
-                            border: 1px solid #34C759;
-                            border-radius: 12px;
-                            padding: 12px;
-                            margin: 16px 0;
-                            text-align: center;
-                            color: #34C759;
-                            font-weight: 600;
-                        ">
-                            ✅ Already Paid - No collection needed
-                        </div>
-                    ` : ''}
-
-                    <div class="verification-section" style="margin: 20px 0;">
-                        <label style="display: block; margin-bottom: 8px; font-weight: 600;">
-                            Enter ${isPickup ? 'Pickup' : 'Delivery'} Code:
-                        </label>
-                        <input 
-                            type="text" 
-                            id="verification-code-input"
-                            placeholder="XXXXXX"
-                            maxlength="10"
-                            autocomplete="off"
-                            style="
-                                width: 100%;
-                                padding: 16px;
-                                font-size: 24px;
-                                text-align: center;
-                                border: 2px solid rgba(255, 255, 255, 0.2);
-                                border-radius: 12px;
-                                background: rgba(255, 255, 255, 0.05);
-                                color: white;
-                                text-transform: uppercase;
-                                letter-spacing: 2px;
-                                font-weight: 600;
-                                transition: all 0.2s;
-                                outline: none;
-                            "
-                            onkeyup="VerificationModule.handleCodeInput(event)"
-                        />
-                        <div style="text-align: center; opacity: 0.7; margin-top: 8px; font-size: 14px;">
-                            Ask the ${isPickup ? 'vendor' : 'recipient'} for the verification code
-                        </div>
-                    </div>
-
-                    ${needsPayment ? `
-                        <div style="
-                            margin-top: 16px; 
-                            padding: 12px; 
-                            background: rgba(255, 255, 255, 0.05); 
-                            border-radius: 8px;
-                            border: 1px solid rgba(255, 255, 255, 0.1);
-                        ">
-                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                                <input type="checkbox" id="payment-collected-checkbox" style="
-                                    width: 20px; 
-                                    height: 20px; 
-                                    cursor: pointer;
-                                    accent-color: #FF9F0A;
-                                ">
-                                <span style="font-size: 16px;">
-                                    I have collected ${Utils.formatCurrency(stop.price)} cash
-                                </span>
-                            </label>
-                        </div>
-                    ` : ''}
-
-                    <div class="modal-actions" style="display: flex; gap: 12px; margin-top: 24px;">
-                        <button onclick="VerificationModule.closeModal()" style="
-                            flex: 1;
-                            padding: 16px;
-                            background: rgba(255, 255, 255, 0.1);
-                            border: 1px solid rgba(255, 255, 255, 0.2);
-                            border-radius: 12px;
-                            color: white;
-                            font-size: 16px;
-                            font-weight: 600;
-                            cursor: pointer;
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                            gap: 8px;
-                            transition: all 0.2s;
-                        ">
-                            <span>❌</span>
-                            <span>Cancel</span>
-                        </button>
-                        <button onclick="VerificationModule.verifyCode()" style="
-                            flex: 1;
-                            padding: 16px;
-                            background: linear-gradient(135deg, #0066FF, #0052cc);
-                            border: none;
-                            border-radius: 12px;
-                            color: white;
-                            font-size: 16px;
-                            font-weight: 600;
-                            cursor: pointer;
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                            gap: 8px;
-                            transition: all 0.2s;
-                            box-shadow: 0 4px 20px rgba(0, 102, 255, 0.3);
-                        ">
-                            <span>✓</span>
-                            <span>Verify</span>
-                        </button>
-                    </div>
-
-                    ${CONFIG.dev.isDevelopment ? `
-                        <div style="
-                            margin-top: 20px; 
-                            padding: 12px; 
-                            background: rgba(255, 255, 255, 0.05); 
-                            border-radius: 8px;
-                            border: 1px solid rgba(255, 255, 255, 0.1);
-                        ">
-                            <div style="font-size: 12px; opacity: 0.5; margin-bottom: 8px;">
-                                🔧 Development Mode
-                            </div>
-                            <div style="font-size: 14px; opacity: 0.7;">
-                                Expected code: <strong>${stop.verificationCode || 'Any code accepted'}</strong>
-                            </div>
-                        </div>
-                    ` : ''}
-                </div>
-            </div>
-            <style>
-                @keyframes fadeIn {
-                    from { opacity: 0; }
-                    to { opacity: 1; }
+        // Reset map view
+        if (GlobalState.map && GlobalState.route && GlobalState.route.stops) {
+            const bounds = L.latLngBounds();
+            GlobalState.route.stops.forEach(stop => {
+                if (stop.location) {
+                    bounds.extend([stop.location.lat, stop.location.lng]);
                 }
-                @keyframes slideUp {
-                    from { 
-                        transform: translateY(20px); 
-                        opacity: 0;
-                    }
-                    to { 
-                        transform: translateY(0); 
-                        opacity: 1;
-                    }
-                }
-            </style>
-        `;
-        
-        document.body.appendChild(modal);
-        
-        // Focus input
-        setTimeout(() => {
-            const input = document.getElementById('verification-code-input');
-            if (input) input.focus();
-        }, 100);
-        
-        // Vibrate for attention
-        Utils.vibrate([100, 50, 100]);
-    },
-
-    // Handle code input
-    handleCodeInput(event) {
-        const input = event.target;
-        input.value = input.value.toUpperCase();
-        
-        // Remove error state when typing
-        input.style.borderColor = 'rgba(255, 255, 255, 0.2)';
-        
-        // Auto-verify on Enter
-        if (event.key === 'Enter') {
-            this.verifyCode();
+            });
+            GlobalState.map.fitBounds(bounds, { padding: [50, 50] });
         }
-    },
-
-    // Verify the entered code
-    async verifyCode() {
-        const input = document.getElementById('verification-code-input');
-        const enteredCode = input?.value?.trim().toUpperCase();
-        const stop = GlobalState.verification.currentStop;
-        
-        if (!stop) return;
-        
-        // Validate code entry
-        if (!enteredCode || enteredCode.length < 4) {
-            input.style.borderColor = '#FF3B30';
-            Utils.vibrate([200, 100, 200]);
-            Utils.showNotification('Please enter a valid code', 'error');
-            return;
-        }
-        
-        // Check payment collection for cash deliveries
-        if (stop.type === 'delivery' && stop.paymentMethod === 'cash' && stop.paymentStatus === 'pending') {
-            const paymentCheckbox = document.getElementById('payment-collected-checkbox');
-            if (paymentCheckbox && !paymentCheckbox.checked) {
-                Utils.showNotification('Please confirm cash collection before verifying', 'warning');
-                Utils.vibrate([100, 50, 100]);
-                return;
-            }
-        }
-        
-        // Check if code is correct
-        const expectedCode = stop.verificationCode?.toUpperCase().replace(/[^A-Z0-9]/g, '');
-        const isValid = CONFIG.dev.isDevelopment ? 
-            (enteredCode.length > 0) : 
-            (enteredCode === expectedCode);
-        
-        if (!isValid) {
-            input.style.borderColor = '#FF3B30';
-            Utils.vibrate([200, 100, 200]);
-            Utils.showNotification('Invalid verification code', 'error');
-            return;
-        }
-        
-        // Close verification modal
-        this.closeModal();
-        
-        // Handle based on stop type
-        if (stop.type === 'pickup') {
-            // For pickup: directly complete
-            this.completePickup(stop);
-        } else {
-            // For delivery: show POD modal
-            Utils.showNotification('Code verified! Please take proof of delivery photo', 'success');
-            setTimeout(() => {
-                this.showPODModal(stop);
-            }, 500);
-        }
-    },
-
-    // Complete pickup
-    async completePickup(stop) {
-        // Mark as completed
-        await RouteModule.completeStop(stop.id);
-        
-        // Show success animation
-        this.showSuccessAnimation('Pickup Complete!');
-        
-        // Update UI
-        UIModule.refresh();
-        
-        // Check for next stop
-        setTimeout(() => {
-            const nextStop = RouteModule.getNextStop();
-            if (nextStop) {
-                MapModule.focusOnStop(nextStop);
-                Utils.showNotification(`Next: ${nextStop.type} at ${nextStop.address}`, 'info');
-            }
-        }, 2000);
-    },
-
-    // Show POD (Proof of Delivery) modal
-    showPODModal(stop) {
-        const modal = document.createElement('div');
-        modal.className = 'pod-modal';
-        modal.style.cssText = `
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.9);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 10000;
-            animation: fadeIn 0.2s ease;
-            padding: 20px;
-        `;
-        
-        modal.innerHTML = `
-            <div class="pod-content" style="
-                background: rgba(255, 255, 255, 0.1);
-                backdrop-filter: blur(30px);
-                -webkit-backdrop-filter: blur(30px);
-                border: 1px solid rgba(255, 255, 255, 0.2);
-                border-radius: 24px;
-                width: 90%;
-                max-width: 400px;
-                overflow: hidden;
-                animation: slideUp 0.3s ease;
-                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-            ">
-                <div class="pod-header" style="
-                    padding: 20px;
-                    text-align: center;
-                    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-                    background: linear-gradient(135deg, #0066FF, #0052cc);
-                    color: white;
-                ">
-                    <h3 style="margin: 0; font-size: 20px;">Proof of Delivery</h3>
-                    <p style="margin: 5px 0 0 0; opacity: 0.9; font-size: 14px;">
-                        ${stop.address}
-                    </p>
-                </div>
-                <div class="pod-main" style="padding: 20px; color: white;">
-                    <div class="photo-area" id="photo-capture-area" onclick="VerificationModule.capturePhoto()" style="
-                        background: rgba(255, 255, 255, 0.05);
-                        border: 2px dashed rgba(255, 255, 255, 0.3);
-                        border-radius: 16px;
-                        padding: 40px 20px;
-                        text-align: center;
-                        cursor: pointer;
-                        transition: all 0.3s ease;
-                        margin-bottom: 20px;
-                        position: relative;
-                    ">
-                        <div id="photo-prompt">
-                            <div style="font-size: 48px; margin-bottom: 10px;">📸</div>
-                            <div style="font-size: 18px; font-weight: 600; margin-bottom: 5px;">
-                                Take Photo
-                            </div>
-                            <div style="font-size: 14px; opacity: 0.7;">
-                                Tap to capture proof of delivery
-                            </div>
-                        </div>
-                        <div id="photo-preview" style="display: none;">
-                            <img id="captured-photo" style="width: 100%; border-radius: 12px; display: block;" />
-                            <button onclick="event.stopPropagation(); VerificationModule.retakePhoto()" style="
-                                position: absolute;
-                                top: 10px;
-                                right: 10px;
-                                background: white;
-                                color: black;
-                                border: none;
-                                padding: 8px 12px;
-                                border-radius: 20px;
-                                font-size: 14px;
-                                font-weight: 600;
-                                cursor: pointer;
-                                box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-                            ">Retake</button>
-                        </div>
-                    </div>
-                    
-                    <input type="file" 
-                           id="photo-input" 
-                           accept="image/*" 
-                           capture="environment"
-                           style="display: none;"
-                           onchange="VerificationModule.handlePhotoCapture(event)" />
-                    
-                    <div style="display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap;">
-                        ${['Handed to Customer', 'Left at Doorstep', 'With Security', 'With Neighbor', 'Safe Location', 'Other'].map((option, i) => `
-                            <label style="flex: 1; min-width: calc(33% - 8px);">
-                                <input type="radio" name="delivery-type" value="${option.toLowerCase().replace(/ /g, '_')}" 
-                                       ${i === 0 ? 'checked' : ''} style="display: none;" />
-                                <span style="
-                                    display: block;
-                                    padding: 10px;
-                                    background: rgba(255, 255, 255, 0.05);
-                                    border: 2px solid rgba(255, 255, 255, 0.1);
-                                    border-radius: 10px;
-                                    text-align: center;
-                                    font-size: 13px;
-                                    cursor: pointer;
-                                    transition: all 0.2s;
-                                    color: white;
-                                " onclick="
-                                    this.parentElement.querySelector('input').checked = true;
-                                    document.querySelectorAll('input[name=delivery-type] + span').forEach(s => {
-                                        s.style.background = 'rgba(255, 255, 255, 0.05)';
-                                        s.style.borderColor = 'rgba(255, 255, 255, 0.1)';
-                                    });
-                                    this.style.background = 'rgba(0, 102, 255, 0.2)';
-                                    this.style.borderColor = '#0066FF';
-                                ">${option}</span>
-                            </label>
-                        `).join('')}
-                    </div>
-                    
-                    <button id="complete-delivery-btn" 
-                            onclick="VerificationModule.completeDelivery()" 
-                            style="
-                                width: 100%;
-                                padding: 16px;
-                                background: rgba(255, 255, 255, 0.2);
-                                border: 1px solid rgba(255, 255, 255, 0.3);
-                                border-radius: 12px;
-                                font-size: 18px;
-                                font-weight: 700;
-                                color: white;
-                                cursor: not-allowed;
-                                transition: all 0.3s;
-                            ">
-                        Complete Delivery
-                    </button>
-                    
-                    <button onclick="VerificationModule.skipPOD()" style="
-                        display: block;
-                        width: 100%;
-                        padding: 10px;
-                        background: none;
-                        border: none;
-                        color: rgba(255, 255, 255, 0.5);
-                        font-size: 13px;
-                        text-decoration: underline;
-                        cursor: pointer;
-                        margin-top: 10px;
-                    ">Skip photo (not recommended)</button>
-                </div>
-            </div>
-        `;
-        
-        document.body.appendChild(modal);
-        
-        // Initialize POD data
-        GlobalState.verification.podData = {
-            photo: null,
-            deliveryType: 'handed_to_customer',
-            timestamp: new Date().toISOString(),
-            location: GlobalState.location
-        };
-    },
-
-    // Capture photo
-    capturePhoto() {
-        const input = document.getElementById('photo-input');
-        if (input) input.click();
-    },
-
-    // Handle photo capture
-    handlePhotoCapture(event) {
-        const file = event.target.files[0];
-        if (!file) return;
-        
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            // Store photo data
-            GlobalState.verification.podData.photo = e.target.result;
-            
-            // Show preview
-            const photoPrompt = document.getElementById('photo-prompt');
-            const photoPreview = document.getElementById('photo-preview');
-            const capturedPhoto = document.getElementById('captured-photo');
-            const completeBtn = document.getElementById('complete-delivery-btn');
-            
-            if (photoPrompt) photoPrompt.style.display = 'none';
-            if (photoPreview) photoPreview.style.display = 'block';
-            if (capturedPhoto) capturedPhoto.src = e.target.result;
-            if (completeBtn) {
-                completeBtn.style.background = 'linear-gradient(135deg, #0066FF, #0052cc)';
-                completeBtn.style.cursor = 'pointer';
-                completeBtn.style.borderColor = '#0066FF';
-                completeBtn.style.boxShadow = '0 4px 20px rgba(0, 102, 255, 0.3)';
-            }
-        };
-        reader.readAsDataURL(file);
-    },
-
-    // Retake photo
-    retakePhoto() {
-        const photoPrompt = document.getElementById('photo-prompt');
-        const photoPreview = document.getElementById('photo-preview');
-        const completeBtn = document.getElementById('complete-delivery-btn');
-        
-        if (photoPrompt) photoPrompt.style.display = 'block';
-        if (photoPreview) photoPreview.style.display = 'none';
-        if (completeBtn) {
-            completeBtn.style.background = 'rgba(255, 255, 255, 0.2)';
-            completeBtn.style.cursor = 'not-allowed';
-            completeBtn.style.borderColor = 'rgba(255, 255, 255, 0.3)';
-            completeBtn.style.boxShadow = 'none';
-        }
-        
-        GlobalState.verification.podData.photo = null;
-    },
-
-    // Complete delivery
-    async completeDelivery() {
-        const stop = GlobalState.verification.currentStop;
-        if (!stop) return;
-        
-        // Get delivery type
-        const deliveryType = document.querySelector('input[name="delivery-type"]:checked')?.value || 'handed_to_customer';
-        GlobalState.verification.podData.deliveryType = deliveryType;
-        
-        // Mark stop as completed
-        await RouteModule.completeStop(stop.id);
-        
-        // Create POD record in Supabase
-        await SupabaseModule.createProofOfDelivery(stop.id, GlobalState.verification.podData);
-        
-        // Close POD modal
-        this.closePODModal();
-        
-        // Show success
-        this.showSuccessAnimation('Delivery Complete!');
-        
-        // Update UI
-        UIModule.refresh();
-        
-        // Check if route is complete
-        if (RouteModule.isRouteComplete()) {
-            setTimeout(() => this.showRouteCompleteModal(), 2000);
-        } else {
-            // Navigate to next stop
-            const nextStop = RouteModule.getNextStop();
-            if (nextStop) {
-                setTimeout(() => {
-                    MapModule.focusOnStop(nextStop);
-                    Utils.showNotification(`Next: ${nextStop.type} at ${nextStop.address}`, 'info');
-                }, 2000);
-            }
-        }
-    },
-
-    // Skip POD
-    skipPOD() {
-        if (!confirm('Are you sure you want to skip taking a photo? This is not recommended.')) {
-            return;
-        }
-        
-        GlobalState.verification.podData.photo = null;
-        GlobalState.verification.podData.skipped = true;
-        
-        this.completeDelivery();
-    },
-
-    // Close modals
-    closeModal() {
-        const modal = document.querySelector('.verification-modal');
-        if (modal) modal.remove();
-    },
-
-    closePODModal() {
-        const modal = document.querySelector('.pod-modal');
-        if (modal) modal.remove();
-    },
-
-    // Show success animation
-    showSuccessAnimation(message) {
-        const animation = document.createElement('div');
-        animation.style.cssText = `
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(30px);
-            -webkit-backdrop-filter: blur(30px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 20px;
-            padding: 40px;
-            text-align: center;
-            z-index: 10001;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
-            animation: popIn 0.3s ease-out;
-        `;
-        
-        animation.innerHTML = `
-            <div style="
-                width: 80px;
-                height: 80px;
-                background: linear-gradient(135deg, #34C759, #2ecc71);
-                border-radius: 50%;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                margin: 0 auto 20px;
-                font-size: 48px;
-                color: white;
-                box-shadow: 0 4px 20px rgba(52, 199, 89, 0.4);
-            ">✓</div>
-            <div style="font-size: 24px; font-weight: 700; color: white;">
-                ${message}
-            </div>
-            <style>
-                @keyframes popIn {
-                    from {
-                        transform: translate(-50%, -50%) scale(0.8);
-                        opacity: 0;
-                    }
-                    to {
-                        transform: translate(-50%, -50%) scale(1);
-                        opacity: 1;
-                    }
-                }
-            </style>
-        `;
-        
-        document.body.appendChild(animation);
-        
-        Utils.vibrate([100, 50, 100]);
-        
-        setTimeout(() => animation.remove(), 2000);
-    },
-
-    // Show route complete modal
-    showRouteCompleteModal() {
-        const totalStops = GlobalState.route.stops.length;
-        const totalEarnings = GlobalState.earnings.totalRouteEarnings || 0;
-        const cashCollected = GlobalState.parcels.cashCollected || 0;
-        
-        const modal = document.createElement('div');
-        modal.style.cssText = `
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.95);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 10000;
-            animation: fadeIn 0.3s ease;
-        `;
-        
-        modal.innerHTML = `
-            <div style="
-                background: rgba(255, 255, 255, 0.1);
-                backdrop-filter: blur(30px);
-                -webkit-backdrop-filter: blur(30px);
-                border: 1px solid rgba(255, 255, 255, 0.2);
-                border-radius: 24px;
-                padding: 40px;
-                text-align: center;
-                max-width: 400px;
-                animation: slideUp 0.4s ease;
-                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-                color: white;
-            ">
-                <div style="font-size: 72px; margin-bottom: 20px; animation: bounce 0.6s ease;">
-                    🎉
-                </div>
-                <h2 style="margin: 0 0 20px; font-size: 28px;">Route Complete!</h2>
-                <p style="margin: 20px 0; opacity: 0.9;">
-                    Amazing work! You've successfully completed all deliveries.
-                </p>
-                
-                <div style="
-                    display: flex;
-                    justify-content: center;
-                    gap: 40px;
-                    margin: 32px 0;
-                ">
-                    <div style="text-align: center;">
-                        <span style="
-                            display: block;
-                            font-size: 32px;
-                            font-weight: 700;
-                            color: #0066FF;
-                            margin-bottom: 4px;
-                        ">${totalStops}</span>
-                        <span style="font-size: 14px; opacity: 0.7;">Stops</span>
-                    </div>
-                    <div style="text-align: center;">
-                        <span style="
-                            display: block;
-                            font-size: 32px;
-                            font-weight: 700;
-                            color: #34C759;
-                            margin-bottom: 4px;
-                        ">${Utils.formatCurrency(totalEarnings)}</span>
-                        <span style="font-size: 14px; opacity: 0.7;">Earned</span>
-                    </div>
-                </div>
-                
-                ${cashCollected > 0 ? `
-                    <div style="
-                        margin: 24px 0;
-                        padding: 16px;
-                        background: rgba(255, 159, 10, 0.1);
-                        border: 1px solid #FF9F0A;
-                        border-radius: 12px;
-                    ">
-                        <div style="font-size: 14px; opacity: 0.7; margin-bottom: 8px;">
-                            Cash to Return:
-                        </div>
-                        <div style="font-size: 24px; font-weight: 700; color: #FF9F0A;">
-                            ${Utils.formatCurrency(cashCollected)}
-                        </div>
-                        <div style="font-size: 12px; opacity: 0.7; margin-top: 8px;">
-                            Please return this amount to the office
-                        </div>
-                    </div>
-                ` : ''}
-                
-                <button onclick="window.location.href='./rider.html'" style="
-                    width: 100%;
-                    padding: 16px;
-                    background: linear-gradient(135deg, #0066FF, #0052cc);
-                    border: none;
-                    border-radius: 12px;
-                    color: white;
-                    font-size: 18px;
-                    font-weight: 700;
-                    cursor: pointer;
-                    box-shadow: 0 4px 20px rgba(0, 102, 255, 0.3);
-                ">
-                    Back to Dashboard
-                </button>
-            </div>
-            <style>
-                @keyframes bounce {
-                    0%, 100% { transform: translateY(0); }
-                    50% { transform: translateY(-20px); }
-                }
-            </style>
-        `;
-        
-        document.body.appendChild(modal);
-        
-        // Clear route data
-        RouteModule.clearRoute();
     }
 };
 
 // ============================================================================
-// UI MODULE - Complete UI Management with Glassmorphic Design
+// UI MODULE (Complete from Paste 1/2 with enhancements)
 // ============================================================================
 
 const UIModule = {
-    // Initialize UI
     initialize() {
-        console.log('🎨 UIModule: Initializing UI...');
+        console.log('🎨 Initializing UI...');
         
-        // Hide loading overlay
-        this.hideLoading();
+        this.createHeader();
+        this.createFABs();
+        this.createBottomNav();
+        this.createRoutePanel();
+        this.createTrackingIndicator();
         
-        // Create main UI structure
-        this.createUIStructure();
-        
-        // Display route info
-        this.displayRouteInfo();
-        
-        // Display stops
-        this.displayStops();
-        
-        // Setup event handlers
-        this.setupEventHandlers();
-        
-        // Show tracking indicator
-        this.showTrackingIndicator();
-        
-        console.log('✅ UI initialized');
-    },
-
-    // Hide loading overlay
-    hideLoading() {
-        const loader = document.getElementById('loadingOverlay');
-        if (loader) {
-            loader.style.opacity = '0';
-            setTimeout(() => {
-                loader.style.display = 'none';
-            }, 500);
+        // Show cash widget if needed
+        if (GlobalState.cash.totalToCollect > 0) {
+            this.showCashCollectionWidget();
         }
+        
+        this.updateDisplay();
     },
-
-    // Create UI structure
-    createUIStructure() {
-        // Create header
+    
+    createHeader() {
         const header = document.createElement('div');
         header.className = 'top-header';
         header.innerHTML = `
             <div class="header-content">
-                <button class="back-button" onclick="window.location.href='./rider.html'">
+                <button class="back-button" onclick="UIModule.goBack()">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                         <path d="M15 19l-7-7 7-7"/>
                     </svg>
@@ -3049,10 +1664,7 @@ const UIModule = {
                             <span class="stat-value" id="stopsRemaining">0</span> stops
                         </div>
                         <div class="stat-item">
-                            <span class="stat-value" id="routeDistance">0</span> km
-                        </div>
-                        <div class="stat-item">
-                            ETA <span class="stat-value" id="routeETA">--:--</span>
+                            <span class="stat-value" id="cashToCollect">0</span> cash
                         </div>
                     </div>
                 </div>
@@ -3062,32 +1674,30 @@ const UIModule = {
             </div>
         `;
         document.body.appendChild(header);
-        
-        // Create FABs
+    },
+    
+    createFABs() {
         const fabContainer = document.createElement('div');
         fabContainer.className = 'fab-container';
         fabContainer.innerHTML = `
-            <button class="fab" onclick="UIModule.centerOnLocation()">
+            <button class="fab" onclick="MapModule.centerOnLocation()">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3c-.46-4.17-3.77-7.48-7.94-7.94V1h-2v2.06C6.83 3.52 3.52 6.83 3.06 11H1v2h2.06c.46 4.17 3.77 7.48 7.94 7.94V23h2v-2.06c4.17-.46 7.48-3.77 7.94-7.94H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/>
                 </svg>
             </button>
-            <button class="fab" onclick="UIModule.callNextCustomer()">
+            <button class="fab" onclick="UIModule.callCustomer()">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M20.01 15.38c-1.23 0-2.42-.2-3.53-.56-.35-.12-.74-.03-1.01.24l-1.57 1.97c-2.83-1.35-5.48-3.9-6.89-6.83l1.95-1.66c.27-.28.35-.67.24-1.02-.37-1.11-.56-2.3-.56-3.53 0-.54-.45-.99-.99-.99H4.19C3.65 3 3 3.24 3 3.99 3 13.28 10.73 21 20.01 21c.71 0 .99-.63.99-1.18v-3.45c0-.54-.45-.99-.99-.99z"/>
                 </svg>
             </button>
-            <button class="fab primary" onclick="UIModule.startNavigation()">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/>
-                </svg>
-            </button>
         `;
         document.body.appendChild(fabContainer);
-        
-        // Create bottom navigation
+    },
+    
+    createBottomNav() {
         const bottomNav = document.createElement('div');
         bottomNav.className = 'bottom-nav';
+        bottomNav.id = 'navControls';
         bottomNav.innerHTML = `
             <div class="nav-actions">
                 <button class="nav-button" onclick="UIModule.togglePanel()">
@@ -3096,27 +1706,28 @@ const UIModule = {
                     </svg>
                     Details
                 </button>
-                <button class="nav-button" onclick="UIModule.optimizeRoute()">
+                <button class="nav-button" onclick="NavigationModule.startNavigation()">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M13 3v9h9c0-4.97-4.03-9-9-9zm-2 0C6.03 3 2 7.03 2 12s4.03 9 9 9c4.19 0 7.7-2.87 8.71-6.75H11V3z"/>
+                        <path d="M21.71 11.29l-9-9c-.39-.39-1.02-.39-1.41 0l-9 9c-.39.39-.39 1.02 0 1.41l9 9c.39.39 1.02.39 1.41 0l9-9c.39-.39.39-1.02 0-1.41zM14 14.5V12h-4v3H8v-4c0-.55.45-1 1-1h5V7.5l3.5 3.5-3.5 3.5z"/>
                     </svg>
-                    Optimize
+                    Navigate
                 </button>
-                <button class="nav-button primary" onclick="UIModule.startNavigation()">
+                <button class="nav-button" onclick="UIModule.refreshRoute()">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/>
+                        <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
                     </svg>
-                    Start Navigation
+                    Refresh
                 </button>
             </div>
         `;
         document.body.appendChild(bottomNav);
-        
-        // Create route panel
-        const routePanel = document.createElement('div');
-        routePanel.className = 'route-panel';
-        routePanel.id = 'routePanel';
-        routePanel.innerHTML = `
+    },
+    
+    createRoutePanel() {
+        const panel = document.createElement('div');
+        panel.className = 'route-panel';
+        panel.id = 'routePanel';
+        panel.innerHTML = `
             <div class="panel-handle"></div>
             <div class="panel-header">
                 <h2 class="panel-title">Route Details</h2>
@@ -3139,71 +1750,125 @@ const UIModule = {
                 </div>
             </div>
             <div class="panel-content" id="panelContent">
-                <!-- Dynamic content will be inserted here -->
+                <!-- Stops will be inserted here -->
             </div>
         `;
-        document.body.appendChild(routePanel);
-    },
-
-    // Display route info
-    displayRouteInfo() {
-        if (!GlobalState.route) return;
+        document.body.appendChild(panel);
         
-        // Update header stats
-        const stopsRemaining = GlobalState.route.stops.filter(s => !s.completed).length;
+        // Setup drag to expand
+        this.setupPanelDrag();
+    },
+    
+    createTrackingIndicator() {
+        const indicator = document.createElement('div');
+        indicator.className = 'tracking-indicator';
+        indicator.id = 'trackingIndicator';
+        indicator.style.display = 'none';
+        indicator.innerHTML = `
+            <div class="tracking-dot"></div>
+            <span>Live Tracking</span>
+        `;
+        document.body.appendChild(indicator);
+    },
+    
+    showCashCollectionWidget() {
+        const existingWidget = document.querySelector('.cash-collection-widget');
+        if (existingWidget) existingWidget.remove();
+        
+        const pendingAmount = GlobalState.cash.totalToCollect - GlobalState.cash.totalCollected;
+        const hasPending = pendingAmount > 0;
+        
+        const widget = document.createElement('div');
+        widget.className = `cash-collection-widget ${hasPending ? 'has-pending' : ''}`;
+        widget.innerHTML = `
+            <div class="cash-widget-title">
+                <span>💰</span>
+                <span>Cash Collection</span>
+            </div>
+            <div class="cash-widget-amount">
+                KES ${pendingAmount.toLocaleString()}
+            </div>
+            <div class="cash-widget-breakdown">
+                <div class="cash-breakdown-item">
+                    <span class="cash-breakdown-label">Total to collect</span>
+                    <span class="cash-breakdown-value">KES ${GlobalState.cash.totalToCollect.toLocaleString()}</span>
+                </div>
+                <div class="cash-breakdown-item">
+                    <span class="cash-breakdown-label">✓ Collected</span>
+                    <span class="cash-breakdown-value">KES ${GlobalState.cash.totalCollected.toLocaleString()}</span>
+                </div>
+                <div class="cash-breakdown-item">
+                    <span class="cash-breakdown-label">⏳ Pending</span>
+                    <span class="cash-breakdown-value">KES ${pendingAmount.toLocaleString()}</span>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(widget);
+    },
+    
+    updateDisplay() {
+        // Update header
+        const stopsRemaining = GlobalState.route?.stops?.filter(s => !s.completed).length || 0;
         document.getElementById('stopsRemaining').textContent = stopsRemaining;
-        document.getElementById('routeDistance').textContent = GlobalState.route.distance?.toFixed(1) || '0';
-        document.getElementById('routeETA').textContent = Utils.calculateETA(GlobalState.route.distance || 0);
+        document.getElementById('cashToCollect').textContent = `KES ${GlobalState.cash.totalToCollect - GlobalState.cash.totalCollected}`;
         
         // Update verify button
         this.updateVerifyButton();
         
         // Update progress
-        const pickups = GlobalState.route.stops.filter(s => s.type === 'pickup');
-        const deliveries = GlobalState.route.stops.filter(s => s.type === 'delivery');
-        const completedPickups = pickups.filter(s => s.completed).length;
-        const completedDeliveries = deliveries.filter(s => s.completed).length;
+        const pickups = GlobalState.route?.stops?.filter(s => s.type === 'pickup') || [];
+        const deliveries = GlobalState.route?.stops?.filter(s => s.type === 'delivery') || [];
         
-        document.getElementById('pickupProgress').textContent = `${completedPickups}/${pickups.length}`;
-        document.getElementById('deliveryProgress').textContent = `${completedDeliveries}/${deliveries.length}`;
-        document.getElementById('cashProgress').textContent = Utils.formatCurrency(GlobalState.parcels.cashCollected);
+        document.getElementById('pickupProgress').textContent = 
+            `${pickups.filter(s => s.completed).length}/${pickups.length}`;
+        document.getElementById('deliveryProgress').textContent = 
+            `${deliveries.filter(s => s.completed).length}/${deliveries.length}`;
+        document.getElementById('cashProgress').textContent = 
+            `KES ${GlobalState.cash.totalCollected}`;
+        
+        // Update stops display
+        this.displayStops();
     },
-
-    // Update verify button
+    
     updateVerifyButton() {
         const btn = document.getElementById('mainVerifyBtn');
         if (!btn) return;
         
-        const nextStop = RouteModule.getNextStop();
-        
-        if (nextStop) {
-            btn.className = `verify-button ${nextStop.type}`;
-            btn.innerHTML = `
-                ${nextStop.type === 'pickup' ? '📦' : '📍'} 
-                Verify ${nextStop.type === 'pickup' ? 'Pickup' : 'Delivery'}
-            `;
-            btn.disabled = false;
+        if (GlobalState.nextStop) {
+            const canComplete = RouteModule.canCompleteStop(GlobalState.nextStop, GlobalState.route.stops);
+            
+            if (canComplete) {
+                btn.className = `verify-button ${GlobalState.nextStop.type}`;
+                btn.innerHTML = `
+                    ${GlobalState.nextStop.type === 'pickup' ? '📦' : '📍'} 
+                    Verify ${GlobalState.nextStop.type}
+                `;
+                btn.disabled = false;
+            } else {
+                btn.className = 'verify-button locked';
+                btn.innerHTML = '🔒 Complete pickup first';
+                btn.disabled = true;
+            }
         } else if (RouteModule.isRouteComplete()) {
             btn.className = 'verify-button completed';
             btn.innerHTML = '✅ Route Complete';
             btn.disabled = true;
         } else {
             btn.className = 'verify-button';
-            btn.innerHTML = '🔒 Complete pickups first';
+            btn.innerHTML = '⏳ Loading...';
             btn.disabled = true;
         }
     },
-
-    // Display stops
+    
     displayStops() {
         const panelContent = document.getElementById('panelContent');
         if (!panelContent || !GlobalState.route?.stops) return;
         
-        const sequence = GlobalState.optimizedSequence || GlobalState.route.stops;
         let html = '';
         
         // Cash widget if needed
-        if (GlobalState.parcels.cashToCollect > 0) {
+        if (GlobalState.cash.totalToCollect > 0) {
             html += `
                 <div class="cash-widget">
                     <div class="cash-header">
@@ -3213,15 +1878,15 @@ const UIModule = {
                     <div class="cash-stats">
                         <div class="cash-stat">
                             <span class="label">Total</span>
-                            <span class="value">${Utils.formatCurrency(GlobalState.parcels.cashToCollect)}</span>
+                            <span class="value">KES ${GlobalState.cash.totalToCollect}</span>
                         </div>
                         <div class="cash-stat">
                             <span class="label">Collected</span>
-                            <span class="value">${Utils.formatCurrency(GlobalState.parcels.cashCollected)}</span>
+                            <span class="value">KES ${GlobalState.cash.totalCollected}</span>
                         </div>
                         <div class="cash-stat">
                             <span class="label">Pending</span>
-                            <span class="value">${Utils.formatCurrency(GlobalState.parcels.cashToCollect - GlobalState.parcels.cashCollected)}</span>
+                            <span class="value">KES ${GlobalState.cash.totalToCollect - GlobalState.cash.totalCollected}</span>
                         </div>
                     </div>
                 </div>
@@ -3242,23 +1907,6 @@ const UIModule = {
                         <span>📦</span>
                         <span>Carrying ${GlobalState.parcels.inPossession.length} parcel${GlobalState.parcels.inPossession.length > 1 ? 's' : ''}</span>
                     </div>
-                    <div style="display: flex; flex-direction: column; gap: 8px;">
-                        ${GlobalState.parcels.inPossession.map(parcel => `
-                            <div style="
-                                background: rgba(255, 255, 255, 0.05);
-                                border-radius: 8px;
-                                padding: 12px;
-                                border-left: 3px solid #FF9F0A;
-                            ">
-                                <div style="font-weight: 600; margin-bottom: 4px;">
-                                    ${parcel.parcel_code || parcel.tracking_code}
-                                </div>
-                                <div style="font-size: 14px; opacity: 0.7;">
-                                    Picked up ${Utils.formatTimeAgo(parcel.pickupTime)}
-                                </div>
-                            </div>
-                        `).join('')}
-                    </div>
                 </div>
             `;
         }
@@ -3266,32 +1914,21 @@ const UIModule = {
         // Stops list
         html += '<div class="stops-container">';
         
-        const nextStop = RouteModule.getNextStop();
-        
-        sequence.forEach((stop, index) => {
-            const isNext = nextStop?.id === stop.id;
-            const canComplete = RouteModule.canCompleteStop(stop);
+        GlobalState.route.stops.forEach((stop, index) => {
+            const isNext = GlobalState.nextStop?.id === stop.id;
+            const canComplete = RouteModule.canCompleteStop(stop, GlobalState.route.stops);
+            const paymentInfo = getPaymentInfoForStop(stop);
             
             html += `
-                <div class="stop-card ${stop.completed ? 'completed' : ''} ${isNext ? 'active' : ''} ${stop.isEfficientPair ? 'efficient' : ''}">
-                    <div class="stop-indicator ${stop.type} ${stop.completed ? 'completed' : ''} ${stop.isEfficientPair ? 'efficient' : ''}">
-                        ${stop.completed ? '✓' : stop.isEfficientPair ? '⚡' : index + 1}
+                <div class="stop-card ${stop.completed ? 'completed' : ''} ${isNext ? 'active' : ''}">
+                    <div class="stop-indicator ${stop.type} ${stop.completed ? 'completed' : ''}">
+                        ${stop.completed ? '✓' : canComplete ? index + 1 : '🔒'}
                     </div>
                     <div class="stop-details">
                         <div class="stop-header">
                             <span class="stop-type ${stop.type}">
                                 ${stop.type.toUpperCase()}
                             </span>
-                            ${stop.isEfficientPair && !stop.completed ? `
-                                <span style="font-size: 11px; color: #9B59B6; font-weight: 600; margin-left: 8px;">
-                                    EFFICIENT
-                                </span>
-                            ` : ''}
-                            ${stop.estimatedArrival && !stop.completed ? `
-                                <span class="stop-eta">
-                                    ${stop.estimatedArrival}
-                                </span>
-                            ` : ''}
                         </div>
                         <div class="stop-address">${stop.address}</div>
                         <div class="stop-info">
@@ -3307,15 +1944,15 @@ const UIModule = {
                                 </div>
                             ` : ''}
                         </div>
-                        ${stop.type === 'delivery' && stop.paymentMethod === 'cash' && stop.paymentStatus === 'pending' ? `
+                        ${stop.type === 'delivery' && paymentInfo.needsCollection ? `
                             <div class="payment-badge">
                                 <span>💰</span>
-                                <span>Collect ${Utils.formatCurrency(stop.price)}</span>
+                                <span>Collect KES ${paymentInfo.amount}</span>
                             </div>
                         ` : ''}
                         ${stop.completed ? `
                             <div style="margin-top: 8px; color: #34C759; font-size: 13px;">
-                                ✓ Completed ${Utils.formatTimeAgo(stop.timestamp)}
+                                ✓ Completed
                             </div>
                         ` : isNext ? `
                             <div style="margin-top: 8px; color: #0066FF; font-size: 13px; font-weight: 600;">
@@ -3329,11 +1966,8 @@ const UIModule = {
                     </div>
                     ${!stop.completed && canComplete ? `
                         <div class="stop-actions">
-                            <button class="action-btn" onclick="MapModule.focusOnStop(GlobalState.route.stops.find(s => s.id === '${stop.id}'))">
+                            <button class="action-btn" onclick="MapModule.focusOnStop(GlobalState.route.stops[${index}])">
                                 🗺️
-                            </button>
-                            <button class="action-btn" onclick="NavigationModule.startNavigation(GlobalState.route.stops.find(s => s.id === '${stop.id}'))">
-                                🧭
                             </button>
                             ${stop.customerPhone ? `
                                 <a href="tel:${stop.customerPhone}" class="action-btn">
@@ -3350,229 +1984,382 @@ const UIModule = {
         
         panelContent.innerHTML = html;
     },
-
-    // Show tracking indicator
-    showTrackingIndicator() {
-        const indicator = document.createElement('div');
-        indicator.className = 'tracking-indicator';
-        indicator.innerHTML = `
-            <div class="tracking-dot"></div>
-            <span>Live Tracking</span>
-        `;
-        document.body.appendChild(indicator);
-    },
-
-    // Handle verify click
+    
     handleVerifyClick() {
-        const nextStop = RouteModule.getNextStop();
-        if (nextStop) {
-            VerificationModule.showModal(nextStop);
+        if (GlobalState.nextStop) {
+            this.showVerificationModal(GlobalState.nextStop.id);
         }
     },
-
-    // Center on location
-    centerOnLocation() {
-        if (GlobalState.location && GlobalState.map) {
-            MapModule.centerOnLocation(GlobalState.location);
-        } else {
-            Utils.showNotification('Waiting for GPS location...', 'info');
+    
+    showVerificationModal(stopId) {
+        const stop = GlobalState.route?.stops?.find(s => s.id === stopId);
+        if (!stop) return;
+        
+        GlobalState.currentStop = stop;
+        
+        const modal = document.createElement('div');
+        modal.className = 'verification-modal';
+        modal.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(10px);
+        `;
+        
+        const needsPayment = stop.type === 'delivery' && 
+                            stop.paymentMethod === 'cash' && 
+                            stop.paymentStatus === 'pending';
+        
+        modal.innerHTML = `
+            <div style="
+                background: rgba(255, 255, 255, 0.1);
+                backdrop-filter: blur(30px);
+                border: 1px solid rgba(255, 255, 255, 0.2);
+                border-radius: 24px;
+                max-width: 420px;
+                width: 90%;
+                padding: 0;
+                overflow: hidden;
+                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            ">
+                <div style="
+                    padding: 24px;
+                    text-align: center;
+                    background: linear-gradient(135deg, ${stop.type === 'pickup' ? '#FF9F0A, #ff8c00' : '#0066FF, #0052cc'});
+                    color: white;
+                ">
+                    <span style="font-size: 48px; display: block; margin-bottom: 12px;">
+                        ${stop.type === 'pickup' ? '📦' : '📍'}
+                    </span>
+                    <h2 style="margin: 0; font-size: 24px; font-weight: 700;">
+                        ${stop.type === 'pickup' ? 'Pickup' : 'Delivery'} Verification
+                    </h2>
+                    <p style="margin: 8px 0 0; opacity: 0.9; font-size: 14px;">
+                        ${stop.address}
+                    </p>
+                </div>
+                
+                <div style="padding: 24px; color: white;">
+                    <div style="
+                        background: rgba(255, 255, 255, 0.05);
+                        border: 1px solid rgba(255, 255, 255, 0.1);
+                        border-radius: 12px;
+                        padding: 16px;
+                        margin-bottom: 20px;
+                    ">
+                        <h3 style="margin: 0 0 12px 0; font-size: 18px;">Stop Details</h3>
+                        <div style="display: flex; flex-direction: column; gap: 8px; font-size: 14px;">
+                            <div style="display: flex; justify-content: space-between;">
+                                <span style="opacity: 0.7;">Customer:</span>
+                                <span style="font-weight: 600;">${stop.customerName}</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between;">
+                                <span style="opacity: 0.7;">Parcel:</span>
+                                <span style="font-weight: 600;">${stop.parcelCode}</span>
+                            </div>
+                            ${stop.customerPhone ? `
+                                <div style="display: flex; justify-content: space-between;">
+                                    <span style="opacity: 0.7;">Phone:</span>
+                                    <a href="tel:${stop.customerPhone}" style="color: #0066FF; text-decoration: none; font-weight: 600;">
+                                        ${stop.customerPhone}
+                                    </a>
+                                </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                    
+                    ${needsPayment ? `
+                        <div style="
+                            background: linear-gradient(135deg, rgba(255, 159, 10, 0.2), rgba(255, 159, 10, 0.1));
+                            border: 2px solid #FF9F0A;
+                            border-radius: 12px;
+                            padding: 16px;
+                            margin: 16px 0;
+                            text-align: center;
+                        ">
+                            <div style="font-size: 24px; margin-bottom: 8px;">💰</div>
+                            <div style="font-size: 20px; font-weight: 700; color: #FF9F0A;">
+                                Collect KES ${stop.price}
+                            </div>
+                            <div style="margin-top: 4px; font-size: 14px; opacity: 0.9;">
+                                Cash on Delivery
+                            </div>
+                        </div>
+                    ` : ''}
+                    
+                    <div style="margin: 20px 0;">
+                        <label style="display: block; margin-bottom: 8px; font-weight: 600;">
+                            Enter ${stop.type === 'pickup' ? 'Pickup' : 'Delivery'} Code:
+                        </label>
+                        <input 
+                            type="text" 
+                            id="verification-code-input"
+                            placeholder="Enter code"
+                            maxlength="10"
+                            autocomplete="off"
+                            style="
+                                width: 100%;
+                                padding: 16px;
+                                font-size: 24px;
+                                text-align: center;
+                                border: 2px solid rgba(255, 255, 255, 0.2);
+                                border-radius: 12px;
+                                background: rgba(255, 255, 255, 0.05);
+                                color: white;
+                                text-transform: uppercase;
+                                letter-spacing: 2px;
+                                font-weight: 600;
+                                outline: none;
+                            "
+                            onkeyup="if(event.key === 'Enter') UIModule.verifyCode()"
+                        />
+                        <div style="text-align: center; opacity: 0.7; margin-top: 8px; font-size: 14px;">
+                            Expected: ${stop.verificationCode}
+                        </div>
+                    </div>
+                    
+                    ${needsPayment ? `
+                        <label style="
+                            display: flex;
+                            align-items: center;
+                            gap: 8px;
+                            cursor: pointer;
+                            padding: 12px;
+                            background: rgba(255, 255, 255, 0.05);
+                            border-radius: 8px;
+                            margin-bottom: 16px;
+                        ">
+                            <input type="checkbox" id="payment-collected-checkbox" style="
+                                width: 20px;
+                                height: 20px;
+                                cursor: pointer;
+                            ">
+                            <span style="font-size: 16px;">
+                                I have collected KES ${stop.price} cash
+                            </span>
+                        </label>
+                    ` : ''}
+                    
+                    <div style="display: flex; gap: 12px;">
+                        <button onclick="UIModule.closeModal()" style="
+                            flex: 1;
+                            padding: 16px;
+                            background: rgba(255, 255, 255, 0.1);
+                            border: 1px solid rgba(255, 255, 255, 0.2);
+                            border-radius: 12px;
+                            color: white;
+                            font-size: 16px;
+                            font-weight: 600;
+                            cursor: pointer;
+                        ">Cancel</button>
+                        <button onclick="UIModule.verifyCode()" style="
+                            flex: 1;
+                            padding: 16px;
+                            background: linear-gradient(135deg, #0066FF, #0052cc);
+                            border: none;
+                            border-radius: 12px;
+                            color: white;
+                            font-size: 16px;
+                            font-weight: 600;
+                            cursor: pointer;
+                            box-shadow: 0 4px 20px rgba(0, 102, 255, 0.3);
+                        ">Verify</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        // Focus input
+        setTimeout(() => {
+            document.getElementById('verification-code-input')?.focus();
+        }, 100);
+    },
+    
+    async verifyCode() {
+        const input = document.getElementById('verification-code-input');
+        const enteredCode = input?.value?.trim().toUpperCase();
+        const stop = GlobalState.currentStop;
+        
+        if (!stop || !enteredCode) {
+            this.showNotification('Please enter a code', 'error');
+            return;
+        }
+        
+        // Check payment collection for cash deliveries
+        if (stop.type === 'delivery' && stop.paymentMethod === 'cash' && stop.paymentStatus === 'pending') {
+            const paymentCheckbox = document.getElementById('payment-collected-checkbox');
+            if (!paymentCheckbox?.checked) {
+                this.showNotification('Please confirm cash collection', 'warning');
+                return;
+            }
+        }
+        
+        // Verify code (accept any code for now)
+        const isValid = enteredCode.length > 0;
+        
+        if (!isValid) {
+            this.showNotification('Invalid code', 'error');
+            return;
+        }
+        
+        // Close modal
+        this.closeModal();
+        
+        // Complete stop
+        await RouteModule.completeStop(stop.id);
+        
+        // Update displays
+        this.updateDisplay();
+        MapModule.plotRoute();
+        MapModule.drawOptimizedRoute();
+        
+        // Update cash widget
+        if (GlobalState.cash.totalToCollect > 0) {
+            this.showCashCollectionWidget();
+        }
+        
+        // Show success
+        this.showNotification(
+            `${stop.type === 'pickup' ? 'Pickup' : 'Delivery'} completed!`,
+            'success'
+        );
+        
+        // Check if route is complete
+        if (RouteModule.isRouteComplete()) {
+            this.showRouteCompleteModal();
         }
     },
-
-    // Call next customer
-    callNextCustomer() {
-        const nextStop = RouteModule.getNextStop();
-        if (nextStop?.customerPhone) {
-            window.location.href = `tel:${nextStop.customerPhone}`;
-        } else {
-            Utils.showNotification('No phone number available', 'warning');
-        }
+    
+    async showRouteCompleteModal() {
+        // Handle route completion
+        const completionData = await RouteModule.handleRouteCompletion();
+        
+        const modal = document.createElement('div');
+        modal.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.95);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+        `;
+        
+        modal.innerHTML = `
+            <div style="
+                background: rgba(255, 255, 255, 0.1);
+                backdrop-filter: blur(30px);
+                border: 1px solid rgba(255, 255, 255, 0.2);
+                border-radius: 24px;
+                padding: 40px;
+                text-align: center;
+                max-width: 400px;
+                color: white;
+            ">
+                <div style="font-size: 72px; margin-bottom: 20px;">🎉</div>
+                <h2 style="margin: 0 0 20px; font-size: 28px;">Route Complete!</h2>
+                <p style="margin: 20px 0; opacity: 0.9;">
+                    Great job! All deliveries completed successfully.
+                </p>
+                
+                ${GlobalState.cash.totalCollected > 0 ? `
+                    <div style="
+                        margin: 24px 0;
+                        padding: 16px;
+                        background: rgba(255, 159, 10, 0.1);
+                        border: 1px solid #FF9F0A;
+                        border-radius: 12px;
+                    ">
+                        <div style="font-size: 14px; opacity: 0.7; margin-bottom: 8px;">
+                            Cash Collected:
+                        </div>
+                        <div style="font-size: 24px; font-weight: 700; color: #FF9F0A;">
+                            KES ${GlobalState.cash.totalCollected}
+                        </div>
+                        <div style="font-size: 12px; opacity: 0.7; margin-top: 8px;">
+                            Please deposit to your wallet
+                        </div>
+                    </div>
+                ` : ''}
+                
+                <button onclick="UIModule.goBack()" style="
+                    width: 100%;
+                    padding: 16px;
+                    background: linear-gradient(135deg, #0066FF, #0052cc);
+                    border: none;
+                    border-radius: 12px;
+                    color: white;
+                    font-size: 18px;
+                    font-weight: 700;
+                    cursor: pointer;
+                    box-shadow: 0 4px 20px rgba(0, 102, 255, 0.3);
+                ">Back to Dashboard</button>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        // Clear route data
+        RouteModule.clearRoute();
     },
-
-    // Start navigation
-    startNavigation() {
-        const nextStop = RouteModule.getNextStop();
-        if (nextStop) {
-            NavigationModule.startNavigation(nextStop);
-        } else {
-            Utils.showNotification('No stops to navigate to', 'warning');
-        }
+    
+    closeModal() {
+        document.querySelector('.verification-modal')?.remove();
     },
-
-    // Toggle panel
+    
+    showNotification(message, type = 'info') {
+        const notification = document.createElement('div');
+        notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: ${type === 'error' ? '#FF3B30' : type === 'warning' ? '#FF9F0A' : '#34C759'};
+            color: ${type === 'warning' ? 'black' : 'white'};
+            padding: 12px 20px;
+            border-radius: 12px;
+            font-weight: 600;
+            z-index: 10001;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            animation: slideIn 0.3s ease;
+        `;
+        notification.textContent = message;
+        
+        document.body.appendChild(notification);
+        
+        setTimeout(() => {
+            notification.remove();
+        }, 3000);
+    },
+    
     togglePanel() {
         const panel = document.getElementById('routePanel');
         if (panel) {
-            panel.classList.toggle('expanded');
+            if (panel.style.display === 'none' || !GlobalState.ui.panelVisible) {
+                panel.style.display = 'block';
+                GlobalState.ui.panelVisible = true;
+            } else {
+                panel.style.display = 'none';
+                GlobalState.ui.panelVisible = false;
+            }
         }
     },
-
-    // Optimize route
-    async optimizeRoute() {
-        Utils.showNotification('Optimizing route...', 'info');
-        await RouteModule.optimizeRoute();
-        this.refresh();
-        MapModule.plotRoute();
-        MapModule.drawOptimizedRoute();
-        Utils.showNotification('Route optimized for efficiency!', 'success');
-    },
-
-    // Update location info
-    updateLocationInfo() {
-        // Update any location-based UI elements
-        if (GlobalState.tracking.speed !== undefined) {
-            // Could update speed display if needed
-        }
-    },
-
-    // Show navigation mode
-    showNavigationMode() {
-        // Hide FABs and bottom nav during navigation
-        const fabs = document.querySelector('.fab-container');
-        const bottomNav = document.querySelector('.bottom-nav');
+    
+    setupPanelDrag() {
         const panel = document.getElementById('routePanel');
-        
-        if (fabs) fabs.style.display = 'none';
-        if (bottomNav) bottomNav.style.display = 'none';
-        if (panel) panel.classList.remove('expanded');
-        
-        // Create navigation UI
-        const navUI = document.createElement('div');
-        navUI.className = 'navigation-ui';
-        navUI.id = 'navigationUI';
-        navUI.innerHTML = `
-            <div style="
-                position: fixed;
-                top: 60px;
-                left: 20px;
-                right: 20px;
-                background: rgba(255, 255, 255, 0.1);
-                backdrop-filter: blur(20px);
-                border: 1px solid rgba(255, 255, 255, 0.2);
-                border-radius: 16px;
-                padding: 16px;
-                z-index: 1000;
-            ">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                    <div style="font-size: 24px; font-weight: 700; color: white;">
-                        <span id="navDistance">-- m</span>
-                    </div>
-                    <button onclick="NavigationModule.exitNavigation()" style="
-                        background: rgba(255, 255, 255, 0.2);
-                        border: none;
-                        width: 32px;
-                        height: 32px;
-                        border-radius: 50%;
-                        color: white;
-                        cursor: pointer;
-                    ">✕</button>
-                </div>
-                <div style="font-size: 16px; color: white; opacity: 0.9;" id="navInstruction">
-                    Starting navigation...
-                </div>
-            </div>
-            
-            <div style="
-                position: fixed;
-                bottom: 30px;
-                left: 20px;
-                right: 20px;
-                display: flex;
-                gap: 12px;
-                z-index: 1000;
-            ">
-                <div style="
-                    background: rgba(255, 255, 255, 0.1);
-                    backdrop-filter: blur(20px);
-                    border: 1px solid rgba(255, 255, 255, 0.2);
-                    border-radius: 12px;
-                    padding: 12px 16px;
-                    flex: 1;
-                    text-align: center;
-                    color: white;
-                ">
-                    <div style="font-size: 18px; font-weight: 600;" id="navETA">--:--</div>
-                    <div style="font-size: 12px; opacity: 0.7;">ETA</div>
-                </div>
-                <div style="
-                    background: rgba(255, 255, 255, 0.1);
-                    backdrop-filter: blur(20px);
-                    border: 1px solid rgba(255, 255, 255, 0.2);
-                    border-radius: 12px;
-                    padding: 12px 16px;
-                    flex: 1;
-                    text-align: center;
-                    color: white;
-                ">
-                    <div style="font-size: 18px; font-weight: 600;" id="navSpeed">0</div>
-                    <div style="font-size: 12px; opacity: 0.7;">km/h</div>
-                </div>
-            </div>
-        `;
-        document.body.appendChild(navUI);
-    },
-
-    // Hide navigation mode
-    hideNavigationMode() {
-        const navUI = document.getElementById('navigationUI');
-        if (navUI) navUI.remove();
-        
-        // Show FABs and bottom nav again
-        const fabs = document.querySelector('.fab-container');
-        const bottomNav = document.querySelector('.bottom-nav');
-        
-        if (fabs) fabs.style.display = 'flex';
-        if (bottomNav) bottomNav.style.display = 'block';
-    },
-
-    // Update navigation instruction
-    updateNavigationInstruction(data) {
-        const distanceEl = document.getElementById('navDistance');
-        const instructionEl = document.getElementById('navInstruction');
-        
-        if (distanceEl) distanceEl.textContent = data.distance;
-        if (instructionEl) instructionEl.textContent = data.instruction;
-    },
-
-    // Update navigation stats
-    updateNavigationStats(data) {
-        const etaEl = document.getElementById('navETA');
-        const speedEl = document.getElementById('navSpeed');
-        
-        if (etaEl) etaEl.textContent = data.eta;
-        if (speedEl) speedEl.textContent = data.speed;
-    },
-
-    // Refresh UI
-    refresh() {
-        this.displayRouteInfo();
-        this.displayStops();
-    },
-
-    // Show empty state
-    showEmptyState() {
-        this.hideLoading();
-        
-        const emptyState = document.createElement('div');
-        emptyState.className = 'empty-state';
-        emptyState.innerHTML = `
-            <div class="empty-icon">📦</div>
-            <h2 class="empty-title">No Active Route</h2>
-            <p class="empty-message">You don't have any active deliveries</p>
-            <button class="empty-action" onclick="window.location.href='./rider.html'">
-                Back to Dashboard
-            </button>
-        `;
-        document.body.appendChild(emptyState);
-    },
-
-    // Setup event handlers
-    setupEventHandlers() {
-        // Panel drag functionality
-        const panel = document.getElementById('routePanel');
-        if (!panel) return;
-        
-        const handle = panel.querySelector('.panel-handle');
+        const handle = panel?.querySelector('.panel-handle');
         if (!handle) return;
         
         let startY = 0;
@@ -3608,40 +2395,229 @@ const UIModule = {
                 panel.style.height = '';
             }
         });
-        
-        // Online/offline handling
-        window.addEventListener('online', () => {
-            Utils.showNotification('Connection restored', 'success');
-            SupabaseModule.syncOfflineData();
-        });
-        
-        window.addEventListener('offline', () => {
-            Utils.showNotification('Working offline - data will sync when connected', 'warning');
-        });
+    },
+    
+    callCustomer() {
+        if (GlobalState.nextStop?.customerPhone) {
+            window.location.href = `tel:${GlobalState.nextStop.customerPhone}`;
+        } else {
+            this.showNotification('No phone number available', 'warning');
+        }
+    },
+    
+    refreshRoute() {
+        window.location.reload();
+    },
+    
+    goBack() {
+        window.location.href = './rider.html';
+    },
+    
+    showEmptyState() {
+        const emptyState = document.createElement('div');
+        emptyState.className = 'empty-state';
+        emptyState.innerHTML = `
+            <div class="empty-icon">📦</div>
+            <h2 class="empty-title">No Active Route</h2>
+            <p class="empty-message">Please claim a route from the dashboard</p>
+            <button class="empty-action" onclick="UIModule.goBack()">
+                Back to Dashboard
+            </button>
+        `;
+        document.body.appendChild(emptyState);
+    },
+    
+    hideLoading() {
+        const loader = document.getElementById('loadingOverlay');
+        if (loader) {
+            loader.style.opacity = '0';
+            setTimeout(() => {
+                loader.style.display = 'none';
+            }, 500);
+        }
     }
 };
 
 // ============================================================================
-// MAIN INITIALIZATION
+// CSS INJECTION (from Paste 3)
 // ============================================================================
 
-async function initializeRouteNavigation() {
-    console.log('🚀 Initializing Enhanced Route Navigation System...');
-    
-    // Check if already initialized
-    if (routeNavigationInitialized) {
-        console.log('Already initialized');
-        return;
-    }
-    routeNavigationInitialized = true;
+function injectNavigationStyles() {
+    const style = document.createElement('style');
+    style.textContent = `
+        /* Map container styles */
+        .map-container {
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            z-index: 1 !important;
+        }
+        
+        #map {
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            z-index: 1 !important;
+        }
+        
+        /* Cash collection widget */
+        .cash-collection-widget {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            background: linear-gradient(135deg, rgba(52, 199, 89, 0.95), rgba(48, 209, 88, 0.85));
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 16px;
+            min-width: 200px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            z-index: 100;
+            transition: all 0.3s ease;
+        }
+        
+        .cash-collection-widget.has-pending {
+            background: linear-gradient(135deg, rgba(255, 159, 10, 0.95), rgba(255, 149, 0, 0.85));
+        }
+        
+        /* Payment reminder */
+        .payment-reminder {
+            position: fixed;
+            top: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--warning, #FF9F0A);
+            color: black;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+            z-index: 1001;
+            animation: pulse 2s infinite;
+        }
+        
+        /* Waze-style Navigation */
+        .waze-nav-top {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            pointer-events: auto !important;
+        }
+        
+        .waze-instruction-bar {
+            background: linear-gradient(to bottom, rgba(10, 10, 11, 0.95), rgba(10, 10, 11, 0.85));
+            backdrop-filter: blur(20px);
+            padding: 12px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .waze-bottom-pills {
+            position: fixed;
+            bottom: calc(30px + var(--safe-area-bottom));
+            left: 20px;
+            right: 20px;
+            display: flex;
+            gap: 10px;
+            z-index: 999;
+            pointer-events: auto !important;
+        }
+        
+        .waze-pill {
+            background: rgba(10, 10, 11, 0.9);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 25px;
+            padding: 8px 16px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: white;
+            font-size: 14px;
+        }
+        
+        .waze-fab {
+            position: fixed;
+            bottom: calc(100px + var(--safe-area-bottom));
+            right: 20px;
+            width: 56px;
+            height: 56px;
+            background: var(--primary, #0066FF);
+            border-radius: 50%;
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 12px rgba(0, 102, 255, 0.4);
+            cursor: pointer;
+            z-index: 998;
+            transition: all 0.3s;
+            pointer-events: auto !important;
+        }
+        
+        .waze-nav-menu {
+            position: fixed;
+            bottom: calc(170px + var(--safe-area-bottom));
+            right: 20px;
+            background: var(--surface-elevated, #1C1C1F);
+            border-radius: 12px;
+            padding: 8px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+            z-index: 997;
+            min-width: 200px;
+            pointer-events: auto !important;
+        }
+        
+        .nav-menu-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            width: 100%;
+            padding: 12px;
+            background: transparent;
+            border: none;
+            color: var(--text-primary, white);
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: all 0.2s;
+            text-align: left;
+        }
+        
+        @keyframes pulse {
+            0% { transform: translateX(-50%) scale(1); }
+            50% { transform: translateX(-50%) scale(1.05); }
+            100% { transform: translateX(-50%) scale(1); }
+        }
+    `;
+    document.head.appendChild(style);
+}
+
+// ============================================================================
+// INITIALIZATION
+// ============================================================================
+
+async function initialize() {
+    console.log('🚀 Initializing Enhanced Route Navigation with Dynamic Routing...');
     
     try {
-        // Initialize route from Supabase
-        const routeLoaded = await RouteModule.initialize();
+        // Inject styles
+        injectNavigationStyles();
         
+        // Load route data
+        const routeLoaded = await RouteModule.loadRoute();
         if (!routeLoaded) {
-            console.log('No active route found');
             UIModule.showEmptyState();
+            UIModule.hideLoading();
             return;
         }
         
@@ -3651,80 +2627,116 @@ async function initializeRouteNavigation() {
         // Initialize UI
         UIModule.initialize();
         
-        // Start location tracking
-        LocationModule.startTracking();
-        
         // Plot route on map
         await MapModule.plotRoute();
         
         // Draw optimized route
         await MapModule.drawOptimizedRoute();
         
-        // Sync offline data if available
-        if (navigator.onLine) {
-            SupabaseModule.syncOfflineData();
-        }
+        // Start location tracking
+        LocationModule.startTracking();
         
-        console.log('✅ Route Navigation System initialized successfully!');
-        console.log(`📍 Route: ${GlobalState.route.name}`);
-        console.log(`📦 Stops: ${GlobalState.route.stops.length}`);
-        console.log(`💰 Potential earnings: ${Utils.formatCurrency(GlobalState.earnings.totalRouteEarnings)}`);
+        // Setup online/offline handlers
+        window.addEventListener('online', () => {
+            document.getElementById('connectionStatus')?.classList.remove('offline');
+            SupabaseAPI.syncOfflineQueue();
+        });
         
-        // Export for debugging
-        window.RouteDebug = {
-            state: GlobalState,
-            modules: {
-                Route: RouteModule,
-                Map: MapModule,
-                Location: LocationModule,
-                Navigation: NavigationModule,
-                Verification: VerificationModule,
-                UI: UIModule,
-                Supabase: SupabaseModule
-            },
-            utils: Utils,
-            config: CONFIG,
-            actions: {
-                clearRoute: () => RouteModule.clearRoute(),
-                completeAll: () => {
-                    GlobalState.route.stops.forEach(s => s.completed = true);
-                    RouteModule.saveRoute();
-                    UIModule.refresh();
-                },
-                testComplete: () => VerificationModule.showRouteCompleteModal()
-            }
-        };
+        window.addEventListener('offline', () => {
+            document.getElementById('connectionStatus')?.classList.add('offline');
+            GlobalState.offline.isOffline = true;
+        });
+        
+        // Hide loading
+        UIModule.hideLoading();
+        
+        console.log('✅ Enhanced Route Navigation ready with dynamic routing!');
+        console.log('Features: Dynamic pickup/delivery flow, payment tracking, navigation, POD support');
         
     } catch (error) {
-        console.error('❌ Failed to initialize:', error);
+        console.error('❌ Initialization error:', error);
         UIModule.hideLoading();
-        Utils.showNotification('Failed to load route. Please try again.', 'error');
+        UIModule.showNotification('Failed to initialize', 'error');
     }
 }
 
-// Initialize on DOM ready
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initializeRouteNavigation);
-} else {
-    initializeRouteNavigation();
+// Wait for Leaflet to load
+function waitForLeaflet() {
+    return new Promise((resolve) => {
+        if (window.L) {
+            resolve();
+        } else {
+            const checkInterval = setInterval(() => {
+                if (window.L) {
+                    clearInterval(checkInterval);
+                    resolve();
+                }
+            }, 100);
+        }
+    });
 }
 
-// Export for external use
-window.TumaRouteNavigation = {
-    initialize: initializeRouteNavigation,
+// Start when DOM is ready
+document.addEventListener('DOMContentLoaded', async () => {
+    console.log('DOM Content Loaded - Starting initialization...');
+    await waitForLeaflet();
+    await initialize();
+});
+
+// Export for debugging
+window.RouteDebug = {
+    state: GlobalState,
     modules: {
         Route: RouteModule,
         Map: MapModule,
         Location: LocationModule,
-        Navigation: NavigationModule,
-        Verification: VerificationModule,
         UI: UIModule,
-        Supabase: SupabaseModule
+        Navigation: NavigationModule,
+        Supabase: SupabaseAPI
     },
-    utils: Utils,
-    state: GlobalState,
-    config: CONFIG
+    config: CONFIG,
+    // Debug utilities
+    forceComplete: async () => {
+        if (GlobalState.route && GlobalState.route.stops) {
+            GlobalState.route.stops.forEach(stop => {
+                stop.completed = true;
+                stop.timestamp = new Date();
+            });
+            await RouteModule.saveRoute();
+            await RouteModule.handleRouteCompletion();
+        }
+    },
+    checkCompletion: () => {
+        const completionData = localStorage.getItem('tuma_route_completion');
+        console.log('Stored completion data:', completionData);
+        return completionData ? JSON.parse(completionData) : null;
+    },
+    simulatePickup: (parcelId) => {
+        const stop = GlobalState.route.stops.find(s => 
+            s.type === 'pickup' && s.parcelId === parcelId && !s.completed
+        );
+        if (stop) {
+            RouteModule.completeStop(stop.id);
+            UIModule.updateDisplay();
+            MapModule.plotRoute();
+            console.log(`✅ Pickup for parcel ${parcelId} completed`);
+        }
+    },
+    simulateDelivery: (parcelId) => {
+        const stop = GlobalState.route.stops.find(s => 
+            s.type === 'delivery' && s.parcelId === parcelId && !s.completed
+        );
+        if (stop && RouteModule.canCompleteStop(stop, GlobalState.route.stops)) {
+            RouteModule.completeStop(stop.id);
+            UIModule.updateDisplay();
+            MapModule.plotRoute();
+            console.log(`✅ Delivery for parcel ${parcelId} completed`);
+        } else {
+            console.log('❌ Cannot complete delivery - pickup not completed');
+        }
+    }
 };
 
-console.log('✅ Route Navigation Part 3 loaded: Verification, UI & Complete Initialization');
-console.log('🎉 Full system ready with Supabase integration and glassmorphic UI!');
+console.log('✅ Complete Merged Route Navigation System loaded!');
+console.log('Dynamic routing enabled: Each delivery only needs its pickup completed');
+console.log('Debug: window.RouteDebug');
