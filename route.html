@@ -96,7 +96,7 @@
             display: none !important;
         }
 
-        /* Beautiful Loading State */
+        /* Loading Overlay */
         .loading-overlay {
             position: fixed;
             top: 0;
@@ -160,7 +160,7 @@
             color: var(--text-secondary);
         }
 
-        /* Glassmorphic Top Header */
+        /* Top Header */
         .top-header {
             position: fixed;
             top: 0;
@@ -196,11 +196,7 @@
             cursor: pointer;
             transition: all 0.3s ease;
             color: var(--text-primary);
-        }
-
-        .back-button:hover {
-            background: rgba(255, 255, 255, 0.1);
-            transform: scale(1.05);
+            border: none;
         }
 
         .back-button:active {
@@ -266,15 +262,6 @@
             box-shadow: 0 4px 12px rgba(52, 199, 89, 0.3);
         }
 
-        .verify-button:hover:not(:disabled) {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(0, 102, 255, 0.4);
-        }
-
-        .verify-button:active:not(:disabled) {
-            transform: translateY(0);
-        }
-
         .verify-button:disabled {
             opacity: 0.5;
             cursor: not-allowed;
@@ -306,11 +293,7 @@
             transition: all 0.3s ease;
             box-shadow: var(--shadow-md);
             color: var(--text-primary);
-        }
-
-        .fab:hover {
-            transform: scale(1.1);
-            background: rgba(255, 255, 255, 0.1);
+            border: none;
         }
 
         .fab:active {
@@ -324,12 +307,7 @@
             box-shadow: 0 6px 20px rgba(0, 102, 255, 0.4);
         }
 
-        .fab svg {
-            width: 24px;
-            height: 24px;
-        }
-
-        /* Bottom Navigation Bar */
+        /* Bottom Navigation */
         .bottom-nav {
             position: fixed;
             bottom: 0;
@@ -366,13 +344,8 @@
             transition: all 0.3s ease;
         }
 
-        .nav-button:hover {
-            background: rgba(255, 255, 255, 0.1);
-            transform: translateY(-2px);
-        }
-
         .nav-button:active {
-            transform: translateY(0);
+            transform: scale(0.98);
         }
 
         .nav-button.primary {
@@ -383,11 +356,7 @@
             box-shadow: 0 4px 20px rgba(0, 102, 255, 0.3);
         }
 
-        .nav-button.primary:hover {
-            box-shadow: 0 6px 30px rgba(0, 102, 255, 0.4);
-        }
-
-        /* Route Panel - Glassmorphic */
+        /* Route Panel */
         .route-panel {
             position: fixed;
             bottom: 0;
@@ -418,11 +387,6 @@
             margin: 12px auto;
             cursor: grab;
             transition: all 0.3s ease;
-        }
-
-        .panel-handle:hover {
-            background: rgba(255, 255, 255, 0.3);
-            width: 60px;
         }
 
         .panel-header {
@@ -475,7 +439,7 @@
             max-height: calc(70vh - 180px);
         }
 
-        /* Cash Widget - Glassmorphic */
+        /* Cash Widget */
         .cash-widget {
             background: linear-gradient(135deg, 
                 rgba(255, 159, 10, 0.1),
@@ -521,7 +485,7 @@
             color: var(--warning);
         }
 
-        /* Stop Cards - Modern Glass Design */
+        /* Stop Cards */
         .stops-container {
             display: flex;
             flex-direction: column;
@@ -540,11 +504,6 @@
             transition: all 0.3s ease;
         }
 
-        .stop-card:hover {
-            transform: translateX(4px);
-            background: rgba(255, 255, 255, 0.08);
-        }
-
         .stop-card.active {
             background: linear-gradient(135deg,
                 rgba(0, 102, 255, 0.1),
@@ -559,14 +518,6 @@
                 rgba(52, 199, 89, 0.05),
                 transparent
             );
-        }
-
-        .stop-card.efficient {
-            background: linear-gradient(135deg,
-                rgba(155, 89, 182, 0.1),
-                rgba(155, 89, 182, 0.05)
-            );
-            border-color: rgba(155, 89, 182, 0.3);
         }
 
         .stop-indicator {
@@ -599,11 +550,6 @@
             box-shadow: 0 4px 12px rgba(52, 199, 89, 0.3);
         }
 
-        .stop-indicator.efficient {
-            background: linear-gradient(135deg, var(--purple), #8e44ad);
-            box-shadow: 0 4px 12px rgba(155, 89, 182, 0.3);
-        }
-
         .stop-details {
             flex: 1;
             min-width: 0;
@@ -634,12 +580,6 @@
         .stop-type.delivery {
             background: var(--primary-light);
             color: var(--primary);
-        }
-
-        .stop-eta {
-            margin-left: auto;
-            font-size: 12px;
-            color: var(--text-secondary);
         }
 
         .stop-address {
@@ -704,11 +644,6 @@
             text-decoration: none;
         }
 
-        .action-btn:hover {
-            background: rgba(255, 255, 255, 0.1);
-            transform: scale(1.1);
-        }
-
         /* Empty State */
         .empty-state {
             position: fixed;
@@ -756,12 +691,27 @@
             box-shadow: 0 4px 20px rgba(0, 102, 255, 0.3);
         }
 
-        .empty-action:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 30px rgba(0, 102, 255, 0.4);
+        /* Connection Status */
+        .connection-status {
+            position: fixed;
+            top: calc(80px + var(--safe-area-top));
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--warning);
+            color: black;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            z-index: 90;
+            display: none;
         }
 
-        /* Live Tracking Indicator */
+        .connection-status.offline {
+            display: block;
+        }
+
+        /* Tracking Indicator */
         .tracking-indicator {
             position: fixed;
             top: calc(80px + var(--safe-area-top));
@@ -803,18 +753,6 @@
             50% { opacity: 0.3; }
         }
 
-        /* Responsive Design */
-        @media (max-width: 380px) {
-            .route-stats-bar {
-                font-size: 11px;
-            }
-            
-            .verify-button {
-                padding: 8px 16px;
-                font-size: 13px;
-            }
-        }
-
         /* Custom Scrollbar */
         .panel-content::-webkit-scrollbar {
             width: 6px;
@@ -829,10 +767,6 @@
             background: var(--glass-border);
             border-radius: 3px;
         }
-
-        .panel-content::-webkit-scrollbar-thumb:hover {
-            background: rgba(255, 255, 255, 0.2);
-        }
     </style>
 </head>
 <body>
@@ -842,8 +776,13 @@
             <div class="loading-logo">📦</div>
             <div class="loading-spinner"></div>
             <div class="loading-text">Loading Route</div>
-            <div class="loading-subtext">Optimizing for efficiency...</div>
+            <div class="loading-subtext">Preparing navigation...</div>
         </div>
+    </div>
+    
+    <!-- Connection Status -->
+    <div id="connectionStatus" class="connection-status">
+        Working offline - changes will sync
     </div>
     
     <!-- Map Container -->
@@ -851,17 +790,14 @@
         <div id="map"></div>
     </div>
     
-    <!-- Dynamic UI will be injected here by JavaScript -->
+    <!-- UI will be injected by JavaScript -->
     
-    <!-- Scripts -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" 
+            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" 
+            crossorigin=""></script>
+    
+    <!-- Route Navigation System -->
     <script src="./route.js"></script>
-    
-    <script>
-        // Initialize the route navigation system
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('DOM loaded, waiting for route navigation to initialize...');
-        });
-    </script>
 </body>
 </html>
