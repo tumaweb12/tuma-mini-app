@@ -368,8 +368,10 @@ function optimizeRouteStops() {
         updateOptimizeButton(true);
     }, 1500);
 }
+
+// END OF PART 1
 // ============================================================================
-// PART 2 OF 6 - DYNAMIC ROUTE OPTIMIZATION ALGORITHM
+// PART 2 OF 6 - DYNAMIC ROUTE OPTIMIZATION ALGORITHMS
 // ============================================================================
 
 /**
@@ -624,6 +626,8 @@ function calculateCentroid(stops) {
         lng: sumLng / stops.length
     };
 }
+
+// END OF PART 2
 
 /**
  * Toggle between optimization modes
@@ -1244,357 +1248,38 @@ function injectNavigationStyles() {
     
     document.head.appendChild(style);
 }
-// ============================================================================
-// PART 4 OF 6 - ENHANCED MAP FUNCTIONS WITH NUMBERED MARKERS
-// ============================================================================
 
-/**
- * Create enhanced Leaflet icon with route order numbers
- */
-function createLeafletIcon(stop, orderNumber) {
-    const isCompleted = stop.completed;
-    const isActive = isNextStop(stop);
-    const type = stop.type;
-    
-    // In dynamic mode, show order number; in phased mode, show P/D
-    const showOrderNumber = config.optimization.enableDynamicRouting && state.activeRoute?.isOptimized;
-    
-    const bgColor = isCompleted ? '#1C1C1F' : type === 'pickup' ? '#FF9F0A' : '#0066FF';
-    const borderColor = isCompleted ? '#48484A' : '#FFFFFF';
-    const symbol = isCompleted ? '✓' : showOrderNumber ? orderNumber : (type === 'pickup' ? 'P' : 'D');
-    
-    return L.divIcon({
-        className: 'custom-marker',
-        html: `
-            <div class="stop-marker-wrapper ${isCompleted ? 'completed' : ''} ${isActive ? 'active' : ''}">
-                <div class="stop-marker ${type}" style="
-                    background: ${bgColor};
-                    width: 44px;
-                    height: 44px;
-                    border-radius: 50%;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-                    border: 3px solid ${borderColor};
-                    position: relative;
-                ">
-                    <span style="
-                        color: white;
-                        font-weight: 700;
-                        font-size: ${showOrderNumber ? '18px' : '20px'};
-                        ${isCompleted ? 'color: #8E8E93;' : ''}
-                    ">${symbol}</span>
-                    ${isActive ? '<div class="marker-pulse"></div>' : ''}
-                </div>
-                <div class="marker-label">${type === 'pickup' ? 'Pickup' : 'Delivery'}</div>
-            </div>
-        `,
-        iconSize: [44, 70],
-        iconAnchor: [22, 55],
-        popupAnchor: [0, -55]
-    });
+// END OF PART 3
+}, 7000);
 }
 
-/**
- * Create enhanced stop popup with order number
- */
-function createStopPopup(stop, orderNumber) {
-    const bgColor = stop.type === 'pickup' ? '#FF9F0A' : '#0066FF';
-    const textColor = stop.type === 'pickup' ? '#0A0A0B' : 'white';
-    const paymentInfo = getPaymentInfoForStop(stop);
-    const showOrderNumber = config.optimization.enableDynamicRouting && state.activeRoute?.isOptimized;
-    
-    return `
-        <div class="stop-popup">
-            <div class="popup-header ${stop.type}" style="background: ${bgColor}; color: ${textColor};">
-                ${showOrderNumber ? `<div class="popup-order-number">${orderNumber}</div>` : ''}
-                <span class="popup-phase">${stop.type.toUpperCase()}</span>
-                <span class="popup-code">${stop.parcelCode}</span>
-            </div>
-            <div class="popup-body">
-                <h3>${stop.address}</h3>
-                <div class="popup-info">
-                    <div class="info-row">
-                        <span class="info-icon">👤</span>
-                        <span>${stop.customerName}</span>
-                    </div>
-                    <div class="info-row">
-                        <span class="info-icon">📞</span>
-                        <a href="tel:${stop.customerPhone}">${stop.customerPhone}</a>
-                    </div>
-                    ${stop.specialInstructions ? `
-                        <div class="info-row instructions">
-                            <span class="info-icon">💬</span>
-                            <span>${stop.specialInstructions}</span>
-                        </div>
-                    ` : ''}
-                    ${paymentInfo.needsCollection ? `
-                        <div class="info-row payment">
-                            <span class="info-icon">💰</span>
-                            <span style="font-weight: 600; color: #FF9F0A;">
-                                Collect: KES ${paymentInfo.amount.toLocaleString()}
-                            </span>
-                        </div>
-                    ` : paymentInfo.method === 'online' ? `
-                        <div class="info-row payment" style="background: rgba(52, 199, 89, 0.1); border: 1px solid rgba(52, 199, 89, 0.2);">
-                            <span class="info-icon">✅</span>
-                            <span style="color: #34C759; font-weight: 600;">Already Paid Online</span>
-                        </div>
-                    ` : ''}
-                </div>
-                ${!stop.completed && canCompleteStop(stop) ? `
-                    <div class="popup-actions">
-                        <button onclick="openVerificationModal('${stop.id}')">
-                            ✓ Verify ${stop.type}
-                        </button>
-                        <button onclick="navigateToStop('${stop.id}')">
-                            🧭 Navigate Here
-                        </button>
-                    </div>
-                ` : stop.completed ? `
-                    <div class="popup-completed-status">
-                        ✓ Completed ${formatTimeAgo(stop.timestamp)}
-                    </div>
-                ` : ''}
-            </div>
-        </div>
-    `;
-}
-
-/**
- * Plot route with enhanced numbered markers
- */
-async function plotRoute() {
-    if (!state.map || !state.activeRoute || !state.activeRoute.stops) return;
-    
-    // Clear existing markers
-    state.markers.forEach(marker => marker.remove());
-    state.markers = [];
-    if (state.routePolyline) {
-        state.routePolyline.remove();
-        state.routePolyline = null;
-    }
-    
-    if (state.radiusCircle) {
-        state.radiusCircle.remove();
-        state.radiusCircle = null;
-    }
-    
-    const bounds = L.latLngBounds();
-    
-    // Update stop order map
-    updateStopOrderMap();
-    
-    // Add markers for each stop with order numbers
-    state.activeRoute.stops.forEach((stop, index) => {
-        const orderNumber = index + 1;
-        const marker = L.marker([stop.location.lat, stop.location.lng], {
-            icon: createLeafletIcon(stop, orderNumber)
-        })
-        .addTo(state.map)
-        .bindPopup(createStopPopup(stop, orderNumber), {
-            maxWidth: 320,
-            className: 'enhanced-popup'
-        });
+function initializeOptimizeButton() {
+    setTimeout(() => {
+        addOptimizeButton();
         
-        state.markers.push(marker);
-        bounds.extend([stop.location.lat, stop.location.lng]);
-    });
-    
-    state.map.fitBounds(bounds, { padding: [50, 50] });
+        if (state.activeRoute && state.activeRoute.isOptimized) {
+            updateOptimizeButton(true);
+        }
+    }, 500);
 }
 
-// UI Helper functions
-function addOptimizeButton() {
-    if (document.getElementById('optimizeBtn')) return;
-    
-    const navControls = document.getElementById('navControls');
-    if (!navControls) return;
-    
-    const optimizeContainer = document.createElement('div');
-    optimizeContainer.className = 'optimize-button-container';
-    optimizeContainer.innerHTML = `
-        <div class="optimization-mode-toggle">
-            <span>Mode:</span>
-            <span class="mode-indicator">
-                ${config.optimization.enableDynamicRouting ? '⚡ Dynamic' : '📦 Phased'}
-            </span>
-            <button onclick="toggleOptimizationMode()" style="
-                background: rgba(255, 255, 255, 0.1);
-                border: none;
-                border-radius: 6px;
-                padding: 4px 8px;
-                color: white;
-                font-size: 12px;
-                cursor: pointer;
-            ">Switch</button>
-        </div>
-        <button id="optimizeBtn" class="optimize-route-btn" onclick="optimizeRouteStops()">
-            <span class="optimize-icon">✨</span>
-            <span class="optimize-text">Optimize Route</span>
-        </button>
-        <button id="undoOptimizeBtn" class="undo-optimize-btn" onclick="undoOptimization()" style="display: none;">
-            <span class="undo-icon">↩️</span>
-            <span>Undo</span>
-        </button>
-    `;
-    
-    navControls.insertBefore(optimizeContainer, navControls.firstChild);
-}
-
-function updateOptimizeButton(isOptimized) {
-    const optimizeBtn = document.getElementById('optimizeBtn');
-    const undoBtn = document.getElementById('undoOptimizeBtn');
-    
-    if (optimizeBtn) {
-        if (isOptimized) {
-            optimizeBtn.innerHTML = `
-                <span class="optimize-icon">✅</span>
-                <span class="optimize-text">Route Optimized</span>
-            `;
-            optimizeBtn.disabled = true;
-            optimizeBtn.classList.add('optimized');
+function waitForLeaflet() {
+    return new Promise((resolve) => {
+        if (window.L) {
+            resolve();
         } else {
-            optimizeBtn.innerHTML = `
-                <span class="optimize-icon">✨</span>
-                <span class="optimize-text">Optimize Route</span>
-            `;
-            optimizeBtn.disabled = false;
-            optimizeBtn.classList.remove('optimized');
-        }
-    }
-    
-    if (undoBtn) {
-        undoBtn.style.display = isOptimized ? 'flex' : 'none';
-    }
-    
-    // Update mode indicator
-    const modeIndicator = document.querySelector('.mode-indicator');
-    if (modeIndicator) {
-        modeIndicator.innerHTML = config.optimization.enableDynamicRouting 
-            ? '⚡ Dynamic' 
-            : '📦 Phased';
-    }
-}
-
-function showOptimizingAnimation() {
-    const animation = document.createElement('div');
-    animation.id = 'optimizingAnimation';
-    animation.className = 'optimizing-animation';
-    
-    const steps = config.optimization.enableDynamicRouting
-        ? [
-            '📍 Analyzing stop locations',
-            '🧮 Calculating optimal paths',
-            '⚡ Smart interleaving stops',
-            '✅ Validating sequence'
-        ]
-        : [
-            '📍 Analyzing locations',
-            '📦 Organizing pickups',
-            '📍 Organizing deliveries',
-            '✅ Finalizing route'
-        ];
-    
-    animation.innerHTML = `
-        <div class="optimizing-content">
-            <div class="optimizing-spinner"></div>
-            <h3>Optimizing Route...</h3>
-            <p>${config.optimization.enableDynamicRouting 
-                ? 'Using smart dynamic routing' 
-                : 'Using phased routing'}</p>
-            <div class="optimizing-steps">
-                ${steps.map((step, i) => `
-                    <div class="step ${i === 0 ? 'active' : ''}" data-step="${i}">
-                        ${step}
-                    </div>
-                `).join('')}
-            </div>
-        </div>
-    `;
-    
-    document.body.appendChild(animation);
-    
-    // Animate steps
-    steps.forEach((_, index) => {
-        if (index > 0) {
-            setTimeout(() => {
-                const step = animation.querySelector(`.step[data-step="${index}"]`);
-                if (step) step.classList.add('active');
-            }, 300 * (index + 1));
+            const checkInterval = setInterval(() => {
+                if (window.L) {
+                    clearInterval(checkInterval);
+                    resolve();
+                }
+            }, 100);
         }
     });
 }
 
-function hideOptimizingAnimation() {
-    const animation = document.getElementById('optimizingAnimation');
-    if (animation) {
-        animation.classList.add('fade-out');
-        setTimeout(() => animation.remove(), 300);
-    }
-}
-
-function showOptimizationResults(savedDistance, savedPercentage) {
-    // Store original route for undo
-    if (!state.originalRouteOrder) {
-        state.originalRouteOrder = [...state.activeRoute.stops];
-    }
-    
-    const results = document.createElement('div');
-    results.className = 'optimization-results';
-    
-    // Get route efficiency metrics
-    const efficiency = analyzeRouteEfficiency(state.activeRoute.stops);
-    const efficiencyClass = efficiency.efficiencyScore > 80 ? 'high' : 
-                           efficiency.efficiencyScore > 60 ? 'medium' : 'low';
-    
-    results.innerHTML = `
-        <div class="results-content">
-            <div class="results-icon">🎉</div>
-            <h2>Route Optimized!</h2>
-            <div class="results-stats">
-                <div class="stat">
-                    <span class="stat-value">${savedDistance.toFixed(1)} km</span>
-                    <span class="stat-label">Distance Saved</span>
-                </div>
-                <div class="stat">
-                    <span class="stat-value">${savedPercentage}%</span>
-                    <span class="stat-label">More Efficient</span>
-                </div>
-                <div class="stat">
-                    <span class="stat-value">${Math.round(savedDistance * 2.5)} min</span>
-                    <span class="stat-label">Time Saved</span>
-                </div>
-            </div>
-            <div class="results-comparison">
-                <div class="comparison-item">
-                    <span class="comparison-label">Original:</span>
-                    <span class="comparison-value">${state.optimizationStats.originalDistance.toFixed(1)} km</span>
-                </div>
-                <div class="comparison-item">
-                    <span class="comparison-label">Optimized:</span>
-                    <span class="comparison-value success">${state.optimizationStats.optimizedDistance.toFixed(1)} km</span>
-                </div>
-                <div class="comparison-item">
-                    <span class="comparison-label">Efficiency Score:</span>
-                    <span class="comparison-value efficiency-${efficiencyClass}">
-                        ${Math.round(efficiency.efficiencyScore)}%
-                    </span>
-                </div>
-            </div>
-            <div class="optimization-mode-info">
-                <strong>Optimization Mode:</strong> ${config.optimization.enableDynamicRouting ? 'Dynamic' : 'Phased'}<br>
-                ${config.optimization.enableDynamicRouting 
-                    ? 'Smart interleaving of pickups and deliveries based on proximity'
-                    : 'All pickups completed before deliveries'}
-            </div>
-            <button class="results-close" onclick="this.parentElement.parentElement.remove()">
-                Got it!
-            </button>
-        </div>
-// ============================================================================
-// PART 4 OF 6 - ENHANCED MAP FUNCTIONS WITH NUMBERED MARKERS
+// END OF PART 4// ============================================================================
+// PART 4 OF 6 - OPTIMIZATION UI & MAP FUNCTIONS
 // ============================================================================
 
 /**
@@ -2298,6 +1983,8 @@ function createPhaseProgressWidget(pickupStops, deliveryStops) {
         </div>
     `;
 }
+
+// END OF PART 5
 
 function createParcelsInPossessionWidget() {
     return `
