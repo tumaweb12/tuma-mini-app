@@ -21,12 +21,11 @@
     <!-- 4) Chart.js for performance visualization -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
-    <!-- 5) Your config & modules -->
-    <script src="./config.js"></script>
+    <!-- 5) Supabase -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
-    <script type="module" src="./supabaseClient.js"></script>
-    <script type="module" src="./mapUtils.js"></script>
-    <script type="module" src="./businessLogic.js"></script>
+    
+    <!-- 6) Your config (non-module) -->
+    <script src="./config.js"></script>
     
     <style>
         * {
@@ -77,6 +76,38 @@
             height: 100%;
             background: var(--surface);
             overflow: hidden;
+        }
+
+        /* Loading State */
+        .loading-overlay {
+            position: fixed;
+            inset: 0;
+            background: var(--surface);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            transition: opacity 0.3s;
+        }
+
+        .loading-spinner {
+            width: 48px;
+            height: 48px;
+            border: 3px solid var(--border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 16px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            color: var(--text-secondary);
+            font-size: 14px;
         }
 
         /* Main Content */
@@ -136,6 +167,10 @@
             position: relative;
         }
 
+        .partner-avatar.starter {
+            background: linear-gradient(135deg, #4CAF50, #45a049);
+        }
+
         .partner-avatar.bronze {
             background: linear-gradient(135deg, var(--tier-bronze), #A0522D);
         }
@@ -188,9 +223,29 @@
             text-transform: uppercase;
         }
 
+        .partner-tier.starter {
+            background: linear-gradient(135deg, rgba(76, 175, 80, 0.2), rgba(76, 175, 80, 0.1));
+            color: #4CAF50;
+        }
+
+        .partner-tier.bronze {
+            background: linear-gradient(135deg, rgba(205, 127, 50, 0.2), rgba(205, 127, 50, 0.1));
+            color: var(--tier-bronze);
+        }
+
+        .partner-tier.silver {
+            background: linear-gradient(135deg, rgba(192, 192, 192, 0.2), rgba(192, 192, 192, 0.1));
+            color: var(--tier-silver);
+        }
+
         .partner-tier.gold {
             background: linear-gradient(135deg, rgba(255, 215, 0, 0.2), rgba(255, 215, 0, 0.1));
             color: var(--tier-gold);
+        }
+
+        .partner-tier.platinum {
+            background: linear-gradient(135deg, rgba(229, 228, 226, 0.2), rgba(229, 228, 226, 0.1));
+            color: var(--tier-platinum);
         }
 
         .partner-code {
@@ -307,6 +362,45 @@
         .form-container {
             padding: 20px;
             padding-bottom: calc(20px + var(--safe-area-bottom));
+        }
+
+        /* Notification */
+        .notification {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--surface-elevated);
+            color: var(--text-primary);
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            z-index: 3000;
+            animation: slideDown 0.3s ease-out;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .notification.success {
+            background: var(--success);
+        }
+
+        .notification.error {
+            background: var(--danger);
+        }
+
+        .notification.warning {
+            background: var(--warning);
+        }
+
+        @keyframes slideDown {
+            from {
+                transform: translateX(-50%) translateY(-100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(-50%) translateY(0);
+                opacity: 1;
+            }
         }
 
         /* Streak & Activity Section */
@@ -1105,22 +1199,28 @@
 </head>
 <body>
     <div class="app">
+        <!-- Loading Overlay -->
+        <div class="loading-overlay" id="loadingOverlay">
+            <div class="loading-spinner"></div>
+            <div class="loading-text">Loading partner dashboard...</div>
+        </div>
+
         <!-- Main Content -->
         <div class="main-content" id="mainContent">
             <!-- Header -->
             <div class="header" id="header">
                 <div class="header-top">
                     <div class="partner-info">
-                        <div class="partner-avatar gold" id="partnerAvatar">
-                            <span id="partnerInitial">J</span>
-                            <div class="tier-indicator">👑</div>
+                        <div class="partner-avatar" id="partnerAvatar">
+                            <span id="partnerInitial">-</span>
+                            <div class="tier-indicator"></div>
                         </div>
                         <div class="partner-details">
                             <div>
-                                <span class="partner-name" id="partnerName">John Doe</span>
-                                <span class="partner-tier gold" id="partnerTier">GOLD</span>
+                                <span class="partner-name" id="partnerName">Loading...</span>
+                                <span class="partner-tier" id="partnerTier">-</span>
                             </div>
-                            <div class="partner-code">Partner ID: <span id="partnerCode">TMA-001</span></div>
+                            <div class="partner-code">Partner ID: <span id="partnerCode">-</span></div>
                         </div>
                     </div>
                     <a href="https://t.me/tumapartners" target="_blank" class="telegram-group-btn">
@@ -1137,16 +1237,16 @@
                         <div class="earnings-title">Available Balance</div>
                         <div class="earnings-period">Updated live</div>
                     </div>
-                    <div class="earnings-amount">KES <span id="availableBalance">3,450</span></div>
-                    <div class="earnings-status ready">
+                    <div class="earnings-amount">KES <span id="availableBalance">0</span></div>
+                    <div class="earnings-status">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>
+                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
                         </svg>
-                        <span>Ready to cash out (Min: KES 100)</span>
+                        <span>Calculating...</span>
                     </div>
                 </div>
 
-                <button class="cashout-btn" id="cashoutBtn" onclick="showCashoutModal()">
+                <button class="cashout-btn" id="cashoutBtn" disabled>
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                         <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1.41 16.09V20h-2.67v-1.93c-1.71-.36-3.16-1.46-3.27-3.4h1.96c.1 1.05.82 1.87 2.65 1.87 1.96 0 2.4-.98 2.4-1.59 0-.83-.44-1.61-2.67-2.14-2.48-.6-4.18-1.62-4.18-3.67 0-1.72 1.39-2.84 3.11-3.21V4h2.67v1.95c1.86.45 2.79 1.86 2.85 3.39H14.3c-.05-1.11-.64-1.87-2.22-1.87-1.5 0-2.4.68-2.4 1.64 0 .84.65 1.39 2.67 1.91s4.18 1.39 4.18 3.91c-.01 1.83-1.38 2.83-3.12 3.16z"/>
                     </svg>
@@ -1162,12 +1262,12 @@
                     <div class="activity-grid">
                         <div class="activity-card">
                             <div class="activity-icon streak-fire">🔥</div>
-                            <div class="activity-value" id="streakDays">7</div>
+                            <div class="activity-value" id="streakDays">0</div>
                             <div class="activity-label">Day Streak</div>
                         </div>
                         <div class="activity-card">
                             <div class="activity-icon">📈</div>
-                            <div class="activity-value" id="weeklyGrowth">+23%</div>
+                            <div class="activity-value" id="weeklyGrowth">0%</div>
                             <div class="activity-label">Weekly Growth</div>
                         </div>
                     </div>
@@ -1176,34 +1276,7 @@
                     <div class="calendar-card">
                         <div class="calendar-title">This Week's Activity</div>
                         <div class="calendar-grid">
-                            <div class="calendar-day">
-                                <div class="day-label">Mon</div>
-                                <div class="day-count">12</div>
-                            </div>
-                            <div class="calendar-day active">
-                                <div class="day-label">Tue</div>
-                                <div class="day-count">8</div>
-                            </div>
-                            <div class="calendar-day active">
-                                <div class="day-label">Wed</div>
-                                <div class="day-count">15</div>
-                            </div>
-                            <div class="calendar-day active">
-                                <div class="day-label">Thu</div>
-                                <div class="day-count">6</div>
-                            </div>
-                            <div class="calendar-day active today">
-                                <div class="day-label">Fri</div>
-                                <div class="day-count">11</div>
-                            </div>
-                            <div class="calendar-day">
-                                <div class="day-label">Sat</div>
-                                <div class="day-count">0</div>
-                            </div>
-                            <div class="calendar-day">
-                                <div class="day-label">Sun</div>
-                                <div class="day-count">0</div>
-                            </div>
+                            <!-- Will be populated by JavaScript -->
                         </div>
                     </div>
                 </div>
@@ -1211,26 +1284,8 @@
                 <!-- Smart Insights -->
                 <div class="insights-section">
                     <h2 class="section-title">Smart Insights</h2>
-                    
-                    <div class="insight-card">
-                        <div class="insight-header">
-                            <div class="insight-icon">💡</div>
-                            <div class="insight-title">Dormant Vendor Alert</div>
-                        </div>
-                        <div class="insight-content">
-                            Sarah's Boutique hasn't sent parcels in 5 days. They usually send 3-4 daily.
-                        </div>
-                        <span class="insight-action" onclick="contactVendor('sarah')">Send Reminder</span>
-                    </div>
-
-                    <div class="insight-card">
-                        <div class="insight-header">
-                            <div class="insight-icon">🎯</div>
-                            <div class="insight-title">Peak Hours Opportunity</div>
-                        </div>
-                        <div class="insight-content">
-                            Your vendors are most active 2-4 PM. Schedule check-ins during this time for better response.
-                        </div>
+                    <div>
+                        <!-- Will be populated by JavaScript -->
                     </div>
                 </div>
 
@@ -1241,42 +1296,39 @@
                         <div class="kpi-card">
                             <div class="kpi-header">
                                 <div class="kpi-title">Vendor Onboarding</div>
-                                <div class="kpi-value">3 / 5</div>
+                                <div class="kpi-value">0 / 5</div>
                             </div>
                             <div class="kpi-progress">
-                                <div class="kpi-progress-bar" style="width: 60%"></div>
+                                <div class="kpi-progress-bar" style="width: 0%"></div>
                             </div>
                             <div class="kpi-status">
-                                <span>2 more to reach target</span>
-                                <span class="kpi-badge">On Track</span>
+                                <span>Loading...</span>
                             </div>
                         </div>
 
                         <div class="kpi-card">
                             <div class="kpi-header">
                                 <div class="kpi-title">Parcel Generation</div>
-                                <div class="kpi-value">42 / 50</div>
+                                <div class="kpi-value">0 / 50</div>
                             </div>
                             <div class="kpi-progress">
-                                <div class="kpi-progress-bar" style="width: 84%"></div>
+                                <div class="kpi-progress-bar" style="width: 0%"></div>
                             </div>
                             <div class="kpi-status">
-                                <span>8 parcels to target</span>
-                                <span class="kpi-badge">Almost There!</span>
+                                <span>Loading...</span>
                             </div>
                         </div>
 
                         <div class="kpi-card">
                             <div class="kpi-header">
                                 <div class="kpi-title">Vendor Activation</div>
-                                <div class="kpi-value">85%</div>
+                                <div class="kpi-value">0%</div>
                             </div>
                             <div class="kpi-progress">
-                                <div class="kpi-progress-bar" style="width: 85%"></div>
+                                <div class="kpi-progress-bar" style="width: 0%"></div>
                             </div>
                             <div class="kpi-status">
-                                <span>20 of 24 vendors active</span>
-                                <span class="kpi-badge">Excellent</span>
+                                <span>Loading...</span>
                             </div>
                         </div>
                     </div>
@@ -1292,17 +1344,17 @@
                         </div>
                         <div class="rank-display">
                             <div class="rank-metric">
-                                <div class="rank-number">#24</div>
+                                <div class="rank-number">-</div>
                                 <div class="rank-label">Your Rank</div>
                             </div>
                             <div class="rank-divider"></div>
                             <div class="rank-metric">
-                                <div class="rank-number">156</div>
+                                <div class="rank-number">0</div>
                                 <div class="rank-label">Total Parcels</div>
                             </div>
                             <div class="rank-divider"></div>
                             <div class="rank-metric">
-                                <div class="rank-number">Top 15%</div>
+                                <div class="rank-number">-</div>
                                 <div class="rank-label">Percentile</div>
                             </div>
                         </div>
@@ -1315,24 +1367,22 @@
                     <div class="stats-grid">
                         <div class="stat-card">
                             <div class="stat-icon">💰</div>
-                            <div class="stat-value">45K</div>
+                            <div class="stat-value">0</div>
                             <div class="stat-label">Total Earned</div>
-                            <span class="stat-trend trend-up">+12%</span>
                         </div>
                         <div class="stat-card">
                             <div class="stat-icon">📦</div>
-                            <div class="stat-value">234</div>
+                            <div class="stat-value">0</div>
                             <div class="stat-label">Total Parcels</div>
-                            <span class="stat-trend trend-up">+8%</span>
                         </div>
                         <div class="stat-card">
                             <div class="stat-icon">👥</div>
-                            <div class="stat-value">24</div>
+                            <div class="stat-value">0</div>
                             <div class="stat-label">Vendors</div>
                         </div>
                         <div class="stat-card">
                             <div class="stat-icon">✅</div>
-                            <div class="stat-value">92%</div>
+                            <div class="stat-value">0%</div>
                             <div class="stat-label">Success Rate</div>
                         </div>
                     </div>
@@ -1343,66 +1393,17 @@
                     <div class="vendors-header">
                         <h2 class="section-title">Vendor Performance</h2>
                         <div class="vendor-filter">
-                            <button class="filter-btn active" onclick="filterVendors('all')">All</button>
-                            <button class="filter-btn" onclick="filterVendors('active')">Active</button>
-                            <button class="filter-btn" onclick="filterVendors('dormant')">Dormant</button>
+                            <button class="filter-btn active">All</button>
+                            <button class="filter-btn">Active</button>
+                            <button class="filter-btn">Dormant</button>
                         </div>
                     </div>
                     
                     <div class="vendor-list">
-                        <div class="vendor-item" onclick="viewVendorDetails('1')">
-                            <div class="vendor-info">
-                                <div class="vendor-name">
-                                    John's Electronics
-                                    <span class="vendor-status status-active"></span>
-                                </div>
-                                <div class="vendor-details">
-                                    <span>📍 CBD</span>
-                                    <span>⏱️ 2h ago</span>
-                                </div>
-                            </div>
-                            <div class="vendor-stats">
-                                <div class="vendor-parcels">45</div>
-                                <div class="vendor-label">this week</div>
-                            </div>
-                        </div>
-                        
-                        <div class="vendor-item" onclick="viewVendorDetails('2')">
-                            <div class="vendor-info">
-                                <div class="vendor-name">
-                                    Sarah's Boutique
-                                    <span class="vendor-status status-dormant"></span>
-                                </div>
-                                <div class="vendor-details">
-                                    <span>📍 Westlands</span>
-                                    <span>⏱️ 5d ago</span>
-                                </div>
-                            </div>
-                            <div class="vendor-stats">
-                                <div class="vendor-parcels">12</div>
-                                <div class="vendor-label">this week</div>
-                            </div>
-                        </div>
-                        
-                        <div class="vendor-item" onclick="viewVendorDetails('3')">
-                            <div class="vendor-info">
-                                <div class="vendor-name">
-                                    Fresh Foods Market
-                                    <span class="vendor-status status-active"></span>
-                                </div>
-                                <div class="vendor-details">
-                                    <span>📍 Kilimani</span>
-                                    <span>⏱️ 1h ago</span>
-                                </div>
-                            </div>
-                            <div class="vendor-stats">
-                                <div class="vendor-parcels">32</div>
-                                <div class="vendor-label">this week</div>
-                            </div>
-                        </div>
+                        <!-- Will be populated by JavaScript -->
                     </div>
 
-                    <button class="add-vendor-btn" onclick="showAddVendorModal()">
+                    <button class="add-vendor-btn">
                         <span>+</span>
                         <span>Add New Vendor</span>
                     </button>
@@ -1412,50 +1413,22 @@
                 <div class="leaderboard-section">
                     <h2 class="section-title">Community Rankings</h2>
                     
-                    <div class="leaderboard-opt-in" id="leaderboardOptIn" style="display: none;">
+                    <div class="leaderboard-opt-in" id="leaderboardOptIn">
                         <h3>Join the Monthly Rankings</h3>
                         <p>Compare parcel performance with other partners. No earnings data is shared.</p>
-                        <button class="opt-in-btn" onclick="optInToLeaderboard()">Join Rankings</button>
+                        <button class="opt-in-btn">Join Rankings</button>
                     </div>
 
-                    <div class="leaderboard-active" id="leaderboardActive">
+                    <div class="leaderboard-active" id="leaderboardActive" style="display: none;">
                         <div class="leaderboard-header">
                             <div class="leaderboard-title">
                                 🏆 Top Partners
                             </div>
-                            <div class="leaderboard-reset">Resets in 12 days</div>
+                            <div class="leaderboard-reset">Calculating...</div>
                         </div>
                         
                         <div class="leaderboard-list">
-                            <div class="leaderboard-item">
-                                <div class="leaderboard-rank rank-1">1</div>
-                                <div class="leaderboard-info">
-                                    <div class="leaderboard-name">Sarah M.</div>
-                                    <div class="leaderboard-stats">42 vendors • Nairobi</div>
-                                </div>
-                                <div class="leaderboard-parcels">287</div>
-                            </div>
-                            
-                            <div class="leaderboard-item">
-                                <div class="leaderboard-rank rank-2">2</div>
-                                <div class="leaderboard-info">
-                                    <div class="leaderboard-name">
-                                        James K.
-                                        <span class="newcomer-badge">NEW</span>
-                                    </div>
-                                    <div class="leaderboard-stats">28 vendors • Westlands</div>
-                                </div>
-                                <div class="leaderboard-parcels">245</div>
-                            </div>
-                            
-                            <div class="leaderboard-item self">
-                                <div class="leaderboard-rank">24</div>
-                                <div class="leaderboard-info">
-                                    <div class="leaderboard-name">You</div>
-                                    <div class="leaderboard-stats">24 vendors • CBD</div>
-                                </div>
-                                <div class="leaderboard-parcels">156</div>
-                            </div>
+                            <!-- Will be populated by JavaScript -->
                         </div>
                     </div>
                 </div>
@@ -1467,7 +1440,7 @@
             <div class="modal">
                 <div class="modal-header">
                     <h3 class="modal-title">Confirm Cash Out</h3>
-                    <button class="close-modal" onclick="hideCashoutModal()">
+                    <button class="close-modal">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                             <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
                         </svg>
@@ -1477,86 +1450,33 @@
                 <div class="fee-breakdown">
                     <div class="fee-item">
                         <span class="fee-label">Available Balance</span>
-                        <span class="fee-value">KES 3,450</span>
+                        <span class="fee-value">KES 0</span>
                     </div>
                     <div class="fee-item">
                         <span class="fee-label">M-Pesa Transaction Fee</span>
-                        <span class="fee-value">- KES 34</span>
+                        <span class="fee-value">- KES 0</span>
                     </div>
                     <div class="fee-item total">
                         <span class="fee-label">You will receive</span>
-                        <span class="fee-value" style="color: var(--success);">KES 3,416</span>
+                        <span class="fee-value" style="color: var(--success);">KES 0</span>
                     </div>
                 </div>
 
                 <div class="mpesa-notice">
-                    ℹ️ The KES 34 deduction is the standard M-Pesa transaction fee. Tuma charges no additional fees.
+                    ℹ️ The fee shown is the standard M-Pesa transaction fee. Tuma charges no additional fees.
                 </div>
                 
                 <div class="modal-actions">
-                    <button class="modal-btn secondary" onclick="hideCashoutModal()">Cancel</button>
-                    <button class="modal-btn primary" onclick="confirmCashout()">Confirm</button>
+                    <button class="modal-btn secondary">Cancel</button>
+                    <button class="modal-btn primary">Confirm</button>
                 </div>
             </div>
         </div>
     </div>
 
-    <script>
-        // M-Pesa fee calculation
-        function calculateMpesaFee(amount) {
-            if (amount <= 100) return 0;
-            else if (amount <= 500) return 7;
-            else if (amount <= 1000) return 13;
-            else if (amount <= 1500) return 23;
-            else if (amount <= 2500) return 33;
-            else if (amount <= 3500) return 53;
-            else if (amount <= 5000) return 57;
-            else if (amount <= 7500) return 78;
-            else if (amount <= 10000) return 90;
-            else if (amount <= 15000) return 98;
-            else if (amount <= 20000) return 103;
-            else if (amount <= 35000) return 108;
-            return 108;
-        }
-
-        // Modal functions
-        function showCashoutModal() {
-            const amount = 3450; // Get from actual data
-            const fee = calculateMpesaFee(amount);
-            const modal = document.getElementById('cashoutModal');
-            
-            modal.querySelector('.fee-value').textContent = `KES ${amount.toLocaleString()}`;
-            modal.querySelectorAll('.fee-value')[1].textContent = `- KES ${fee}`;
-            modal.querySelectorAll('.fee-value')[2].textContent = `KES ${(amount - fee).toLocaleString()}`;
-            
-            modal.style.display = 'flex';
-        }
-
-        function hideCashoutModal() {
-            document.getElementById('cashoutModal').style.display = 'none';
-        }
-
-        function confirmCashout() {
-            alert('Processing cash out via M-Pesa...');
-            hideCashoutModal();
-        }
-
-        // Filter vendors
-        function filterVendors(type) {
-            document.querySelectorAll('.filter-btn').forEach(btn => {
-                btn.classList.remove('active');
-            });
-            event.target.classList.add('active');
-            // Implement filtering logic
-        }
-
-        // Initialize
-        window.addEventListener('DOMContentLoaded', () => {
-            // Check leaderboard preference
-            const optedIn = localStorage.getItem('leaderboard_opt_in') === 'true';
-            document.getElementById('leaderboardOptIn').style.display = optedIn ? 'none' : 'block';
-            document.getElementById('leaderboardActive').style.display = optedIn ? 'block' : 'none';
-        });
-    </script>
+    <!-- Load agent.js module -->
+    <script type="module" src="./supabaseClient.js"></script>
+    <script type="module" src="./businessLogic.js"></script>
+    <script type="module" src="./agent.js"></script>
 </body>
 </html>
