@@ -535,95 +535,76 @@ function injectNavigationStyles() {
             z-index: 1 !important;
         }
         
-        /* ELEGANT CASH COLLECTION WIDGET */
+        /* GLASSMORPHIC CASH COLLECTION WIDGET - GREEN MONEY THEME */
         .cash-collection-widget {
             position: fixed;
-            top: 80px;
-            right: 20px;
-            background: linear-gradient(135deg, #0A0A0B 0%, #1C1C1F 100%);
-            backdrop-filter: blur(20px);
+            top: 70px;
+            right: 12px;
+            left: 12px;
+            background: linear-gradient(135deg, rgba(46, 125, 50, 0.85) 0%, rgba(67, 160, 71, 0.75) 100%);
+            backdrop-filter: blur(16px) saturate(180%);
+            -webkit-backdrop-filter: blur(16px) saturate(180%);
             border-radius: 20px;
-            padding: 20px;
-            min-width: 240px;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5), 0 2px 10px rgba(0, 0, 0, 0.3);
-            z-index: 100;
+            padding: 16px 18px;
+            box-shadow: 0 8px 32px rgba(46, 125, 50, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+            z-index: 95;
             transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.18);
             font-weight: 500;
+            position: relative;
+            overflow: hidden;
+            max-width: 400px;
+            margin: 0 auto;
         }
         
-        .cash-collection-widget:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 15px 50px rgba(0, 0, 0, 0.6), 0 5px 15px rgba(0, 0, 0, 0.4);
+        @media (min-width: 428px) {
+            .cash-collection-widget {
+                left: auto;
+                right: 20px;
+                max-width: 280px;
+            }
+        }
+        
+        .cash-collection-widget::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 50%;
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.15) 0%, transparent 100%);
+            pointer-events: none;
+        }
+        
+        .cash-collection-widget::after {
+            content: '💰';
+            position: absolute;
+            top: 16px;
+            right: 18px;
+            font-size: 24px;
+            opacity: 0.3;
+            animation: float 3s ease-in-out infinite;
+        }
+        
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-8px); }
         }
         
         .cash-collection-widget.has-pending {
-            background: linear-gradient(135deg, #FF9F0A 0%, #FF6B00 100%);
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: linear-gradient(135deg, rgba(255, 152, 0, 0.85) 0%, rgba(255, 183, 77, 0.75) 100%);
+            box-shadow: 0 8px 32px rgba(255, 152, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+            animation: pulseGlow 2s ease-in-out infinite;
+        }
+        
+        @keyframes pulseGlow {
+            0%, 100% { box-shadow: 0 8px 32px rgba(255, 152, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2); }
+            50% { box-shadow: 0 8px 40px rgba(255, 152, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.3); }
         }
         
         .cash-widget-title {
-            font-size: 12px;
-            font-weight: 600;
-            color: rgba(255, 255, 255, 0.7);
-            text-transform: uppercase;
-            letter-spacing: 1.5px;
-            margin-bottom: 12px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        
-        .cash-collection-widget.has-pending .cash-widget-title {
-            color: rgba(0, 0, 0, 0.6);
-        }
-        
-        .cash-widget-amount {
-            font-size: 36px;
-            font-weight: 800;
-            color: white;
-            margin-bottom: 16px;
-            letter-spacing: -1px;
-            line-height: 1;
-        }
-        
-        .cash-collection-widget.has-pending .cash-widget-amount {
-            color: #0A0A0B;
-        }
-        
-        .cash-widget-breakdown {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            padding-top: 16px;
-            border-top: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        
-        .cash-collection-widget.has-pending .cash-widget-breakdown {
-            border-top-color: rgba(0, 0, 0, 0.1);
-        }
-        
-        .cash-breakdown-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 14px;
-            color: rgba(255, 255, 255, 0.8);
-        }
-        
-        .cash-collection-widget.has-pending .cash-breakdown-item {
-            color: rgba(0, 0, 0, 0.8);
-        }
-        
-        .cash-breakdown-label {
-            opacity: 0.7;
-            font-weight: 500;
-        }
-        
-        .cash-breakdown-value {
-            font-weight: 700;
-            font-size: 15px;
-        }
+            font-size: 11px;
+            font-weight: 700
         
         /* OPTIMIZATION BUTTON STYLES */
         .optimize-button-container {
@@ -3153,6 +3134,68 @@ window.openVerificationModal = function(stopId) {
                     </div>
                 ` : ''}
                 
+                ${stop.type === 'delivery' ? `
+                    <div class="photo-capture-section" style="
+                        margin: 18px 0;
+                        padding: 16px;
+                        background: rgba(255, 255, 255, 0.05);
+                        border-radius: 12px;
+                        border: 1px solid rgba(255, 255, 255, 0.1);
+                    ">
+                        <label style="
+                            display: block;
+                            font-size: 14px;
+                            font-weight: 600;
+                            margin-bottom: 12px;
+                            color: rgba(255, 255, 255, 0.9);
+                        ">
+                            📸 Proof of Delivery (Required)
+                        </label>
+                        <div id="photoPreview" style="
+                            display: none;
+                            margin-bottom: 12px;
+                            border-radius: 8px;
+                            overflow: hidden;
+                            border: 2px solid #34C759;
+                        ">
+                            <img id="capturedPhoto" style="width: 100%; height: auto; display: block;" />
+                        </div>
+                        <button id="capturePhotoBtn" onclick="captureDeliveryPhoto()" style="
+                            width: 100%;
+                            padding: 14px;
+                            background: linear-gradient(135deg, rgba(0, 102, 255, 0.2), rgba(0, 82, 204, 0.15));
+                            border: 1px solid #0066FF;
+                            border-radius: 10px;
+                            color: white;
+                            font-weight: 600;
+                            font-size: 15px;
+                            cursor: pointer;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            gap: 8px;
+                            transition: all 0.2s;
+                        ">
+                            <span>📷</span>
+                            <span id="photoButtonText">Take Photo</span>
+                        </button>
+                        <input type="file" 
+                               id="photoInput" 
+                               accept="image/*" 
+                               capture="environment" 
+                               style="display: none;" 
+                               onchange="handlePhotoCapture(event)" />
+                        <p style="
+                            font-size: 12px;
+                            color: rgba(255, 255, 255, 0.5);
+                            text-align: center;
+                            margin-top: 8px;
+                        ">
+                            Photo required to complete delivery
+                        </p>
+                    </div>
+                ` : ''}
+                
                 <div class="verification-section">
                     <label style="font-weight: 600; font-size: 15px;">Enter ${stop.type} verification code:</label>
                     <input type="text" 
@@ -3271,6 +3314,17 @@ window.verifyCode = async function(stopId) {
         return;
     }
     
+    // Check photo requirement for deliveries
+    if (stop.type === 'delivery') {
+        const photoData = window.capturedPhotoData;
+        if (!photoData) {
+            showNotification('📸 Please take a photo for proof of delivery', 'warning');
+            document.getElementById('capturePhotoBtn').style.animation = 'shake 0.3s';
+            return;
+        }
+    }
+    
+    // Check payment collection for cash deliveries
     if (stop.type === 'delivery' && paymentInfo.needsCollection) {
         const paymentCheckbox = document.getElementById('paymentCollected');
         if (paymentCheckbox && !paymentCheckbox.checked) {
@@ -3282,6 +3336,13 @@ window.verifyCode = async function(stopId) {
     
     stop.completed = true;
     stop.timestamp = new Date();
+    
+    // Store photo data if delivery
+    if (stop.type === 'delivery' && window.capturedPhotoData) {
+        stop.deliveryPhoto = window.capturedPhotoData;
+        // Clear photo data after storing
+        window.capturedPhotoData = null;
+    }
     
     if (stop.type === 'delivery' && paymentInfo.needsCollection) {
         state.paymentsByStop[stop.id].collected = true;
@@ -3301,7 +3362,8 @@ window.verifyCode = async function(stopId) {
                 {
                     status: stop.type === 'pickup' ? 'picked' : 'delivered',
                     [`${stop.type}_timestamp`]: stop.timestamp.toISOString(),
-                    payment_status: stop.type === 'delivery' && paymentInfo.needsCollection ? 'collected' : undefined
+                    payment_status: stop.type === 'delivery' && paymentInfo.needsCollection ? 'collected' : undefined,
+                    delivery_photo: stop.type === 'delivery' && stop.deliveryPhoto ? stop.deliveryPhoto : undefined
                 }
             );
         } catch (error) {
@@ -3324,6 +3386,43 @@ window.verifyCode = async function(stopId) {
             showEnhancedNavigation(nextStop);
         }
     }
+};
+
+// Photo capture functions
+window.captureDeliveryPhoto = function() {
+    const input = document.getElementById('photoInput');
+    if (input) {
+        input.click();
+    }
+};
+
+window.handlePhotoCapture = function(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const photoData = e.target.result;
+        window.capturedPhotoData = photoData;
+        
+        // Show preview
+        const preview = document.getElementById('photoPreview');
+        const img = document.getElementById('capturedPhoto');
+        const btn = document.getElementById('capturePhotoBtn');
+        const btnText = document.getElementById('photoButtonText');
+        
+        if (preview && img) {
+            img.src = photoData;
+            preview.style.display = 'block';
+            btn.style.background = 'linear-gradient(135deg, rgba(52, 199, 89, 0.2), rgba(48, 209, 88, 0.15))';
+            btn.style.borderColor = '#34C759';
+            btnText.textContent = 'Retake Photo';
+        }
+        
+        showNotification('✅ Photo captured successfully', 'success');
+    };
+    
+    reader.readAsDataURL(file);
 };
 
 function showSuccessAnimation(type) {
