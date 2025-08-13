@@ -307,16 +307,51 @@ function optimizeRouteStops() {
 }
 
 function performSmartOptimization(stops) {
-    const zones = groupStopsByZone(stops);
-    const orderedZones = optimizeZoneOrder(zones);
-    const optimizedStops = [];
+    // First, separate pickups and deliveries
+    const pickups = stops.filter(s => s.type === 'pickup');
+    const deliveries = stops.filter(s => s.type === 'delivery');
     
-    orderedZones.forEach(zone => {
-        const zoneStops = optimizeZoneStops(zone.stops);
-        optimizedStops.push(...zoneStops);
-    });
+    // IMPORTANT: Do all pickups first, then all deliveries
+    // This is the standard logistics approach
     
-    return validateAndAdjustSequence(optimizedStops);
+    // Optimize pickup order using nearest neighbor
+    const optimizedPickups = optimizeStopSequence(pickups);
+    
+    // Optimize delivery order
+    const optimizedDeliveries = optimizeStopSequence(deliveries);
+    
+    // Combine: All pickups first, then all deliveries
+    return [...optimizedPickups, ...optimizedDeliveries];
+}
+
+function optimizeStopSequence(stops) {
+    if (stops.length <= 1) return stops;
+    
+    const optimized = [];
+    const remaining = [...stops];
+    
+    // Start with the first stop or the one closest to center
+    let current = remaining.shift();
+    optimized.push(current);
+    
+    // Use nearest neighbor algorithm
+    while (remaining.length > 0) {
+        let nearestIndex = 0;
+        let minDistance = Infinity;
+        
+        for (let i = 0; i < remaining.length; i++) {
+            const distance = calculateDistance(current.location, remaining[i].location);
+            if (distance < minDistance) {
+                minDistance = distance;
+                nearestIndex = i;
+            }
+        }
+        
+        current = remaining.splice(nearestIndex, 1)[0];
+        optimized.push(current);
+    }
+    
+    return optimized;
 }
 
 function groupStopsByZone(stops) {
@@ -755,7 +790,7 @@ function injectNavigationStyles() {
             border: 1px solid rgba(147, 51, 234, 0.3);
         }
         
-        /* Optimization results */
+        /* Optimization results - FIXED MOBILE LAYOUT */
         .optimization-results {
             position: fixed;
             top: 50%;
@@ -763,12 +798,13 @@ function injectNavigationStyles() {
             transform: translate(-50%, -50%);
             background: linear-gradient(135deg, #1C1C1F, #2C2C2E);
             border-radius: 24px;
-            padding: 48px;
+            padding: 32px 24px;
             text-align: center;
             z-index: 5000;
             box-shadow: 0 25px 80px rgba(0, 0, 0, 0.6);
             animation: bounceIn 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
-            max-width: 480px;
+            width: 90%;
+            max-width: 380px;
             border: 1px solid rgba(255, 255, 255, 0.1);
         }
         
@@ -787,14 +823,14 @@ function injectNavigationStyles() {
         }
         
         .results-icon {
-            font-size: 72px;
-            margin-bottom: 24px;
+            font-size: 64px;
+            margin-bottom: 20px;
         }
         
         .optimization-results h2 {
-            font-size: 32px;
+            font-size: 26px;
             font-weight: 800;
-            margin-bottom: 28px;
+            margin-bottom: 24px;
             color: white;
             letter-spacing: -1px;
         }
@@ -802,31 +838,33 @@ function injectNavigationStyles() {
         .results-stats {
             display: flex;
             justify-content: space-around;
-            margin-bottom: 28px;
-            padding: 24px;
+            margin-bottom: 24px;
+            padding: 20px 16px;
             background: rgba(255, 255, 255, 0.05);
             border-radius: 16px;
             backdrop-filter: blur(10px);
+            gap: 16px;
         }
         
         .results-stats .stat {
             text-align: center;
+            flex: 1;
         }
         
         .results-stats .stat-value {
             display: block;
-            font-size: 28px;
+            font-size: 24px;
             font-weight: 800;
             color: #9333EA;
-            margin-bottom: 6px;
+            margin-bottom: 4px;
             letter-spacing: -0.5px;
         }
         
         .results-stats .stat-label {
-            font-size: 12px;
+            font-size: 11px;
             color: rgba(255, 255, 255, 0.5);
             text-transform: uppercase;
-            letter-spacing: 1px;
+            letter-spacing: 0.8px;
             font-weight: 600;
         }
         
@@ -834,8 +872,8 @@ function injectNavigationStyles() {
             display: flex;
             flex-direction: column;
             gap: 10px;
-            margin-bottom: 28px;
-            padding: 18px;
+            margin-bottom: 24px;
+            padding: 16px;
             background: rgba(255, 255, 255, 0.03);
             border-radius: 12px;
         }
@@ -843,7 +881,8 @@ function injectNavigationStyles() {
         .comparison-item {
             display: flex;
             justify-content: space-between;
-            font-size: 16px;
+            align-items: center;
+            font-size: 15px;
             font-weight: 500;
         }
         
@@ -866,7 +905,7 @@ function injectNavigationStyles() {
             color: white;
             border: none;
             border-radius: 14px;
-            padding: 16px;
+            padding: 14px;
             font-size: 16px;
             font-weight: 700;
             cursor: pointer;
@@ -1648,12 +1687,19 @@ function createStopCard(stop, number, type, isLocked = false) {
     const canInteract = !stop.completed && !isLocked && (type === 'pickup' || canCompleteDelivery(stop));
     const paymentInfo = getPaymentInfoForStop(stop);
     
+    // Get the actual order number in the route
+    let orderNumber = number;
+    if (state.activeRoute && state.activeRoute.stops) {
+        const index = state.activeRoute.stops.findIndex(s => s.id === stop.id);
+        orderNumber = index >= 0 ? (index + 1) : number;
+    }
+    
     return `
         <div class="stop-card ${stop.completed ? 'completed' : ''} ${isActive ? 'active' : ''} ${isLocked ? 'blocked' : ''}" 
              onclick="${canInteract ? `selectStop('${stop.id}')` : ''}"
              data-stop-id="${stop.id}">
             <div class="stop-number-badge ${type}">
-                ${stop.completed ? '✓' : number}
+                ${stop.completed ? '✓' : orderNumber}
             </div>
             <div class="stop-content">
                 <div class="stop-header">
@@ -1695,13 +1741,17 @@ function createStopCard(stop, number, type, isLocked = false) {
                     </div>
                 ` : isActive ? `
                     <div class="stop-status active">
-                        → Current Stop
+                        → Stop #${orderNumber} - Current
                     </div>
                 ` : isLocked ? `
                     <div class="stop-status blocked">
                         🔒 Complete pickups first
                     </div>
-                ` : ''}
+                ` : `
+                    <div class="stop-status" style="color: var(--text-secondary); font-size: 12px;">
+                        Stop #${orderNumber} in route
+                    </div>
+                `}
             </div>
             <div class="stop-actions">
                 ${!stop.completed && canInteract ? `
