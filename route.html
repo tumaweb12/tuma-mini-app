@@ -625,6 +625,8 @@
             max-width: 320px;
             border: 1px solid rgba(255, 255, 255, 0.08);
             box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+            /* IMPORTANT: Hidden by default, shown only when no route */
+            display: none;
         }
 
         .empty-icon {
@@ -866,8 +868,8 @@
             </svg>
         </button>
 
-        <!-- Empty State (shown when no route) -->
-        <div class="empty-state" id="emptyState">
+        <!-- Empty State (hidden by default, shown only when no route) -->
+        <div class="empty-state" id="emptyState" style="display: none;">
             <div class="empty-icon">🗺️</div>
             <h3 class="empty-title">No Active Route</h3>
             <p class="empty-message">Claim a route from the rider dashboard to start navigating</p>
