@@ -1,7 +1,8 @@
+
 /**
- * Complete Enhanced Route Navigation Module with OpenRouteService
- * Fixed version with improved synchronization and direct API calls
- * Includes commission tracking and proper route completion handling
+ * Complete Enhanced Route Navigation Module with Payment Collection
+ * Includes payment tracking, cash collection reminders, and financial summaries
+ * PART 1 OF 2
  */
 
 // Development Configuration
@@ -58,7 +59,11 @@ const state = {
     accuracyCircle: null,
     radiusCircle: null,
     totalRouteEarnings: 0, // Track total earnings
-    routeCommission: 0 // Track total commission
+    routeCommission: 0, // Track total commission
+    // Payment tracking
+    totalCashToCollect: 0,
+    totalCashCollected: 0,
+    paymentsByStop: {} // Track payment status by stop ID
 };
 
 // API Configuration
@@ -134,6 +139,77 @@ function parsePrice(priceValue) {
     return 0;
 }
 
+// Enhanced function to get payment info for a stop
+function getPaymentInfoForStop(stop) {
+    if (!state.activeRoute || !state.activeRoute.parcels) {
+        return {
+            amount: 0,
+            method: 'unknown',
+            status: 'unknown',
+            needsCollection: false
+        };
+    }
+    
+    const parcel = state.activeRoute.parcels.find(p => p.id === stop.parcelId);
+    if (!parcel) {
+        return {
+            amount: 0,
+            method: 'unknown',
+            status: 'unknown',
+            needsCollection: false
+        };
+    }
+    
+    const amount = parsePrice(parcel.price || parcel.total_price || 0);
+    const method = parcel.payment_method || 'cash';
+    const status = parcel.payment_status || 'pending';
+    
+    return {
+        amount: amount,
+        method: method,
+        status: status,
+        needsCollection: stop.type === 'delivery' && method === 'cash' && status === 'pending'
+    };
+}
+
+// Calculate total cash to collect
+function calculateCashCollection() {
+    state.totalCashToCollect = 0;
+    state.totalCashCollected = 0;
+    
+    if (!state.activeRoute || !state.activeRoute.stops) return;
+    
+    state.activeRoute.stops.forEach(stop => {
+        if (stop.type === 'delivery') {
+            const paymentInfo = getPaymentInfoForStop(stop);
+            
+            if (paymentInfo.needsCollection) {
+                state.totalCashToCollect += paymentInfo.amount;
+                
+                if (stop.completed) {
+                    state.totalCashCollected += paymentInfo.amount;
+                    state.paymentsByStop[stop.id] = {
+                        amount: paymentInfo.amount,
+                        collected: true,
+                        timestamp: stop.timestamp
+                    };
+                } else {
+                    state.paymentsByStop[stop.id] = {
+                        amount: paymentInfo.amount,
+                        collected: false
+                    };
+                }
+            }
+        }
+    });
+    
+    console.log('Cash collection calculated:', {
+        total: state.totalCashToCollect,
+        collected: state.totalCashCollected,
+        pending: state.totalCashToCollect - state.totalCashCollected
+    });
+}
+
 // Sync helper function
 async function syncRouteData() {
     if (!state.activeRoute) return;
@@ -174,6 +250,116 @@ function injectNavigationStyles() {
             z-index: 1 !important;
         }
         
+        /* Cash collection widget */
+        .cash-collection-widget {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            background: linear-gradient(135deg, rgba(52, 199, 89, 0.95), rgba(48, 209, 88, 0.85));
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 16px;
+            min-width: 200px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            z-index: 100;
+            transition: all 0.3s ease;
+        }
+        
+        .cash-collection-widget.has-pending {
+            background: linear-gradient(135deg, rgba(255, 159, 10, 0.95), rgba(255, 149, 0, 0.85));
+        }
+        
+        .cash-widget-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: white;
+            opacity: 0.9;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .cash-widget-amount {
+            font-size: 28px;
+            font-weight: 700;
+            color: white;
+            margin-bottom: 12px;
+        }
+        
+        .cash-widget-breakdown {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        
+        .cash-breakdown-item {
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+            color: white;
+        }
+        
+        .cash-breakdown-label {
+            opacity: 0.8;
+        }
+        
+        .cash-breakdown-value {
+            font-weight: 600;
+        }
+        
+        /* Payment badge for stop cards */
+        .payment-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: linear-gradient(135deg, rgba(255, 159, 10, 0.2), rgba(255, 149, 0, 0.1));
+            border: 1px solid var(--warning);
+            border-radius: 20px;
+            padding: 6px 12px;
+            margin-top: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--warning);
+        }
+        
+        .payment-badge.collected {
+            background: linear-gradient(135deg, rgba(52, 199, 89, 0.2), rgba(48, 209, 88, 0.1));
+            border-color: var(--success);
+            color: var(--success);
+        }
+        
+        .payment-badge.prepaid {
+            background: linear-gradient(135deg, rgba(0, 102, 255, 0.2), rgba(0, 88, 255, 0.1));
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+        
+        /* Payment reminder in navigation */
+        .payment-reminder {
+            position: fixed;
+            top: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--warning);
+            color: black;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+            z-index: 1001;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { transform: translateX(-50%) scale(1); }
+            50% { transform: translateX(-50%) scale(1.05); }
+            100% { transform: translateX(-50%) scale(1); }
+        }
+        
         /* Ensure navigation doesn't block map */
         .enhanced-navigation {
             pointer-events: none !important;
@@ -187,7 +373,8 @@ function injectNavigationStyles() {
         .waze-nav-top,
         .waze-bottom-pills,
         .waze-fab,
-        .waze-nav-menu {
+        .waze-nav-menu,
+        .cash-collection-widget {
             pointer-events: auto !important;
         }
         
@@ -387,6 +574,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             // Calculate total earnings and commission for the route
             calculateRouteFinancials();
             
+            // Calculate cash collection amounts
+            calculateCashCollection();
+            
             // Initialize map with rotation enabled
             await initializeMap();
             
@@ -408,6 +598,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             // Enhance route panel
             enhanceRoutePanel();
             
+            // Show cash collection widget if needed
+            if (state.totalCashToCollect > 0) {
+                showCashCollectionWidget();
+            }
+            
             // Start location tracking
             startLocationTracking();
         } else {
@@ -419,6 +614,52 @@ document.addEventListener('DOMContentLoaded', async () => {
         showEmptyState();
     }
 });
+
+// Show cash collection widget
+function showCashCollectionWidget() {
+    const existingWidget = document.querySelector('.cash-collection-widget');
+    if (existingWidget) existingWidget.remove();
+    
+    const pendingAmount = state.totalCashToCollect - state.totalCashCollected;
+    const hasPending = pendingAmount > 0;
+    
+    const widget = document.createElement('div');
+    widget.className = `cash-collection-widget ${hasPending ? 'has-pending' : ''}`;
+    widget.innerHTML = `
+        <div class="cash-widget-title">
+            <span>💰</span>
+            <span>Cash Collection</span>
+        </div>
+        <div class="cash-widget-amount">
+            KES ${pendingAmount.toLocaleString()}
+        </div>
+        <div class="cash-widget-breakdown">
+            <div class="cash-breakdown-item">
+                <span class="cash-breakdown-label">Total to collect</span>
+                <span class="cash-breakdown-value">KES ${state.totalCashToCollect.toLocaleString()}</span>
+            </div>
+            <div class="cash-breakdown-item">
+                <span class="cash-breakdown-label">✓ Collected</span>
+                <span class="cash-breakdown-value">KES ${state.totalCashCollected.toLocaleString()}</span>
+            </div>
+            <div class="cash-breakdown-item">
+                <span class="cash-breakdown-label">⏳ Pending</span>
+                <span class="cash-breakdown-value">KES ${pendingAmount.toLocaleString()}</span>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(widget);
+}
+
+// Update cash collection widget
+function updateCashCollectionWidget() {
+    calculateCashCollection();
+    const widget = document.querySelector('.cash-collection-widget');
+    if (widget) {
+        showCashCollectionWidget();
+    }
+}
 
 // Calculate route financials
 function calculateRouteFinancials() {
@@ -537,6 +778,7 @@ async function handleRouteCompletion() {
         completed: true,
         earnings: Math.round(state.totalRouteEarnings),
         commission: Math.round(state.routeCommission),
+        cashCollected: Math.round(state.totalCashCollected),
         deliveries: deliveryCount,
         stops: state.activeRoute.stops.length,
         timestamp: new Date().toISOString(),
@@ -561,7 +803,8 @@ async function handleRouteCompletion() {
                     `id=eq.${parcel.id}`,
                     {
                         status: 'delivered',
-                        delivery_timestamp: new Date().toISOString()
+                        delivery_timestamp: new Date().toISOString(),
+                        payment_status: parcel.payment_method === 'cash' ? 'collected' : parcel.payment_status
                     }
                 );
             }
@@ -656,6 +899,9 @@ window.toggleRoutePanel = function() {
         }, 300);
     }
 };
+
+// END OF PART 1
+// PART 2 OF 2 - Continued from Part 1
 
 // Enhance route panel with drag functionality
 function enhanceRoutePanel() {
@@ -966,10 +1212,11 @@ function createLeafletIcon(stop) {
     });
 }
 
-// Create popup content
+// Create popup content with payment info
 function createStopPopup(stop) {
     const bgColor = stop.type === 'pickup' ? '#FF9F0A' : '#0066FF';
     const textColor = stop.type === 'pickup' ? 'black' : 'white';
+    const paymentInfo = getPaymentInfoForStop(stop);
     
     return `
         <div class="stop-popup">
@@ -992,6 +1239,19 @@ function createStopPopup(stop) {
                         <div class="info-row instructions">
                             <span class="info-icon">💬</span>
                             <span>${stop.specialInstructions}</span>
+                        </div>
+                    ` : ''}
+                    ${paymentInfo.needsCollection ? `
+                        <div class="info-row payment" style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(0,0,0,0.1);">
+                            <span class="info-icon">💰</span>
+                            <span style="font-weight: 600; color: var(--warning);">
+                                Collect: KES ${paymentInfo.amount.toLocaleString()}
+                            </span>
+                        </div>
+                    ` : paymentInfo.method === 'online' ? `
+                        <div class="info-row payment" style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(0,0,0,0.1);">
+                            <span class="info-icon">✅</span>
+                            <span style="color: var(--success);">Already Paid</span>
                         </div>
                     ` : ''}
                 </div>
@@ -1226,7 +1486,7 @@ function updateRouteStats() {
     document.getElementById('estimatedTime').textContent = estimatedTime;
 }
 
-// Display stops list
+// Display stops list with payment info
 function displayStops() {
     const stopsList = document.getElementById('stopsList');
     if (!stopsList || !state.activeRoute) return;
@@ -1300,7 +1560,7 @@ function createPhaseProgressWidget(pickupStops, deliveryStops) {
     `;
 }
 
-// Create parcels in possession widget
+// Create parcels in possession widget with payment info
 function createParcelsInPossessionWidget() {
     return `
         <div class="parcels-possession-widget" style="background: linear-gradient(135deg, rgba(255, 159, 10, 0.2) 0%, rgba(255, 159, 10, 0.1) 100%); border: 1px solid var(--warning); border-radius: 14px; padding: 16px; margin-bottom: 20px;">
@@ -1309,13 +1569,25 @@ function createParcelsInPossessionWidget() {
                 <span style="font-weight: 600; color: var(--text-primary);">Carrying ${state.parcelsInPossession.length} parcel${state.parcelsInPossession.length > 1 ? 's' : ''}</span>
             </div>
             <div class="parcel-cards" style="display: flex; flex-direction: column; gap: 8px;">
-                ${state.parcelsInPossession.map(parcel => `
-                    <div class="parcel-card" style="background: var(--surface-high); border-radius: 8px; padding: 12px; border-left: 3px solid var(--warning);">
-                        <div class="parcel-code" style="font-weight: 600; margin-bottom: 4px; color: var(--text-primary);">${parcel.parcelCode}</div>
-                        <div class="parcel-destination" style="font-size: 14px; color: var(--text-secondary); margin-bottom: 4px;">${parcel.destination}</div>
-                        <div class="parcel-time" style="font-size: 12px; color: var(--text-tertiary);">Picked up ${formatTimeAgo(parcel.pickupTime)}</div>
-                    </div>
-                `).join('')}
+                ${state.parcelsInPossession.map(parcel => {
+                    const deliveryStop = state.activeRoute.stops.find(s => 
+                        s.type === 'delivery' && s.parcelId === parcel.parcelId
+                    );
+                    const paymentInfo = deliveryStop ? getPaymentInfoForStop(deliveryStop) : null;
+                    
+                    return `
+                        <div class="parcel-card" style="background: var(--surface-high); border-radius: 8px; padding: 12px; border-left: 3px solid var(--warning);">
+                            <div class="parcel-code" style="font-weight: 600; margin-bottom: 4px; color: var(--text-primary);">${parcel.parcelCode}</div>
+                            <div class="parcel-destination" style="font-size: 14px; color: var(--text-secondary); margin-bottom: 4px;">${parcel.destination}</div>
+                            <div class="parcel-time" style="font-size: 12px; color: var(--text-tertiary);">Picked up ${formatTimeAgo(parcel.pickupTime)}</div>
+                            ${paymentInfo && paymentInfo.needsCollection ? `
+                                <div style="margin-top: 6px; font-size: 13px; font-weight: 600; color: var(--warning);">
+                                    💰 Collect: KES ${paymentInfo.amount.toLocaleString()}
+                                </div>
+                            ` : ''}
+                        </div>
+                    `;
+                }).join('')}
             </div>
         </div>
     `;
@@ -1345,10 +1617,11 @@ function updateParcelsInPossession() {
     });
 }
 
-// Create stop card
+// Create stop card with payment info
 function createStopCard(stop, number, type, isLocked = false) {
     const isActive = isNextStop(stop);
     const canInteract = !stop.completed && !isLocked && (type === 'pickup' || canCompleteDelivery(stop));
+    const paymentInfo = getPaymentInfoForStop(stop);
     
     return `
         <div class="stop-card ${stop.completed ? 'completed' : ''} ${isActive ? 'active' : ''} ${isLocked ? 'blocked' : ''}" 
@@ -1378,6 +1651,20 @@ function createStopCard(stop, number, type, isLocked = false) {
                         </div>
                     ` : ''}
                 </div>
+                
+                <!-- Payment Badge for Delivery Stops -->
+                ${type === 'delivery' && paymentInfo.needsCollection ? `
+                    <div class="payment-badge ${stop.completed ? 'collected' : ''}">
+                        <span>💵</span>
+                        <span>${stop.completed ? 'Collected' : 'COLLECT'}: KES ${paymentInfo.amount.toLocaleString()}</span>
+                    </div>
+                ` : type === 'delivery' && paymentInfo.method === 'online' ? `
+                    <div class="payment-badge prepaid">
+                        <span>✅</span>
+                        <span>Already Paid</span>
+                    </div>
+                ` : ''}
+                
                 ${stop.completed ? `
                     <div class="stop-status completed">
                         ✓ Completed ${formatTimeAgo(stop.timestamp)}
@@ -1735,18 +2022,34 @@ async function updateWazeNavigation(targetStop) {
     }
 }
 
-// Show arrival notification
+// Show arrival notification with payment reminder
 function showArrivalNotification(targetStop) {
     const distanceEl = document.querySelector('.waze-distance');
     const streetEl = document.querySelector('.waze-street');
     const arrowEl = document.querySelector('.direction-arrow');
+    const paymentInfo = getPaymentInfoForStop(targetStop);
     
     if (distanceEl) distanceEl.textContent = 'Arrived';
     if (streetEl) streetEl.textContent = `${targetStop.type} location reached`;
     if (arrowEl) arrowEl.textContent = '✅';
     
     if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
-    showNotification(`Arrived at ${targetStop.type} location`, 'success');
+    
+    // Show payment reminder for cash collection
+    if (targetStop.type === 'delivery' && paymentInfo.needsCollection) {
+        showNotification(`⚠️ Remember to collect KES ${paymentInfo.amount.toLocaleString()} from customer`, 'warning');
+        
+        // Show payment reminder overlay
+        const reminderDiv = document.createElement('div');
+        reminderDiv.className = 'payment-reminder';
+        reminderDiv.innerHTML = `💰 Collect KES ${paymentInfo.amount.toLocaleString()}`;
+        document.body.appendChild(reminderDiv);
+        
+        // Remove after 5 seconds
+        setTimeout(() => reminderDiv.remove(), 5000);
+    } else {
+        showNotification(`Arrived at ${targetStop.type} location`, 'success');
+    }
     
     setTimeout(() => {
         openQuickVerification();
@@ -1912,6 +2215,8 @@ window.showDestinationDetails = function(stopId) {
     const stop = state.activeRoute.stops.find(s => s.id === stopId);
     if (!stop) return;
     
+    const paymentInfo = getPaymentInfoForStop(stop);
+    
     const modal = document.createElement('div');
     modal.className = 'destination-details-modal';
     modal.innerHTML = `
@@ -1943,6 +2248,18 @@ window.showDestinationDetails = function(stopId) {
                     <div class="detail-section">
                         <h4>Special Instructions</h4>
                         <p>${stop.specialInstructions}</p>
+                    </div>
+                ` : ''}
+                ${stop.type === 'delivery' && paymentInfo.needsCollection ? `
+                    <div class="detail-section" style="background: rgba(255, 159, 10, 0.1); padding: 12px; border-radius: 8px; border: 1px solid var(--warning);">
+                        <h4 style="color: var(--warning);">Payment Collection</h4>
+                        <p style="font-size: 20px; font-weight: 700; color: var(--warning);">KES ${paymentInfo.amount.toLocaleString()}</p>
+                        <p style="font-size: 14px; color: var(--text-secondary);">Cash on delivery</p>
+                    </div>
+                ` : stop.type === 'delivery' && paymentInfo.method === 'online' ? `
+                    <div class="detail-section" style="background: rgba(52, 199, 89, 0.1); padding: 12px; border-radius: 8px;">
+                        <h4 style="color: var(--success);">Payment Status</h4>
+                        <p style="color: var(--success);">✅ Already paid online</p>
                     </div>
                 ` : ''}
             </div>
@@ -2014,10 +2331,20 @@ function checkStopProximity() {
     
     if (distance < 0.1 && !state.proximityNotified) {
         state.proximityNotified = true;
-        showNotification(
-            `Approaching ${nextStop.type} location - ${Math.round(distance * 1000)}m away`,
-            'info'
-        );
+        
+        // Check if it's a cash collection delivery
+        const paymentInfo = getPaymentInfoForStop(nextStop);
+        if (nextStop.type === 'delivery' && paymentInfo.needsCollection) {
+            showNotification(
+                `💰 Approaching delivery - Remember to collect KES ${paymentInfo.amount.toLocaleString()}`,
+                'warning'
+            );
+        } else {
+            showNotification(
+                `Approaching ${nextStop.type} location - ${Math.round(distance * 1000)}m away`,
+                'info'
+            );
+        }
         
         setTimeout(() => {
             state.proximityNotified = false;
@@ -2061,10 +2388,12 @@ window.openQuickVerification = function() {
     }
 };
 
-// Open verification modal
+// Open verification modal with payment reminder
 window.openVerificationModal = function(stopId) {
     const stop = state.activeRoute.stops.find(s => s.id === stopId);
     if (!stop || stop.completed) return;
+    
+    const paymentInfo = getPaymentInfoForStop(stop);
     
     const modal = document.createElement('div');
     modal.className = 'verification-modal';
@@ -2100,6 +2429,38 @@ window.openVerificationModal = function(stopId) {
                     </div>
                 </div>
                 
+                ${stop.type === 'delivery' && paymentInfo.needsCollection ? `
+                    <div class="payment-collection-alert" style="
+                        background: linear-gradient(135deg, rgba(255, 159, 10, 0.2), rgba(255, 149, 0, 0.1));
+                        border: 2px solid var(--warning);
+                        border-radius: 12px;
+                        padding: 16px;
+                        margin: 16px 0;
+                        text-align: center;
+                    ">
+                        <div style="font-size: 24px; margin-bottom: 8px;">💰</div>
+                        <div style="font-size: 20px; font-weight: 700; color: var(--warning); margin-bottom: 4px;">
+                            Collect KES ${paymentInfo.amount.toLocaleString()}
+                        </div>
+                        <div style="font-size: 14px; color: var(--text-secondary);">
+                            Cash payment from customer
+                        </div>
+                    </div>
+                ` : stop.type === 'delivery' && paymentInfo.method === 'online' ? `
+                    <div style="
+                        background: linear-gradient(135deg, rgba(52, 199, 89, 0.2), rgba(48, 209, 88, 0.1));
+                        border: 1px solid var(--success);
+                        border-radius: 12px;
+                        padding: 12px;
+                        margin: 16px 0;
+                        text-align: center;
+                        color: var(--success);
+                        font-weight: 600;
+                    ">
+                        ✅ Already Paid - No collection needed
+                    </div>
+                ` : ''}
+                
                 <div class="verification-section">
                     <label>Enter ${stop.type} verification code:</label>
                     <input type="text" 
@@ -2110,6 +2471,15 @@ window.openVerificationModal = function(stopId) {
                            autocomplete="off">
                     <p class="code-hint">Ask the ${stop.type === 'pickup' ? 'sender' : 'recipient'} for their code</p>
                 </div>
+                
+                ${stop.type === 'delivery' && paymentInfo.needsCollection ? `
+                    <div style="margin-top: 16px; padding: 12px; background: var(--surface-high); border-radius: 8px;">
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <input type="checkbox" id="paymentCollected" style="width: 20px; height: 20px; cursor: pointer;">
+                            <span style="font-size: 16px;">I have collected KES ${paymentInfo.amount.toLocaleString()} cash</span>
+                        </label>
+                    </div>
+                ` : ''}
                 
                 <div class="modal-actions">
                     <button class="modal-btn primary" onclick="verifyCode('${stop.id}')">
@@ -2146,13 +2516,14 @@ window.closeVerificationModal = function() {
     }
 };
 
-// Verify code with improved sync
+// Verify code with improved sync and payment validation
 window.verifyCode = async function(stopId) {
     const stop = state.activeRoute.stops.find(s => s.id === stopId);
     if (!stop) return;
     
     const codeInput = document.getElementById('verificationCode');
     const code = codeInput.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const paymentInfo = getPaymentInfoForStop(stop);
     
     if (!code || code.length < 6) {
         codeInput.classList.add('error');
@@ -2166,9 +2537,26 @@ window.verifyCode = async function(stopId) {
         return;
     }
     
+    // Check payment collection for cash deliveries
+    if (stop.type === 'delivery' && paymentInfo.needsCollection) {
+        const paymentCheckbox = document.getElementById('paymentCollected');
+        if (paymentCheckbox && !paymentCheckbox.checked) {
+            showNotification('Please confirm cash collection before verifying', 'warning');
+            paymentCheckbox.parentElement.style.animation = 'shake 0.3s';
+            return;
+        }
+    }
+    
     // Mark stop as completed
     stop.completed = true;
     stop.timestamp = new Date();
+    
+    // Update payment tracking
+    if (stop.type === 'delivery' && paymentInfo.needsCollection) {
+        state.paymentsByStop[stop.id].collected = true;
+        state.paymentsByStop[stop.id].timestamp = stop.timestamp;
+        updateCashCollectionWidget();
+    }
     
     // Save immediately
     await syncRouteData();
@@ -2183,7 +2571,8 @@ window.verifyCode = async function(stopId) {
                 `id=eq.${stop.parcelId}`,
                 {
                     status: stop.type === 'pickup' ? 'picked' : 'delivered',
-                    [`${stop.type}_timestamp`]: stop.timestamp.toISOString()
+                    [`${stop.type}_timestamp`]: stop.timestamp.toISOString(),
+                    payment_status: stop.type === 'delivery' && paymentInfo.needsCollection ? 'collected' : undefined
                 }
             );
         } catch (error) {
@@ -2253,14 +2642,14 @@ function showPhaseCompleteAnimation() {
     setTimeout(() => animation.remove(), 3000);
 }
 
-// Complete route with proper sync
+// Complete route with proper sync and cash collection summary
 async function completeRoute() {
     console.log('Completing route...');
     
     // Handle completion and store data
     await handleRouteCompletion();
     
-    // Show completion animation
+    // Show completion animation with cash collected info
     const animation = document.createElement('div');
     animation.className = 'route-complete-animation';
     animation.innerHTML = `
@@ -2277,6 +2666,12 @@ async function completeRoute() {
                     <span class="stat-value">KES ${Math.round(state.totalRouteEarnings)}</span>
                     <span class="stat-label">Earned</span>
                 </div>
+                ${state.totalCashCollected > 0 ? `
+                    <div class="stat">
+                        <span class="stat-value">KES ${Math.round(state.totalCashCollected)}</span>
+                        <span class="stat-label">Cash Collected</span>
+                    </div>
+                ` : ''}
             </div>
             <button class="complete-btn" onclick="finishRoute()">
                 Back to Dashboard
@@ -2932,13 +3327,16 @@ window.routeDebug = {
     },
     calculateFinancials: () => {
         calculateRouteFinancials();
+        calculateCashCollection();
         console.log('Route financials:', {
             totalEarnings: state.totalRouteEarnings,
-            totalCommission: state.routeCommission
+            totalCommission: state.routeCommission,
+            cashToCollect: state.totalCashToCollect,
+            cashCollected: state.totalCashCollected
         });
     }
 };
 
-console.log('✅ Fixed Route.js loaded successfully with improved synchronization!');
-console.log('Features: Direct API calls, proper price parsing, better error handling, sync helpers');
+console.log('✅ Enhanced Route.js loaded successfully with payment collection features!');
+console.log('Features: Cash collection tracking, payment reminders, verification requirements');
 console.log('Debug commands: window.routeDebug');
