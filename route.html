@@ -3,13 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Tuma - Route Navigation</title>
     
-    <!-- Leaflet CSS -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- Telegram Web App runtime -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    
+    <!-- Leaflet CSS MUST come before JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" 
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" 
+          crossorigin=""/>
+    
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" 
+            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" 
+            crossorigin=""></script>
     
     <style>
         * {
@@ -22,870 +31,1807 @@
         :root {
             --primary: #0066FF;
             --primary-dark: #0052CC;
+            --surface: #0A0A0B;
+            --surface-elevated: #141416;
+            --surface-high: #1C1C1F;
+            --surface-dim: #070708;
+            --text-primary: #FFFFFF;
+            --text-secondary: #8E8E93;
+            --text-tertiary: #48484A;
+            --border: #2C2C2E;
             --success: #34C759;
             --warning: #FF9F0A;
             --danger: #FF3B30;
-            --surface: #0A0A0B;
-            --surface-elevated: rgba(20, 20, 22, 0.95);
-            --surface-high: rgba(28, 28, 31, 0.95);
-            --glass: rgba(255, 255, 255, 0.05);
-            --glass-border: rgba(255, 255, 255, 0.1);
-            --glass-heavy: rgba(10, 10, 11, 0.85);
-            --text-primary: #FFFFFF;
-            --text-secondary: rgba(255, 255, 255, 0.7);
-            --text-tertiary: rgba(255, 255, 255, 0.5);
-            --border: rgba(255, 255, 255, 0.1);
-            --safe-area-bottom: env(safe-area-inset-bottom);
+            --express: #FF9800;
+            --smart: #2196F3;
+            --eco: #4CAF50;
             --safe-area-top: env(safe-area-inset-top);
+            --safe-area-bottom: env(safe-area-inset-bottom);
+        }
+
+        /* CRITICAL: Ensure proper height hierarchy */
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
-            background: #000;
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+            background: #000000;
             color: var(--text-primary);
             position: fixed;
             width: 100%;
             height: 100%;
-            overflow: hidden;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
         }
 
-        /* Map Container - CRITICAL */
-        #map {
-            position: absolute !important;
-            top: 0;
-            left: 0;
-            width: 100% !important;
-            height: 100% !important;
-            z-index: 1;
-            background: var(--surface);
-        }
-
-        /* Loading Overlay */
-        .loading-overlay {
-            position: fixed;
-            inset: 0;
-            background: var(--surface);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 10000;
-        }
-
-        .loading-spinner {
-            width: 60px;
-            height: 60px;
-            border: 3px solid var(--glass-border);
-            border-top-color: var(--primary);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        /* Top Header */
-        .top-header {
+        .app {
             position: fixed;
             top: 0;
             left: 0;
             right: 0;
-            background: var(--glass-heavy);
-            backdrop-filter: blur(20px);
+            bottom: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--surface);
+            overflow: hidden;
+        }
+
+        /* Header - Fixed positioning */
+        .header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: rgba(10, 10, 11, 0.95);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border-bottom: 0.5px solid var(--border);
             z-index: 100;
-            padding: 12px 16px;
-            padding-top: calc(12px + var(--safe-area-top));
-            border-bottom: 1px solid var(--border);
+            padding: 16px 20px;
+            padding-top: calc(16px + var(--safe-area-top));
         }
 
         .header-content {
             display: flex;
             align-items: center;
-            gap: 12px;
+            justify-content: space-between;
         }
 
         .back-button {
-            width: 40px;
-            height: 40px;
+            width: 36px;
+            height: 36px;
             border-radius: 50%;
-            background: var(--glass);
-            border: 1px solid var(--glass-border);
+            background: var(--surface-elevated);
+            border: none;
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            color: var(--text-primary);
+            transition: all 0.2s;
         }
 
-        .route-info-header {
-            flex: 1;
+        .back-button:active {
+            scale: 0.95;
+            background: var(--surface-high);
         }
 
         .route-title {
             font-size: 18px;
-            font-weight: 700;
-            margin-bottom: 4px;
-        }
-
-        .route-stats-bar {
-            display: flex;
-            gap: 16px;
-            font-size: 13px;
-            color: var(--text-secondary);
-        }
-
-        .stat-value {
-            color: var(--text-primary);
             font-weight: 600;
+            text-align: center;
+            flex: 1;
         }
 
-        .verify-button {
-            padding: 10px 20px;
-            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-            color: white;
-            border: none;
-            border-radius: 20px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
+        .route-info {
             display: flex;
             align-items: center;
-            gap: 6px;
-        }
-
-        .verify-button.pickup {
-            background: linear-gradient(135deg, var(--warning), #ff8c00);
-        }
-
-        .verify-button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        /* Premium Cash Widget */
-        .cash-widget {
-            position: fixed;
-            top: calc(80px + var(--safe-area-top));
-            left: 16px;
-            right: 16px;
-            max-width: 400px;
-            background: linear-gradient(135deg, 
-                rgba(34, 197, 94, 0.95),
-                rgba(22, 163, 74, 0.85),
-                rgba(5, 46, 22, 0.9)
-            );
-            background-size: 200% 200%;
-            animation: moneyShimmer 8s ease infinite;
-            backdrop-filter: blur(20px);
-            border: 1px solid rgba(34, 197, 94, 0.4);
-            border-radius: 16px;
-            padding: 16px;
-            z-index: 90;
-            box-shadow: 
-                0 4px 20px rgba(34, 197, 94, 0.3),
-                0 8px 32px rgba(0, 0, 0, 0.4);
-            position: relative;
-            overflow: hidden;
-        }
-
-        @keyframes moneyShimmer {
-            0%, 100% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-        }
-
-        .cash-widget::before {
-            content: '';
-            position: absolute;
-            inset: 0;
-            background: repeating-linear-gradient(
-                45deg,
-                transparent,
-                transparent 10px,
-                rgba(255, 255, 255, 0.02) 10px,
-                rgba(255, 255, 255, 0.02) 20px
-            );
-            pointer-events: none;
-        }
-
-        .cash-widget::after {
-            content: '💵';
-            position: absolute;
-            top: -20px;
-            right: 20px;
-            font-size: 40px;
-            opacity: 0.1;
-            animation: floatMoney 6s ease-in-out infinite;
-        }
-
-        @keyframes floatMoney {
-            0%, 100% { transform: translateY(0) rotate(-5deg); }
-            50% { transform: translateY(10px) rotate(5deg); }
-        }
-
-        .cash-header {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            margin-bottom: 12px;
-            font-size: 16px;
-            font-weight: 700;
-            color: white;
-            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-        }
-
-        .cash-stats {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
             gap: 12px;
         }
 
-        .cash-stat {
-            text-align: center;
-            padding: 10px;
-            background: linear-gradient(135deg, rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.2));
-            border: 1px solid rgba(34, 197, 94, 0.3);
-            border-radius: 12px;
-        }
-
-        .cash-stat .label {
-            font-size: 11px;
-            color: rgba(255, 255, 255, 0.7);
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            display: block;
-            margin-bottom: 6px;
-        }
-
-        .cash-stat .value {
-            font-size: 22px;
-            font-weight: 800;
+        .route-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            background: var(--primary);
             color: white;
-            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
-            font-family: 'SF Mono', Monaco, monospace;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: none;
         }
 
-        .cash-stat:nth-child(2) .value {
-            color: #86efac;
+        .route-badge:hover {
+            background: var(--primary-dark);
+            transform: translateY(-1px);
         }
 
-        .cash-stat:nth-child(3) .value {
-            color: #fbbf24;
+        .route-badge:active {
+            transform: translateY(0);
         }
 
-        /* Bottom Nav */
-        .bottom-nav {
+        /* CRITICAL: Map Container must fill the screen */
+        .map-container {
             position: fixed;
-            bottom: 0;
+            top: 0;
             left: 0;
             right: 0;
-            background: var(--glass-heavy);
-            backdrop-filter: blur(30px);
-            border-top: 1px solid var(--glass-border);
-            padding: 12px 16px;
-            padding-bottom: calc(12px + var(--safe-area-bottom));
-            z-index: 100;
+            bottom: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
         }
 
-        .nav-actions {
-            display: flex;
-            gap: 12px;
+        #map {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
         }
 
-        .nav-button {
-            flex: 1;
-            background: var(--glass);
-            border: 1px solid var(--glass-border);
-            border-radius: 14px;
-            padding: 14px;
-            color: var(--text-primary);
-            font-size: 15px;
-            font-weight: 600;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
+        /* Ensure Leaflet container has proper background */
+        .leaflet-container {
+            background: #f0f0f0 !important;
+            font-family: inherit;
         }
 
-        .nav-button.primary {
-            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-            border: none;
-            color: white;
+        /* Leaflet controls positioning */
+        .leaflet-control-zoom {
+            margin-bottom: 80px !important;
         }
 
-        /* Route Panel */
+        /* Route Overview Panel */
         .route-panel {
             position: fixed;
             bottom: 0;
             left: 0;
             right: 0;
-            background: var(--glass-heavy);
-            backdrop-filter: blur(30px);
-            border: 1px solid var(--glass-border);
-            border-radius: 24px 24px 0 0;
-            max-height: 70vh;
-            transform: translateY(100%);
-            transition: transform 0.3s;
-            z-index: 200;
-            overflow: hidden;
+            background: var(--surface-elevated);
+            border-radius: 20px 20px 0 0;
+            padding: 20px;
+            padding-bottom: calc(20px + var(--safe-area-bottom));
+            z-index: 50;
+            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            max-height: 70%;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
         }
 
-        .route-panel.visible {
-            transform: translateY(0);
+        /* Hide route panel completely when navigation is active */
+        .route-panel.navigation-hidden {
+            display: none !important;
         }
 
         .panel-handle {
             width: 40px;
             height: 4px;
-            background: var(--glass-border);
+            background: var(--text-tertiary);
             border-radius: 2px;
-            margin: 12px auto;
+            margin: 0 auto 16px;
+            cursor: grab;
         }
 
-        .panel-header {
-            padding: 0 20px 16px;
-            border-bottom: 1px solid var(--glass-border);
+        .panel-handle:active {
+            cursor: grabbing;
+        }
+
+        /* Enhanced Route Stats */
+        .route-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .stat-box {
+            background: var(--surface-high);
+            border-radius: 12px;
+            padding: 12px;
+            text-align: center;
+            border: 1px solid var(--border);
+            transition: all 0.2s;
+        }
+
+        .stat-box:hover {
+            border-color: var(--primary);
+            transform: translateY(-2px);
+        }
+
+        .stat-value {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 4px;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        /* Route Phases Widget */
+        .route-phases {
             display: flex;
-            justify-content: space-between;
             align-items: center;
-        }
-
-        .panel-content {
-            padding: 20px;
-            overflow-y: auto;
-            max-height: calc(70vh - 100px);
-        }
-
-        .stop-card {
-            background: var(--glass);
-            border: 1px solid var(--glass-border);
-            border-radius: 16px;
+            justify-content: space-between;
+            background: var(--surface-high);
+            border-radius: 14px;
             padding: 16px;
-            margin-bottom: 12px;
+            margin-bottom: 20px;
+            border: 1px solid var(--border);
+        }
+
+        .phase {
             display: flex;
+            align-items: center;
+            gap: 12px;
+            flex: 1;
+            padding: 8px 12px;
+            border-radius: 10px;
+            transition: all 0.3s;
+        }
+
+        .phase.active {
+            background: rgba(0, 102, 255, 0.1);
+            border: 1px solid var(--primary);
+        }
+
+        .phase.completed {
+            background: rgba(52, 199, 89, 0.1);
+            border: 1px solid var(--success);
+        }
+
+        .phase-icon {
+            font-size: 24px;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--surface);
+            border-radius: 50%;
+        }
+
+        .phase.active .phase-icon {
+            background: var(--primary);
+        }
+
+        .phase.completed .phase-icon {
+            background: var(--success);
+        }
+
+        .phase-info {
+            flex: 1;
+        }
+
+        .phase-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 2px;
+        }
+
+        .phase-progress {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .phase-arrow {
+            font-size: 20px;
+            color: var(--text-tertiary);
+            margin: 0 8px;
+        }
+
+        /* Enhanced Stops List */
+        .stops-header {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .stops-list {
+            display: flex;
+            flex-direction: column;
             gap: 12px;
         }
 
-        .stop-indicator {
-            width: 44px;
-            height: 44px;
+        /* Phase Section */
+        .phase-section {
+            margin-bottom: 24px;
+        }
+
+        .phase-section.completed {
+            opacity: 0.7;
+        }
+
+        .phase-section.locked {
+            opacity: 0.5;
+        }
+
+        .phase-section h3 {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .phase-count {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        /* Enhanced Stop Card */
+        .stop-card {
+            background: var(--surface-high);
+            border-radius: 14px;
+            padding: 16px;
+            display: flex;
+            align-items: stretch;
+            gap: 12px;
+            border: 1px solid var(--border);
+            transition: all 0.3s;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stop-card:hover:not(.completed):not(.blocked) {
+            border-color: var(--primary);
+            transform: translateX(4px);
+            box-shadow: 0 4px 12px rgba(0, 102, 255, 0.2);
+        }
+
+        .stop-card.completed {
+            background: rgba(52, 199, 89, 0.05);
+            border-color: rgba(52, 199, 89, 0.3);
+        }
+
+        .stop-card.active {
+            border-color: var(--primary);
+            background: rgba(0, 102, 255, 0.05);
+            box-shadow: 0 0 0 2px rgba(0, 102, 255, 0.2);
+        }
+
+        .stop-card.blocked {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .stop-number-badge {
+            width: 40px;
+            height: 40px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             font-weight: 700;
+            font-size: 16px;
+            flex-shrink: 0;
+            background: var(--surface);
             color: white;
+            border: 2px solid var(--border);
         }
 
-        .stop-indicator.pickup {
-            background: linear-gradient(135deg, var(--warning), #ff8c00);
+        .stop-number-badge.pickup {
+            background: var(--warning);
+            border-color: var(--warning);
+            color: black;
         }
 
-        .stop-indicator.delivery {
-            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+        .stop-number-badge.delivery {
+            background: var(--success);
+            border-color: var(--success);
         }
 
-        .stop-details {
+        .stop-card.completed .stop-number-badge {
+            background: var(--surface-high);
+            border-color: var(--success);
+            color: var(--success);
+        }
+
+        .stop-content {
             flex: 1;
+            min-width: 0;
+        }
+
+        .stop-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 8px;
         }
 
         .stop-address {
             font-size: 16px;
             font-weight: 600;
-            margin-bottom: 8px;
+            line-height: 1.3;
+            margin: 0;
+            color: var(--text-primary);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
         }
 
-        .stop-info {
+        .stop-distance {
+            font-size: 14px;
+            color: var(--text-secondary);
+            flex-shrink: 0;
+            margin-left: 8px;
+        }
+
+        .stop-details {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .detail-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
             font-size: 14px;
             color: var(--text-secondary);
         }
 
-        .payment-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            background: rgba(255, 159, 10, 0.1);
-            border: 1px solid rgba(255, 159, 10, 0.5);
-            border-radius: 20px;
-            padding: 6px 12px;
-            margin-top: 8px;
-            font-size: 13px;
-            font-weight: 600;
-            color: var(--warning);
+        .detail-icon {
+            font-size: 16px;
+            width: 20px;
+            text-align: center;
+            flex-shrink: 0;
         }
 
-        /* Verification Modal */
-        .verification-modal {
-            position: fixed;
-            inset: 0;
-            background: rgba(0, 0, 0, 0.85);
+        .detail-row.instructions {
+            background: rgba(255, 159, 10, 0.1);
+            padding: 8px;
+            border-radius: 8px;
+            border-left: 3px solid var(--warning);
+            margin-top: 4px;
+        }
+
+        .stop-status {
+            margin-top: 8px;
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            text-align: center;
+        }
+
+        .stop-status.completed {
+            background: rgba(52, 199, 89, 0.1);
+            color: var(--success);
+        }
+
+        .stop-status.active {
+            background: rgba(0, 102, 255, 0.1);
+            color: var(--primary);
+        }
+
+        .stop-status.blocked {
+            background: rgba(255, 59, 48, 0.1);
+            color: var(--danger);
+        }
+
+        .stop-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-left: 12px;
+        }
+
+        .action-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: none;
+            background: var(--surface);
+            color: var(--text-primary);
             display: flex;
             align-items: center;
             justify-content: center;
-            z-index: 10000;
-            padding: 20px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+            font-size: 18px;
         }
 
-        .modal-content {
-            background: var(--surface-elevated);
-            border-radius: 24px;
-            max-width: 420px;
-            width: 90%;
-            overflow: hidden;
+        .action-btn:hover {
+            background: var(--primary);
+            color: white;
+            transform: scale(1.1);
         }
 
-        .modal-header {
-            padding: 24px;
+        .action-btn:active {
+            transform: scale(0.95);
+        }
+
+        /* Empty State */
+        .empty-state {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
             text-align: center;
+            z-index: 10;
+            padding: 40px;
+            background: var(--surface-elevated);
+            border-radius: 20px;
+            max-width: 300px;
+        }
+
+        .empty-icon {
+            width: 80px;
+            height: 80px;
+            background: var(--surface-high);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+            font-size: 36px;
+        }
+
+        .empty-title {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .empty-message {
+            font-size: 16px;
+            color: var(--text-secondary);
+            line-height: 1.4;
+        }
+
+        /* Location Button */
+        .location-button {
+            position: fixed;
+            bottom: 160px;
+            right: 20px;
+            width: 44px;
+            height: 44px;
+            background: white;
+            border-radius: 50%;
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            z-index: 90;
+            color: var(--surface);
+        }
+
+        .location-button.active {
+            background: var(--primary);
             color: white;
         }
 
+        /* Live Tracking Indicator */
+        .tracking-indicator {
+            position: fixed;
+            top: 100px;
+            right: 20px;
+            background: var(--success);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            z-index: 90;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .tracking-dot {
+            width: 8px;
+            height: 8px;
+            background: white;
+            border-radius: 50%;
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+
+        /* Navigation Controls */
+        .nav-controls {
+            position: fixed;
+            bottom: calc(20px + var(--safe-area-bottom));
+            left: 20px;
+            right: 20px;
+            z-index: 60;
+            display: flex;
+            gap: 12px;
+            transition: bottom 0.3s ease;
+        }
+
+        .nav-button {
+            flex: 1;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 14px;
+            padding: 16px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .nav-button:active {
+            scale: 0.98;
+            background: var(--primary-dark);
+        }
+
+        .nav-button.secondary {
+            background: var(--surface-elevated);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
+
+        .nav-button.secondary:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+
+        /* Waze-style Navigation - Fixed to not block map */
+        .enhanced-navigation {
+            pointer-events: none !important;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 1000;
+        }
+
+        .enhanced-navigation.waze-style {
+            pointer-events: none !important;
+        }
+        
+        /* Individual navigation elements with pointer events */
+        .waze-nav-top,
+        .waze-bottom-pills,
+        .waze-fab,
+        .waze-nav-menu {
+            pointer-events: auto !important;
+        }
+        
+        .waze-nav-top {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+        }
+        
+        .waze-instruction-bar {
+            background: linear-gradient(to bottom, rgba(10, 10, 11, 0.95), rgba(10, 10, 11, 0.85));
+            backdrop-filter: blur(20px);
+            padding: 12px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .waze-close-btn,
+        .waze-menu-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .waze-close-btn:active,
+        .waze-menu-btn:active {
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(0.95);
+        }
+        
+        .waze-direction-icon {
+            width: 40px;
+            height: 40px;
+            background: var(--primary);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        
+        .direction-arrow {
+            font-size: 24px;
+        }
+        
+        .waze-instruction-text {
+            flex: 1;
+            min-width: 0;
+        }
+        
+        .waze-distance {
+            font-size: 20px;
+            font-weight: 700;
+            color: white;
+            margin-bottom: 2px;
+        }
+        
+        .waze-street {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.8);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        /* Floating bottom pills */
+        .waze-bottom-pills {
+            position: fixed;
+            bottom: calc(30px + var(--safe-area-bottom));
+            left: 20px;
+            right: 20px;
+            display: flex;
+            gap: 10px;
+            z-index: 999;
+        }
+        
+        .waze-pill {
+            background: rgba(10, 10, 11, 0.9);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 25px;
+            padding: 8px 16px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: white;
+            font-size: 14px;
+        }
+        
+        .pill-icon {
+            font-size: 16px;
+        }
+        
+        .pill-value {
+            font-weight: 600;
+        }
+        
+        .pill-label {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 12px;
+        }
+        
+        .speed-pill {
+            margin-left: auto;
+            flex-direction: column;
+            align-items: center;
+            padding: 8px 12px;
+        }
+        
+        .speed-pill .pill-value {
+            font-size: 18px;
+            line-height: 1;
+        }
+        
+        /* Floating Action Button */
+        .waze-fab {
+            position: fixed;
+            bottom: calc(100px + var(--safe-area-bottom));
+            right: 20px;
+            width: 56px;
+            height: 56px;
+            background: var(--primary);
+            border-radius: 50%;
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 12px rgba(0, 102, 255, 0.4);
+            cursor: pointer;
+            z-index: 998;
+            transition: all 0.3s;
+        }
+        
+        .waze-fab:active {
+            transform: scale(0.9);
+        }
+        
+        /* Navigation Menu */
+        .waze-nav-menu {
+            position: fixed;
+            bottom: calc(170px + var(--safe-area-bottom));
+            right: 20px;
+            background: var(--surface-elevated);
+            border-radius: 12px;
+            padding: 8px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+            z-index: 997;
+            min-width: 200px;
+        }
+        
+        .nav-menu-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            width: 100%;
+            padding: 12px;
+            background: transparent;
+            border: none;
+            color: var(--text-primary);
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: all 0.2s;
+            text-align: left;
+        }
+        
+        .nav-menu-item:hover {
+            background: var(--surface-high);
+        }
+        
+        .nav-menu-item:active {
+            transform: scale(0.98);
+        }
+        
+        .menu-icon {
+            font-size: 18px;
+            width: 24px;
+            text-align: center;
+        }
+
+        /* Success and completion animations */
+        .success-animation {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(52, 199, 89, 0.95);
+            border-radius: 20px;
+            padding: 24px 32px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            z-index: 10000;
+            animation: successPop 0.5s ease-out;
+        }
+
+        @keyframes successPop {
+            0% {
+                transform: translate(-50%, -50%) scale(0);
+                opacity: 0;
+            }
+            50% {
+                transform: translate(-50%, -50%) scale(1.1);
+            }
+            100% {
+                transform: translate(-50%, -50%) scale(1);
+                opacity: 1;
+            }
+        }
+
+        .success-icon {
+            font-size: 48px;
+            color: white;
+        }
+
+        .success-text {
+            font-size: 18px;
+            font-weight: 600;
+            color: white;
+        }
+
+        /* Phase complete animation */
+        .phase-complete-animation {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 10000;
+            animation: phaseComplete 0.6s ease-out;
+        }
+
+        @keyframes phaseComplete {
+            0% {
+                transform: translate(-50%, -50%) scale(0) rotate(-180deg);
+                opacity: 0;
+            }
+            50% {
+                transform: translate(-50%, -50%) scale(1.2) rotate(10deg);
+            }
+            100% {
+                transform: translate(-50%, -50%) scale(1) rotate(0deg);
+                opacity: 1;
+            }
+        }
+
+        .phase-complete-content {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            border-radius: 24px;
+            padding: 32px 40px;
+            text-align: center;
+            color: white;
+            box-shadow: 0 8px 32px rgba(0, 102, 255, 0.5);
+        }
+
+        .phase-icon {
+            font-size: 64px;
+            margin-bottom: 16px;
+        }
+
+        .phase-complete-content h2 {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .phase-complete-content p {
+            font-size: 16px;
+            opacity: 0.9;
+        }
+
+        /* Route complete animation */
+        .route-complete-animation {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.9);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            z-index: 10001;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            animation: fadeIn 0.5s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .route-complete-content {
+            background: var(--surface-elevated);
+            border-radius: 32px;
+            padding: 48px 32px;
+            max-width: 400px;
+            width: 100%;
+            text-align: center;
+            animation: slideUp 0.6s ease-out 0.3s both;
+        }
+
+        @keyframes slideUp {
+            from {
+                transform: translateY(50px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .complete-icon {
+            font-size: 80px;
+            margin-bottom: 24px;
+            animation: bounce 0.6s ease-out 0.6s both;
+        }
+
+        @keyframes bounce {
+            0%, 100% {
+                transform: translateY(0);
+            }
+            50% {
+                transform: translateY(-20px);
+            }
+        }
+
+        .route-complete-content h1 {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 16px;
+            color: var(--text-primary);
+        }
+
+        .route-complete-content p {
+            font-size: 16px;
+            color: var(--text-secondary);
+            margin-bottom: 32px;
+            line-height: 1.5;
+        }
+
+        .route-complete-content .route-stats {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 32px;
+            padding: 24px;
+            background: var(--surface-high);
+            border-radius: 20px;
+        }
+
+        .route-complete-content .stat {
+            text-align: center;
+        }
+
+        .route-complete-content .stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 4px;
+            display: block;
+        }
+
+        .route-complete-content .stat-label {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .complete-btn {
+            width: 100%;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 16px;
+            padding: 18px;
+            font-size: 18px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .complete-btn:hover {
+            background: var(--primary-dark);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(0, 102, 255, 0.4);
+        }
+
+        .complete-btn:active {
+            transform: translateY(0);
+        }
+
+        /* Notification styles */
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 16px 20px;
+            border-radius: 12px;
+            font-weight: 600;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            max-width: 350px;
+            z-index: 3000;
+            animation: slideIn 0.3s ease-out;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .notification.success {
+            background: var(--success);
+            color: white;
+        }
+
+        .notification.error {
+            background: var(--danger);
+            color: white;
+        }
+
+        .notification.warning {
+            background: var(--warning);
+            color: black;
+        }
+
+        .notification.info {
+            background: var(--primary);
+            color: white;
+        }
+
+        .notification.hiding {
+            animation: slideOut 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes slideOut {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+        }
+
+        .notification-icon {
+            font-size: 20px;
+        }
+
+        /* Verification modal enhancements */
+        .verification-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: modalFadeIn 0.3s ease-out;
+        }
+
+        @keyframes modalFadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+
+        .modal-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+
+        .modal-content {
+            position: relative;
+            background: var(--surface-elevated);
+            border-radius: 24px;
+            max-width: 400px;
+            width: 90%;
+            max-height: 90vh;
+            overflow: hidden;
+            animation: modalSlideUp 0.3s ease-out;
+        }
+
+        @keyframes modalSlideUp {
+            from {
+                transform: translateY(50px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .modal-content.closing {
+            animation: modalSlideDown 0.3s ease-out;
+        }
+
+        @keyframes modalSlideDown {
+            from {
+                transform: translateY(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateY(50px);
+                opacity: 0;
+            }
+        }
+
+        .modal-header {
+            padding: 20px;
+            text-align: center;
+            border-bottom: 1px solid var(--border);
+        }
+
         .modal-header.pickup {
-            background: linear-gradient(135deg, #FF9F0A, #ff8c00);
+            background: linear-gradient(135deg, var(--warning) 0%, #ff8c00 100%);
         }
 
         .modal-header.delivery {
-            background: linear-gradient(135deg, #0066FF, #0052cc);
+            background: linear-gradient(135deg, var(--success) 0%, #2ec659 100%);
+        }
+
+        .modal-icon {
+            font-size: 48px;
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        .modal-header h2 {
+            font-size: 24px;
+            font-weight: 700;
+            color: white;
+            margin: 0;
         }
 
         .modal-body {
             padding: 24px;
         }
 
+        .stop-summary {
+            background: var(--surface-high);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 24px;
+        }
+
+        .stop-summary h3 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: var(--text-primary);
+        }
+
+        .summary-details {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .summary-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+        }
+
+        .summary-label {
+            color: var(--text-secondary);
+        }
+
+        .summary-value {
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+
+        .summary-row.instructions {
+            flex-direction: column;
+            gap: 4px;
+            background: rgba(255, 159, 10, 0.1);
+            padding: 8px;
+            border-radius: 8px;
+            margin-top: 8px;
+        }
+
+        .verification-section {
+            margin-bottom: 24px;
+        }
+
+        .verification-section label {
+            display: block;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+        }
+
         .verification-input {
             width: 100%;
-            padding: 16px;
-            font-size: 24px;
-            text-align: center;
-            background: var(--glass);
-            border: 2px solid var(--glass-border);
+            background: var(--surface-high);
+            border: 2px solid var(--border);
             border-radius: 12px;
+            padding: 16px;
+            font-size: 20px;
+            font-weight: 700;
+            text-align: center;
             color: var(--text-primary);
-            text-transform: uppercase;
             letter-spacing: 2px;
-            margin: 20px 0;
+            text-transform: uppercase;
+            outline: none;
+            transition: all 0.3s;
+        }
+
+        .verification-input:focus {
+            border-color: var(--primary);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(0, 102, 255, 0.2);
+        }
+
+        .verification-input.error {
+            border-color: var(--danger);
+            animation: shake 0.5s;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-10px); }
+            75% { transform: translateX(10px); }
+        }
+
+        .code-hint {
+            font-size: 12px;
+            color: var(--text-tertiary);
+            text-align: center;
+            margin-top: 8px;
         }
 
         .modal-actions {
             display: flex;
+            flex-direction: column;
             gap: 12px;
         }
 
         .modal-btn {
-            flex: 1;
+            width: 100%;
             padding: 16px;
-            border: none;
             border-radius: 12px;
+            border: none;
             font-size: 16px;
             font-weight: 600;
             cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
         }
 
-        .modal-btn.cancel {
-            background: var(--glass);
-            color: var(--text-primary);
-            border: 1px solid var(--glass-border);
-        }
-
-        .modal-btn.verify {
-            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+        .modal-btn.primary {
+            background: var(--primary);
             color: white;
         }
 
-        /* Hide Leaflet attribution */
-        .leaflet-control-attribution {
-            display: none !important;
+        .modal-btn.secondary {
+            background: var(--surface-high);
+            color: var(--text-primary);
         }
 
-        /* Dark map tiles */
-        .leaflet-tile {
-            filter: brightness(0.6) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3) brightness(0.7);
+        .modal-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .modal-btn:active {
+            transform: translateY(0);
+        }
+
+        /* Destination details modal */
+        .destination-details-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .destination-details-modal .modal-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+
+        .destination-details-modal .modal-content {
+            position: relative;
+            background: var(--surface-elevated);
+            border-radius: 20px;
+            max-width: 380px;
+            width: 100%;
+            padding: 24px;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .modal-header h3 {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .modal-close {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--surface-high);
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .modal-close:hover {
+            background: var(--surface);
+        }
+
+        .modal-body {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .detail-section {
+            padding: 12px 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .detail-section:last-child {
+            border-bottom: none;
+        }
+
+        .detail-section h4 {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+
+        .detail-section p {
+            font-size: 16px;
+            color: var(--text-primary);
+            line-height: 1.4;
+        }
+
+        .detail-section a {
+            color: var(--primary);
+            text-decoration: none;
+        }
+
+        .code-display {
+            font-family: monospace;
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        /* Responsive */
+        @media (min-width: 428px) {
+            .app {
+                max-width: 428px;
+                margin: 0 auto;
+                box-shadow: 0 0 60px rgba(0, 0, 0, 0.5);
+            }
+        }
+
+        /* Leaflet Overrides for Tuma Theme */
+        .leaflet-popup-content-wrapper {
+            padding: 0;
+            background: var(--surface-elevated);
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+        }
+
+        .leaflet-popup-content {
+            margin: 0;
+            max-width: 280px;
+            font-family: inherit;
+        }
+
+        .leaflet-popup-tip {
+            background: var(--surface-elevated);
+            border: 1px solid var(--border);
+        }
+
+        /* Custom Marker Styles */
+        .custom-marker {
+            position: relative;
+        }
+
+        .stop-marker-wrapper {
+            position: relative;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .stop-marker-wrapper:hover {
+            transform: translateY(-4px);
+        }
+
+        .stop-marker-wrapper.active .marker-pulse {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: var(--primary);
+            transform: translate(-50%, -50%);
+            animation: markerPulse 2s infinite;
+            z-index: -1;
+        }
+
+        @keyframes markerPulse {
+            0% {
+                transform: translate(-50%, -50%) scale(0.8);
+                opacity: 0.8;
+            }
+            50% {
+                transform: translate(-50%, -50%) scale(1.5);
+                opacity: 0;
+            }
+            100% {
+                transform: translate(-50%, -50%) scale(0.8);
+                opacity: 0.8;
+            }
+        }
+
+        .marker-label {
+            position: absolute;
+            top: 45px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--surface-elevated);
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            white-space: nowrap;
+            border: 1px solid var(--border);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Stop Popup Styling */
+        .stop-popup {
+            min-width: 250px;
+        }
+
+        .popup-header {
+            padding: 12px 16px;
+            color: white;
+            margin: -15px -15px 12px -15px;
+            border-radius: 16px 16px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 600;
+        }
+
+        .popup-header.pickup {
+            background: var(--warning);
+            color: black;
+        }
+
+        .popup-header.delivery {
+            background: var(--success);
+        }
+
+        .popup-body {
+            padding: 0 16px 16px 16px;
+        }
+
+        .popup-body h3 {
+            margin: 0 0 12px 0;
+            font-size: 16px;
+            color: var(--text-primary);
+        }
+
+        .popup-info {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .info-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .info-row a {
+            color: var(--primary);
+            text-decoration: none;
+        }
+
+        .info-row.instructions {
+            background: rgba(255, 159, 10, 0.1);
+            padding: 8px;
+            border-radius: 8px;
+        }
+
+        .popup-actions {
+            margin-top: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .popup-actions button {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .popup-actions button:first-child {
+            background: var(--primary);
+            color: white;
+        }
+
+        .popup-actions button:last-child {
+            background: var(--surface-high);
+            color: white;
+        }
+
+        .popup-actions button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        /* Pulse effect for current location */
+        @keyframes pulse {
+            0% {
+                transform: scale(0.95);
+                opacity: 0.7;
+            }
+            70% {
+                transform: scale(1.3);
+                opacity: 0.3;
+            }
+            100% {
+                transform: scale(0.95);
+                opacity: 0.7;
+            }
+        }
+        
+        .pulse-circle {
+            animation: pulse 2s infinite;
         }
     </style>
 </head>
 <body>
-    <!-- Map Container -->
-    <div id="map"></div>
-    
-    <!-- Loading Overlay -->
-    <div id="loadingOverlay" class="loading-overlay">
-        <div class="loading-spinner"></div>
-    </div>
-    
-    <!-- Leaflet JS -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    
-    <!-- Route Navigation System -->
-    <script>
-        // Configuration
-        const CONFIG = {
-            api: {
-                SUPABASE_URL: 'https://btxavqfoirdzwpfrvezp.supabase.co',
-                SUPABASE_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ0eGF2cWZvaXJkendwZnJ2ZXpwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE0ODcxMTcsImV4cCI6MjA2NzA2MzExN30.kQKpukFGx-cBl1zZRuXmex02ifkZ751WCUfQPogYutk'
-            },
-            defaults: {
-                nairobi: { lat: -1.2921, lng: 36.8219 }
-            }
-        };
+    <div class="app">
+        <!-- Map Container - MUST come first for proper z-index -->
+        <div class="map-container">
+            <div id="map"></div>
+        </div>
 
-        // Global State
-        const GlobalState = {
-            route: null,
-            map: null,
-            markers: [],
-            cash: {
-                total: 0,
-                collected: 0,
-                pending: 0
-            },
-            currentStop: null,
-            nextStop: null
-        };
-
-        // Initialize System
-        async function initialize() {
-            console.log('Initializing Route Navigation...');
-            
-            // Load route from localStorage
-            const storedRoute = localStorage.getItem('tuma_active_route');
-            if (!storedRoute) {
-                showEmptyState();
-                return;
-            }
-            
-            try {
-                GlobalState.route = JSON.parse(storedRoute);
-                console.log('Route loaded:', GlobalState.route.name);
-                
-                // Process stops
-                if (!GlobalState.route.stops && GlobalState.route.parcels) {
-                    GlobalState.route.stops = generateStopsFromParcels(GlobalState.route.parcels);
-                }
-                
-                // Find next stop
-                GlobalState.nextStop = GlobalState.route.stops.find(s => !s.completed);
-                
-                // Calculate cash
-                calculateCash();
-                
-                // Initialize map
-                initMap();
-                
-                // Create UI
-                createUI();
-                
-                // Hide loading
-                document.getElementById('loadingOverlay').style.display = 'none';
-                
-            } catch (error) {
-                console.error('Error loading route:', error);
-                showEmptyState();
-            }
-        }
-
-        function generateStopsFromParcels(parcels) {
-            const stops = [];
-            
-            parcels.forEach(parcel => {
-                // Pickup
-                stops.push({
-                    id: `pickup-${parcel.id}`,
-                    type: 'pickup',
-                    parcelId: parcel.id,
-                    parcelCode: parcel.parcel_code || 'PKG-XXX',
-                    address: parcel.sender_address || 'Pickup Location',
-                    location: {
-                        lat: parseFloat(parcel.pickup_lat) || CONFIG.defaults.nairobi.lat,
-                        lng: parseFloat(parcel.pickup_lng) || CONFIG.defaults.nairobi.lng
-                    },
-                    customerName: parcel.sender_name || 'Sender',
-                    customerPhone: parcel.sender_phone || '',
-                    completed: false
-                });
-                
-                // Delivery
-                stops.push({
-                    id: `delivery-${parcel.id}`,
-                    type: 'delivery',
-                    parcelId: parcel.id,
-                    parcelCode: parcel.parcel_code || 'PKG-XXX',
-                    address: parcel.recipient_address || 'Delivery Location',
-                    location: {
-                        lat: parseFloat(parcel.delivery_lat) || CONFIG.defaults.nairobi.lat + 0.01,
-                        lng: parseFloat(parcel.delivery_lng) || CONFIG.defaults.nairobi.lng + 0.01
-                    },
-                    customerName: parcel.recipient_name || 'Recipient',
-                    customerPhone: parcel.recipient_phone || '',
-                    paymentMethod: parcel.payment_method || 'cash',
-                    price: parseFloat(parcel.price) || 0,
-                    completed: false
-                });
-            });
-            
-            return stops;
-        }
-
-        function calculateCash() {
-            GlobalState.cash.total = 0;
-            GlobalState.cash.collected = 0;
-            
-            GlobalState.route.stops?.forEach(stop => {
-                if (stop.type === 'delivery' && stop.paymentMethod === 'cash') {
-                    GlobalState.cash.total += stop.price || 0;
-                    if (stop.completed) {
-                        GlobalState.cash.collected += stop.price || 0;
-                    }
-                }
-            });
-            
-            GlobalState.cash.pending = GlobalState.cash.total - GlobalState.cash.collected;
-        }
-
-        function initMap() {
-            // Initialize Leaflet map
-            GlobalState.map = L.map('map').setView([CONFIG.defaults.nairobi.lat, CONFIG.defaults.nairobi.lng], 13);
-            
-            // Add tile layer
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                maxZoom: 19
-            }).addTo(GlobalState.map);
-            
-            // Plot stops
-            GlobalState.route.stops?.forEach((stop, index) => {
-                const icon = L.divIcon({
-                    className: 'custom-marker',
-                    html: `<div style="
-                        background: ${stop.type === 'pickup' ? '#FF9F0A' : '#0066FF'};
-                        color: white;
-                        width: 40px;
-                        height: 40px;
-                        border-radius: 50%;
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                        font-weight: bold;
-                        border: 3px solid white;
-                        box-shadow: 0 3px 10px rgba(0,0,0,0.3);
-                    ">${stop.completed ? '✓' : index + 1}</div>`,
-                    iconSize: [40, 40],
-                    iconAnchor: [20, 20]
-                });
-                
-                const marker = L.marker([stop.location.lat, stop.location.lng], {icon})
-                    .addTo(GlobalState.map)
-                    .bindPopup(`
-                        <b>${stop.type.toUpperCase()}</b><br>
-                        ${stop.address}<br>
-                        <small>${stop.customerName}</small>
-                    `);
-                
-                GlobalState.markers.push(marker);
-            });
-            
-            // Draw route line
-            if (GlobalState.route.stops?.length > 1) {
-                const coords = GlobalState.route.stops.map(s => [s.location.lat, s.location.lng]);
-                L.polyline(coords, {
-                    color: '#0066FF',
-                    weight: 4,
-                    opacity: 0.7
-                }).addTo(GlobalState.map);
-                
-                // Fit bounds
-                const bounds = L.latLngBounds(coords);
-                GlobalState.map.fitBounds(bounds, {padding: [50, 50]});
-            }
-        }
-
-        function createUI() {
-            // Header
-            const header = document.createElement('div');
-            header.className = 'top-header';
-            header.innerHTML = `
-                <div class="header-content">
-                    <button class="back-button" onclick="goBack()">←</button>
-                    <div class="route-info-header">
-                        <div class="route-title">${GlobalState.route?.name || 'Route'}</div>
-                        <div class="route-stats-bar">
-                            <div><span class="stat-value">${GlobalState.route?.stops?.length || 0}</span> stops</div>
-                            <div><span class="stat-value">KES ${GlobalState.cash.pending}</span> cash</div>
-                        </div>
-                    </div>
-                    <button class="verify-button ${GlobalState.nextStop?.type || ''}" 
-                            onclick="showVerification()" 
-                            ${!GlobalState.nextStop ? 'disabled' : ''}>
-                        ✓ Verify ${GlobalState.nextStop?.type || ''}
+        <!-- Header -->
+        <div class="header">
+            <div class="header-content">
+                <button class="back-button" onclick="goBack()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
+                        <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
+                    </svg>
+                </button>
+                <div class="route-title" id="routeTitle">Route Navigation</div>
+                <div class="route-info">
+                    <button class="route-badge verify-btn" id="routeType" onclick="openQuickVerification()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                        </svg>
+                        <span>Verify</span>
                     </button>
                 </div>
-            `;
-            document.body.appendChild(header);
+            </div>
+        </div>
+
+        <!-- Live Tracking Indicator -->
+        <div class="tracking-indicator" id="trackingIndicator" style="display: none;">
+            <div class="tracking-dot"></div>
+            <span>Live Tracking</span>
+        </div>
+
+        <!-- Location Button -->
+        <button class="location-button" id="locationButton" onclick="centerOnLocation()">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3c-.46-4.17-3.77-7.48-7.94-7.94V1h-2v2.06C6.83 3.52 3.52 6.83 3.06 11H1v2h2.06c.46 4.17 3.77 7.48 7.94 7.94V23h2v-2.06c4.17-.46 7.48-3.77 7.94-7.94H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/>
+            </svg>
+        </button>
+
+        <!-- Empty State (shown when no route) -->
+        <div class="empty-state" id="emptyState">
+            <div class="empty-icon">🗺️</div>
+            <h3 class="empty-title">No Active Route</h3>
+            <p class="empty-message">Claim a route from the rider dashboard to start navigating</p>
+        </div>
+
+        <!-- Route Panel -->
+        <div class="route-panel" id="routePanel" style="display: none;">
+            <div class="panel-handle"></div>
             
-            // Cash Widget
-            if (GlobalState.cash.total > 0) {
-                const cashWidget = document.createElement('div');
-                cashWidget.className = 'cash-widget';
-                cashWidget.innerHTML = `
-                    <div class="cash-header">
-                        💰 Cash Collection
-                    </div>
-                    <div class="cash-stats">
-                        <div class="cash-stat">
-                            <span class="label">Total</span>
-                            <span class="value">KES ${GlobalState.cash.total}</span>
-                        </div>
-                        <div class="cash-stat">
-                            <span class="label">Collected</span>
-                            <span class="value">KES ${GlobalState.cash.collected}</span>
-                        </div>
-                        <div class="cash-stat">
-                            <span class="label">Pending</span>
-                            <span class="value">KES ${GlobalState.cash.pending}</span>
-                        </div>
-                    </div>
-                `;
-                document.body.appendChild(cashWidget);
-            }
-            
-            // Bottom Nav
-            const bottomNav = document.createElement('div');
-            bottomNav.className = 'bottom-nav';
-            bottomNav.innerHTML = `
-                <div class="nav-actions">
-                    <button class="nav-button" onclick="togglePanel()">📋 Details</button>
-                    <button class="nav-button primary" onclick="startNavigation()">🧭 Start Navigation</button>
+            <div class="route-stats">
+                <div class="stat-box">
+                    <div class="stat-value" id="remainingStops">0</div>
+                    <div class="stat-label">Stops Left</div>
                 </div>
-            `;
-            document.body.appendChild(bottomNav);
-            
-            // Route Panel
-            const panel = document.createElement('div');
-            panel.className = 'route-panel';
-            panel.id = 'routePanel';
-            panel.innerHTML = `
-                <div class="panel-handle"></div>
-                <div class="panel-header">
-                    <h2 style="margin: 0; font-size: 20px;">Route Details</h2>
-                    <button onclick="togglePanel()" style="background: none; border: none; color: var(--text-primary); font-size: 24px; cursor: pointer;">×</button>
+                <div class="stat-box">
+                    <div class="stat-value"><span id="totalDistance">0</span> km</div>
+                    <div class="stat-label">Total Distance</div>
                 </div>
-                <div class="panel-content">
-                    ${GlobalState.route?.stops?.map((stop, i) => `
-                        <div class="stop-card">
-                            <div class="stop-indicator ${stop.type}">
-                                ${stop.completed ? '✓' : i + 1}
-                            </div>
-                            <div class="stop-details">
-                                <div class="stop-address">${stop.address}</div>
-                                <div class="stop-info">
-                                    👤 ${stop.customerName}<br>
-                                    📋 ${stop.parcelCode}
-                                </div>
-                                ${stop.type === 'delivery' && stop.paymentMethod === 'cash' ? `
-                                    <div class="payment-badge">
-                                        💰 Collect KES ${stop.price}
-                                    </div>
-                                ` : ''}
-                            </div>
-                        </div>
-                    `).join('') || '<p>No stops</p>'}
+                <div class="stat-box">
+                    <div class="stat-value"><span id="estimatedTime">0</span> min</div>
+                    <div class="stat-label">Est. Time</div>
                 </div>
-            `;
-            document.body.appendChild(panel);
-        }
+            </div>
 
-        function showVerification() {
-            if (!GlobalState.nextStop) return;
-            
-            const modal = document.createElement('div');
-            modal.className = 'verification-modal';
-            modal.innerHTML = `
-                <div class="modal-content">
-                    <div class="modal-header ${GlobalState.nextStop.type}">
-                        <h2>${GlobalState.nextStop.type === 'pickup' ? '📦 Pickup' : '📍 Delivery'} Verification</h2>
-                        <p>${GlobalState.nextStop.address}</p>
-                    </div>
-                    <div class="modal-body">
-                        <h3>Stop Details</h3>
-                        <p>Customer: ${GlobalState.nextStop.customerName}</p>
-                        <p>Parcel: ${GlobalState.nextStop.parcelCode}</p>
-                        
-                        <label style="display: block; margin-top: 20px; margin-bottom: 8px;">
-                            Enter ${GlobalState.nextStop.type} Code:
-                        </label>
-                        <input type="text" 
-                               class="verification-input" 
-                               id="verifyCode" 
-                               placeholder="ENTER CODE"
-                               autocomplete="off">
-                        
-                        <!-- NEVER show the actual code - removed for security -->
-                        
-                        <div class="modal-actions">
-                            <button class="modal-btn cancel" onclick="closeModal()">Cancel</button>
-                            <button class="modal-btn verify" onclick="verifyStop()">Verify</button>
-                        </div>
-                    </div>
-                </div>
-            `;
-            document.body.appendChild(modal);
-            document.getElementById('verifyCode').focus();
-        }
+            <div class="stops-list" id="stopsList">
+                <!-- Enhanced stops will be populated here by JS -->
+            </div>
+        </div>
 
-        function closeModal() {
-            document.querySelector('.verification-modal')?.remove();
-        }
+        <!-- Navigation Controls -->
+        <div class="nav-controls" id="navControls" style="display: none;">
+            <button class="nav-button secondary" onclick="toggleRoutePanel()">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 8l-6 6 1.41 1.41L12 10.83l4.59 4.58L18 14z"/>
+                </svg>
+                <span>Details</span>
+            </button>
+            <button class="nav-button" onclick="startNavigation()">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/>
+                </svg>
+                <span>Start Navigation</span>
+            </button>
+        </div>
+    </div>
 
-        function verifyStop() {
-            const code = document.getElementById('verifyCode')?.value;
-            if (code && code.length > 0) {
-                // Mark stop as complete
-                if (GlobalState.nextStop) {
-                    GlobalState.nextStop.completed = true;
-                    GlobalState.nextStop.timestamp = new Date().toISOString();
-                    
-                    // Save to localStorage
-                    localStorage.setItem('tuma_active_route', JSON.stringify(GlobalState.route));
-                    
-                    // Recalculate and refresh
-                    calculateCash();
-                    location.reload();
-                }
-            }
-        }
-
-        function togglePanel() {
-            const panel = document.getElementById('routePanel');
-            if (panel) {
-                panel.classList.toggle('visible');
-            }
-        }
-
-        function startNavigation() {
-            alert('Starting navigation to next stop...');
-            // Navigation implementation
-        }
-
-        function goBack() {
-            window.location.href = './rider.html';
-        }
-
-        function showEmptyState() {
-            document.getElementById('loadingOverlay').style.display = 'none';
-            document.body.innerHTML = `
-                <div style="display: flex; align-items: center; justify-content: center; height: 100%; text-align: center; padding: 20px;">
-                    <div>
-                        <div style="font-size: 72px; margin-bottom: 20px;">📦</div>
-                        <h2>No Active Route</h2>
-                        <p style="color: var(--text-secondary); margin: 20px 0;">Please claim a route from the dashboard</p>
-                        <button onclick="goBack()" style="padding: 14px 28px; background: var(--primary); color: white; border: none; border-radius: 12px; font-size: 16px; cursor: pointer;">
-                            Back to Dashboard
-                        </button>
-                    </div>
-                </div>
-            `;
-        }
-
-        // Initialize on load
-        window.addEventListener('DOMContentLoaded', initialize);
-    </script>
+    <!-- Load the enhanced route.js module -->
+    <script src="./route.js"></script>
 </body>
 </html>
