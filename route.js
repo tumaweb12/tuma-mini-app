@@ -391,16 +391,45 @@ function optimizeRouteStops() {
         updateOptimizeButton(true);
     }, 1500);
 }
-// ============================================================================
-// PART 2 OF 6 - DYNAMIC ROUTE OPTIMIZATION ALGORITHM
+/**
+ * Order zones by traveling salesman approach from starting position
+ */
+function orderZonesByProximity(zones, startPosition) {
+    if (zones.length <= 1) return zones;
+    
+    const ordered = [];
+    const remaining = [...zones];
+    let currentPos = startPosition;
+    
+    // Use nearest neighbor for zones
+    while (remaining.length > 0) {
+        let nearestIndex = 0;
+        let minDistance = Infinity;
+        
+        remaining.forEach((zone, index) => {
+            const distance = calculateDistance(currentPos, zone.center);
+            if (distance < minDistance) {
+                minDistance = distance;
+                nearestIndex = index;
+            }
+        });
+        
+        const nextZone = remaining.splice(nearestIndex, 1)[0];
+        ordered.push(nextZone);
+        currentPos = nextZone.center;
+    }
+    
+    return ordered;
+}// ============================================================================
+// PART 2 OF 6 - INTELLIGENT ROUTE OPTIMIZATION WITH FLOW ANALYSIS
 // ============================================================================
 
 /**
- * Performs dynamic route optimization with intelligent interleaving
- * of pickups and deliveries based on proximity
+ * Enhanced route optimization using flow-based algorithm
+ * Creates logical routes that minimize backtracking
  */
 function performDynamicOptimization(stops) {
-    console.log('🚀 Starting dynamic route optimization...');
+    console.log('🚀 Starting intelligent flow-based route optimization...');
     
     // Separate pickups and deliveries
     const pickups = stops.filter(s => s.type === 'pickup');
@@ -413,122 +442,829 @@ function performDynamicOptimization(stops) {
         deliveryMap[parcelId] = d;
     });
     
-    // Initialize optimization state
-    const optimizedRoute = [];
-    const availablePickups = [...pickups];
-    const pendingDeliveries = new Set(); // Deliveries that can now be made
-    const completedParcels = new Set();
+    // Step 1: Analyze pickup-delivery relationships
+    const routeSegments = analyzePickupDeliveryPairs(pickups, deliveryMap);
     
-    // Determine starting position
-    let currentPosition = state.currentLocation 
-        ? { lat: state.currentLocation.lat, lng: state.currentLocation.lng }
-        : calculateCentroid(stops);
+    // Step 2: Find optimal route flow (linear, circular, or hub-based)
+    const routeFlow = determineOptimalFlow(routeSegments, stops);
+    console.log(`Optimal route flow: ${routeFlow.type}`);
     
-    console.log('Starting position:', currentPosition);
+    // Step 3: Build route following the optimal flow
+    const optimizedRoute = buildFlowBasedRoute(routeSegments, routeFlow);
     
-    // Main optimization loop
-    while (availablePickups.length > 0 || pendingDeliveries.size > 0) {
-        let nextStop = null;
-        let nextStopDistance = Infinity;
-        let isPickup = false;
+    console.log(`✨ Optimization complete: ${optimizedRoute.length} stops optimized`);
+    return optimizedRoute;
+}
+
+/**
+ * Analyze pickup-delivery pairs to understand route requirements
+ */
+function analyzePickupDeliveryPairs(pickups, deliveryMap) {
+    const segments = [];
+    
+    pickups.forEach(pickup => {
+        const parcelId = pickup.parcelCode || pickup.parcelId;
+        const delivery = deliveryMap[parcelId];
         
-        // Evaluate all available pickups
-        availablePickups.forEach(pickup => {
-            const distance = calculateDistance(currentPosition, pickup.location);
-            
-            // Check if this pickup has a nearby delivery
-            const parcelId = pickup.parcelCode || pickup.parcelId;
-            const correspondingDelivery = deliveryMap[parcelId];
-            let adjustedDistance = distance;
-            
-            // If delivery is very close to pickup, favor this pickup
-            if (correspondingDelivery) {
-                const deliveryDistance = calculateDistance(pickup.location, correspondingDelivery.location);
-                if (deliveryDistance < config.optimization.maxProximityForImmediateDelivery) {
-                    adjustedDistance *= 0.8; // 20% bonus for nearby delivery
-                    console.log(`Pickup ${pickup.parcelCode} has nearby delivery (${deliveryDistance.toFixed(1)}km)`);
+        if (delivery) {
+            const segment = {
+                pickup: pickup,
+                delivery: delivery,
+                distance: calculateDistance(pickup.location, delivery.location),
+                vector: {
+                    start: pickup.location,
+                    end: delivery.location,
+                    bearing: calculateBearing(pickup.location, delivery.location)
                 }
-            }
+            };
             
-            if (adjustedDistance < nextStopDistance) {
-                nextStop = pickup;
-                nextStopDistance = adjustedDistance;
-                isPickup = true;
-            }
-        });
-        
-        // Evaluate all pending deliveries
-        pendingDeliveries.forEach(delivery => {
-            const distance = calculateDistance(currentPosition, delivery.location);
-            
-            // Apply delivery preference bonus to encourage completing deliveries
-            const adjustedDistance = distance * config.optimization.deliveryPreferenceBonus;
-            
-            if (adjustedDistance < nextStopDistance) {
-                nextStop = delivery;
-                nextStopDistance = adjustedDistance;
-                isPickup = false;
-            }
-        });
-        
-        // Add the selected stop to the route
-        if (nextStop) {
-            optimizedRoute.push(nextStop);
-            currentPosition = nextStop.location;
-            
-            if (isPickup) {
-                // Remove from available pickups
-                const index = availablePickups.findIndex(p => p.id === nextStop.id);
-                if (index > -1) availablePickups.splice(index, 1);
-                
-                // Add corresponding delivery to pending
-                const parcelId = nextStop.parcelCode || nextStop.parcelId;
-                const delivery = deliveryMap[parcelId];
-                if (delivery) {
-                    pendingDeliveries.add(delivery);
-                    
-                    // Check if we should immediately deliver if very close
-                    const deliveryDistance = calculateDistance(currentPosition, delivery.location);
-                    if (deliveryDistance < config.optimization.maxProximityForImmediateDelivery && 
-                        availablePickups.length > 0) {
-                        console.log(`Immediate delivery opportunity for ${parcelId} (${deliveryDistance.toFixed(1)}km away)`);
-                        
-                        // Check if there are any pickups even closer
-                        let closestPickupDistance = Infinity;
-                        availablePickups.forEach(p => {
-                            const dist = calculateDistance(currentPosition, p.location);
-                            if (dist < closestPickupDistance) closestPickupDistance = dist;
-                        });
-                        
-                        // If delivery is closer than next pickup, do it now
-                        if (deliveryDistance < closestPickupDistance * 0.9) {
-                            optimizedRoute.push(delivery);
-                            currentPosition = delivery.location;
-                            pendingDeliveries.delete(delivery);
-                            completedParcels.add(parcelId);
-                            console.log(`✅ Immediate delivery completed for ${parcelId}`);
-                        }
-                    }
-                }
+            // Classify segment type
+            if (segment.distance < 1.0) {
+                segment.type = 'local'; // Pickup and delivery very close
+            } else if (segment.distance < 3.0) {
+                segment.type = 'short'; // Short distance delivery
             } else {
-                // Remove from pending deliveries
-                pendingDeliveries.delete(nextStop);
-                const parcelId = nextStop.parcelCode || nextStop.parcelId;
-                completedParcels.add(parcelId);
+                segment.type = 'long'; // Long distance delivery
             }
             
-            console.log(`Added ${isPickup ? 'PICKUP' : 'DELIVERY'}: ${nextStop.address} (${nextStopDistance.toFixed(1)}km)`);
-        } else {
-            console.warn('No next stop found - this should not happen');
+            segments.push(segment);
+        }
+    });
+    
+    return segments;
+}
+
+/**
+ * Determine optimal flow pattern for the route
+ */
+function determineOptimalFlow(segments, allStops) {
+    // Calculate route statistics
+    const stats = {
+        totalStops: allStops.length,
+        localSegments: segments.filter(s => s.type === 'local').length,
+        shortSegments: segments.filter(s => s.type === 'short').length,
+        longSegments: segments.filter(s => s.type === 'long').length,
+        averageSegmentDistance: segments.reduce((sum, s) => sum + s.distance, 0) / segments.length
+    };
+    
+    // Find general direction of travel
+    const directionVector = calculateGeneralDirection(segments);
+    
+    // Determine route pattern
+    let flowType;
+    let strategy;
+    
+    if (stats.localSegments > segments.length * 0.6) {
+        // Most pickups and deliveries are close together
+        flowType = 'clustered';
+        strategy = 'complete_pairs'; // Complete each pickup-delivery pair when close
+    } else if (directionVector.consistency > 0.7) {
+        // Route has a clear directional flow
+        flowType = 'directional';
+        strategy = 'follow_direction'; // Follow the general direction
+    } else if (stats.averageSegmentDistance < 2.5) {
+        // Mixed but generally short distances
+        flowType = 'mixed_short';
+        strategy = 'minimize_travel'; // Minimize total travel
+    } else {
+        // Complex route with long distances
+        flowType = 'complex';
+        strategy = 'batch_pickups'; // Batch pickups in areas then deliver
+    }
+    
+    return {
+        type: flowType,
+        strategy: strategy,
+        direction: directionVector,
+        stats: stats
+    };
+}
+
+/**
+ * Calculate general direction of route flow
+ */
+function calculateGeneralDirection(segments) {
+    if (segments.length === 0) {
+        return { bearing: 0, consistency: 0 };
+    }
+    
+    // Calculate average bearing weighted by distance
+    let totalX = 0, totalY = 0, totalWeight = 0;
+    
+    segments.forEach(segment => {
+        const bearing = segment.vector.bearing * Math.PI / 180;
+        const weight = segment.distance;
+        
+        totalX += Math.cos(bearing) * weight;
+        totalY += Math.sin(bearing) * weight;
+        totalWeight += weight;
+    });
+    
+    const avgBearing = Math.atan2(totalY, totalX) * 180 / Math.PI;
+    
+    // Calculate consistency (how aligned segments are)
+    let alignmentSum = 0;
+    segments.forEach(segment => {
+        const diff = Math.abs(segment.vector.bearing - avgBearing);
+        const normalizedDiff = Math.min(diff, 360 - diff);
+        alignmentSum += (1 - normalizedDiff / 180) * segment.distance;
+    });
+    
+    const consistency = alignmentSum / totalWeight;
+    
+    return {
+        bearing: (avgBearing + 360) % 360,
+        consistency: consistency
+    };
+}
+
+/**
+ * Build route following the optimal flow pattern
+ */
+function buildFlowBasedRoute(segments, routeFlow) {
+    let optimizedRoute = [];
+    
+    switch (routeFlow.strategy) {
+        case 'complete_pairs':
+            optimizedRoute = buildPairCompletionRoute(segments);
             break;
+            
+        case 'follow_direction':
+            optimizedRoute = buildDirectionalRoute(segments, routeFlow.direction);
+            break;
+            
+        case 'minimize_travel':
+            optimizedRoute = buildMinimalTravelRoute(segments);
+            break;
+            
+        case 'batch_pickups':
+            optimizedRoute = buildBatchedRoute(segments);
+            break;
+            
+        default:
+            optimizedRoute = buildMinimalTravelRoute(segments);
+    }
+    
+    return optimizedRoute;
+}
+
+/**
+ * Build route completing pickup-delivery pairs when they're close
+ */
+function buildPairCompletionRoute(segments) {
+    const route = [];
+    const completed = new Set();
+    
+    // Sort segments by pickup-delivery distance (shortest first)
+    const sortedSegments = [...segments].sort((a, b) => a.distance - b.distance);
+    
+    // Find optimal starting segment
+    const startSegment = findOptimalStartSegment(sortedSegments);
+    let currentPosition = startSegment.pickup.location;
+    
+    // Process segments in order of proximity
+    const remaining = sortedSegments.filter(s => s !== startSegment);
+    const toProcess = [startSegment];
+    
+    while (toProcess.length > 0 || remaining.length > 0) {
+        if (toProcess.length === 0) {
+            // Find nearest segment
+            let nearest = null;
+            let minDist = Infinity;
+            
+            remaining.forEach(segment => {
+                const dist = calculateDistance(currentPosition, segment.pickup.location);
+                if (dist < minDist) {
+                    minDist = dist;
+                    nearest = segment;
+                }
+            });
+            
+            if (nearest) {
+                toProcess.push(nearest);
+                remaining.splice(remaining.indexOf(nearest), 1);
+            }
+        }
+        
+        const segment = toProcess.shift();
+        if (!segment) break;
+        
+        // Add pickup
+        route.push(segment.pickup);
+        currentPosition = segment.pickup.location;
+        
+        // If delivery is close or no other pickups are closer, complete it
+        const distToDelivery = calculateDistance(currentPosition, segment.delivery.location);
+        let shouldDeliver = distToDelivery < 2.0; // Within 2km
+        
+        if (!shouldDeliver && remaining.length > 0) {
+            // Check if any pickup is closer than the delivery
+            const closestPickup = remaining.reduce((closest, seg) => {
+                const dist = calculateDistance(currentPosition, seg.pickup.location);
+                return dist < closest.distance ? { segment: seg, distance: dist } : closest;
+            }, { segment: null, distance: Infinity });
+            
+            shouldDeliver = closestPickup.distance > distToDelivery * 0.8;
+        }
+        
+        if (shouldDeliver || remaining.length === 0) {
+            route.push(segment.delivery);
+            currentPosition = segment.delivery.location;
+            completed.add(segment);
+        } else {
+            // Defer delivery for later
+            toProcess.push({ 
+                pickup: null, 
+                delivery: segment.delivery,
+                distance: 0 
+            });
         }
     }
     
-    // Final validation
-    const validatedRoute = validateRouteIntegrity(optimizedRoute);
+    return route.filter(stop => stop !== null);
+}
+
+/**
+ * Build route following general direction
+ */
+function buildDirectionalRoute(segments, direction) {
+    const route = [];
     
-    console.log(`✨ Optimization complete: ${validatedRoute.length} stops optimized`);
-    return validatedRoute;
+    // Sort all stops by projection along direction vector
+    const allStops = [];
+    segments.forEach(seg => {
+        allStops.push(seg.pickup);
+        allStops.push(seg.delivery);
+    });
+    
+    // Project each stop onto the direction vector
+    const projectedStops = allStops.map(stop => {
+        const bearing = direction.bearing * Math.PI / 180;
+        const projection = stop.location.lng * Math.cos(bearing) + 
+                          stop.location.lat * Math.sin(bearing);
+        return { stop, projection };
+    });
+    
+    // Sort by projection
+    projectedStops.sort((a, b) => a.projection - b.projection);
+    
+    // Build route respecting pickup-delivery constraints
+    const addedPickups = new Set();
+    const addedStops = new Set();
+    
+    projectedStops.forEach(({ stop }) => {
+        if (addedStops.has(stop)) return;
+        
+        if (stop.type === 'pickup') {
+            route.push(stop);
+            addedPickups.add(stop.parcelCode || stop.parcelId);
+            addedStops.add(stop);
+        } else if (stop.type === 'delivery') {
+            const parcelId = stop.parcelCode || stop.parcelId;
+            if (addedPickups.has(parcelId)) {
+                route.push(stop);
+                addedStops.add(stop);
+            }
+        }
+    });
+    
+    // Add any missed deliveries
+    projectedStops.forEach(({ stop }) => {
+        if (!addedStops.has(stop) && stop.type === 'delivery') {
+            route.push(stop);
+        }
+    });
+    
+    return route;
+}
+
+/**
+ * Build route minimizing total travel distance
+ */
+function buildMinimalTravelRoute(segments) {
+    const route = [];
+    const completed = new Set();
+    const pendingDeliveries = new Map(); // parcelId -> delivery
+    
+    // Get all pickups
+    const pickups = segments.map(s => s.pickup);
+    const remaining = new Set(pickups);
+    
+    // Initialize pending deliveries
+    segments.forEach(seg => {
+        const parcelId = seg.pickup.parcelCode || seg.pickup.parcelId;
+        pendingDeliveries.set(parcelId, seg.delivery);
+    });
+    
+    // Find starting point that minimizes total distance
+    let currentPosition = findOptimalStartPosition(pickups, segments);
+    
+    while (remaining.size > 0 || pendingDeliveries.size > 0) {
+        let nextStop = null;
+        let minDistance = Infinity;
+        
+        // Evaluate pickups
+        remaining.forEach(pickup => {
+            const dist = calculateDistance(currentPosition, pickup.location);
+            if (dist < minDistance) {
+                minDistance = dist;
+                nextStop = { stop: pickup, type: 'pickup' };
+            }
+        });
+        
+        // Evaluate available deliveries
+        pendingDeliveries.forEach((delivery, parcelId) => {
+            // Check if pickup is done
+            const pickup = segments.find(s => 
+                (s.pickup.parcelCode === parcelId || s.pickup.parcelId === parcelId)
+            )?.pickup;
+            
+            if (pickup && !remaining.has(pickup)) {
+                const dist = calculateDistance(currentPosition, delivery.location);
+                // Slight preference for deliveries to clear inventory
+                const adjustedDist = dist * 0.9;
+                
+                if (adjustedDist < minDistance) {
+                    minDistance = adjustedDist;
+                    nextStop = { stop: delivery, type: 'delivery', parcelId };
+                }
+            }
+        });
+        
+        if (!nextStop) break;
+        
+        route.push(nextStop.stop);
+        currentPosition = nextStop.stop.location;
+        
+        if (nextStop.type === 'pickup') {
+            remaining.delete(nextStop.stop);
+        } else {
+            pendingDeliveries.delete(nextStop.parcelId);
+        }
+    }
+    
+    return route;
+}
+
+/**
+ * Build route with batched pickups
+ */
+function buildBatchedRoute(segments) {
+    // Group segments by geographic area
+    const areas = groupSegmentsByArea(segments);
+    const route = [];
+    
+    // Process each area
+    areas.forEach(area => {
+        // Add all pickups in area first
+        area.segments.forEach(seg => {
+            route.push(seg.pickup);
+        });
+        
+        // Then add deliveries in optimal order
+        const deliveries = area.segments.map(s => s.delivery);
+        const optimizedDeliveries = optimizeStopOrder(deliveries);
+        route.push(...optimizedDeliveries);
+    });
+    
+    return route;
+}
+
+/**
+ * Group segments by geographic area
+ */
+function groupSegmentsByArea(segments) {
+    const areas = [];
+    const assigned = new Set();
+    
+    segments.forEach(segment => {
+        if (assigned.has(segment)) return;
+        
+        const area = {
+            center: segment.pickup.location,
+            segments: [segment]
+        };
+        
+        assigned.add(segment);
+        
+        // Find other segments with pickups nearby
+        segments.forEach(other => {
+            if (assigned.has(other)) return;
+            
+            const dist = calculateDistance(area.center, other.pickup.location);
+            if (dist < 3.0) { // 3km radius
+                area.segments.push(other);
+                assigned.add(other);
+            }
+        });
+        
+        if (area.segments.length > 0) {
+            areas.push(area);
+        }
+    });
+    
+    return areas;
+}
+
+/**
+ * Find optimal starting position
+ */
+function findOptimalStartPosition(stops, segments) {
+    // Calculate center of mass
+    const centroid = calculateCentroid(stops);
+    
+    // Find stop closest to centroid
+    let bestStop = stops[0];
+    let minDist = Infinity;
+    
+    stops.forEach(stop => {
+        const dist = calculateDistance(centroid, stop.location);
+        if (dist < minDist) {
+            minDist = dist;
+            bestStop = stop;
+        }
+    });
+    
+    return bestStop.location;
+}
+
+/**
+ * Find optimal starting segment
+ */
+function findOptimalStartSegment(segments) {
+    if (segments.length === 0) return null;
+    
+    // Prefer segments where pickup and delivery are close
+    // and located near the edge of the route area
+    let bestSegment = segments[0];
+    let bestScore = Infinity;
+    
+    segments.forEach(segment => {
+        // Score based on segment distance and position
+        const score = segment.distance;
+        
+        if (score < bestScore) {
+            bestScore = score;
+            bestSegment = segment;
+        }
+    });
+    
+    return bestSegment;
+}
+
+/**
+ * Create geographical zones based on stop proximity
+ */
+function createGeographicalZones(stops) {
+    const zones = [];
+    const assigned = new Set();
+    const ZONE_RADIUS = 2.0; // km - stops within this radius are in same zone
+    
+    stops.forEach(stop => {
+        if (assigned.has(stop.id)) return;
+        
+        // Create a new zone with this stop
+        const zone = {
+            center: stop.location,
+            stops: [stop],
+            bounds: {
+                north: stop.location.lat,
+                south: stop.location.lat,
+                east: stop.location.lng,
+                west: stop.location.lng
+            },
+            name: getZoneName(stop.location)
+        };
+        
+        assigned.add(stop.id);
+        
+        // Find all stops within zone radius
+        stops.forEach(otherStop => {
+            if (assigned.has(otherStop.id)) return;
+            
+            const distance = calculateDistance(zone.center, otherStop.location);
+            if (distance <= ZONE_RADIUS) {
+                zone.stops.push(otherStop);
+                assigned.add(otherStop.id);
+                
+                // Update zone bounds
+                zone.bounds.north = Math.max(zone.bounds.north, otherStop.location.lat);
+                zone.bounds.south = Math.min(zone.bounds.south, otherStop.location.lat);
+                zone.bounds.east = Math.max(zone.bounds.east, otherStop.location.lng);
+                zone.bounds.west = Math.min(zone.bounds.west, otherStop.location.lng);
+            }
+        });
+        
+        // Recalculate zone center as centroid of all stops
+        zone.center = calculateCentroid(zone.stops);
+        zones.push(zone);
+    });
+    
+    return zones;
+}
+
+/**
+ * Get approximate zone name based on Nairobi geography
+ */
+function getZoneName(location) {
+    // Nairobi zone approximations based on coordinates
+    const lat = location.lat;
+    const lng = location.lng;
+    
+    if (lat > -1.26 && lng < 36.78) return "Westlands/Parklands";
+    if (lat > -1.26 && lng > 36.84) return "Muthaiga/Gigiri";
+    if (lat < -1.28 && lat > -1.30 && lng < 36.78) return "Kilimani/Lavington";
+    if (lat < -1.28 && lat > -1.30 && lng > 36.82) return "CBD/Town";
+    if (lat < -1.30 && lng < 36.80) return "Ngong Road/Karen";
+    if (lat < -1.30 && lng > 36.82) return "South B/C";
+    if (lat > -1.24) return "Northern Nairobi";
+    
+    return "Nairobi";
+}
+
+/**
+ * Find the optimal starting point for the route
+ * Tests different starting points to minimize total route distance
+ */
+function findOptimalRouteStart(zones, allStops) {
+    console.log('Finding optimal route starting point...');
+    
+    let bestTotalDistance = Infinity;
+    let bestStartPoint = null;
+    let bestZoneOrder = null;
+    
+    // Test starting from each zone
+    zones.forEach((startZone, startIndex) => {
+        // Test starting from each stop in the zone
+        startZone.stops.forEach(startStop => {
+            // Calculate total route distance starting from this point
+            const testRoute = simulateRouteFromStart(startStop.location, zones, allStops);
+            const totalDistance = calculateTotalRouteDistance(testRoute);
+            
+            if (totalDistance < bestTotalDistance) {
+                bestTotalDistance = totalDistance;
+                bestStartPoint = startStop.location;
+                bestZoneOrder = orderZonesByProximity(zones, startStop.location);
+                console.log(`New best start: ${startStop.address} (${totalDistance.toFixed(1)}km)`);
+            }
+        });
+    });
+    
+    // Also test starting from geographic extremes
+    const extremePoints = findGeographicExtremes(allStops);
+    extremePoints.forEach(point => {
+        const testRoute = simulateRouteFromStart(point, zones, allStops);
+        const totalDistance = calculateTotalRouteDistance(testRoute);
+        
+        if (totalDistance < bestTotalDistance) {
+            bestTotalDistance = totalDistance;
+            bestStartPoint = point;
+            bestZoneOrder = orderZonesByProximity(zones, point);
+            console.log(`New best start from extreme point (${totalDistance.toFixed(1)}km)`);
+        }
+    });
+    
+    console.log(`Optimal route distance: ${bestTotalDistance.toFixed(1)}km`);
+    
+    return {
+        optimalStart: bestStartPoint || calculateCentroid(allStops),
+        orderedZones: bestZoneOrder || zones
+    };
+}
+
+/**
+ * Find geographic extreme points (north, south, east, west)
+ */
+function findGeographicExtremes(stops) {
+    if (!stops || stops.length === 0) return [];
+    
+    let north = stops[0], south = stops[0], east = stops[0], west = stops[0];
+    
+    stops.forEach(stop => {
+        if (stop.location.lat > north.location.lat) north = stop;
+        if (stop.location.lat < south.location.lat) south = stop;
+        if (stop.location.lng > east.location.lng) east = stop;
+        if (stop.location.lng < west.location.lng) west = stop;
+    });
+    
+    return [
+        north.location,
+        south.location,
+        east.location,
+        west.location
+    ];
+}
+
+/**
+ * Simulate a route from a starting point to estimate total distance
+ */
+function simulateRouteFromStart(startPoint, zones, allStops) {
+    const simulatedRoute = [];
+    const orderedZones = orderZonesByProximity(zones, startPoint);
+    let currentPos = startPoint;
+    
+    // Quick simulation using zone centers
+    orderedZones.forEach(zone => {
+        // Add nearest stop in zone as entry point
+        let nearestStop = zone.stops[0];
+        let minDist = Infinity;
+        
+        zone.stops.forEach(stop => {
+            const dist = calculateDistance(currentPos, stop.location);
+            if (dist < minDist) {
+                minDist = dist;
+                nearestStop = stop;
+            }
+        });
+        
+        simulatedRoute.push(nearestStop);
+        
+        // Add other stops in zone (simplified)
+        zone.stops.forEach(stop => {
+            if (stop !== nearestStop) {
+                simulatedRoute.push(stop);
+            }
+        });
+        
+        // Update position to last stop in zone
+        if (zone.stops.length > 0) {
+            currentPos = zone.stops[zone.stops.length - 1].location;
+        }
+    });
+    
+    return simulatedRoute;
+}
+
+/**
+ * Optimize stops within a zone
+ */
+function optimizeZoneStops(pickups, deliveries, entryPoint, deliveryMap, completedParcels) {
+    const zoneStops = [];
+    const availablePickups = [...pickups];
+    const availableDeliveries = [];
+    
+    // First, check which deliveries can be done (pickup already completed)
+    deliveries.forEach(delivery => {
+        const parcelId = delivery.parcelCode || delivery.parcelId;
+        const pickup = pickups.find(p => 
+            (p.parcelCode === parcelId || p.parcelId === parcelId)
+        );
+        
+        // If pickup is in this zone or already completed, delivery is available
+        if (pickup || completedParcels.has(parcelId)) {
+            availableDeliveries.push(delivery);
+        }
+    });
+    
+    // Optimize order using 2-opt improvement
+    let allStops = [...availablePickups, ...availableDeliveries];
+    
+    // Start with nearest neighbor
+    const initialRoute = [];
+    let currentPos = entryPoint;
+    const unvisited = new Set(allStops);
+    
+    while (unvisited.size > 0) {
+        let nearest = null;
+        let minDist = Infinity;
+        
+        unvisited.forEach(stop => {
+            const dist = calculateDistance(currentPos, stop.location);
+            
+            // Apply penalties and bonuses
+            let adjustedDist = dist;
+            
+            // Penalize deliveries if their pickup isn't done yet
+            if (stop.type === 'delivery') {
+                const parcelId = stop.parcelCode || stop.parcelId;
+                const pickup = availablePickups.find(p => 
+                    p.parcelCode === parcelId || p.parcelId === parcelId
+                );
+                
+                if (pickup && !initialRoute.includes(pickup)) {
+                    adjustedDist *= 3.0; // Heavy penalty - do pickup first
+                } else {
+                    adjustedDist *= 0.9; // Slight bonus for deliveries
+                }
+            }
+            
+            if (adjustedDist < minDist) {
+                minDist = adjustedDist;
+                nearest = stop;
+            }
+        });
+        
+        if (nearest) {
+            initialRoute.push(nearest);
+            currentPos = nearest.location;
+            unvisited.delete(nearest);
+        }
+    }
+    
+    // Apply 2-opt improvement
+    return improve2Opt(initialRoute);
+}
+
+/**
+ * 2-opt algorithm to improve route by eliminating crossings
+ */
+function improve2Opt(route) {
+    if (route.length < 4) return route;
+    
+    let improved = [...route];
+    let improvement = true;
+    
+    while (improvement) {
+        improvement = false;
+        
+        for (let i = 0; i < improved.length - 2; i++) {
+            for (let j = i + 2; j < improved.length; j++) {
+                // Calculate current distance
+                const currentDist = 
+                    calculateDistance(improved[i].location, improved[i + 1].location) +
+                    calculateDistance(improved[j - 1].location, improved[j].location);
+                
+                // Calculate swapped distance
+                const swappedDist = 
+                    calculateDistance(improved[i].location, improved[j - 1].location) +
+                    calculateDistance(improved[i + 1].location, improved[j].location);
+                
+                // If swapping improves, do it
+                if (swappedDist < currentDist) {
+                    // Reverse the route between i+1 and j-1
+                    const reversed = improved.slice(i + 1, j).reverse();
+                    improved = [
+                        ...improved.slice(0, i + 1),
+                        ...reversed,
+                        ...improved.slice(j)
+                    ];
+                    improvement = true;
+                    break;
+                }
+            }
+            if (improvement) break;
+        }
+    }
+    
+    return improved;
+}
+
+/**
+ * Validate route integrity and fix any issues
+ */
+function validateAndFixRoute(route, allStops, deliveryMap) {
+    const validated = [];
+    const pickedUpParcels = new Set();
+    const addedStopIds = new Set();
+    const deferredDeliveries = [];
+    
+    // First pass - add all stops respecting pickup/delivery order
+    route.forEach(stop => {
+        if (addedStopIds.has(stop.id)) return; // Skip duplicates
+        
+        const parcelId = stop.parcelCode || stop.parcelId;
+        
+        if (stop.type === 'pickup') {
+            validated.push(stop);
+            addedStopIds.add(stop.id);
+            pickedUpParcels.add(parcelId);
+            
+            // Check for deferred deliveries
+            const deferredIndex = deferredDeliveries.findIndex(d => 
+                (d.parcelCode === parcelId) || (d.parcelId === parcelId)
+            );
+            if (deferredIndex > -1) {
+                const delivery = deferredDeliveries.splice(deferredIndex, 1)[0];
+                validated.push(delivery);
+                addedStopIds.add(delivery.id);
+            }
+        } else if (stop.type === 'delivery') {
+            if (pickedUpParcels.has(parcelId)) {
+                validated.push(stop);
+                addedStopIds.add(stop.id);
+            } else {
+                deferredDeliveries.push(stop);
+            }
+        }
+    });
+    
+    // Add any remaining deferred deliveries
+    deferredDeliveries.forEach(delivery => {
+        if (!addedStopIds.has(delivery.id)) {
+            validated.push(delivery);
+            addedStopIds.add(delivery.id);
+        }
+    });
+    
+    // Second pass - add any missing stops
+    allStops.forEach(stop => {
+        if (!addedStopIds.has(stop.id)) {
+            console.warn(`Adding missing stop: ${stop.id}`);
+            validated.push(stop);
+        }
+    });
+    
+    return validated;
 }
 
 /**
