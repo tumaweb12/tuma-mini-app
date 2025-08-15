@@ -165,7 +165,7 @@ function parsePrice(priceValue) {
 }
 
 function getPaymentInfoForStop(stop) {
-    if (!state.activeRoute || !state.activeRoute.parcels) {
+    if (!state.activeRoute) {
         return {
             amount: 0,
             method: 'unknown',
@@ -174,7 +174,28 @@ function getPaymentInfoForStop(stop) {
         };
     }
     
-    const parcel = state.activeRoute.parcels.find(p => p.id === stop.parcelId);
+    // First try to find parcel in parcels array
+    let parcel = null;
+    if (state.activeRoute.parcels && state.activeRoute.parcels.length > 0) {
+        parcel = state.activeRoute.parcels.find(p => 
+            p.id === stop.parcelId || 
+            p.parcel_code === stop.parcelCode ||
+            p.code === stop.parcelCode
+        );
+    }
+    
+    // If no parcel found, check if payment info is directly on the stop
+    if (!parcel && stop.paymentInfo) {
+        return {
+            amount: parsePrice(stop.paymentInfo.amount || 0),
+            method: stop.paymentInfo.method || 'cash',
+            status: stop.paymentInfo.status || 'pending',
+            needsCollection: stop.type === 'delivery' && 
+                           (stop.paymentInfo.method || 'cash') === 'cash' && 
+                           (stop.paymentInfo.status || 'pending') === 'pending'
+        };
+    }
+    
     if (!parcel) {
         return {
             amount: 0,
@@ -184,9 +205,9 @@ function getPaymentInfoForStop(stop) {
         };
     }
     
-    const amount = parsePrice(parcel.price || parcel.total_price || 0);
-    const method = parcel.payment_method || 'cash';
-    const status = parcel.payment_status || 'pending';
+    const amount = parsePrice(parcel.price || parcel.total_price || parcel.amount || 0);
+    const method = parcel.payment_method || parcel.paymentMethod || 'cash';
+    const status = parcel.payment_status || parcel.paymentStatus || 'pending';
     
     return {
         amount: amount,
@@ -1259,8 +1280,54 @@ function injectNavigationStyles() {
             stroke-width: 1;
         }
         
-        /* ELEGANT CASH COLLECTION WIDGET and other styles continue... */
-        /* Including all other styles from original paste-2.txt */
+        /* ELEGANT CASH COLLECTION WIDGET */
+        .cash-collection-widget {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            background: linear-gradient(135deg, #0A0A0B 0%, #1C1C1F 100%);
+            backdrop-filter: blur(20px);
+            border-radius: 20px;
+            padding: 20px;
+            min-width: 240px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5), 0 2px 10px rgba(0, 0, 0, 0.3);
+            z-index: 100;
+            transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            font-weight: 500;
+        }
+        
+        /* OPTIMIZATION BUTTON STYLES */
+        .optimize-button-container {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+            width: 100%;
+        }
+        
+        .optimize-route-btn {
+            flex: 1;
+            background: linear-gradient(135deg, #9333EA, #7928CA);
+            color: white;
+            border: none;
+            border-radius: 16px;
+            padding: 16px 20px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            box-shadow: 0 4px 15px rgba(147, 51, 234, 0.4);
+            letter-spacing: 0.5px;
+        }
+        
+        /* Enhanced navigation styles */
+        .enhanced-navigation {
+            pointer-events: none !important;
+        }
     `;
     
     // Add remaining styles (truncated for brevity - include all from original)
@@ -1620,8 +1687,17 @@ function getNextStop() {
 
 function updateRouteStats() {
     const remainingStops = state.activeRoute.stops.filter(s => !s.completed).length;
-    const totalDistance = state.activeRoute.distance || 
-                         calculateTotalRouteDistance(state.activeRoute.stops);
+    
+    // Calculate total distance more reliably
+    let totalDistance = 0;
+    if (state.activeRoute.distance) {
+        totalDistance = parseFloat(state.activeRoute.distance);
+    } else if (state.activeRoute.total_distance) {
+        totalDistance = parseFloat(state.activeRoute.total_distance);
+    } else {
+        totalDistance = calculateTotalRouteDistance(state.activeRoute.stops);
+    }
+    
     const estimatedTime = Math.round(totalDistance * 2.5 + remainingStops * 5);
     
     const remainingEl = document.getElementById('remainingStops');
@@ -1631,6 +1707,10 @@ function updateRouteStats() {
     if (remainingEl) remainingEl.textContent = remainingStops;
     if (distanceEl) distanceEl.textContent = totalDistance.toFixed(1);
     if (timeEl) timeEl.textContent = estimatedTime;
+    
+    // Also update in the stats display
+    const statsDistance = document.querySelector('.stat-value.distance');
+    if (statsDistance) statsDistance.textContent = `${totalDistance.toFixed(1)} km`;
 }
 
 function updateDynamicHeader() {
@@ -2397,28 +2477,44 @@ function createStopPopup(stop) {
                            state.activeRoute?.isOptimized && 
                            orderNumber;
     
+    // Different fields for pickup vs delivery
+    let customerName, customerPhone;
+    if (type === 'pickup') {
+        customerName = stop.vendor_name || stop.vendorName || stop.sender_name || stop.customerName || 'Vendor';
+        customerPhone = stop.vendor_phone || stop.vendorPhone || stop.sender_phone || stop.customerPhone || '';
+    } else {
+        customerName = stop.recipient_name || stop.recipientName || stop.customer_name || stop.customerName || 'Recipient';
+        customerPhone = stop.recipient_phone || stop.recipientPhone || stop.customer_phone || stop.customerPhone || '';
+    }
+    
+    const address = stop.address || stop.location_address || 'Address not available';
+    const parcelCode = stop.parcelCode || stop.parcel_code || stop.code || 'N/A';
+    const instructions = stop.specialInstructions || stop.special_instructions || stop.instructions || '';
+    
     return `
         <div class="stop-popup">
             <div class="popup-header ${type}">
                 ${showOrderNumber ? `<div class="popup-order-badge">${orderNumber}</div>` : ''}
                 <span class="popup-phase">${showOrderNumber ? '' : ''} ${type.toUpperCase()}</span>
-                <span class="popup-code">${stop.parcelCode}</span>
+                <span class="popup-code">${parcelCode}</span>
             </div>
             <div class="popup-body">
-                <h3>${stop.address}</h3>
+                <h3>${address}</h3>
                 <div class="popup-info">
                     <div class="info-row">
                         <span class="info-icon">👤</span>
-                        <span>${stop.customerName}</span>
+                        <span>${customerName}</span>
                     </div>
-                    <div class="info-row">
-                        <span class="info-icon">📞</span>
-                        <a href="tel:${stop.customerPhone}">${stop.customerPhone}</a>
-                    </div>
-                    ${stop.specialInstructions ? `
+                    ${customerPhone ? `
+                        <div class="info-row">
+                            <span class="info-icon">📞</span>
+                            <a href="tel:${customerPhone}">${customerPhone}</a>
+                        </div>
+                    ` : ''}
+                    ${instructions ? `
                         <div class="info-row instructions">
                             <span class="info-icon">💬</span>
-                            <span>${stop.specialInstructions}</span>
+                            <span>${instructions}</span>
                         </div>
                     ` : ''}
                     ${paymentInfo.needsCollection ? `
@@ -2490,14 +2586,14 @@ async function plotRoute() {
             maxWidth: 340,
             className: 'enhanced-popup',
             autoPan: true,
-            autoPanPadding: [20, 20]
+            autoPanPadding: [20, 20],
+            autoClose: true,  // Auto close when another opens
+            closeOnClick: true  // Close when clicking elsewhere
         });
         
-        // Add hover effect
-        marker.on('mouseover', function() {
-            if (!this.isPopupOpen()) {
-                this.openPopup();
-            }
+        // Remove auto-open on hover - only open on click
+        marker.on('click', function() {
+            this.openPopup();
         });
         
         state.markers.push(marker);
@@ -2876,6 +2972,20 @@ function createStopCard(stop, number, type, isLocked = false) {
     const canInteract = !stop.completed && !isLocked && (type === 'pickup' || canCompleteDelivery(stop));
     const paymentInfo = getPaymentInfoForStop(stop);
     
+    // Different fields for pickup vs delivery
+    let customerName, customerPhone;
+    if (type === 'pickup') {
+        customerName = stop.vendor_name || stop.vendorName || stop.sender_name || stop.customerName || 'Vendor';
+        customerPhone = stop.vendor_phone || stop.vendorPhone || stop.sender_phone || stop.customerPhone || '';
+    } else {
+        customerName = stop.recipient_name || stop.recipientName || stop.customer_name || stop.customerName || 'Recipient';
+        customerPhone = stop.recipient_phone || stop.recipientPhone || stop.customer_phone || stop.customerPhone || '';
+    }
+    
+    const address = stop.address || stop.location_address || 'Address not available';
+    const parcelCode = stop.parcelCode || stop.parcel_code || stop.code || 'N/A';
+    const instructions = stop.specialInstructions || stop.special_instructions || stop.instructions || '';
+    
     return `
         <div class="stop-card ${stop.completed ? 'completed' : ''} ${isActive ? 'active' : ''} ${isLocked ? 'blocked' : ''}" 
              onclick="${canInteract ? `selectStop('${stop.id}')` : ''}"
@@ -2885,22 +2995,22 @@ function createStopCard(stop, number, type, isLocked = false) {
             </div>
             <div class="stop-content">
                 <div class="stop-header">
-                    <h3 class="stop-address">${stop.address}</h3>
+                    <h3 class="stop-address">${address}</h3>
                     ${stop.distance ? `<span class="stop-distance">${stop.distance} km</span>` : ''}
                 </div>
                 <div class="stop-details">
                     <div class="detail-row">
                         <span class="detail-icon">👤</span>
-                        <span>${stop.customerName} • ${stop.customerPhone}</span>
+                        <span>${customerName}${customerPhone ? ` • ${customerPhone}` : ''}</span>
                     </div>
                     <div class="detail-row">
                         <span class="detail-icon">📋</span>
-                        <span>Code: ${stop.parcelCode}</span>
+                        <span>Code: ${parcelCode}</span>
                     </div>
-                    ${stop.specialInstructions ? `
+                    ${instructions ? `
                         <div class="detail-row instructions">
                             <span class="detail-icon">💬</span>
-                            <span>${stop.specialInstructions}</span>
+                            <span>${instructions}</span>
                         </div>
                     ` : ''}
                 </div>
@@ -2932,13 +3042,17 @@ function createStopCard(stop, number, type, isLocked = false) {
                 ` : ''}
             </div>
             <div class="stop-actions">
-                ${!stop.completed && canInteract ? `
+                ${!stop.completed && canInteract && customerPhone ? `
                     <button class="action-btn navigate" onclick="event.stopPropagation(); navigateToStop('${stop.id}')">
                         🧭
                     </button>
-                    <a href="tel:${stop.customerPhone}" class="action-btn call" onclick="event.stopPropagation();">
+                    <a href="tel:${customerPhone}" class="action-btn call" onclick="event.stopPropagation();">
                         📞
                     </a>
+                ` : !stop.completed && canInteract ? `
+                    <button class="action-btn navigate" onclick="event.stopPropagation(); navigateToStop('${stop.id}')">
+                        🧭
+                    </button>
                 ` : ''}
             </div>
         </div>
