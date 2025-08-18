@@ -347,15 +347,15 @@
 <body>
     <div class="app">
         <div class="header">
-            <h1>🚀 Tuma Delivery Business Model</h1>
+            <h1>Tuma Delivery Business Model</h1>
             <p>Interactive financial calculator for Kenya's smart delivery clustering platform. Adjust parameters to see real-time profitability and break-even analysis.</p>
         </div>
 
         <div class="container">
             <div class="tabs">
-                <button class="tab active" onclick="showTab('calculator')">📊 Interactive Calculator</button>
-                <button class="tab" onclick="showTab('scenarios')">📈 Scenarios</button>
-                <button class="tab" onclick="showTab('about')">ℹ️ About Tuma</button>
+                <button class="tab active" onclick="showTab('calculator')">Interactive Calculator</button>
+                <button class="tab" onclick="showTab('scenarios')">Scenarios</button>
+                <button class="tab" onclick="showTab('about')">About Tuma</button>
             </div>
 
             <!-- Calculator Tab -->
@@ -367,7 +367,7 @@
 
                 <!-- Cost Benchmarks Legend -->
                 <div class="control-section" style="margin-bottom: 30px;">
-                    <h3>💡 Realistic Cost Benchmarks (Per Delivery)</h3>
+                    <h3>Realistic Cost Benchmarks (Per Delivery)</h3>
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
                         <div class="analysis-item">
                             <p><strong>Google Maps API:</strong> KSh 0.50 - 2.00 (geocoding + routing)</p>
@@ -382,7 +382,7 @@
                             <p><strong>Database (Supabase):</strong> KSh 0.10 - 0.30 per delivery</p>
                         </div>
                         <div class="analysis-item">
-                            <p><strong>Chairman/Association:</strong> KSh 5 - 15 (negotiable)</p>
+                            <p><strong>Aggregation Fees:</strong> KSh 5 - 15 (negotiable)</p>
                         </div>
                         <div class="analysis-item">
                             <p><strong>Agent Commission:</strong> 15-25% of platform revenue</p>
@@ -393,7 +393,7 @@
                 <div class="controls-grid">
                     <!-- Revenue Parameters -->
                     <div class="control-section">
-                        <h3>💰 Revenue Parameters</h3>
+                        <h3>Revenue Parameters</h3>
                         
                         <div class="slider-group">
                             <div class="slider-label">
@@ -409,6 +409,14 @@
                                 <span class="slider-value" id="platformShareValue">30%</span>
                             </div>
                             <input type="range" min="15" max="60" value="30" step="1" class="slider" id="platformShare" oninput="updateCalculations()">
+                        </div>
+
+                        <div class="slider-group">
+                            <div class="slider-label">
+                                <span>Zero Commission Threshold</span>
+                                <span class="slider-value" id="zeroCommissionValue">KSh 0</span>
+                            </div>
+                            <input type="range" min="0" max="200" value="0" step="10" class="slider" id="zeroCommission" oninput="updateCalculations()">
                         </div>
 
                         <div class="slider-group">
@@ -438,14 +446,14 @@
 
                     <!-- Cost Parameters -->
                     <div class="control-section">
-                        <h3>💸 Cost Parameters</h3>
+                        <h3>Cost Parameters</h3>
                         
                         <div class="slider-group">
                             <div class="slider-label">
-                                <span>Chairman/Association Fee</span>
-                                <span class="slider-value" id="chairmanFeeValue">KSh 10</span>
+                                <span>Aggregation Fees (per delivery)</span>
+                                <span class="slider-value" id="aggregationFeeValue">KSh 10</span>
                             </div>
-                            <input type="range" min="0" max="30" value="10" step="0.5" class="slider" id="chairmanFee" oninput="updateCalculations()">
+                            <input type="range" min="0" max="30" value="10" step="0.5" class="slider" id="aggregationFee" oninput="updateCalculations()">
                         </div>
 
                         <div class="slider-group">
@@ -471,13 +479,21 @@
                             </div>
                             <input type="range" min="0" max="5" value="1" step="0.1" class="slider" id="smsCost" oninput="updateCalculations()">
                         </div>
+
+                        <div class="slider-group">
+                            <div class="slider-label">
+                                <span>Tax Rate (%)</span>
+                                <span class="slider-value" id="taxRateValue">30%</span>
+                            </div>
+                            <input type="range" min="0" max="50" value="30" step="1" class="slider" id="taxRate" oninput="updateCalculations()">
+                        </div>
                     </div>
                 </div>
 
                 <div class="controls-grid">
                     <!-- Operational Costs -->
                     <div class="control-section">
-                        <h3>🏢 Monthly Operational Costs</h3>
+                        <h3>Monthly Operational Costs</h3>
                         
                         <div class="slider-group">
                             <div class="slider-label">
@@ -514,7 +530,7 @@
 
                     <!-- Market Parameters -->
                     <div class="control-section">
-                        <h3>📊 Market & Efficiency</h3>
+                        <h3>Market & Efficiency</h3>
                         
                         <div class="slider-group">
                             <div class="slider-label">
@@ -552,7 +568,7 @@
 
                 <!-- Results Section -->
                 <div class="results-section">
-                    <h2>📈 Financial Results</h2>
+                    <h2>Financial Results</h2>
                     
                     <div class="metrics-grid">
                         <div class="metric-card">
@@ -635,7 +651,7 @@
 
                 <!-- Analysis Section -->
                 <div class="analysis-section">
-                    <h3>💡 Business Analysis</h3>
+                    <h3>Business Analysis</h3>
                     <div id="analysisContainer">
                         <div class="analysis-item">
                             <p><strong>Break-even Analysis:</strong> Very low break-even point indicates a sustainable business model.</p>
@@ -793,12 +809,14 @@
             // Get all input values
             const avgPrice = parseFloat(document.getElementById('avgPrice').value);
             const platformShare = parseFloat(document.getElementById('platformShare').value) / 100;
+            const zeroCommission = parseFloat(document.getElementById('zeroCommission').value);
             const dailyDeliveries = parseFloat(document.getElementById('dailyDeliveries').value);
             const expressPercent = parseFloat(document.getElementById('expressPercent').value) / 100;
-            const chairmanFee = parseFloat(document.getElementById('chairmanFee').value);
+            const aggregationFee = parseFloat(document.getElementById('aggregationFee').value);
             const agentCommission = parseFloat(document.getElementById('agentCommission').value) / 100;
             const techCost = parseFloat(document.getElementById('techCost').value);
             const smsCost = parseFloat(document.getElementById('smsCost').value);
+            const taxRate = parseFloat(document.getElementById('taxRate').value) / 100;
             const staffCost = parseFloat(document.getElementById('staffCost').value);
             const officeCost = parseFloat(document.getElementById('officeCost').value);
             const supportCost = parseFloat(document.getElementById('supportCost').value);
@@ -812,12 +830,14 @@
             // Update slider displays
             document.getElementById('avgPriceValue').textContent = formatCurrency(avgPrice);
             document.getElementById('platformShareValue').textContent = Math.round(platformShare * 100) + '%';
+            document.getElementById('zeroCommissionValue').textContent = formatCurrency(zeroCommission);
             document.getElementById('dailyDeliveriesValue').textContent = formatNumber(dailyDeliveries);
             document.getElementById('expressPercentValue').textContent = Math.round(expressPercent * 100) + '%';
-            document.getElementById('chairmanFeeValue').textContent = formatCurrency(chairmanFee);
+            document.getElementById('aggregationFeeValue').textContent = formatCurrency(aggregationFee);
             document.getElementById('agentCommissionValue').textContent = Math.round(agentCommission * 100) + '%';
             document.getElementById('techCostValue').textContent = formatCurrency(techCost);
             document.getElementById('smsCostValue').textContent = formatCurrency(smsCost);
+            document.getElementById('taxRateValue').textContent = Math.round(taxRate * 100) + '%';
             document.getElementById('staffCostValue').textContent = formatCurrency(staffCost);
             document.getElementById('officeCostValue').textContent = formatCurrency(officeCost);
             document.getElementById('supportCostValue').textContent = formatCurrency(supportCost);
@@ -832,26 +852,39 @@
             const expressPrice = avgPrice * 1.4; // 40% premium for express
             const weightedAvgPrice = (avgPrice * (1 - expressPercent)) + (expressPrice * expressPercent);
             
+            // Calculate commission considering zero commission threshold
+            let effectiveCommissionRate = platformShare;
+            if (weightedAvgPrice <= zeroCommission) {
+                effectiveCommissionRate = 0; // No commission on low-value deliveries
+            }
+            
+            // Estimate percentage of deliveries below threshold (simple model)
+            const lowValuePercent = Math.min(zeroCommission / avgPrice, 1);
+            const avgCommissionRate = (effectiveCommissionRate * (1 - lowValuePercent)) + (0 * lowValuePercent);
+            
             // Core calculations
-            const revenuePerDelivery = weightedAvgPrice * platformShare;
+            const revenuePerDelivery = weightedAvgPrice * avgCommissionRate;
             const agentCommissionPerDelivery = revenuePerDelivery * agentCommission;
-            const variableCostPerDelivery = chairmanFee + agentCommissionPerDelivery + techCost + smsCost;
+            const variableCostPerDelivery = aggregationFee + agentCommissionPerDelivery + techCost + smsCost;
             const failureCost = revenuePerDelivery * failureRate;
             const totalVariableCost = variableCostPerDelivery + failureCost;
-            const profitPerDelivery = revenuePerDelivery - totalVariableCost;
+            const grossProfitPerDelivery = revenuePerDelivery - totalVariableCost;
             
             // Monthly calculations
             const monthlyFixedCosts = staffCost + officeCost + supportCost + marketingCost;
             const monthlyDeliveries = dailyDeliveries * workingDays;
             const monthlyRevenue = revenuePerDelivery * monthlyDeliveries;
             const monthlyVariableCosts = totalVariableCost * monthlyDeliveries;
-            const monthlyProfit = monthlyRevenue - monthlyVariableCosts - monthlyFixedCosts;
+            const monthlyGrossProfit = monthlyRevenue - monthlyVariableCosts - monthlyFixedCosts;
+            const monthlyTax = Math.max(monthlyGrossProfit * taxRate, 0);
+            const monthlyNetProfit = monthlyGrossProfit - monthlyTax;
             
-            // Break-even calculation (fixed)
+            // Break-even calculation (FIXED)
             const dailyFixedCosts = monthlyFixedCosts / workingDays;
             let breakEvenDaily = 0;
-            if (profitPerDelivery > 0) {
-                breakEvenDaily = Math.ceil(dailyFixedCosts / profitPerDelivery);
+            if (grossProfitPerDelivery > 0) {
+                // Break-even = Fixed costs ÷ (Gross profit per delivery)
+                breakEvenDaily = Math.ceil(dailyFixedCosts / grossProfitPerDelivery);
             } else {
                 breakEvenDaily = 999999; // Invalid scenario
             }
@@ -863,11 +896,11 @@
             
             // Update results display
             document.getElementById('revenuePerDelivery').textContent = formatCurrency(revenuePerDelivery);
-            document.getElementById('profitPerDelivery').textContent = formatCurrency(profitPerDelivery);
-            document.getElementById('monthlyProfit').textContent = formatCurrency(monthlyProfit);
+            document.getElementById('profitPerDelivery').textContent = formatCurrency(grossProfitPerDelivery);
+            document.getElementById('monthlyProfit').textContent = formatCurrency(monthlyNetProfit);
             
             // Handle break-even display
-            if (breakEvenDaily >= 999999 || profitPerDelivery <= 0) {
+            if (breakEvenDaily >= 999999 || grossProfitPerDelivery <= 0) {
                 document.getElementById('breakEvenDaily').textContent = "N/A";
                 document.getElementById('breakEvenDaily').style.color = "#FF3B30";
             } else {
@@ -883,9 +916,9 @@
             document.getElementById('tableDailyRevenue').textContent = formatCurrency(revenuePerDelivery * dailyDeliveries);
             document.getElementById('tableMonthlyRevenue').textContent = formatCurrency(monthlyRevenue);
             
-            document.getElementById('tableChairman').textContent = formatCurrency(chairmanFee);
-            document.getElementById('tableDailyChairman').textContent = formatCurrency(chairmanFee * dailyDeliveries);
-            document.getElementById('tableMonthlyChairman').textContent = formatCurrency(chairmanFee * monthlyDeliveries);
+            document.getElementById('tableAggregation').textContent = formatCurrency(aggregationFee);
+            document.getElementById('tableDailyAggregation').textContent = formatCurrency(aggregationFee * dailyDeliveries);
+            document.getElementById('tableMonthlyAggregation').textContent = formatCurrency(aggregationFee * monthlyDeliveries);
             
             document.getElementById('tableAgent').textContent = formatCurrency(agentCommissionPerDelivery);
             document.getElementById('tableDailyAgent').textContent = formatCurrency(agentCommissionPerDelivery * dailyDeliveries);
@@ -899,17 +932,26 @@
             document.getElementById('tableDailyOps').textContent = formatCurrency(dailyFixedCosts);
             document.getElementById('tableMonthlyOps').textContent = formatCurrency(monthlyFixedCosts);
             
-            document.getElementById('tableNetPerDelivery').textContent = formatCurrency(profitPerDelivery);
-            document.getElementById('tableDailyNet').textContent = formatCurrency(profitPerDelivery * dailyDeliveries - dailyFixedCosts);
-            document.getElementById('tableMonthlyNet').textContent = formatCurrency(monthlyProfit);
+            document.getElementById('tableTax').textContent = formatCurrency(monthlyTax / monthlyDeliveries);
+            document.getElementById('tableDailyTax').textContent = formatCurrency(monthlyTax / workingDays);
+            document.getElementById('tableMonthlyTax').textContent = formatCurrency(monthlyTax);
+            
+            document.getElementById('tableNetPerDelivery').textContent = formatCurrency(monthlyNetProfit / monthlyDeliveries);
+            document.getElementById('tableDailyNet').textContent = formatCurrency((monthlyNetProfit / workingDays));
+            document.getElementById('tableMonthlyNet').textContent = formatCurrency(monthlyNetProfit);
             
             // Update analysis
-            updateAnalysis(breakEvenDaily, profitPerDelivery, monthlyProfit, marketShare, agentMonthlyEarnings);
+            updateAnalysis(breakEvenDaily, grossProfitPerDelivery, monthlyNetProfit, marketShare, agentMonthlyEarnings, zeroCommission);
         }
 
-        function updateAnalysis(breakEven, profitPerDelivery, monthlyProfit, marketShare, agentEarnings) {
+        function updateAnalysis(breakEven, profitPerDelivery, monthlyProfit, marketShare, agentEarnings, zeroCommission) {
             const analysisContainer = document.getElementById('analysisContainer');
             let analysis = '';
+            
+            // Zero commission impact analysis
+            if (zeroCommission > 0) {
+                analysis += '<div class="analysis-item"><p><strong>Zero Commission Impact:</strong> No commission on deliveries worth KSh ' + zeroCommission + ' or below. This reduces average revenue but may increase volume from price-sensitive customers.</p></div>';
+            }
             
             // Break-even analysis
             if (profitPerDelivery <= 0) {
