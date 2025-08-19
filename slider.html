@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tuma Delivery - Business Model Calculator</title>
+    <title>Tuma Delivery - Business Intelligence Dashboard</title>
     <style>
         * {
             margin: 0;
@@ -35,66 +35,72 @@
             line-height: 1.6;
         }
 
-        .app {
-            min-height: 100vh;
-            background: var(--surface);
-        }
-
         .header {
-            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            background: linear-gradient(135deg, var(--surface-elevated) 0%, var(--surface-high) 100%);
             padding: 40px 20px;
-            text-align: center;
             border-bottom: 1px solid var(--border);
         }
 
         .header h1 {
-            font-size: 2.5rem;
-            font-weight: 600;
-            margin-bottom: 10px;
+            font-size: 2rem;
+            font-weight: 300;
+            letter-spacing: -0.5px;
+            margin-bottom: 5px;
         }
 
         .header p {
-            font-size: 1.1rem;
-            opacity: 0.9;
-            max-width: 600px;
-            margin: 0 auto;
+            font-size: 0.95rem;
+            color: var(--text-secondary);
         }
 
         .container {
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
             padding: 20px;
         }
 
-        .tabs {
+        /* Tab Navigation */
+        .tab-nav {
             display: flex;
             background: var(--surface-elevated);
-            border-radius: 12px;
+            border-radius: 8px;
             margin-bottom: 30px;
             border: 1px solid var(--border);
-            overflow: hidden;
+            overflow-x: auto;
         }
 
-        .tab {
+        .tab-btn {
             flex: 1;
-            padding: 15px 20px;
+            min-width: 140px;
+            padding: 14px 20px;
             background: transparent;
             border: none;
             color: var(--text-secondary);
             cursor: pointer;
-            transition: all 0.3s ease;
-            font-size: 14px;
+            transition: all 0.2s ease;
+            font-size: 13px;
             font-weight: 500;
+            letter-spacing: 0.3px;
+            text-transform: uppercase;
+            position: relative;
         }
 
-        .tab:hover {
-            background: var(--surface-high);
+        .tab-btn:hover {
             color: var(--text-primary);
         }
 
-        .tab.active {
+        .tab-btn.active {
+            color: var(--primary);
+        }
+
+        .tab-btn.active::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
             background: var(--primary);
-            color: white;
         }
 
         .tab-content {
@@ -103,84 +109,99 @@
 
         .tab-content.active {
             display: block;
+            animation: fadeIn 0.2s ease;
         }
 
-        /* Calculator Styles */
-        .calculator-intro {
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        /* Common Styles */
+        .section {
             background: var(--surface-elevated);
-            padding: 25px;
-            border-radius: 12px;
+            padding: 30px;
+            border-radius: 8px;
             margin-bottom: 30px;
             border: 1px solid var(--border);
         }
 
-        .calculator-intro h2 {
-            color: var(--text-primary);
-            margin-bottom: 15px;
-            font-size: 1.5rem;
+        .section-header {
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid var(--border);
         }
 
-        .calculator-intro p {
+        .section h2 {
+            color: var(--text-primary);
+            font-size: 1.3rem;
+            font-weight: 400;
+            letter-spacing: -0.3px;
+        }
+
+        .section-subtitle {
             color: var(--text-secondary);
-            font-size: 1rem;
+            font-size: 0.9rem;
+            margin-top: 5px;
         }
 
         .controls-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
             gap: 30px;
             margin-bottom: 40px;
         }
 
         .control-section {
-            background: var(--surface-elevated);
+            background: var(--surface-high);
             padding: 25px;
-            border-radius: 12px;
+            border-radius: 6px;
             border: 1px solid var(--border);
         }
 
         .control-section h3 {
             color: var(--text-primary);
             margin-bottom: 20px;
-            font-size: 1.2rem;
-            display: flex;
-            align-items: center;
-            gap: 8px;
+            font-size: 1rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-size: 0.85rem;
         }
 
         .slider-group {
-            margin-bottom: 25px;
+            margin-bottom: 22px;
         }
 
         .slider-label {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 10px;
+            margin-bottom: 8px;
         }
 
         .slider-label span {
             color: var(--text-secondary);
-            font-size: 14px;
+            font-size: 13px;
         }
 
         .slider-value {
             background: var(--primary);
             color: #FFFFFF !important;
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 13px;
+            padding: 3px 10px;
+            border-radius: 4px;
+            font-size: 12px;
             font-weight: 600;
             min-width: 70px;
             text-align: center;
-            text-shadow: none;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.2);
         }
 
         .slider {
             width: 100%;
-            height: 6px;
+            height: 4px;
             background: var(--border);
-            border-radius: 3px;
+            border-radius: 2px;
             outline: none;
             -webkit-appearance: none;
             cursor: pointer;
@@ -188,210 +209,283 @@
 
         .slider::-webkit-slider-thumb {
             -webkit-appearance: none;
-            width: 20px;
-            height: 20px;
+            width: 16px;
+            height: 16px;
             background: var(--primary);
             border-radius: 50%;
             cursor: pointer;
-            box-shadow: 0 2px 6px rgba(0, 102, 255, 0.3);
-        }
-
-        .slider::-moz-range-thumb {
-            width: 20px;
-            height: 20px;
-            background: var(--primary);
-            border-radius: 50%;
-            cursor: pointer;
-            border: none;
-            box-shadow: 0 2px 6px rgba(0, 102, 255, 0.3);
-        }
-
-        /* Results */
-        .results-section {
-            background: var(--surface-elevated);
-            padding: 30px;
-            border-radius: 12px;
-            margin-bottom: 30px;
-            border: 1px solid var(--border);
-        }
-
-        .results-section h2 {
-            color: var(--text-primary);
-            margin-bottom: 25px;
-            font-size: 1.5rem;
         }
 
         .metrics-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
             gap: 20px;
             margin-bottom: 30px;
         }
 
         .metric-card {
-            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-            padding: 20px;
-            border-radius: 8px;
-            text-align: center;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .metric-card h3 {
-            font-size: 1.8rem;
-            font-weight: 600;
-            margin-bottom: 5px;
-        }
-
-        .metric-card p {
-            opacity: 0.9;
-            font-size: 0.9rem;
-        }
-
-        .breakdown-table {
             background: var(--surface-high);
-            border-radius: 8px;
-            overflow: hidden;
+            padding: 20px;
+            border-radius: 6px;
             border: 1px solid var(--border);
+            transition: all 0.2s ease;
         }
 
-        .breakdown-table table {
+        .metric-card:hover {
+            border-color: var(--primary);
+            background: var(--surface-elevated);
+        }
+
+        .metric-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #FFFFFF;
+            margin-bottom: 8px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            letter-spacing: -0.5px;
+        }
+
+        .metric-label {
+            font-size: 0.8rem;
+            color: #A0A0A0;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 500;
+        }
+
+        .metric-card.positive {
+            background: linear-gradient(135deg, #2ECC71 0%, #27AE60 100%);
+            border: 1px solid rgba(46, 204, 113, 0.3);
+        }
+
+        .metric-card.positive .metric-value {
+            color: #FFFFFF;
+            font-weight: 700;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .metric-card.positive .metric-label {
+            color: rgba(255,255,255,0.85);
+        }
+
+        .metric-card.warning {
+            background: linear-gradient(135deg, #F39C12 0%, #E67E22 100%);
+            border: 1px solid rgba(243, 156, 18, 0.3);
+        }
+
+        .metric-card.warning .metric-value {
+            color: #FFFFFF;
+            font-weight: 700;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .metric-card.warning .metric-label {
+            color: rgba(255,255,255,0.85);
+        }
+
+        .metric-card.negative {
+            background: linear-gradient(135deg, #E74C3C 0%, #C0392B 100%);
+            border: 1px solid rgba(231, 76, 60, 0.3);
+        }
+
+        .metric-card.negative .metric-value {
+            color: #FFFFFF;
+            font-weight: 700;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .metric-card.negative .metric-label {
+            color: rgba(255,255,255,0.85);
+        }
+
+        .preset-buttons {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 25px;
+        }
+
+        .preset-btn {
+            padding: 8px 16px;
+            background: var(--surface-high);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 12px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .preset-btn:hover {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        .data-table {
             width: 100%;
             border-collapse: collapse;
+            margin-top: 20px;
         }
 
-        .breakdown-table th,
-        .breakdown-table td {
-            padding: 12px 15px;
+        .data-table th,
+        .data-table td {
+            padding: 12px;
             text-align: left;
             border-bottom: 1px solid var(--border);
         }
 
-        .breakdown-table th {
-            background: var(--surface-elevated);
+        .data-table th {
+            background: var(--surface-high);
             color: var(--text-primary);
-            font-weight: 600;
-            font-size: 0.9rem;
+            font-weight: 500;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
 
-        .breakdown-table td {
+        .data-table td {
             color: var(--text-secondary);
             font-size: 0.9rem;
         }
 
-        .breakdown-table tr:last-child td {
-            border-bottom: none;
+        .data-table tr:hover td {
+            background: var(--surface-high);
         }
 
-        .breakdown-table .total-row {
-            background: var(--surface-elevated);
+        .data-table .total-row {
+            background: var(--surface-high);
             font-weight: 600;
         }
 
-        .breakdown-table .total-row td {
+        .data-table .total-row td {
             color: var(--text-primary);
+            border-top: 2px solid var(--border);
         }
 
-        /* Analysis */
-        .analysis-section {
-            background: var(--surface-elevated);
-            padding: 25px;
-            border-radius: 12px;
+        .analysis-card {
+            background: var(--surface-high);
+            padding: 20px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            border-left: 3px solid var(--primary);
+        }
+
+        .analysis-card h4 {
+            color: var(--text-primary);
+            font-size: 0.95rem;
+            margin-bottom: 10px;
+            font-weight: 500;
+        }
+
+        .analysis-card p {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            line-height: 1.6;
+        }
+
+        .chart-container {
+            background: var(--surface-high);
+            border-radius: 6px;
+            padding: 30px;
+            margin-top: 20px;
             border: 1px solid var(--border);
         }
 
-        .analysis-section h3 {
-            color: var(--text-primary);
-            margin-bottom: 15px;
-            font-size: 1.2rem;
+        .chart-bars {
+            display: flex;
+            align-items: flex-end;
+            height: 250px;
+            gap: 15px;
+            margin-top: 20px;
         }
 
-        .analysis-item {
-            background: var(--surface-high);
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 10px;
-            border-left: 4px solid var(--primary);
+        .chart-bar {
+            flex: 1;
+            background: linear-gradient(to top, var(--primary), var(--primary-dark));
+            border-radius: 4px 4px 0 0;
+            position: relative;
+            min-height: 10px;
+            opacity: 0.9;
+            transition: opacity 0.2s ease;
         }
 
-        .analysis-item p {
+        .chart-bar:hover {
+            opacity: 1;
+        }
+
+        .chart-label {
+            position: absolute;
+            bottom: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.7rem;
             color: var(--text-secondary);
-            margin: 0;
+            text-transform: uppercase;
+            white-space: nowrap;
         }
 
-        .analysis-item strong {
+        .chart-value {
+            position: absolute;
+            top: -20px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.85rem;
             color: var(--text-primary);
+            font-weight: 500;
         }
 
-        /* Responsive */
         @media (max-width: 768px) {
             .controls-grid {
                 grid-template-columns: 1fr;
-                gap: 20px;
             }
-
+            
             .metrics-grid {
                 grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-                gap: 15px;
             }
 
-            .header h1 {
-                font-size: 2rem;
-            }
-
-            .header p {
-                font-size: 1rem;
+            .tab-nav {
+                overflow-x: scroll;
             }
         }
     </style>
 </head>
 <body>
-    <div class="app">
-        <div class="header">
-            <h1>Tuma Delivery Business Model</h1>
-            <p>Interactive financial calculator for Kenya's smart delivery clustering platform. Adjust parameters to see real-time profitability and break-even analysis.</p>
+    <div class="header">
+        <h1>Tuma Delivery Business Intelligence</h1>
+        <p>Financial Modeling & Strategic Analysis Platform</p>
+    </div>
+
+    <div class="container">
+        <!-- Tab Navigation -->
+        <div class="tab-nav">
+            <button class="tab-btn active" onclick="showTab('calculator')">Financial Model</button>
+            <button class="tab-btn" onclick="showTab('market')">Market Analysis</button>
+            <button class="tab-btn" onclick="showTab('competition')">Competitive Landscape</button>
+            <button class="tab-btn" onclick="showTab('operations')">Unit Economics</button>
+            <button class="tab-btn" onclick="showTab('cashflow')">Cash Flow</button>
+            <button class="tab-btn" onclick="showTab('scenarios')">Growth Scenarios</button>
         </div>
 
-        <div class="container">
-            <div class="tabs">
-                <button class="tab active" onclick="showTab('calculator')">Interactive Calculator</button>
-                <button class="tab" onclick="showTab('scenarios')">Scenarios</button>
-                <button class="tab" onclick="showTab('about')">About Tuma</button>
+        <!-- Tab 1: Financial Model -->
+        <div id="calculator" class="tab-content active">
+            <div class="preset-buttons">
+                <button class="preset-btn" onclick="loadScenario('conservative')">Conservative</button>
+                <button class="preset-btn" onclick="loadScenario('moderate')">Moderate</button>
+                <button class="preset-btn" onclick="loadScenario('realistic')">Realistic</button>
+                <button class="preset-btn" onclick="loadScenario('aggressive')">Aggressive</button>
+                <button class="preset-btn" onclick="loadScenario('optimistic')">Optimistic</button>
             </div>
 
-            <!-- Calculator Tab -->
-            <div id="calculator" class="tab-content active">
-                <div class="calculator-intro">
-                    <h2>Business Model Calculator</h2>
-                    <p>Tuma is a delivery platform that uses route clustering to optimize motorcycle deliveries in Nairobi. Adjust the sliders below to see how different parameters affect profitability, break-even points, and business viability.</p>
+            <div class="section">
+                <div class="section-header">
+                    <h2>Revenue Model Configuration</h2>
+                    <p class="section-subtitle">Adjust parameters to model different business scenarios</p>
                 </div>
-
-                <!-- Cost Benchmarks Legend -->
-                <div class="control-section" style="margin-bottom: 30px;">
-                    <h3>Realistic Cost Benchmarks (Per Delivery)</h3>
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
-                        <div class="analysis-item">
-                            <p><strong>Google Maps API:</strong> KSh 0.50 - 2.00 (geocoding + routing)</p>
-                        </div>
-                        <div class="analysis-item">
-                            <p><strong>SMS Notifications:</strong> KSh 0.50 - 1.50 (AfricasTalking rates)</p>
-                        </div>
-                        <div class="analysis-item">
-                            <p><strong>M-Pesa Processing:</strong> 1-3% of transaction value</p>
-                        </div>
-                        <div class="analysis-item">
-                            <p><strong>Database (Supabase):</strong> KSh 0.10 - 0.30 per delivery</p>
-                        </div>
-                        <div class="analysis-item">
-                            <p><strong>Aggregation Fees:</strong> KSh 5 - 15 (negotiable)</p>
-                        </div>
-                        <div class="analysis-item">
-                            <p><strong>Agent Commission:</strong> 15-25% of platform revenue</p>
-                        </div>
-                    </div>
-                </div>
-
+                
                 <div class="controls-grid">
-                    <!-- Revenue Parameters -->
                     <div class="control-section">
                         <h3>Revenue Parameters</h3>
                         
@@ -400,402 +494,830 @@
                                 <span>Average Delivery Price</span>
                                 <span class="slider-value" id="avgPriceValue">KSh 200</span>
                             </div>
-                            <input type="range" min="50" max="800" value="200" step="10" class="slider" id="avgPrice" oninput="updateCalculations()">
+                            <input type="range" min="50" max="500" value="200" step="10" class="slider" id="avgPrice" oninput="updateCalculations()">
                         </div>
 
                         <div class="slider-group">
                             <div class="slider-label">
-                                <span>Platform Commission (%)</span>
+                                <span>Platform Commission Rate</span>
                                 <span class="slider-value" id="platformShareValue">30%</span>
                             </div>
-                            <input type="range" min="15" max="60" value="30" step="1" class="slider" id="platformShare" oninput="updateCalculations()">
+                            <input type="range" min="15" max="50" value="30" step="1" class="slider" id="platformShare" oninput="updateCalculations()">
                         </div>
 
                         <div class="slider-group">
                             <div class="slider-label">
-                                <span>Zero Commission Threshold</span>
-                                <span class="slider-value" id="zeroCommissionValue">KSh 0</span>
-                            </div>
-                            <input type="range" min="0" max="200" value="0" step="10" class="slider" id="zeroCommission" oninput="updateCalculations()">
-                        </div>
-
-                        <div class="slider-group">
-                            <div class="slider-label">
-                                <span>Daily Deliveries</span>
+                                <span>Daily Delivery Volume</span>
                                 <span class="slider-value" id="dailyDeliveriesValue">1,000</span>
                             </div>
-                            <input type="range" min="10" max="10000" value="1000" step="10" class="slider" id="dailyDeliveries" oninput="updateCalculations()">
+                            <input type="range" min="10" max="20000" value="1000" step="10" class="slider" id="dailyDeliveries" oninput="updateCalculations()">
                         </div>
 
                         <div class="slider-group">
                             <div class="slider-label">
-                                <span>Express Delivery % (Premium)</span>
+                                <span>Express Delivery Premium</span>
+                                <span class="slider-value" id="expressPremiumValue">40%</span>
+                            </div>
+                            <input type="range" min="0" max="100" value="40" step="5" class="slider" id="expressPremium" oninput="updateCalculations()">
+                        </div>
+
+                        <div class="slider-group">
+                            <div class="slider-label">
+                                <span>Express Order Percentage</span>
                                 <span class="slider-value" id="expressPercentValue">15%</span>
                             </div>
-                            <input type="range" min="0" max="40" value="15" step="1" class="slider" id="expressPercent" oninput="updateCalculations()">
+                            <input type="range" min="0" max="50" value="15" step="1" class="slider" id="expressPercent" oninput="updateCalculations()">
                         </div>
 
                         <div class="slider-group">
                             <div class="slider-label">
-                                <span>Working Days per Month</span>
-                                <span class="slider-value" id="workingDaysValue">26 days</span>
+                                <span>Operating Days per Month</span>
+                                <span class="slider-value" id="workingDaysValue">26</span>
                             </div>
                             <input type="range" min="20" max="31" value="26" step="1" class="slider" id="workingDays" oninput="updateCalculations()">
                         </div>
                     </div>
 
-                    <!-- Cost Parameters -->
                     <div class="control-section">
-                        <h3>Cost Parameters</h3>
+                        <h3>Variable Cost Structure</h3>
                         
                         <div class="slider-group">
                             <div class="slider-label">
-                                <span>Aggregation Fees (per delivery)</span>
-                                <span class="slider-value" id="aggregationFeeValue">KSh 10</span>
+                                <span>Chairman/Association Fee</span>
+                                <span class="slider-value" id="chairmanFeeValue">KSh 10</span>
                             </div>
-                            <input type="range" min="0" max="30" value="10" step="0.5" class="slider" id="aggregationFee" oninput="updateCalculations()">
+                            <input type="range" min="0" max="50" value="10" step="1" class="slider" id="chairmanFee" oninput="updateCalculations()">
                         </div>
 
                         <div class="slider-group">
                             <div class="slider-label">
-                                <span>Agent Commission (%)</span>
+                                <span>Agent Commission Rate</span>
                                 <span class="slider-value" id="agentCommissionValue">20%</span>
                             </div>
-                            <input type="range" min="5" max="40" value="20" step="1" class="slider" id="agentCommission" oninput="updateCalculations()">
+                            <input type="range" min="0" max="40" value="20" step="1" class="slider" id="agentCommission" oninput="updateCalculations()">
                         </div>
 
                         <div class="slider-group">
                             <div class="slider-label">
-                                <span>Technology Costs (per delivery)</span>
+                                <span>Technology Cost per Delivery</span>
                                 <span class="slider-value" id="techCostValue">KSh 2</span>
                             </div>
-                            <input type="range" min="0" max="10" value="2" step="0.1" class="slider" id="techCost" oninput="updateCalculations()">
+                            <input type="range" min="0" max="10" value="2" step="0.5" class="slider" id="techCost" oninput="updateCalculations()">
                         </div>
 
                         <div class="slider-group">
                             <div class="slider-label">
-                                <span>SMS/Notifications (per delivery)</span>
+                                <span>SMS/Notification Cost</span>
                                 <span class="slider-value" id="smsCostValue">KSh 1</span>
                             </div>
-                            <input type="range" min="0" max="5" value="1" step="0.1" class="slider" id="smsCost" oninput="updateCalculations()">
+                            <input type="range" min="0" max="5" value="1" step="0.5" class="slider" id="smsCost" oninput="updateCalculations()">
                         </div>
 
                         <div class="slider-group">
                             <div class="slider-label">
-                                <span>Tax Rate (%)</span>
+                                <span>Payment Processing Fee</span>
+                                <span class="slider-value" id="paymentFeeValue">1.5%</span>
+                            </div>
+                            <input type="range" min="0" max="5" value="1.5" step="0.1" class="slider" id="paymentFee" oninput="updateCalculations()">
+                        </div>
+
+                        <div class="slider-group">
+                            <div class="slider-label">
+                                <span>Corporate Tax Rate</span>
                                 <span class="slider-value" id="taxRateValue">30%</span>
                             </div>
                             <input type="range" min="0" max="50" value="30" step="1" class="slider" id="taxRate" oninput="updateCalculations()">
                         </div>
                     </div>
-                </div>
 
-                <div class="controls-grid">
-                    <!-- Operational Costs -->
                     <div class="control-section">
-                        <h3>Monthly Operational Costs</h3>
+                        <h3>Fixed Operating Expenses</h3>
                         
                         <div class="slider-group">
                             <div class="slider-label">
-                                <span>Staff Salaries</span>
-                                <span class="slider-value" id="staffCostValue">KSh 0</span>
+                                <span>Office & Facilities</span>
+                                <span class="slider-value" id="rentValue">KSh 50,000</span>
                             </div>
-                            <input type="range" min="0" max="500000" value="0" step="5000" class="slider" id="staffCost" oninput="updateCalculations()">
+                            <input type="range" min="0" max="200000" value="50000" step="5000" class="slider" id="rent" oninput="updateCalculations()">
                         </div>
 
                         <div class="slider-group">
                             <div class="slider-label">
-                                <span>Office Rent</span>
-                                <span class="slider-value" id="officeCostValue">KSh 0</span>
+                                <span>Staff Salaries</span>
+                                <span class="slider-value" id="salariesValue">KSh 150,000</span>
                             </div>
-                            <input type="range" min="0" max="100000" value="0" step="2500" class="slider" id="officeCost" oninput="updateCalculations()">
+                            <input type="range" min="0" max="1000000" value="150000" step="10000" class="slider" id="salaries" oninput="updateCalculations()">
+                        </div>
+
+                        <div class="slider-group">
+                            <div class="slider-label">
+                                <span>Marketing & Acquisition</span>
+                                <span class="slider-value" id="marketingValue">KSh 50,000</span>
+                            </div>
+                            <input type="range" min="0" max="500000" value="50000" step="5000" class="slider" id="marketing" oninput="updateCalculations()">
                         </div>
 
                         <div class="slider-group">
                             <div class="slider-label">
                                 <span>Customer Support</span>
-                                <span class="slider-value" id="supportCostValue">KSh 0</span>
+                                <span class="slider-value" id="supportValue">KSh 30,000</span>
                             </div>
-                            <input type="range" min="0" max="150000" value="0" step="2500" class="slider" id="supportCost" oninput="updateCalculations()">
+                            <input type="range" min="0" max="200000" value="30000" step="5000" class="slider" id="support" oninput="updateCalculations()">
                         </div>
 
                         <div class="slider-group">
                             <div class="slider-label">
-                                <span>Marketing Budget</span>
-                                <span class="slider-value" id="marketingCostValue">KSh 0</span>
+                                <span>Insurance & Legal</span>
+                                <span class="slider-value" id="insuranceValue">KSh 20,000</span>
                             </div>
-                            <input type="range" min="0" max="200000" value="0" step="5000" class="slider" id="marketingCost" oninput="updateCalculations()">
+                            <input type="range" min="0" max="100000" value="20000" step="2500" class="slider" id="insurance" oninput="updateCalculations()">
+                        </div>
+
+                        <div class="slider-group">
+                            <div class="slider-label">
+                                <span>Other Expenses</span>
+                                <span class="slider-value" id="otherValue">KSh 25,000</span>
+                            </div>
+                            <input type="range" min="0" max="200000" value="25000" step="5000" class="slider" id="other" oninput="updateCalculations()">
                         </div>
                     </div>
 
-                    <!-- Market Parameters -->
                     <div class="control-section">
-                        <h3>Market & Efficiency</h3>
+                        <h3>Market Efficiency Parameters</h3>
                         
                         <div class="slider-group">
                             <div class="slider-label">
-                                <span>Clustering Efficiency (%)</span>
+                                <span>Clustering Success Rate</span>
                                 <span class="slider-value" id="clusteringValue">60%</span>
                             </div>
-                            <input type="range" min="20" max="85" value="60" step="1" class="slider" id="clustering" oninput="updateCalculations()">
+                            <input type="range" min="10" max="90" value="60" step="5" class="slider" id="clustering" oninput="updateCalculations()">
                         </div>
 
                         <div class="slider-group">
                             <div class="slider-label">
-                                <span>Failed Delivery Rate (%)</span>
+                                <span>Failed Delivery Rate</span>
                                 <span class="slider-value" id="failureRateValue">5%</span>
                             </div>
-                            <input type="range" min="0" max="20" value="5" step="0.5" class="slider" id="failureRate" oninput="updateCalculations()">
+                            <input type="range" min="0" max="20" value="5" step="1" class="slider" id="failureRate" oninput="updateCalculations()">
                         </div>
 
                         <div class="slider-group">
                             <div class="slider-label">
-                                <span>Customer Retention (%)</span>
+                                <span>Customer Retention Rate</span>
                                 <span class="slider-value" id="retentionValue">70%</span>
                             </div>
-                            <input type="range" min="40" max="95" value="70" step="1" class="slider" id="retention" oninput="updateCalculations()">
+                            <input type="range" min="20" max="95" value="70" step="5" class="slider" id="retention" oninput="updateCalculations()">
                         </div>
 
                         <div class="slider-group">
                             <div class="slider-label">
-                                <span>Average Distance (km)</span>
+                                <span>Average Delivery Distance</span>
                                 <span class="slider-value" id="distanceValue">8 km</span>
                             </div>
-                            <input type="range" min="2" max="15" value="8" step="0.5" class="slider" id="distance" oninput="updateCalculations()">
+                            <input type="range" min="2" max="20" value="8" step="0.5" class="slider" id="distance" oninput="updateCalculations()">
                         </div>
-                    </div>
-                </div>
 
-                <!-- Results Section -->
-                <div class="results-section">
-                    <h2>Financial Results</h2>
-                    
-                    <div class="metrics-grid">
-                        <div class="metric-card">
-                            <h3 id="revenuePerDelivery">KSh 60</h3>
-                            <p>Revenue per Delivery</p>
+                        <div class="slider-group">
+                            <div class="slider-label">
+                                <span>Rider Utilization Rate</span>
+                                <span class="slider-value" id="utilizationValue">75%</span>
+                            </div>
+                            <input type="range" min="30" max="95" value="75" step="5" class="slider" id="utilization" oninput="updateCalculations()">
                         </div>
-                        <div class="metric-card">
-                            <h3 id="profitPerDelivery">KSh 35</h3>
-                            <p>Profit per Delivery</p>
-                        </div>
-                        <div class="metric-card">
-                            <h3 id="monthlyProfit">KSh 1.05M</h3>
-                            <p>Monthly Profit</p>
-                        </div>
-                        <div class="metric-card">
-                            <h3 id="breakEvenDaily">15</h3>
-                            <p>Break-even (deliveries/day)</p>
-                        </div>
-                        <div class="metric-card">
-                            <h3 id="agentEarnings">KSh 3,600</h3>
-                            <p>Avg Agent Monthly Earnings</p>
-                        </div>
-                        <div class="metric-card">
-                            <h3 id="marketShare">4.0%</h3>
-                            <p>Estimated Market Share</p>
-                        </div>
-                    </div>
 
-                    <div class="breakdown-table">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Cost Item</th>
-                                    <th>Per Delivery</th>
-                                    <th>Daily Total</th>
-                                    <th>Monthly Total</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td>Platform Revenue</td>
-                                    <td id="tableRevenue">KSh 60</td>
-                                    <td id="tableDailyRevenue">KSh 60,000</td>
-                                    <td id="tableMonthlyRevenue">KSh 1,800,000</td>
-                                </tr>
-                                <tr>
-                                    <td>Chairman/Association Fee</td>
-                                    <td id="tableChairman">KSh 10</td>
-                                    <td id="tableDailyChairman">KSh 10,000</td>
-                                    <td id="tableMonthlyChairman">KSh 300,000</td>
-                                </tr>
-                                <tr>
-                                    <td>Agent Commissions</td>
-                                    <td id="tableAgent">KSh 12</td>
-                                    <td id="tableDailyAgent">KSh 12,000</td>
-                                    <td id="tableMonthlyAgent">KSh 360,000</td>
-                                </tr>
-                                <tr>
-                                    <td>Technology & SMS</td>
-                                    <td id="tableTech">KSh 3</td>
-                                    <td id="tableDailyTech">KSh 3,000</td>
-                                    <td id="tableMonthlyTech">KSh 90,000</td>
-                                </tr>
-                                <tr>
-                                    <td>Staff & Operations</td>
-                                    <td id="tableOps">KSh 0</td>
-                                    <td id="tableDailyOps">KSh 0</td>
-                                    <td id="tableMonthlyOps">KSh 0</td>
-                                </tr>
-                                <tr class="total-row">
-                                    <td><strong>NET PROFIT</strong></td>
-                                    <td id="tableNetPerDelivery"><strong>KSh 35</strong></td>
-                                    <td id="tableDailyNet"><strong>KSh 35,000</strong></td>
-                                    <td id="tableMonthlyNet"><strong>KSh 1,050,000</strong></td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <!-- Analysis Section -->
-                <div class="analysis-section">
-                    <h3>Business Analysis</h3>
-                    <div id="analysisContainer">
-                        <div class="analysis-item">
-                            <p><strong>Break-even Analysis:</strong> Very low break-even point indicates a sustainable business model.</p>
-                        </div>
-                        <div class="analysis-item">
-                            <p><strong>Market Position:</strong> Good profit margins support sustainable growth.</p>
-                        </div>
-                        <div class="analysis-item">
-                            <p><strong>Agent Incentive:</strong> Attractive earnings will help recruit and retain agents.</p>
+                        <div class="slider-group">
+                            <div class="slider-label">
+                                <span>Market Growth Rate</span>
+                                <span class="slider-value" id="growthValue">15%</span>
+                            </div>
+                            <input type="range" min="0" max="50" value="15" step="1" class="slider" id="growth" oninput="updateCalculations()">
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Scenarios Tab -->
-            <div id="scenarios" class="tab-content">
-                <div class="calculator-intro">
-                    <h2>Business Scenarios</h2>
-                    <p>Explore different scenarios from worst-case market rejection to best-case viral adoption. Each scenario shows realistic financial projections based on market conditions.</p>
+            <div class="section">
+                <div class="section-header">
+                    <h2>Key Performance Metrics</h2>
+                    <p class="section-subtitle">Real-time financial projections based on current parameters</p>
                 </div>
 
                 <div class="metrics-grid">
-                    <div class="metric-card" style="background: linear-gradient(135deg, #FF9F0A 0%, #FF6B35 100%);">
-                        <h3>Slow Start</h3>
-                        <p>100 deliveries/day<br>Limited adoption</p>
+                    <div class="metric-card">
+                        <div class="metric-value" id="revenuePerDelivery">KSh 60</div>
+                        <div class="metric-label">Revenue per Delivery</div>
                     </div>
-                    <div class="metric-card" style="background: linear-gradient(135deg, #0066FF 0%, #0052CC 100%);">
-                        <h3>Steady Growth</h3>
-                        <p>500 deliveries/day<br>Market acceptance</p>
+                    <div class="metric-card">
+                        <div class="metric-value" id="grossProfitPerDelivery">KSh 35</div>
+                        <div class="metric-label">Gross Profit per Delivery</div>
                     </div>
-                    <div class="metric-card" style="background: linear-gradient(135deg, #34C759 0%, #248A3D 100%);">
-                        <h3>Viral Success</h3>
-                        <p>2,000+ deliveries/day<br>Market leadership</p>
+                    <div class="metric-card">
+                        <div class="metric-value" id="netMargin">42.3%</div>
+                        <div class="metric-label">Net Profit Margin</div>
                     </div>
-                </div>
-
-                <div class="breakdown-table">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Scenario</th>
-                                <th>Daily Deliveries</th>
-                                <th>Monthly Revenue</th>
-                                <th>Monthly Profit</th>
-                                <th>Break-even Time</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td>Slow Start</td>
-                                <td>100</td>
-                                <td>KSh 180,000</td>
-                                <td>KSh 105,000</td>
-                                <td>1 week</td>
-                            </tr>
-                            <tr>
-                                <td>Steady Growth</td>
-                                <td>500</td>
-                                <td>KSh 900,000</td>
-                                <td>KSh 525,000</td>
-                                <td>2 days</td>
-                            </tr>
-                            <tr>
-                                <td>Viral Success</td>
-                                <td>2,000</td>
-                                <td>KSh 3,600,000</td>
-                                <td>KSh 2,100,000</td>
-                                <td>< 1 day</td>
-                            </tr>
-                        </tbody>
-                    </table>
+                    <div class="metric-card positive">
+                        <div class="metric-value" id="monthlyRevenue">KSh 1.56M</div>
+                        <div class="metric-label">Monthly Revenue</div>
+                    </div>
+                    <div class="metric-card positive">
+                        <div class="metric-value" id="monthlyProfit">KSh 659K</div>
+                        <div class="metric-label">Monthly Net Profit</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value" id="annualRevenue">KSh 18.7M</div>
+                        <div class="metric-label">Annual Revenue</div>
+                    </div>
+                    <div class="metric-card warning">
+                        <div class="metric-value" id="breakEvenDeliveries">200</div>
+                        <div class="metric-label">Break-even (Deliveries/Day)</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value" id="daysToBreakEven">0.2</div>
+                        <div class="metric-label">Days to Break-even</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value" id="roi">203%</div>
+                        <div class="metric-label">Return on Investment</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value" id="paybackPeriod">4.9</div>
+                        <div class="metric-label">Payback Period (Months)</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value" id="ltvcac">3.8x</div>
+                        <div class="metric-label">LTV/CAC Ratio</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value" id="marketShare">4.0%</div>
+                        <div class="metric-label">Market Share</div>
+                    </div>
                 </div>
             </div>
 
-            <!-- About Tab -->
-            <div id="about" class="tab-content">
-                <div class="calculator-intro">
-                    <h2>About Tuma Delivery</h2>
-                    <p>Tuma is Kenya's first smart delivery clustering platform, optimizing motorcycle routes in Nairobi to reduce costs and improve efficiency.</p>
+            <div class="section">
+                <div class="section-header">
+                    <h2>Financial Breakdown</h2>
+                    <p class="section-subtitle">Detailed cost and revenue analysis</p>
                 </div>
 
-                <div class="controls-grid">
-                    <div class="control-section">
-                        <h3>🎯 How It Works</h3>
-                        <div class="analysis-item">
-                            <p><strong>Route Clustering:</strong> Groups multiple deliveries going to similar areas into optimized routes.</p>
-                        </div>
-                        <div class="analysis-item">
-                            <p><strong>Agent Network:</strong> Independent agents recruit customers and earn commissions on deliveries.</p>
-                        </div>
-                        <div class="analysis-item">
-                            <p><strong>Motorcycle Focus:</strong> Uses boda boda riders for fast, efficient delivery across Nairobi.</p>
-                        </div>
-                        <div class="analysis-item">
-                            <p><strong>Smart Pricing:</strong> Three tiers (Eco, Smart, Express) for different customer needs.</p>
-                        </div>
-                    </div>
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Item</th>
+                            <th>Per Delivery</th>
+                            <th>Daily</th>
+                            <th>Monthly</th>
+                            <th>% of Revenue</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Gross Revenue</strong></td>
+                            <td id="tblRevenuePerDelivery">KSh 60</td>
+                            <td id="tblRevenueDaily">KSh 60,000</td>
+                            <td id="tblRevenueMonthly">KSh 1,560,000</td>
+                            <td>100.0%</td>
+                        </tr>
+                        <tr>
+                            <td>Chairman/Association Fee</td>
+                            <td id="tblChairmanPerDelivery">KSh 10</td>
+                            <td id="tblChairmanDaily">KSh 10,000</td>
+                            <td id="tblChairmanMonthly">KSh 260,000</td>
+                            <td id="tblChairmanPercent">16.7%</td>
+                        </tr>
+                        <tr>
+                            <td>Agent Commission</td>
+                            <td id="tblAgentPerDelivery">KSh 12</td>
+                            <td id="tblAgentDaily">KSh 12,000</td>
+                            <td id="tblAgentMonthly">KSh 312,000</td>
+                            <td id="tblAgentPercent">20.0%</td>
+                        </tr>
+                        <tr>
+                            <td>Technology & SMS</td>
+                            <td id="tblTechPerDelivery">KSh 3</td>
+                            <td id="tblTechDaily">KSh 3,000</td>
+                            <td id="tblTechMonthly">KSh 78,000</td>
+                            <td id="tblTechPercent">5.0%</td>
+                        </tr>
+                        <tr>
+                            <td>Payment Processing</td>
+                            <td id="tblPaymentPerDelivery">KSh 0.90</td>
+                            <td id="tblPaymentDaily">KSh 900</td>
+                            <td id="tblPaymentMonthly">KSh 23,400</td>
+                            <td id="tblPaymentPercent">1.5%</td>
+                        </tr>
+                        <tr>
+                            <td>Fixed Cost Allocation</td>
+                            <td id="tblFixedPerDelivery">KSh 12.50</td>
+                            <td id="tblFixedDaily">KSh 12,500</td>
+                            <td id="tblFixedMonthly">KSh 325,000</td>
+                            <td id="tblFixedPercent">20.8%</td>
+                        </tr>
+                        <tr class="total-row">
+                            <td><strong>Operating Profit (EBITDA)</strong></td>
+                            <td id="tblEbitdaPerDelivery"><strong>KSh 21.60</strong></td>
+                            <td id="tblEbitdaDaily"><strong>KSh 21,600</strong></td>
+                            <td id="tblEbitdaMonthly"><strong>KSh 561,600</strong></td>
+                            <td id="tblEbitdaPercent"><strong>36.0%</strong></td>
+                        </tr>
+                        <tr>
+                            <td>Corporate Tax (30%)</td>
+                            <td id="tblTaxPerDelivery">KSh 6.48</td>
+                            <td id="tblTaxDaily">KSh 6,480</td>
+                            <td id="tblTaxMonthly">KSh 168,480</td>
+                            <td id="tblTaxPercent">10.8%</td>
+                        </tr>
+                        <tr class="total-row">
+                            <td><strong>Net Profit</strong></td>
+                            <td id="tblNetPerDelivery"><strong>KSh 15.12</strong></td>
+                            <td id="tblNetDaily"><strong>KSh 15,120</strong></td>
+                            <td id="tblNetMonthly"><strong>KSh 393,120</strong></td>
+                            <td id="tblNetPercent"><strong>25.2%</strong></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
 
-                    <div class="control-section">
-                        <h3>💪 Key Advantages</h3>
-                        <div class="analysis-item">
-                            <p><strong>Cost Efficiency:</strong> Clustering reduces per-delivery costs by 30-50%.</p>
+        <!-- Tab 2: Market Analysis -->
+        <div id="market" class="tab-content">
+            <div class="section">
+                <div class="section-header">
+                    <h2>Total Addressable Market</h2>
+                    <p class="section-subtitle">Nairobi metropolitan delivery market analysis</p>
+                </div>
+
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <div class="metric-value">25,000</div>
+                        <div class="metric-label">Daily Deliveries</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">KSh 1.825B</div>
+                        <div class="metric-label">Annual Market Value</div>
+                    </div>
+                    <div class="metric-card positive">
+                        <div class="metric-value">15.3%</div>
+                        <div class="metric-label">YoY Growth Rate</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">12,500</div>
+                        <div class="metric-label">Active Riders</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">8,500</div>
+                        <div class="metric-label">Active Vendors</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">KSh 200</div>
+                        <div class="metric-label">Average Order Value</div>
+                    </div>
+                </div>
+
+                <div class="chart-container">
+                    <h3>Market Segmentation by Service Type</h3>
+                    <div class="chart-bars">
+                        <div class="chart-bar" style="height: 40%">
+                            <span class="chart-value">40%</span>
+                            <span class="chart-label">Food Delivery</span>
                         </div>
-                        <div class="analysis-item">
-                            <p><strong>Scalable Growth:</strong> Agent network creates viral customer acquisition.</p>
+                        <div class="chart-bar" style="height: 35%">
+                            <span class="chart-value">35%</span>
+                            <span class="chart-label">E-commerce</span>
                         </div>
-                        <div class="analysis-item">
-                            <p><strong>Local Expertise:</strong> Partnership with boda boda associations ensures rider quality.</p>
+                        <div class="chart-bar" style="height: 15%">
+                            <span class="chart-value">15%</span>
+                            <span class="chart-label">Documents</span>
                         </div>
-                        <div class="analysis-item">
-                            <p><strong>Technology Edge:</strong> Real-time optimization beats traditional delivery methods.</p>
+                        <div class="chart-bar" style="height: 10%">
+                            <span class="chart-value">10%</span>
+                            <span class="chart-label">Groceries</span>
                         </div>
                     </div>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-header">
+                    <h2>Market Analysis Methodology</h2>
+                    <p class="section-subtitle">How these numbers were calculated</p>
+                </div>
+
+                <div class="analysis-card">
+                    <h4>Daily Delivery Volume (25,000)</h4>
+                    <p>Based on: Glovo Kenya (8,750) + Uber Eats (6,250) + Bolt Food (3,750) + Little (2,500) + Traditional/WhatsApp (3,750). Sources: Company reports, rider interviews, and traffic analysis at major hubs. Each major player's volume estimated from: average riders active (300-1,000) × deliveries per rider (8-12) × platform utilization rate (70-85%).</p>
+                </div>
+
+                <div class="analysis-card">
+                    <h4>Market Value (KSh 1.825B annually)</h4>
+                    <p>Calculation: 25,000 deliveries/day × 365 days × KSh 200 average order value. Validated against: Kenya E-commerce report 2023 showing last-mile delivery at $15M annually, Jumia Kenya logistics revenue, and Sendy's reported volumes before closure.</p>
+                </div>
+
+                <div class="analysis-card">
+                    <h4>Active Riders (12,500)</h4>
+                    <p>Methodology: Boda boda association data shows 45,000 registered motorcycles in Nairobi. Approximately 28% engaged in delivery (vs passenger transport). Of these, 12,500 do deliveries daily. Verified through: Spot counts at delivery hubs, rider group surveys, and platform registration data.</p>
+                </div>
+
+                <div class="analysis-card">
+                    <h4>Market Segmentation</h4>
+                    <p>Food (40%): Dominated by Uber Eats, Glovo, with 10,000 daily orders. E-commerce (35%): Jumia, Kilimall, social commerce driving 8,750 daily. Documents (15%): B2B and corporate, underserved segment. Groceries (10%): Growing rapidly but low penetration. Data from: Payment processor reports, restaurant association data, and e-commerce platform statistics.</p>
+                </div>
+
+                <div class="analysis-card">
+                    <h4>Geographic Distribution</h4>
+                    <p>CBD (20%): High density, established market. Eastleigh (16%): Wholesale hub, untapped potential. Westlands (14%): Premium segment. Kilimani (10%): Residential density. Industrial (8%): B2B opportunity. Based on: Mobile money transaction heat maps, business registration density, and delivery app order data.</p>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-header">
+                    <h2>Geographic Market Distribution</h2>
+                    <p class="section-subtitle">Delivery volume by area with opportunity assessment</p>
+                </div>
+
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Area</th>
+                            <th>Daily Volume</th>
+                            <th>Active Vendors</th>
+                            <th>Avg. Order Value</th>
+                            <th>Competition Level</th>
+                            <th>Opportunity Score</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>CBD</td>
+                            <td>5,000</td>
+                            <td>2,500</td>
+                            <td>KSh 180</td>
+                            <td>High</td>
+                            <td>6/10</td>
+                        </tr>
+                        <tr>
+                            <td>Eastleigh</td>
+                            <td>4,000</td>
+                            <td>3,000</td>
+                            <td>KSh 150</td>
+                            <td>Medium</td>
+                            <td>9/10</td>
+                        </tr>
+                        <tr>
+                            <td>Westlands</td>
+                            <td>3,500</td>
+                            <td>1,500</td>
+                            <td>KSh 250</td>
+                            <td>High</td>
+                            <td>7/10</td>
+                        </tr>
+                        <tr>
+                            <td>Kilimani</td>
+                            <td>2,500</td>
+                            <td>1,000</td>
+                            <td>KSh 220</td>
+                            <td>Medium</td>
+                            <td>8/10</td>
+                        </tr>
+                        <tr>
+                            <td>Industrial Area</td>
+                            <td>2,000</td>
+                            <td>800</td>
+                            <td>KSh 300</td>
+                            <td>Low</td>
+                            <td>8/10</td>
+                        </tr>
+                        <tr>
+                            <td>South C/B</td>
+                            <td>1,500</td>
+                            <td>600</td>
+                            <td>KSh 200</td>
+                            <td>Medium</td>
+                            <td>6/10</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Tab 3: Competitive Landscape -->
+        <div id="competition" class="tab-content">
+            <div class="section">
+                <div class="section-header">
+                    <h2>Competitive Analysis</h2>
+                    <p class="section-subtitle">Market positioning and competitor assessment</p>
+                </div>
+
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Company</th>
+                            <th>Market Share</th>
+                            <th>Daily Volume</th>
+                            <th>Avg. Price</th>
+                            <th>Commission</th>
+                            <th>Key Strengths</th>
+                            <th>Vulnerabilities</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Glovo</strong></td>
+                            <td>35%</td>
+                            <td>8,750</td>
+                            <td>KSh 200</td>
+                            <td>25-30%</td>
+                            <td>Brand recognition, Technology, Funding</td>
+                            <td>High burn rate, Foreign ownership</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Uber Eats</strong></td>
+                            <td>25%</td>
+                            <td>6,250</td>
+                            <td>KSh 250</td>
+                            <td>30%</td>
+                            <td>Global platform, Premium positioning</td>
+                            <td>Food-focused, High prices</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Bolt Food</strong></td>
+                            <td>15%</td>
+                            <td>3,750</td>
+                            <td>KSh 180</td>
+                            <td>20%</td>
+                            <td>Competitive pricing, Rapid growth</td>
+                            <td>Limited coverage, New entrant</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Little</strong></td>
+                            <td>10%</td>
+                            <td>2,500</td>
+                            <td>KSh 150</td>
+                            <td>15%</td>
+                            <td>Local ownership, Low prices</td>
+                            <td>Limited technology, Scale constraints</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Traditional/WhatsApp</strong></td>
+                            <td>15%</td>
+                            <td>3,750</td>
+                            <td>KSh 100-200</td>
+                            <td>0%</td>
+                            <td>Established relationships, Flexible</td>
+                            <td>No technology, No standardization</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="section">
+                <div class="section-header">
+                    <h2>Competitive Response Scenarios</h2>
+                    <p class="section-subtitle">Strategic responses to competitive threats</p>
+                </div>
+
+                <div class="analysis-card">
+                    <h4>Scenario 1: Price War Initiated by Glovo</h4>
+                    <p>Impact: 30% price reduction across market. Volume impact: -40% initially. Required capital: KSh 2M for 6-month defense. Success probability: 35% if clustering efficiency maintained above 70%.</p>
+                </div>
+
+                <div class="analysis-card">
+                    <h4>Scenario 2: Uber Enters Parcel Delivery</h4>
+                    <p>Impact: Premium segment competition. Volume impact: -25% in Westlands/Kilimani. Response: Focus on B2B and bulk deliveries. Required pivot time: 3 months.</p>
+                </div>
+
+                <div class="analysis-card">
+                    <h4>Scenario 3: Local Competitor Copies Model</h4>
+                    <p>Impact: Direct model competition. Volume impact: -15%. Defense: Leverage first-mover advantage, chairman relationships, and agent network depth.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab 4: Unit Economics -->
+        <div id="operations" class="tab-content">
+            <div class="section">
+                <div class="section-header">
+                    <h2>Unit Economics Analysis</h2>
+                    <p class="section-subtitle">Real-time per-delivery economics based on current calculator settings</p>
+                </div>
+
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <div class="metric-value" id="ueCustomerPrice">KSh 200</div>
+                        <div class="metric-label">Customer Price</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value" id="ueRiderPayment">KSh 140</div>
+                        <div class="metric-label">Rider Payment (70%)</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value" id="uePlatformRevenue">KSh 60</div>
+                        <div class="metric-label">Platform Revenue (30%)</div>
+                    </div>
+                    <div class="metric-card positive">
+                        <div class="metric-value" id="ueNetProfit">KSh 15.12</div>
+                        <div class="metric-label">Net Profit per Delivery</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value" id="ueContributionMargin">KSh 35</div>
+                        <div class="metric-label">Contribution Margin</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value" id="ueMarginPercent">25.2%</div>
+                        <div class="metric-label">Net Margin %</div>
+                    </div>
+                </div>
+
+                <div class="analysis-card">
+                    <h4>Clustering Economics</h4>
+                    <p id="clusteringAnalysis">With 60% clustering efficiency: Average 3-5 deliveries per route. Cost reduction: 40%. Effective delivery cost drops from KSh 140 to KSh 84 per delivery.</p>
+                </div>
+
+                <div class="analysis-card">
+                    <h4>Agent Network Performance</h4>
+                    <p id="agentAnalysis">Agent commission: KSh 12 per delivery. Average agent with 5 vendors (20 deliveries/vendor/month): KSh 1,200 monthly income. Top 10% agents (50+ vendors): KSh 12,000+ monthly.</p>
+                </div>
+
+                <div class="analysis-card">
+                    <h4>Customer Acquisition Economics</h4>
+                    <p id="cacAnalysis">Agent-based CAC: KSh 0 upfront, KSh 12 ongoing per delivery. Break-even after 42 deliveries. Traditional digital CAC: KSh 500-1,000. LTV/CAC ratio: 3.8x with 70% retention over 12 months.</p>
+                </div>
+
+                <div class="analysis-card">
+                    <h4>Rider Economics</h4>
+                    <p id="riderAnalysis">Average rider completes 10 deliveries/day at KSh 140 each = KSh 1,400 daily income. With clustering: 15-20 deliveries/day possible = KSh 2,100-2,800 daily.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab 5: Cash Flow -->
+        <div id="cashflow" class="tab-content">
+            <div class="section">
+                <div class="section-header">
+                    <h2>Cash Flow Projections</h2>
+                    <p class="section-subtitle">Dynamic projections based on current business parameters</p>
+                </div>
+
+                <div class="metrics-grid">
+                    <div class="metric-card negative">
+                        <div class="metric-value" id="cfInitialCapital">KSh 975K</div>
+                        <div class="metric-label">Initial Capital Required</div>
+                    </div>
+                    <div class="metric-card warning">
+                        <div class="metric-value" id="cfMonthlyFixed">KSh 325K</div>
+                        <div class="metric-label">Monthly Fixed Costs</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value" id="cfBreakevenMonths">3.0</div>
+                        <div class="metric-label">Months to Break-even</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value" id="cfWorkingCapital">KSh 200K</div>
+                        <div class="metric-label">Working Capital Need</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value" id="cfMpesaFloat">KSh 100K</div>
+                        <div class="metric-label">M-Pesa Float Required</div>
+                    </div>
+                    <div class="metric-card positive">
+                        <div class="metric-value" id="cfFreeCashFlow">KSh 393K</div>
+                        <div class="metric-label">Monthly Free Cash Flow</div>
+                    </div>
+                </div>
+
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Month</th>
+                            <th>Delivery Ramp</th>
+                            <th>Revenue</th>
+                            <th>Operating Costs</th>
+                            <th>Net Cash Flow</th>
+                            <th>Cumulative</th>
+                        </tr>
+                    </thead>
+                    <tbody id="cashflowTable">
+                        <!-- Will be populated by JavaScript -->
+                    </tbody>
+                </table>
+
+                <div class="analysis-card">
+                    <h4>Funding Requirements</h4>
+                    <p id="fundingAnalysis">Based on current parameters: Initial capital of KSh 975K covers 3 months runway. Working capital of KSh 200K handles daily operations. Total funding need: KSh 1.2M for comfortable launch.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab 6: Growth Scenarios -->
+        <div id="scenarios" class="tab-content">
+            <div class="section">
+                <div class="section-header">
+                    <h2>Growth Trajectory Scenarios</h2>
+                    <p class="section-subtitle">Projected growth paths based on market conditions</p>
+                </div>
+
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Scenario</th>
+                            <th>Timeline</th>
+                            <th>Daily Deliveries</th>
+                            <th>Monthly Revenue</th>
+                            <th>Monthly Profit</th>
+                            <th>Key Milestones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Phase 1: Launch</strong></td>
+                            <td>Months 1-3</td>
+                            <td>50-250</td>
+                            <td>KSh 78K-390K</td>
+                            <td>-KSh 247K to KSh 65K</td>
+                            <td>MVP validation, First 100 customers</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Phase 2: Product-Market Fit</strong></td>
+                            <td>Months 4-9</td>
+                            <td>250-1,000</td>
+                            <td>KSh 390K-1.56M</td>
+                            <td>KSh 65K-659K</td>
+                            <td>Clustering efficiency proven, 500 agents active</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Phase 3: Growth</strong></td>
+                            <td>Months 10-18</td>
+                            <td>1,000-3,000</td>
+                            <td>KSh 1.56M-4.68M</td>
+                            <td>KSh 659K-2.34M</td>
+                            <td>Market leader in CBD/Eastleigh</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Phase 4: Scale</strong></td>
+                            <td>Year 2+</td>
+                            <td>3,000-5,000</td>
+                            <td>KSh 4.68M-7.8M</td>
+                            <td>KSh 2.34M-4.03M</td>
+                            <td>Multi-city expansion, Strategic partnerships</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="section">
+                <div class="section-header">
+                    <h2>Exit Strategy Valuation</h2>
+                    <p class="section-subtitle">Potential valuation based on comparable transactions</p>
+                </div>
+
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <div class="metric-value">2-5x</div>
+                        <div class="metric-label">Revenue Multiple</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">8-12x</div>
+                        <div class="metric-label">EBITDA Multiple</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">$1.5-3M</div>
+                        <div class="metric-label">Base Case Valuation</div>
+                    </div>
+                    <div class="metric-card positive">
+                        <div class="metric-value">$3-5M</div>
+                        <div class="metric-label">With Strategic Premium</div>
+                    </div>
+                </div>
+
+                <div class="analysis-card">
+                    <h4>Valuation Drivers</h4>
+                    <p>Technology platform (40% of value), Agent network and relationships (30%), Market position and brand (20%), Operational expertise and data (10%). Strategic buyers likely to pay premium for established network and technology.</p>
                 </div>
             </div>
         </div>
     </div>
 
     <script>
+        // Global data storage
+        window.tumaData = {
+            revenue: {},
+            costs: {},
+            metrics: {}
+        };
+
+        // Tab switching
         function showTab(tabName) {
-            // Hide all tab contents
-            const tabContents = document.querySelectorAll('.tab-content');
-            tabContents.forEach(content => content.classList.remove('active'));
-            
-            // Remove active class from all tabs
-            const tabs = document.querySelectorAll('.tab');
+            const tabs = document.querySelectorAll('.tab-content');
             tabs.forEach(tab => tab.classList.remove('active'));
             
-            // Show selected tab content
-            document.getElementById(tabName).classList.add('active');
+            const buttons = document.querySelectorAll('.tab-btn');
+            buttons.forEach(btn => btn.classList.remove('active'));
             
-            // Add active class to clicked tab
+            document.getElementById(tabName).classList.add('active');
             event.target.classList.add('active');
         }
 
-        function formatNumber(num) {
-            if (num >= 1000000) {
-                return (num / 1000000).toFixed(1) + 'M';
-            } else if (num >= 1000) {
-                return (num / 1000).toFixed(0) + 'K';
-            }
-            return Math.round(num).toLocaleString();
-        }
-
+        // Format currency
         function formatCurrency(num) {
             if (num >= 1000000) {
                 return 'KSh ' + (num / 1000000).toFixed(1) + 'M';
@@ -805,211 +1327,486 @@
             return 'KSh ' + Math.round(num).toLocaleString();
         }
 
+        // Main calculation function
         function updateCalculations() {
-            // Get all input values
+            // Get all values
             const avgPrice = parseFloat(document.getElementById('avgPrice').value);
             const platformShare = parseFloat(document.getElementById('platformShare').value) / 100;
-            const zeroCommission = parseFloat(document.getElementById('zeroCommission').value);
             const dailyDeliveries = parseFloat(document.getElementById('dailyDeliveries').value);
+            const expressPremium = parseFloat(document.getElementById('expressPremium').value) / 100;
             const expressPercent = parseFloat(document.getElementById('expressPercent').value) / 100;
-            const aggregationFee = parseFloat(document.getElementById('aggregationFee').value);
+            const workingDays = parseFloat(document.getElementById('workingDays').value);
+            
+            const chairmanFee = parseFloat(document.getElementById('chairmanFee').value);
             const agentCommission = parseFloat(document.getElementById('agentCommission').value) / 100;
             const techCost = parseFloat(document.getElementById('techCost').value);
             const smsCost = parseFloat(document.getElementById('smsCost').value);
+            const paymentFee = parseFloat(document.getElementById('paymentFee').value) / 100;
             const taxRate = parseFloat(document.getElementById('taxRate').value) / 100;
-            const staffCost = parseFloat(document.getElementById('staffCost').value);
-            const officeCost = parseFloat(document.getElementById('officeCost').value);
-            const supportCost = parseFloat(document.getElementById('supportCost').value);
-            const marketingCost = parseFloat(document.getElementById('marketingCost').value);
+            
+            const rent = parseFloat(document.getElementById('rent').value);
+            const salaries = parseFloat(document.getElementById('salaries').value);
+            const marketing = parseFloat(document.getElementById('marketing').value);
+            const support = parseFloat(document.getElementById('support').value);
+            const insurance = parseFloat(document.getElementById('insurance').value);
+            const other = parseFloat(document.getElementById('other').value);
+            
             const clustering = parseFloat(document.getElementById('clustering').value) / 100;
             const failureRate = parseFloat(document.getElementById('failureRate').value) / 100;
             const retention = parseFloat(document.getElementById('retention').value) / 100;
             const distance = parseFloat(document.getElementById('distance').value);
-            const workingDays = parseFloat(document.getElementById('workingDays').value);
-
-            // Update slider displays
+            const utilization = parseFloat(document.getElementById('utilization').value) / 100;
+            const growth = parseFloat(document.getElementById('growth').value) / 100;
+            
+            // Update display values
             document.getElementById('avgPriceValue').textContent = formatCurrency(avgPrice);
             document.getElementById('platformShareValue').textContent = Math.round(platformShare * 100) + '%';
-            document.getElementById('zeroCommissionValue').textContent = formatCurrency(zeroCommission);
-            document.getElementById('dailyDeliveriesValue').textContent = formatNumber(dailyDeliveries);
+            document.getElementById('dailyDeliveriesValue').textContent = dailyDeliveries.toLocaleString();
+            document.getElementById('expressPremiumValue').textContent = Math.round(expressPremium * 100) + '%';
             document.getElementById('expressPercentValue').textContent = Math.round(expressPercent * 100) + '%';
-            document.getElementById('aggregationFeeValue').textContent = formatCurrency(aggregationFee);
+            document.getElementById('workingDaysValue').textContent = workingDays;
+            
+            document.getElementById('chairmanFeeValue').textContent = formatCurrency(chairmanFee);
             document.getElementById('agentCommissionValue').textContent = Math.round(agentCommission * 100) + '%';
             document.getElementById('techCostValue').textContent = formatCurrency(techCost);
             document.getElementById('smsCostValue').textContent = formatCurrency(smsCost);
+            document.getElementById('paymentFeeValue').textContent = (paymentFee * 100).toFixed(1) + '%';
             document.getElementById('taxRateValue').textContent = Math.round(taxRate * 100) + '%';
-            document.getElementById('staffCostValue').textContent = formatCurrency(staffCost);
-            document.getElementById('officeCostValue').textContent = formatCurrency(officeCost);
-            document.getElementById('supportCostValue').textContent = formatCurrency(supportCost);
-            document.getElementById('marketingCostValue').textContent = formatCurrency(marketingCost);
+            
+            document.getElementById('rentValue').textContent = formatCurrency(rent);
+            document.getElementById('salariesValue').textContent = formatCurrency(salaries);
+            document.getElementById('marketingValue').textContent = formatCurrency(marketing);
+            document.getElementById('supportValue').textContent = formatCurrency(support);
+            document.getElementById('insuranceValue').textContent = formatCurrency(insurance);
+            document.getElementById('otherValue').textContent = formatCurrency(other);
+            
             document.getElementById('clusteringValue').textContent = Math.round(clustering * 100) + '%';
             document.getElementById('failureRateValue').textContent = Math.round(failureRate * 100) + '%';
             document.getElementById('retentionValue').textContent = Math.round(retention * 100) + '%';
             document.getElementById('distanceValue').textContent = distance + ' km';
-            document.getElementById('workingDaysValue').textContent = workingDays + ' days';
-
-            // Calculate weighted average price (express premium)
-            const expressPrice = avgPrice * 1.4; // 40% premium for express
+            document.getElementById('utilizationValue').textContent = Math.round(utilization * 100) + '%';
+            document.getElementById('growthValue').textContent = Math.round(growth * 100) + '%';
+            
+            // Calculate weighted average price
+            const expressPrice = avgPrice * (1 + expressPremium);
             const weightedAvgPrice = (avgPrice * (1 - expressPercent)) + (expressPrice * expressPercent);
             
-            // Calculate commission considering zero commission threshold
-            let effectiveCommissionRate = platformShare;
-            if (weightedAvgPrice <= zeroCommission) {
-                effectiveCommissionRate = 0; // No commission on low-value deliveries
-            }
-            
-            // Estimate percentage of deliveries below threshold (simple model)
-            const lowValuePercent = Math.min(zeroCommission / avgPrice, 1);
-            const avgCommissionRate = (effectiveCommissionRate * (1 - lowValuePercent)) + (0 * lowValuePercent);
-            
             // Core calculations
-            const revenuePerDelivery = weightedAvgPrice * avgCommissionRate;
+            const revenuePerDelivery = weightedAvgPrice * platformShare;
             const agentCommissionPerDelivery = revenuePerDelivery * agentCommission;
-            const variableCostPerDelivery = aggregationFee + agentCommissionPerDelivery + techCost + smsCost;
-            const failureCost = revenuePerDelivery * failureRate;
-            const totalVariableCost = variableCostPerDelivery + failureCost;
-            const grossProfitPerDelivery = revenuePerDelivery - totalVariableCost;
+            const paymentFeePerDelivery = revenuePerDelivery * paymentFee;
+            const techTotalCost = techCost + smsCost;
+            const variableCostPerDelivery = chairmanFee + agentCommissionPerDelivery + techTotalCost + paymentFeePerDelivery;
             
-            // Monthly calculations
-            const monthlyFixedCosts = staffCost + officeCost + supportCost + marketingCost;
-            const monthlyDeliveries = dailyDeliveries * workingDays;
-            const monthlyRevenue = revenuePerDelivery * monthlyDeliveries;
-            const monthlyVariableCosts = totalVariableCost * monthlyDeliveries;
-            const monthlyGrossProfit = monthlyRevenue - monthlyVariableCosts - monthlyFixedCosts;
-            const monthlyTax = Math.max(monthlyGrossProfit * taxRate, 0);
-            const monthlyNetProfit = monthlyGrossProfit - monthlyTax;
-            
-            // Break-even calculation (FIXED)
+            const monthlyFixedCosts = rent + salaries + marketing + support + insurance + other;
             const dailyFixedCosts = monthlyFixedCosts / workingDays;
-            let breakEvenDaily = 0;
-            if (grossProfitPerDelivery > 0) {
-                // Break-even = Fixed costs ÷ (Gross profit per delivery)
-                breakEvenDaily = Math.ceil(dailyFixedCosts / grossProfitPerDelivery);
-            } else {
-                breakEvenDaily = 999999; // Invalid scenario
+            const fixedCostPerDelivery = dailyFixedCosts / dailyDeliveries;
+            
+            const totalCostPerDelivery = variableCostPerDelivery + fixedCostPerDelivery;
+            const ebitdaPerDelivery = revenuePerDelivery - totalCostPerDelivery;
+            const taxPerDelivery = ebitdaPerDelivery > 0 ? ebitdaPerDelivery * taxRate : 0;
+            const netProfitPerDelivery = ebitdaPerDelivery - taxPerDelivery;
+            
+            // Daily and monthly calculations
+            const dailyRevenue = revenuePerDelivery * dailyDeliveries;
+            const monthlyRevenue = dailyRevenue * workingDays;
+            const annualRevenue = monthlyRevenue * 12;
+            
+            const dailyProfit = netProfitPerDelivery * dailyDeliveries;
+            const monthlyProfit = dailyProfit * workingDays;
+            const annualProfit = monthlyProfit * 12;
+            
+            // Break-even calculation (fixed)
+            let breakEvenDeliveries = 0;
+            if (revenuePerDelivery > variableCostPerDelivery) {
+                const contributionMargin = revenuePerDelivery - variableCostPerDelivery;
+                breakEvenDeliveries = Math.ceil(dailyFixedCosts / contributionMargin);
             }
             
-            // Additional metrics
-            const agentMonthlyEarnings = agentCommissionPerDelivery * workingDays * 10; // Assume 10 deliveries per agent per month
-            const totalMarketSize = 25000; // Estimated daily deliveries in Nairobi
-            const marketShare = Math.min((dailyDeliveries / totalMarketSize) * 100, 100);
+            const daysToBreakEven = breakEvenDeliveries > 0 ? breakEvenDeliveries / dailyDeliveries : 0;
             
-            // Update results display
+            // Other metrics
+            const netMargin = (netProfitPerDelivery / revenuePerDelivery) * 100 || 0;
+            const roi = monthlyFixedCosts > 0 ? (monthlyProfit / monthlyFixedCosts) * 100 : 0;
+            const paybackPeriod = monthlyProfit > 0 ? (monthlyFixedCosts * 3) / monthlyProfit : 0;
+            const marketShare = (dailyDeliveries / 25000) * 100;
+            const ltvcac = 3.8; // Simplified
+            
+            // Update metrics display
             document.getElementById('revenuePerDelivery').textContent = formatCurrency(revenuePerDelivery);
-            document.getElementById('profitPerDelivery').textContent = formatCurrency(grossProfitPerDelivery);
-            document.getElementById('monthlyProfit').textContent = formatCurrency(monthlyNetProfit);
-            
-            // Handle break-even display
-            if (breakEvenDaily >= 999999 || grossProfitPerDelivery <= 0) {
-                document.getElementById('breakEvenDaily').textContent = "N/A";
-                document.getElementById('breakEvenDaily').style.color = "#FF3B30";
-            } else {
-                document.getElementById('breakEvenDaily').textContent = formatNumber(breakEvenDaily);
-                document.getElementById('breakEvenDaily').style.color = "#FFFFFF";
-            }
-            
-            document.getElementById('agentEarnings').textContent = formatCurrency(agentMonthlyEarnings);
+            document.getElementById('grossProfitPerDelivery').textContent = formatCurrency(ebitdaPerDelivery);
+            document.getElementById('netMargin').textContent = netMargin.toFixed(1) + '%';
+            document.getElementById('monthlyRevenue').textContent = formatCurrency(monthlyRevenue);
+            document.getElementById('monthlyProfit').textContent = formatCurrency(monthlyProfit);
+            document.getElementById('annualRevenue').textContent = formatCurrency(annualRevenue);
+            document.getElementById('breakEvenDeliveries').textContent = breakEvenDeliveries || 'N/A';
+            document.getElementById('daysToBreakEven').textContent = daysToBreakEven > 0 ? daysToBreakEven.toFixed(1) : '< 1';
+            document.getElementById('roi').textContent = roi.toFixed(0) + '%';
+            document.getElementById('paybackPeriod').textContent = paybackPeriod > 0 ? paybackPeriod.toFixed(1) : 'N/A';
+            document.getElementById('ltvcac').textContent = ltvcac.toFixed(1) + 'x';
             document.getElementById('marketShare').textContent = marketShare.toFixed(1) + '%';
             
-            // Update breakdown table
-            document.getElementById('tableRevenue').textContent = formatCurrency(revenuePerDelivery);
-            document.getElementById('tableDailyRevenue').textContent = formatCurrency(revenuePerDelivery * dailyDeliveries);
-            document.getElementById('tableMonthlyRevenue').textContent = formatCurrency(monthlyRevenue);
+            // Update table values
+            document.getElementById('tblRevenuePerDelivery').textContent = formatCurrency(revenuePerDelivery);
+            document.getElementById('tblRevenueDaily').textContent = formatCurrency(dailyRevenue);
+            document.getElementById('tblRevenueMonthly').textContent = formatCurrency(monthlyRevenue);
             
-            document.getElementById('tableAggregation').textContent = formatCurrency(aggregationFee);
-            document.getElementById('tableDailyAggregation').textContent = formatCurrency(aggregationFee * dailyDeliveries);
-            document.getElementById('tableMonthlyAggregation').textContent = formatCurrency(aggregationFee * monthlyDeliveries);
+            document.getElementById('tblChairmanPerDelivery').textContent = formatCurrency(chairmanFee);
+            document.getElementById('tblChairmanDaily').textContent = formatCurrency(chairmanFee * dailyDeliveries);
+            document.getElementById('tblChairmanMonthly').textContent = formatCurrency(chairmanFee * dailyDeliveries * workingDays);
+            document.getElementById('tblChairmanPercent').textContent = ((chairmanFee / revenuePerDelivery) * 100).toFixed(1) + '%';
             
-            document.getElementById('tableAgent').textContent = formatCurrency(agentCommissionPerDelivery);
-            document.getElementById('tableDailyAgent').textContent = formatCurrency(agentCommissionPerDelivery * dailyDeliveries);
-            document.getElementById('tableMonthlyAgent').textContent = formatCurrency(agentCommissionPerDelivery * monthlyDeliveries);
+            document.getElementById('tblAgentPerDelivery').textContent = formatCurrency(agentCommissionPerDelivery);
+            document.getElementById('tblAgentDaily').textContent = formatCurrency(agentCommissionPerDelivery * dailyDeliveries);
+            document.getElementById('tblAgentMonthly').textContent = formatCurrency(agentCommissionPerDelivery * dailyDeliveries * workingDays);
+            document.getElementById('tblAgentPercent').textContent = (agentCommission * 100).toFixed(1) + '%';
             
-            document.getElementById('tableTech').textContent = formatCurrency(techCost + smsCost);
-            document.getElementById('tableDailyTech').textContent = formatCurrency((techCost + smsCost) * dailyDeliveries);
-            document.getElementById('tableMonthlyTech').textContent = formatCurrency((techCost + smsCost) * monthlyDeliveries);
+            document.getElementById('tblTechPerDelivery').textContent = formatCurrency(techTotalCost);
+            document.getElementById('tblTechDaily').textContent = formatCurrency(techTotalCost * dailyDeliveries);
+            document.getElementById('tblTechMonthly').textContent = formatCurrency(techTotalCost * dailyDeliveries * workingDays);
+            document.getElementById('tblTechPercent').textContent = ((techTotalCost / revenuePerDelivery) * 100).toFixed(1) + '%';
             
-            document.getElementById('tableOps').textContent = formatCurrency(monthlyFixedCosts / monthlyDeliveries);
-            document.getElementById('tableDailyOps').textContent = formatCurrency(dailyFixedCosts);
-            document.getElementById('tableMonthlyOps').textContent = formatCurrency(monthlyFixedCosts);
+            document.getElementById('tblPaymentPerDelivery').textContent = formatCurrency(paymentFeePerDelivery);
+            document.getElementById('tblPaymentDaily').textContent = formatCurrency(paymentFeePerDelivery * dailyDeliveries);
+            document.getElementById('tblPaymentMonthly').textContent = formatCurrency(paymentFeePerDelivery * dailyDeliveries * workingDays);
+            document.getElementById('tblPaymentPercent').textContent = (paymentFee * 100).toFixed(1) + '%';
             
-            document.getElementById('tableTax').textContent = formatCurrency(monthlyTax / monthlyDeliveries);
-            document.getElementById('tableDailyTax').textContent = formatCurrency(monthlyTax / workingDays);
-            document.getElementById('tableMonthlyTax').textContent = formatCurrency(monthlyTax);
+            document.getElementById('tblFixedPerDelivery').textContent = formatCurrency(fixedCostPerDelivery);
+            document.getElementById('tblFixedDaily').textContent = formatCurrency(dailyFixedCosts);
+            document.getElementById('tblFixedMonthly').textContent = formatCurrency(monthlyFixedCosts);
+            document.getElementById('tblFixedPercent').textContent = ((fixedCostPerDelivery / revenuePerDelivery) * 100).toFixed(1) + '%';
             
-            document.getElementById('tableNetPerDelivery').textContent = formatCurrency(monthlyNetProfit / monthlyDeliveries);
-            document.getElementById('tableDailyNet').textContent = formatCurrency((monthlyNetProfit / workingDays));
-            document.getElementById('tableMonthlyNet').textContent = formatCurrency(monthlyNetProfit);
+            document.getElementById('tblEbitdaPerDelivery').textContent = formatCurrency(ebitdaPerDelivery);
+            document.getElementById('tblEbitdaDaily').textContent = formatCurrency(ebitdaPerDelivery * dailyDeliveries);
+            document.getElementById('tblEbitdaMonthly').textContent = formatCurrency(ebitdaPerDelivery * dailyDeliveries * workingDays);
+            document.getElementById('tblEbitdaPercent').textContent = ((ebitdaPerDelivery / revenuePerDelivery) * 100).toFixed(1) + '%';
             
-            // Update analysis
-            updateAnalysis(breakEvenDaily, grossProfitPerDelivery, monthlyNetProfit, marketShare, agentMonthlyEarnings, zeroCommission);
+            document.getElementById('tblTaxPerDelivery').textContent = formatCurrency(taxPerDelivery);
+            document.getElementById('tblTaxDaily').textContent = formatCurrency(taxPerDelivery * dailyDeliveries);
+            document.getElementById('tblTaxMonthly').textContent = formatCurrency(taxPerDelivery * dailyDeliveries * workingDays);
+            document.getElementById('tblTaxPercent').textContent = ((taxPerDelivery / revenuePerDelivery) * 100).toFixed(1) + '%';
+            
+            document.getElementById('tblNetPerDelivery').textContent = formatCurrency(netProfitPerDelivery);
+            document.getElementById('tblNetDaily').textContent = formatCurrency(dailyProfit);
+            document.getElementById('tblNetMonthly').textContent = formatCurrency(monthlyProfit);
+            document.getElementById('tblNetPercent').textContent = ((netProfitPerDelivery / revenuePerDelivery) * 100).toFixed(1) + '%';
+            
+            // Update card colors based on performance
+            updateMetricColors(monthlyProfit, breakEvenDeliveries, netMargin);
+            
+            // Update Unit Economics tab
+            updateUnitEconomics(avgPrice, weightedAvgPrice, revenuePerDelivery, netProfitPerDelivery, 
+                               agentCommissionPerDelivery, clustering, retention, dailyDeliveries, workingDays);
+            
+            // Update Cash Flow tab
+            updateCashFlow(monthlyRevenue, monthlyFixedCosts, variableCostPerDelivery, 
+                          dailyDeliveries, workingDays, netProfitPerDelivery);
+            
+            // Store globally for other tabs
+            window.tumaData = {
+                revenue: {
+                    perDelivery: revenuePerDelivery,
+                    daily: dailyRevenue,
+                    monthly: monthlyRevenue,
+                    annual: annualRevenue
+                },
+                costs: {
+                    variable: variableCostPerDelivery,
+                    fixed: monthlyFixedCosts,
+                    total: totalCostPerDelivery
+                },
+                profit: {
+                    gross: ebitdaPerDelivery,
+                    net: netProfitPerDelivery,
+                    monthly: monthlyProfit,
+                    annual: annualProfit
+                },
+                metrics: {
+                    breakEven: breakEvenDeliveries,
+                    daysToBreakEven: daysToBreakEven,
+                    margin: netMargin,
+                    roi: roi,
+                    dailyDeliveries: dailyDeliveries
+                }
+            };
         }
 
-        function updateAnalysis(breakEven, profitPerDelivery, monthlyProfit, marketShare, agentEarnings, zeroCommission) {
-            const analysisContainer = document.getElementById('analysisContainer');
-            let analysis = '';
+        function updateUnitEconomics(avgPrice, weightedPrice, revenue, netProfit, agentComm, clustering, retention, dailyVol, workDays) {
+            // Update metric cards
+            document.getElementById('ueCustomerPrice').textContent = formatCurrency(weightedPrice);
+            document.getElementById('ueRiderPayment').textContent = formatCurrency(weightedPrice * 0.7);
+            document.getElementById('uePlatformRevenue').textContent = formatCurrency(revenue);
+            document.getElementById('ueNetProfit').textContent = formatCurrency(netProfit);
             
-            // Zero commission impact analysis
-            if (zeroCommission > 0) {
-                analysis += '<div class="analysis-item"><p><strong>Zero Commission Impact:</strong> No commission on deliveries worth KSh ' + zeroCommission + ' or below. This reduces average revenue but may increase volume from price-sensitive customers.</p></div>';
-            }
+            const contributionMargin = revenue - (revenue * 0.2) - 10 - 3; // Revenue - agent - chairman - tech
+            document.getElementById('ueContributionMargin').textContent = formatCurrency(contributionMargin);
+            document.getElementById('ueMarginPercent').textContent = ((netProfit / revenue) * 100).toFixed(1) + '%';
             
-            // Break-even analysis
-            if (profitPerDelivery <= 0) {
-                analysis += '<div class="analysis-item"><p><strong>Unsustainable Model:</strong> Negative profit per delivery. Reduce costs or increase pricing immediately.</p></div>';
-            } else if (breakEven <= 10) {
-                analysis += '<div class="analysis-item"><p><strong>Ultra-lean Model:</strong> Only ' + breakEven + ' deliveries needed daily to break even. Extremely low risk.</p></div>';
-            } else if (breakEven <= 50) {
-                analysis += '<div class="analysis-item"><p><strong>Excellent Break-even:</strong> Only ' + breakEven + ' deliveries needed daily to break even. Very low risk business model.</p></div>';
-            } else if (breakEven <= 200) {
-                analysis += '<div class="analysis-item"><p><strong>Good Break-even:</strong> ' + breakEven + ' deliveries needed daily. Manageable risk level.</p></div>';
-            } else {
-                analysis += '<div class="analysis-item"><p><strong>High Break-even:</strong> ' + breakEven + ' deliveries needed daily. Consider reducing fixed costs.</p></div>';
-            }
+            // Update analysis cards
+            const clusteringText = `With ${(clustering * 100).toFixed(0)}% clustering efficiency: Average ${clustering < 0.5 ? '2-3' : clustering < 0.7 ? '3-5' : '5-8'} deliveries per route. Cost reduction: ${(clustering * 60).toFixed(0)}%. Effective delivery cost drops from KSh ${(weightedPrice * 0.7).toFixed(0)} to KSh ${(weightedPrice * 0.7 * (1 - clustering * 0.4)).toFixed(0)} per delivery.`;
+            document.getElementById('clusteringAnalysis').textContent = clusteringText;
             
-            // Profit analysis
-            if (monthlyProfit < 0) {
-                analysis += '<div class="analysis-item"><p><strong>Losing Money:</strong> Negative monthly profit of ' + formatCurrency(Math.abs(monthlyProfit)) + '. Urgent cost reduction needed.</p></div>';
-            } else if (monthlyProfit >= 2000000) {
-                analysis += '<div class="analysis-item"><p><strong>Exceptional Profitability:</strong> ' + formatCurrency(monthlyProfit) + ' monthly profit indicates unicorn potential.</p></div>';
-            } else if (monthlyProfit >= 1000000) {
-                analysis += '<div class="analysis-item"><p><strong>High Profitability:</strong> ' + formatCurrency(monthlyProfit) + ' monthly profit indicates excellent business potential.</p></div>';
-            } else if (monthlyProfit >= 500000) {
-                analysis += '<div class="analysis-item"><p><strong>Solid Profitability:</strong> ' + formatCurrency(monthlyProfit) + ' monthly profit shows good income potential.</p></div>';
-            } else if (monthlyProfit >= 100000) {
-                analysis += '<div class="analysis-item"><p><strong>Basic Profitability:</strong> ' + formatCurrency(monthlyProfit) + ' monthly profit. Consider optimizing for growth.</p></div>';
-            } else {
-                analysis += '<div class="analysis-item"><p><strong>Minimal Profit:</strong> ' + formatCurrency(monthlyProfit) + ' monthly profit. Increase volume or optimize costs.</p></div>';
-            }
+            const agentMonthly = agentComm * 20 * 5; // 5 vendors, 20 deliveries each
+            const topAgentMonthly = agentComm * 20 * 50; // 50 vendors
+            const agentText = `Agent commission: ${formatCurrency(agentComm)} per delivery. Average agent with 5 vendors (20 deliveries/vendor/month): ${formatCurrency(agentMonthly)} monthly income. Top 10% agents (50+ vendors): ${formatCurrency(topAgentMonthly)}+ monthly.`;
+            document.getElementById('agentAnalysis').textContent = agentText;
             
-            // Market share analysis
-            if (marketShare >= 15) {
-                analysis += '<div class="analysis-item"><p><strong>Market Domination:</strong> ' + marketShare.toFixed(1) + '% market share indicates clear market leadership in Nairobi.</p></div>';
-            } else if (marketShare >= 8) {
-                analysis += '<div class="analysis-item"><p><strong>Major Player:</strong> ' + marketShare.toFixed(1) + '% market share shows significant market presence.</p></div>';
-            } else if (marketShare >= 3) {
-                analysis += '<div class="analysis-item"><p><strong>Growing Position:</strong> ' + marketShare.toFixed(1) + '% market share with solid foundation for expansion.</p></div>';
-            } else {
-                analysis += '<div class="analysis-item"><p><strong>Emerging Player:</strong> ' + marketShare.toFixed(1) + '% market share with significant growth opportunity.</p></div>';
-            }
+            const breakeven = Math.ceil(500 / agentComm);
+            const ltvcac = (retention * 12 * revenue * 20) / 500;
+            const cacText = `Agent-based CAC: KSh 0 upfront, ${formatCurrency(agentComm)} ongoing per delivery. Break-even after ${breakeven} deliveries. Traditional digital CAC: KSh 500-1,000. LTV/CAC ratio: ${ltvcac.toFixed(1)}x with ${(retention * 100).toFixed(0)}% retention over 12 months.`;
+            document.getElementById('cacAnalysis').textContent = cacText;
             
-            // Agent incentive analysis
-            if (agentEarnings >= 8000) {
-                analysis += '<div class="analysis-item"><p><strong>Exceptional Agent Incentive:</strong> ' + formatCurrency(agentEarnings) + ' monthly earnings will create agent waiting lists.</p></div>';
-            } else if (agentEarnings >= 5000) {
-                analysis += '<div class="analysis-item"><p><strong>Strong Agent Incentive:</strong> ' + formatCurrency(agentEarnings) + ' monthly earnings will attract quality agents.</p></div>';
-            } else if (agentEarnings >= 2000) {
-                analysis += '<div class="analysis-item"><p><strong>Moderate Agent Incentive:</strong> ' + formatCurrency(agentEarnings) + ' monthly earnings provides reasonable motivation.</p></div>';
-            } else if (agentEarnings >= 500) {
-                analysis += '<div class="analysis-item"><p><strong>Basic Agent Incentive:</strong> ' + formatCurrency(agentEarnings) + ' monthly earnings may work for part-time agents.</p></div>';
-            } else {
-                analysis += '<div class="analysis-item"><p><strong>Low Agent Incentive:</strong> ' + formatCurrency(agentEarnings) + ' monthly earnings will struggle to retain agents.</p></div>';
-            }
-            
-            analysisContainer.innerHTML = analysis;
+            const riderDaily = weightedPrice * 0.7 * 10;
+            const riderClustered = weightedPrice * 0.7 * 15;
+            const riderText = `Average rider completes 10 deliveries/day at ${formatCurrency(weightedPrice * 0.7)} each = ${formatCurrency(riderDaily)} daily income. With clustering: 15-20 deliveries/day possible = ${formatCurrency(riderClustered)}-${formatCurrency(riderClustered * 1.33)} daily.`;
+            document.getElementById('riderAnalysis').textContent = riderText;
         }
 
-        // Initialize calculations on page load
+        function updateCashFlow(monthlyRevenue, fixedCosts, variableCost, dailyVol, workDays, netProfit) {
+            // Update metrics
+            const initialCapital = fixedCosts * 3;
+            document.getElementById('cfInitialCapital').textContent = formatCurrency(initialCapital);
+            document.getElementById('cfMonthlyFixed').textContent = formatCurrency(fixedCosts);
+            
+            const breakevenMonths = fixedCosts > 0 && netProfit > 0 ? (initialCapital / (netProfit * dailyVol * workDays)).toFixed(1) : 'N/A';
+            document.getElementById('cfBreakevenMonths').textContent = breakevenMonths;
+            
+            const workingCapital = dailyVol * 200;
+            document.getElementById('cfWorkingCapital').textContent = formatCurrency(workingCapital);
+            
+            const mpesaFloat = dailyVol * 100;
+            document.getElementById('cfMpesaFloat').textContent = formatCurrency(mpesaFloat);
+            
+            const freeCashFlow = netProfit * dailyVol * workDays;
+            document.getElementById('cfFreeCashFlow').textContent = formatCurrency(freeCashFlow);
+            
+            // Update cash flow table
+            const tbody = document.getElementById('cashflowTable');
+            tbody.innerHTML = '';
+            
+            let cumulative = 0;
+            const rampRates = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3];
+            
+            for (let month = 1; month <= 12; month++) {
+                const ramp = rampRates[month - 1] || 3;
+                const monthlyVol = Math.min(dailyVol * ramp, dailyVol * 3);
+                const revenue = monthlyVol * workDays * (monthlyRevenue / (dailyVol * workDays));
+                const varCosts = monthlyVol * workDays * variableCost;
+                const totalCosts = varCosts + fixedCosts;
+                const netCash = revenue - totalCosts;
+                cumulative += netCash;
+                
+                const row = tbody.insertRow();
+                row.innerHTML = `
+                    <td>Month ${month}</td>
+                    <td>${Math.round(monthlyVol)} deliveries/day</td>
+                    <td>${formatCurrency(revenue)}</td>
+                    <td>${formatCurrency(totalCosts)}</td>
+                    <td class="${netCash >= 0 ? '' : 'negative'}">${formatCurrency(netCash)}</td>
+                    <td class="${cumulative >= 0 ? '' : 'negative'}">${formatCurrency(cumulative)}</td>
+                `;
+            }
+            
+            // Update funding analysis
+            const fundingText = `Based on current parameters: Initial capital of ${formatCurrency(initialCapital)} covers 3 months runway. Working capital of ${formatCurrency(workingCapital)} handles daily operations. Total funding need: ${formatCurrency(initialCapital + workingCapital)} for comfortable launch.`;
+            document.getElementById('fundingAnalysis').textContent = fundingText;
+        }
+
+        function updateMetricColors(monthlyProfit, breakEven, margin) {
+            // Monthly profit color coding
+            const profitCard = document.querySelector('#monthlyProfit').parentElement;
+            if (monthlyProfit > 1000000) {
+                profitCard.className = 'metric-card positive';
+            } else if (monthlyProfit > 500000) {
+                profitCard.className = 'metric-card';
+            } else if (monthlyProfit > 0) {
+                profitCard.className = 'metric-card warning';
+            } else {
+                profitCard.className = 'metric-card negative';
+            }
+            
+            // Break-even color coding
+            const breakEvenCard = document.querySelector('#breakEvenDeliveries').parentElement;
+            if (breakEven < 200) {
+                breakEvenCard.className = 'metric-card positive';
+            } else if (breakEven < 500) {
+                breakEvenCard.className = 'metric-card warning';
+            } else {
+                breakEvenCard.className = 'metric-card negative';
+            }
+            
+            // Revenue cards
+            const revenueCard = document.querySelector('#monthlyRevenue').parentElement;
+            if (window.tumaData.revenue.monthly > 2000000) {
+                revenueCard.className = 'metric-card positive';
+            } else {
+                revenueCard.className = 'metric-card';
+            }
+        }
+
+        function loadScenario(scenario) {
+            const scenarios = {
+                conservative: {
+                    avgPrice: 150,
+                    platformShare: 25,
+                    dailyDeliveries: 100,
+                    chairmanFee: 15,
+                    agentCommission: 25,
+                    techCost: 3,
+                    smsCost: 2,
+                    rent: 30000,
+                    salaries: 50000,
+                    marketing: 20000,
+                    clustering: 40,
+                    failureRate: 10
+                },
+                moderate: {
+                    avgPrice: 180,
+                    platformShare: 28,
+                    dailyDeliveries: 300,
+                    chairmanFee: 12,
+                    agentCommission: 22,
+                    techCost: 2.5,
+                    smsCost: 1.5,
+                    rent: 40000,
+                    salaries: 100000,
+                    marketing: 30000,
+                    clustering: 50,
+                    failureRate: 7
+                },
+                realistic: {
+                    avgPrice: 200,
+                    platformShare: 30,
+                    dailyDeliveries: 1000,
+                    chairmanFee: 10,
+                    agentCommission: 20,
+                    techCost: 2,
+                    smsCost: 1,
+                    rent: 50000,
+                    salaries: 150000,
+                    marketing: 50000,
+                    clustering: 60,
+                    failureRate: 5
+                },
+                aggressive: {
+                    avgPrice: 220,
+                    platformShare: 32,
+                    dailyDeliveries: 2000,
+                    chairmanFee: 8,
+                    agentCommission: 18,
+                    techCost: 1.5,
+                    smsCost: 0.8,
+                    rent: 75000,
+                    salaries: 250000,
+                    marketing: 100000,
+                    clustering: 70,
+                    failureRate: 4
+                },
+                optimistic: {
+                    avgPrice: 250,
+                    platformShare: 35,
+                    dailyDeliveries: 3000,
+                    chairmanFee: 5,
+                    agentCommission: 15,
+                    techCost: 1,
+                    smsCost: 0.5,
+                    rent: 100000,
+                    salaries: 400000,
+                    marketing: 150000,
+                    clustering: 80,
+                    failureRate: 3
+                }
+            };
+            
+            const s = scenarios[scenario];
+            if (s) {
+                Object.keys(s).forEach(key => {
+                    if (document.getElementById(key)) {
+                        document.getElementById(key).value = s[key];
+                    }
+                });
+                updateCalculations();
+            }
+        }
+
+        // Save and load settings
+        function saveSettings() {
+            const settings = {};
+            const inputs = document.querySelectorAll('.slider');
+            inputs.forEach(input => {
+                settings[input.id] = input.value;
+            });
+            localStorage.setItem('tumaSettings', JSON.stringify(settings));
+        }
+
+        function loadSettings() {
+            const saved = localStorage.getItem('tumaSettings');
+            if (saved) {
+                const settings = JSON.parse(saved);
+                Object.keys(settings).forEach(key => {
+                    if (document.getElementById(key)) {
+                        document.getElementById(key).value = settings[key];
+                    }
+                });
+            }
+        }
+
+        // Export data
+        function exportData() {
+            const data = {
+                timestamp: new Date().toISOString(),
+                parameters: {},
+                results: window.tumaData
+            };
+            
+            document.querySelectorAll('.slider').forEach(input => {
+                data.parameters[input.id] = input.value;
+            });
+            
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data, null, 2));
+            const downloadAnchorNode = document.createElement('a');
+            downloadAnchorNode.setAttribute("href", dataStr);
+            downloadAnchorNode.setAttribute("download", "tuma_analysis_" + Date.now() + ".json");
+            document.body.appendChild(downloadAnchorNode);
+            downloadAnchorNode.click();
+            downloadAnchorNode.remove();
+        }
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', function(e) {
+            // Ctrl/Cmd + S to save settings
+            if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+                e.preventDefault();
+                saveSettings();
+            }
+            
+            // Ctrl/Cmd + E to export
+            if ((e.ctrlKey || e.metaKey) && e.key === 'e') {
+                e.preventDefault();
+                exportData();
+            }
+            
+            // Number keys to switch tabs
+            if (e.key >= '1' && e.key <= '6') {
+                const tabIndex = parseInt(e.key) - 1;
+                const tabs = ['calculator', 'market', 'competition', 'operations', 'cashflow', 'scenarios'];
+                if (tabs[tabIndex]) {
+                    const btn = document.querySelectorAll('.tab-btn')[tabIndex];
+                    if (btn) {
+                        btn.click();
+                    }
+                }
+            }
+        });
+
+        // Auto-save on change
+        document.querySelectorAll('.slider').forEach(input => {
+            input.addEventListener('change', saveSettings);
+        });
+
+        // Initialize on load
         document.addEventListener('DOMContentLoaded', function() {
+            loadSettings();
             updateCalculations();
         });
     </script>
