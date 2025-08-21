@@ -3,7 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Become a Tuma Rider</title>
+    <title>Become a 2MA Rider</title>
+    
+    <!-- Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
     <style>
         * {
             margin: 0;
@@ -64,7 +68,7 @@
         }
 
         .logo-icon {
-            width: 40px;
+            width: 50px;
             height: 40px;
             background: var(--primary);
             border-radius: 10px;
@@ -72,6 +76,8 @@
             align-items: center;
             justify-content: center;
             color: white;
+            font-weight: bold;
+            font-size: 18px;
         }
 
         /* Progress Bar */
@@ -237,12 +243,38 @@
             font-size: 13px;
             color: var(--error);
             margin-top: 6px;
+            display: none;
         }
 
         .success-message {
             font-size: 13px;
             color: var(--success);
             margin-top: 6px;
+        }
+
+        /* PIN Input */
+        .pin-inputs {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+
+        .pin-digit {
+            width: 60px;
+            height: 60px;
+            text-align: center;
+            font-size: 24px;
+            font-weight: 700;
+            background: var(--surface);
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            color: var(--text-primary);
+        }
+
+        .pin-digit:focus {
+            border-color: var(--primary);
+            transform: scale(1.05);
         }
 
         /* File Upload */
@@ -262,11 +294,6 @@
         .file-upload:hover {
             border-color: var(--primary);
             background: rgba(0, 102, 255, 0.02);
-        }
-
-        .file-upload.drag-over {
-            border-color: var(--primary);
-            background: rgba(0, 102, 255, 0.05);
         }
 
         .file-upload.has-file {
@@ -328,96 +355,6 @@
             border-radius: 8px;
         }
 
-        .file-info {
-            flex: 1;
-        }
-
-        .file-name {
-            font-size: 14px;
-            font-weight: 600;
-            margin-bottom: 2px;
-        }
-
-        .file-size {
-            font-size: 12px;
-            color: var(--text-secondary);
-        }
-
-        .remove-file {
-            padding: 8px;
-            background: var(--error);
-            color: white;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 12px;
-        }
-
-        /* Selfie Capture */
-        .camera-container {
-            position: relative;
-            width: 100%;
-            max-width: 320px;
-            margin: 0 auto;
-        }
-
-        .camera-view {
-            width: 100%;
-            aspect-ratio: 1;
-            background: #000;
-            border-radius: 50%;
-            overflow: hidden;
-            position: relative;
-        }
-
-        #videoElement {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-
-        .camera-overlay {
-            position: absolute;
-            inset: 0;
-            border: 3px solid var(--primary);
-            border-radius: 50%;
-            pointer-events: none;
-        }
-
-        .camera-controls {
-            display: flex;
-            justify-content: center;
-            gap: 16px;
-            margin-top: 20px;
-        }
-
-        .camera-btn {
-            width: 60px;
-            height: 60px;
-            border-radius: 50%;
-            border: none;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.2s;
-        }
-
-        .capture-btn {
-            background: var(--primary);
-            color: white;
-            font-size: 24px;
-        }
-
-        .capture-btn:hover {
-            transform: scale(1.1);
-        }
-
-        .retake-btn {
-            background: var(--error);
-            color: white;
-        }
-
         /* Buttons */
         .button-group {
             display: flex;
@@ -466,80 +403,7 @@
             transform: none;
         }
 
-        /* Summary Section */
-        .summary-card {
-            background: var(--surface);
-            border-radius: 16px;
-            padding: 20px;
-            margin-bottom: 16px;
-            box-shadow: var(--shadow);
-        }
-
-        .summary-header {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            margin-bottom: 16px;
-            font-weight: 600;
-        }
-
-        .summary-icon {
-            width: 32px;
-            height: 32px;
-            background: var(--primary);
-            color: white;
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .summary-items {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-
-        .summary-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 8px 0;
-            border-bottom: 1px solid var(--border);
-        }
-
-        .summary-item:last-child {
-            border-bottom: none;
-        }
-
-        .summary-label {
-            font-size: 14px;
-            color: var(--text-secondary);
-        }
-
-        .summary-value {
-            font-size: 14px;
-            font-weight: 600;
-        }
-
-        .status-badge {
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
-        }
-
-        .status-badge.verified {
-            background: rgba(0, 185, 105, 0.1);
-            color: var(--success);
-        }
-
-        .status-badge.pending {
-            background: rgba(255, 184, 0, 0.1);
-            color: var(--warning);
-        }
-
-        /* Loading State */
+        /* Loading */
         .loading-overlay {
             position: fixed;
             inset: 0;
@@ -586,14 +450,10 @@
             color: white;
         }
 
-        /* Mobile Responsiveness */
+        /* Mobile */
         @media (max-width: 600px) {
             .step-label {
                 display: none;
-            }
-            
-            .form-card {
-                padding: 20px;
             }
             
             .button-group {
@@ -604,6 +464,29 @@
                 width: 100%;
             }
         }
+
+        .info-message {
+            padding: 12px;
+            background: rgba(0, 102, 255, 0.1);
+            border: 1px solid rgba(0, 102, 255, 0.2);
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            color: var(--primary);
+        }
+
+        .emergency-group {
+            background: var(--surface-elevated);
+            padding: 16px;
+            border-radius: 12px;
+            margin-top: 20px;
+        }
+
+        .emergency-title {
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: var(--text-primary);
+        }
     </style>
 </head>
 <body>
@@ -611,8 +494,8 @@
     <header class="header">
         <div class="header-content">
             <div class="logo">
-                <div class="logo-icon">📦</div>
-                <span>Tuma Delivery</span>
+                <div class="logo-icon">2MA</div>
+                <span>2MA Delivery</span>
             </div>
             <div class="header-actions">
                 <a href="./auth.html?type=rider" style="color: var(--primary); text-decoration: none;">
@@ -643,10 +526,6 @@
                 </div>
                 <div class="progress-step">
                     <div class="step-circle" id="step4Circle">4</div>
-                    <div class="step-label">Photo</div>
-                </div>
-                <div class="progress-step">
-                    <div class="step-circle" id="step5Circle">5</div>
                     <div class="step-label">Review</div>
                 </div>
             </div>
@@ -683,7 +562,7 @@
                 
                 <div class="form-group">
                     <label class="form-label">National ID Number <span class="required">*</span></label>
-                    <input type="text" class="input-field" id="nationalId" placeholder="12345678" required>
+                    <input type="text" class="input-field" id="nationalId" placeholder="12345678" maxlength="8" required>
                     <div class="error-message" id="nationalIdError"></div>
                 </div>
                 
@@ -692,6 +571,25 @@
                     <input type="date" class="input-field" id="dateOfBirth" required>
                     <div class="error-message" id="dobError"></div>
                 </div>
+
+                <div class="form-group">
+                    <label class="form-label">M-Pesa Number <span class="required">*</span></label>
+                    <input type="tel" class="input-field" id="mpesaNumber" placeholder="0712345678" maxlength="10" required>
+                    <div class="error-message" id="mpesaError"></div>
+                </div>
+
+                <!-- Emergency Contact -->
+                <div class="emergency-group">
+                    <div class="emergency-title">Emergency Contact</div>
+                    <div class="form-group">
+                        <label class="form-label">Contact Name <span class="required">*</span></label>
+                        <input type="text" class="input-field" id="emergencyName" placeholder="Jane Doe" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Contact Phone <span class="required">*</span></label>
+                        <input type="tel" class="input-field" id="emergencyPhone" placeholder="0712345678" maxlength="10" required>
+                    </div>
+                </div>
             </form>
             
             <div class="button-group">
@@ -699,51 +597,42 @@
             </div>
         </div>
 
-        <!-- Step 2: Documents -->
+        <!-- Step 2: Documents (Simplified) -->
         <div class="step-content" id="step2">
             <div class="step-header">
-                <h1 class="step-title">Upload your documents</h1>
-                <p class="step-subtitle">We need these to verify your identity</p>
+                <h1 class="step-title">Verification Documents</h1>
+                <p class="step-subtitle">We'll verify these after submission</p>
             </div>
             
             <div class="form-card">
-                <div class="form-group">
-                    <label class="form-label">National ID (Front & Back) <span class="required">*</span></label>
-                    <div class="file-upload" id="idUpload">
-                        <input type="file" id="idFile" accept="image/*,.pdf" multiple>
-                        <div class="upload-icon">📄</div>
-                        <div class="upload-text">
-                            <div class="upload-title">Drop files here or click to upload</div>
-                            <div class="upload-subtitle">PNG, JPG or PDF (max 5MB)</div>
-                        </div>
-                    </div>
-                    <div id="idPreview"></div>
+                <div class="info-message">
+                    📌 You can upload documents later through the app. For now, just confirm you have these ready:
                 </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Driving License <span class="required">*</span></label>
-                    <div class="file-upload" id="licenseUpload">
-                        <input type="file" id="licenseFile" accept="image/*,.pdf">
-                        <div class="upload-icon">🚗</div>
-                        <div class="upload-text">
-                            <div class="upload-title">Upload your driving license</div>
-                            <div class="upload-subtitle">Must be valid motorcycle license</div>
-                        </div>
-                    </div>
-                    <div id="licensePreview"></div>
+
+                <div style="padding: 20px 0;">
+                    <label style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px; cursor: pointer;">
+                        <input type="checkbox" id="hasNationalId" style="width: 20px; height: 20px;">
+                        <span>I have my National ID (front & back)</span>
+                    </label>
+                    
+                    <label style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px; cursor: pointer;">
+                        <input type="checkbox" id="hasLicense" style="width: 20px; height: 20px;">
+                        <span>I have a valid motorcycle driving license</span>
+                    </label>
+                    
+                    <label style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px; cursor: pointer;">
+                        <input type="checkbox" id="hasGoodConduct" style="width: 20px; height: 20px;">
+                        <span>I have/can get a Certificate of Good Conduct</span>
+                    </label>
+                    
+                    <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
+                        <input type="checkbox" id="hasInsurance" style="width: 20px; height: 20px;">
+                        <span>I have motorcycle insurance</span>
+                    </label>
                 </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Certificate of Good Conduct <span class="required">*</span></label>
-                    <div class="file-upload" id="conductUpload">
-                        <input type="file" id="conductFile" accept="image/*,.pdf">
-                        <div class="upload-icon">✅</div>
-                        <div class="upload-text">
-                            <div class="upload-title">Upload good conduct certificate</div>
-                            <div class="upload-subtitle">Must be less than 6 months old</div>
-                        </div>
-                    </div>
-                    <div id="conductPreview"></div>
+
+                <div class="error-message" id="documentsError" style="display: none;">
+                    Please confirm you have all required documents
                 </div>
             </div>
             
@@ -756,7 +645,7 @@
         <!-- Step 3: Vehicle Information -->
         <div class="step-content" id="step3">
             <div class="step-header">
-                <h1 class="step-title">Vehicle details</h1>
+                <h1 class="step-title">Vehicle Details</h1>
                 <p class="step-subtitle">Tell us about your motorcycle</p>
             </div>
             
@@ -765,11 +654,12 @@
                     <label class="form-label">Vehicle Make <span class="required">*</span></label>
                     <select class="input-field" id="vehicleMake" required>
                         <option value="">Select make</option>
-                        <option value="honda">Honda</option>
-                        <option value="yamaha">Yamaha</option>
-                        <option value="tvs">TVS</option>
-                        <option value="bajaj">Bajaj</option>
-                        <option value="other">Other</option>
+                        <option value="Honda">Honda</option>
+                        <option value="Yamaha">Yamaha</option>
+                        <option value="TVS">TVS</option>
+                        <option value="Bajaj">Bajaj</option>
+                        <option value="Suzuki">Suzuki</option>
+                        <option value="Other">Other</option>
                     </select>
                 </div>
                 
@@ -788,18 +678,16 @@
                     <label class="form-label">Vehicle Color <span class="required">*</span></label>
                     <input type="text" class="input-field" id="vehicleColor" placeholder="e.g., Red" required>
                 </div>
-                
+
                 <div class="form-group">
-                    <label class="form-label">Insurance Certificate <span class="required">*</span></label>
-                    <div class="file-upload" id="insuranceUpload">
-                        <input type="file" id="insuranceFile" accept="image/*,.pdf">
-                        <div class="upload-icon">🛡️</div>
-                        <div class="upload-text">
-                            <div class="upload-title">Upload insurance certificate</div>
-                            <div class="upload-subtitle">Must be valid and current</div>
-                        </div>
-                    </div>
-                    <div id="insurancePreview"></div>
+                    <label class="form-label">License Number <span class="required">*</span></label>
+                    <input type="text" class="input-field" id="licenseNumber" placeholder="DL12345678" required>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">License Expiry Date <span class="required">*</span></label>
+                    <input type="date" class="input-field" id="licenseExpiry" required>
+                    <div class="error-message" id="licenseExpiryError"></div>
                 </div>
             </form>
             
@@ -809,126 +697,53 @@
             </div>
         </div>
 
-        <!-- Step 4: Profile Photo -->
+        <!-- Step 4: Create PIN & Review -->
         <div class="step-content" id="step4">
             <div class="step-header">
-                <h1 class="step-title">Take a selfie</h1>
-                <p class="step-subtitle">We need a clear photo of your face</p>
+                <h1 class="step-title">Almost Done!</h1>
+                <p class="step-subtitle">Create your login PIN and review</p>
             </div>
             
+            <!-- Create PIN -->
             <div class="form-card">
-                <div class="camera-container">
-                    <div class="camera-view">
-                        <video id="videoElement" autoplay playsinline></video>
-                        <canvas id="canvas" style="display: none;"></canvas>
-                        <img id="capturedPhoto" style="display: none; width: 100%; height: 100%; object-fit: cover;">
-                        <div class="camera-overlay"></div>
-                    </div>
-                    
-                    <div class="camera-controls">
-                        <button class="camera-btn capture-btn" id="captureBtn" onclick="capturePhoto()">
-                            📸
-                        </button>
-                        <button class="camera-btn retake-btn" id="retakeBtn" onclick="retakePhoto()" style="display: none;">
-                            🔄
-                        </button>
-                    </div>
-                </div>
-                
-                <div style="margin-top: 20px; text-align: center;">
-                    <p style="font-size: 14px; color: var(--text-secondary);">
-                        Make sure your face is clearly visible and well-lit
+                <div class="form-group">
+                    <label class="form-label">Create a 4-digit PIN <span class="required">*</span></label>
+                    <p style="font-size: 14px; color: var(--text-secondary); margin-bottom: 16px;">
+                        You'll use this PIN to sign in to your account
                     </p>
+                    <div class="pin-inputs">
+                        <input type="password" class="pin-digit" maxlength="1" pattern="[0-9]" inputmode="numeric">
+                        <input type="password" class="pin-digit" maxlength="1" pattern="[0-9]" inputmode="numeric">
+                        <input type="password" class="pin-digit" maxlength="1" pattern="[0-9]" inputmode="numeric">
+                        <input type="password" class="pin-digit" maxlength="1" pattern="[0-9]" inputmode="numeric">
+                    </div>
+                    <div class="error-message" id="pinError" style="text-align: center;">
+                        Please enter a 4-digit PIN
+                    </div>
                 </div>
-            </div>
-            
-            <div class="button-group">
-                <button class="btn btn-secondary" onclick="previousStep()">Back</button>
-                <button class="btn btn-primary" id="photoNextBtn" onclick="nextStep()" disabled>Continue</button>
-            </div>
-        </div>
 
-        <!-- Step 5: Review & Submit -->
-        <div class="step-content" id="step5">
-            <div class="step-header">
-                <h1 class="step-title">Review your application</h1>
-                <p class="step-subtitle">Make sure everything is correct</p>
-            </div>
-            
-            <!-- Personal Information Summary -->
-            <div class="summary-card">
-                <div class="summary-header">
-                    <div class="summary-icon">👤</div>
-                    <span>Personal Information</span>
-                </div>
-                <div class="summary-items">
-                    <div class="summary-item">
-                        <span class="summary-label">Full Name</span>
-                        <span class="summary-value" id="summaryName"></span>
+                <div class="form-group">
+                    <label class="form-label">Confirm PIN <span class="required">*</span></label>
+                    <div class="pin-inputs">
+                        <input type="password" class="pin-digit confirm-pin" maxlength="1" pattern="[0-9]" inputmode="numeric">
+                        <input type="password" class="pin-digit confirm-pin" maxlength="1" pattern="[0-9]" inputmode="numeric">
+                        <input type="password" class="pin-digit confirm-pin" maxlength="1" pattern="[0-9]" inputmode="numeric">
+                        <input type="password" class="pin-digit confirm-pin" maxlength="1" pattern="[0-9]" inputmode="numeric">
                     </div>
-                    <div class="summary-item">
-                        <span class="summary-label">Phone</span>
-                        <span class="summary-value" id="summaryPhone"></span>
-                    </div>
-                    <div class="summary-item">
-                        <span class="summary-label">National ID</span>
-                        <span class="summary-value" id="summaryId"></span>
+                    <div class="error-message" id="confirmPinError" style="text-align: center;">
+                        PINs do not match
                     </div>
                 </div>
             </div>
-            
-            <!-- Documents Summary -->
-            <div class="summary-card">
-                <div class="summary-header">
-                    <div class="summary-icon">📄</div>
-                    <span>Documents</span>
-                </div>
-                <div class="summary-items">
-                    <div class="summary-item">
-                        <span class="summary-label">National ID</span>
-                        <span class="status-badge verified">✓ Uploaded</span>
-                    </div>
-                    <div class="summary-item">
-                        <span class="summary-label">Driving License</span>
-                        <span class="status-badge verified">✓ Uploaded</span>
-                    </div>
-                    <div class="summary-item">
-                        <span class="summary-label">Good Conduct</span>
-                        <span class="status-badge verified">✓ Uploaded</span>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Vehicle Summary -->
-            <div class="summary-card">
-                <div class="summary-header">
-                    <div class="summary-icon">🏍️</div>
-                    <span>Vehicle Information</span>
-                </div>
-                <div class="summary-items">
-                    <div class="summary-item">
-                        <span class="summary-label">Vehicle</span>
-                        <span class="summary-value" id="summaryVehicle"></span>
-                    </div>
-                    <div class="summary-item">
-                        <span class="summary-label">License Plate</span>
-                        <span class="summary-value" id="summaryPlate"></span>
-                    </div>
-                    <div class="summary-item">
-                        <span class="summary-label">Insurance</span>
-                        <span class="status-badge verified">✓ Uploaded</span>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Terms & Conditions -->
+
+            <!-- Terms -->
             <div class="form-card">
                 <label style="display: flex; align-items: flex-start; gap: 12px; cursor: pointer;">
                     <input type="checkbox" id="termsCheckbox" style="margin-top: 4px;">
                     <span style="font-size: 14px; color: var(--text-secondary);">
-                        I agree to the <a href="#" style="color: var(--primary);">Terms of Service</a> 
-                        and <a href="#" style="color: var(--primary);">Privacy Policy</a>. 
+                        I agree to the Terms of Service and Privacy Policy. 
                         I confirm that all information provided is accurate and true.
+                        I understand my application will be reviewed within 24-48 hours.
                     </span>
                 </label>
             </div>
@@ -945,7 +760,7 @@
         <div class="step-content" id="successStep">
             <div class="success-state">
                 <div class="success-icon-large">✓</div>
-                <h1 class="step-title">Application submitted!</h1>
+                <h1 class="step-title">Application Submitted!</h1>
                 <p class="step-subtitle">
                     We'll review your application and get back to you within 24-48 hours
                 </p>
@@ -953,9 +768,10 @@
                 <div class="form-card" style="margin-top: 32px;">
                     <h3 style="margin-bottom: 16px;">What happens next?</h3>
                     <ol style="text-align: left; padding-left: 20px; line-height: 2;">
-                        <li>Our team will verify your documents</li>
+                        <li>Our team will verify your information</li>
                         <li>You'll receive an SMS once approved</li>
-                        <li>Download the Tuma Rider app and start earning</li>
+                        <li>Download the 2MA Rider app and start earning</li>
+                        <li>Complete document upload in the app</li>
                     </ol>
                 </div>
                 
@@ -974,39 +790,50 @@
     </div>
 
     <script>
+        // Initialize Supabase
+        const SUPABASE_URL = 'https://btxavqfoirdzwpfrvezp.supabase.co';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ0eGF2cWZvaXJkendwZnJ2ZXpwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE0ODcxMTcsImV4cCI6MjA2NzA2MzExN30.kQKpukFGx-cBl1zZRuXmex02ifkZ751WCUfQPogYutk';
+        
+        const { createClient } = supabase;
+        const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
+
         // State management
         let currentStep = 1;
-        const totalSteps = 5;
-        let formData = {
-            // Basic info
-            fullName: '',
-            phoneNumber: '',
-            email: '',
-            nationalId: '',
-            dateOfBirth: '',
-            // Documents
-            idFiles: [],
-            licenseFile: null,
-            conductFile: null,
-            // Vehicle
-            vehicleMake: '',
-            vehicleModel: '',
-            licensePlate: '',
-            vehicleColor: '',
-            insuranceFile: null,
-            // Photo
-            profilePhoto: null
-        };
+        const totalSteps = 4;
+        let formData = {};
 
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
-            setupFileUploads();
-            setupFormValidation();
-            initializeCamera();
+            setupPINInputs();
             
-            // Check terms checkbox
+            // Pre-fill phone if coming from auth page
+            const tempRider = localStorage.getItem('2ma_temp_rider');
+            if (tempRider) {
+                try {
+                    const data = JSON.parse(tempRider);
+                    if (data.phone) {
+                        document.getElementById('phoneNumber').value = data.phone;
+                    }
+                } catch (e) {
+                    console.error('Error parsing temp rider data');
+                }
+            }
+
+            // Terms checkbox
             document.getElementById('termsCheckbox').addEventListener('change', (e) => {
-                document.getElementById('submitBtn').disabled = !e.target.checked;
+                validateStep4();
+            });
+
+            // Format phone inputs
+            ['phoneNumber', 'mpesaNumber', 'emergencyPhone'].forEach(id => {
+                document.getElementById(id).addEventListener('input', (e) => {
+                    e.target.value = e.target.value.replace(/\D/g, '');
+                });
+            });
+
+            // Format license plate
+            document.getElementById('licensePlate').addEventListener('input', (e) => {
+                e.target.value = e.target.value.toUpperCase();
             });
         });
 
@@ -1019,10 +846,6 @@
                     currentStep++;
                     updateProgress();
                     showStep(currentStep);
-                    
-                    if (currentStep === 5) {
-                        populateSummary();
-                    }
                 }
             }
         }
@@ -1036,24 +859,18 @@
         }
 
         function showStep(step) {
-            // Hide all steps
             document.querySelectorAll('.step-content').forEach(content => {
                 content.classList.remove('active');
             });
             
-            // Show current step
             document.getElementById(`step${step}`).classList.add('active');
-            
-            // Scroll to top
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
         function updateProgress() {
-            // Update progress bar
             const progress = ((currentStep - 1) / (totalSteps - 1)) * 100;
             document.getElementById('progressFill').style.width = `${progress}%`;
             
-            // Update step circles
             for (let i = 1; i <= totalSteps; i++) {
                 const circle = document.getElementById(`step${i}Circle`);
                 if (i < currentStep) {
@@ -1071,33 +888,19 @@
             }
         }
 
-        // Form Validation
+        // Validation
         function validateCurrentStep() {
-            let isValid = true;
-            
             switch (currentStep) {
                 case 1:
-                    // Validate basic info
-                    isValid = validateBasicInfo();
-                    break;
+                    return validateBasicInfo();
                 case 2:
-                    // Validate documents
-                    isValid = validateDocuments();
-                    break;
+                    return validateDocuments();
                 case 3:
-                    // Validate vehicle info
-                    isValid = validateVehicleInfo();
-                    break;
+                    return validateVehicleInfo();
                 case 4:
-                    // Validate photo
-                    isValid = formData.profilePhoto !== null;
-                    if (!isValid) {
-                        alert('Please take a photo before continuing');
-                    }
-                    break;
+                    return validateStep4();
             }
-            
-            return isValid;
+            return true;
         }
 
         function validateBasicInfo() {
@@ -1112,7 +915,7 @@
                 clearError('fullNameError');
             }
             
-            // Phone number
+            // Phone
             const phone = document.getElementById('phoneNumber').value.trim();
             if (!/^0[0-9]{9}$/.test(phone)) {
                 showError('phoneError', 'Please enter a valid phone number');
@@ -1121,25 +924,16 @@
                 clearError('phoneError');
             }
             
-            // Email (optional but validate if provided)
-            const email = document.getElementById('email').value.trim();
-            if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-                showError('emailError', 'Please enter a valid email address');
-                isValid = false;
-            } else {
-                clearError('emailError');
-            }
-            
             // National ID
             const nationalId = document.getElementById('nationalId').value.trim();
-            if (nationalId.length < 7) {
+            if (nationalId.length < 7 || nationalId.length > 8) {
                 showError('nationalIdError', 'Please enter a valid national ID');
                 isValid = false;
             } else {
                 clearError('nationalIdError');
             }
             
-            // Date of birth (must be 18+)
+            // Date of birth
             const dob = document.getElementById('dateOfBirth').value;
             if (!dob) {
                 showError('dobError', 'Please enter your date of birth');
@@ -1153,29 +947,41 @@
                     clearError('dobError');
                 }
             }
+
+            // M-Pesa
+            const mpesa = document.getElementById('mpesaNumber').value.trim();
+            if (!/^0[0-9]{9}$/.test(mpesa)) {
+                showError('mpesaError', 'Please enter a valid M-Pesa number');
+                isValid = false;
+            } else {
+                clearError('mpesaError');
+            }
+
+            // Emergency contact
+            const emergencyName = document.getElementById('emergencyName').value.trim();
+            const emergencyPhone = document.getElementById('emergencyPhone').value.trim();
+            
+            if (!emergencyName || !emergencyPhone) {
+                alert('Please provide emergency contact information');
+                isValid = false;
+            }
             
             return isValid;
         }
 
         function validateDocuments() {
-            let isValid = true;
+            const hasNationalId = document.getElementById('hasNationalId').checked;
+            const hasLicense = document.getElementById('hasLicense').checked;
+            const hasGoodConduct = document.getElementById('hasGoodConduct').checked;
+            const hasInsurance = document.getElementById('hasInsurance').checked;
             
-            if (formData.idFiles.length === 0) {
-                alert('Please upload your National ID');
-                isValid = false;
+            if (!hasNationalId || !hasLicense || !hasGoodConduct || !hasInsurance) {
+                document.getElementById('documentsError').style.display = 'block';
+                return false;
             }
             
-            if (!formData.licenseFile) {
-                alert('Please upload your Driving License');
-                isValid = false;
-            }
-            
-            if (!formData.conductFile) {
-                alert('Please upload your Certificate of Good Conduct');
-                isValid = false;
-            }
-            
-            return isValid;
+            document.getElementById('documentsError').style.display = 'none';
+            return true;
         }
 
         function validateVehicleInfo() {
@@ -1194,25 +1000,56 @@
             }
             
             const licensePlate = document.getElementById('licensePlate').value.trim();
-            if (!/^K[A-Z]{2}\s?\d{3}[A-Z]$/.test(licensePlate.toUpperCase().replace(/\s/g, ''))) {
-                showError('plateError', 'Please enter a valid license plate (e.g., KXX 123X)');
+            if (licensePlate.length < 7) {
+                showError('plateError', 'Please enter a valid license plate');
                 isValid = false;
             } else {
                 clearError('plateError');
             }
-            
-            const vehicleColor = document.getElementById('vehicleColor').value.trim();
-            if (!vehicleColor) {
-                alert('Please enter vehicle color');
+
+            const licenseExpiry = document.getElementById('licenseExpiry').value;
+            if (!licenseExpiry) {
+                showError('licenseExpiryError', 'Please enter license expiry date');
                 return false;
-            }
-            
-            if (!formData.insuranceFile) {
-                alert('Please upload insurance certificate');
-                isValid = false;
+            } else {
+                const expiry = new Date(licenseExpiry);
+                const today = new Date();
+                if (expiry < today) {
+                    showError('licenseExpiryError', 'License cannot be expired');
+                    return false;
+                }
+                clearError('licenseExpiryError');
             }
             
             return isValid;
+        }
+
+        function validateStep4() {
+            const pin = Array.from(document.querySelectorAll('.pin-digit:not(.confirm-pin)'))
+                .map(input => input.value).join('');
+            const confirmPin = Array.from(document.querySelectorAll('.confirm-pin'))
+                .map(input => input.value).join('');
+            const termsAccepted = document.getElementById('termsCheckbox').checked;
+            
+            let isValid = true;
+            
+            if (pin.length !== 4) {
+                document.getElementById('pinError').style.display = 'block';
+                isValid = false;
+            } else {
+                document.getElementById('pinError').style.display = 'none';
+            }
+            
+            if (pin !== confirmPin) {
+                document.getElementById('confirmPinError').style.display = 'block';
+                isValid = false;
+            } else {
+                document.getElementById('confirmPinError').style.display = 'none';
+            }
+            
+            document.getElementById('submitBtn').disabled = !isValid || !termsAccepted;
+            
+            return isValid && termsAccepted;
         }
 
         function calculateAge(dateOfBirth) {
@@ -1243,7 +1080,7 @@
             }
         }
 
-        // Save Step Data
+        // Save form data
         function saveStepData() {
             switch (currentStep) {
                 case 1:
@@ -1252,333 +1089,133 @@
                     formData.email = document.getElementById('email').value.trim();
                     formData.nationalId = document.getElementById('nationalId').value.trim();
                     formData.dateOfBirth = document.getElementById('dateOfBirth').value;
+                    formData.mpesaNumber = document.getElementById('mpesaNumber').value.trim();
+                    formData.emergencyName = document.getElementById('emergencyName').value.trim();
+                    formData.emergencyPhone = document.getElementById('emergencyPhone').value.trim();
                     break;
                 case 3:
                     formData.vehicleMake = document.getElementById('vehicleMake').value;
                     formData.vehicleModel = document.getElementById('vehicleModel').value.trim();
                     formData.licensePlate = document.getElementById('licensePlate').value.trim().toUpperCase();
                     formData.vehicleColor = document.getElementById('vehicleColor').value.trim();
+                    formData.licenseNumber = document.getElementById('licenseNumber').value.trim();
+                    formData.licenseExpiry = document.getElementById('licenseExpiry').value;
+                    break;
+                case 4:
+                    formData.pin = Array.from(document.querySelectorAll('.pin-digit:not(.confirm-pin)'))
+                        .map(input => input.value).join('');
                     break;
             }
         }
 
-        // File Upload Setup
-        function setupFileUploads() {
-            // ID Upload
-            setupFileInput('idFile', 'idUpload', 'idPreview', (files) => {
-                formData.idFiles = files;
-            }, true); // Allow multiple
-            
-            // License Upload
-            setupFileInput('licenseFile', 'licenseUpload', 'licensePreview', (file) => {
-                formData.licenseFile = file;
-            });
-            
-            // Good Conduct Upload
-            setupFileInput('conductFile', 'conductUpload', 'conductPreview', (file) => {
-                formData.conductFile = file;
-            });
-            
-            // Insurance Upload
-            setupFileInput('insuranceFile', 'insuranceUpload', 'insurancePreview', (file) => {
-                formData.insuranceFile = file;
-            });
-        }
-
-        function setupFileInput(inputId, uploadId, previewId, onFileSelect, multiple = false) {
-            const input = document.getElementById(inputId);
-            const uploadDiv = document.getElementById(uploadId);
-            const previewDiv = document.getElementById(previewId);
-            
-            // Drag and drop
-            uploadDiv.addEventListener('dragover', (e) => {
-                e.preventDefault();
-                uploadDiv.classList.add('drag-over');
-            });
-            
-            uploadDiv.addEventListener('dragleave', () => {
-                uploadDiv.classList.remove('drag-over');
-            });
-            
-            uploadDiv.addEventListener('drop', (e) => {
-                e.preventDefault();
-                uploadDiv.classList.remove('drag-over');
-                handleFiles(e.dataTransfer.files);
-            });
-            
-            // File input change
-            input.addEventListener('change', (e) => {
-                handleFiles(e.target.files);
-            });
-            
-            function handleFiles(files) {
-                if (!files || files.length === 0) return;
-                
-                const validFiles = Array.from(files).filter(file => {
-                    // Check file size (5MB max)
-                    if (file.size > 5 * 1024 * 1024) {
-                        alert(`${file.name} is too large. Maximum size is 5MB.`);
-                        return false;
+        // PIN input setup
+        function setupPINInputs() {
+            document.querySelectorAll('.pin-digit').forEach((input, index, inputs) => {
+                input.addEventListener('input', (e) => {
+                    if (e.target.value && index < inputs.length - 1) {
+                        inputs[index + 1].focus();
                     }
-                    
-                    // Check file type
-                    const validTypes = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf'];
-                    if (!validTypes.includes(file.type)) {
-                        alert(`${file.name} is not a valid file type. Please upload JPG, PNG, or PDF.`);
-                        return false;
-                    }
-                    
-                    return true;
+                    validateStep4();
                 });
-                
-                if (validFiles.length > 0) {
-                    uploadDiv.classList.add('has-file');
-                    displayPreview(validFiles, previewDiv, multiple);
-                    
-                    if (multiple) {
-                        onFileSelect(validFiles);
-                    } else {
-                        onFileSelect(validFiles[0]);
-                    }
-                }
-            }
-        }
 
-        function displayPreview(files, previewDiv, multiple) {
-            previewDiv.innerHTML = '';
-            
-            const filesToShow = multiple ? files : [files[0]];
-            
-            filesToShow.forEach(file => {
-                const preview = document.createElement('div');
-                preview.className = 'file-preview';
-                
-                if (file.type.startsWith('image/')) {
-                    const img = document.createElement('img');
-                    img.src = URL.createObjectURL(file);
-                    preview.appendChild(img);
-                } else {
-                    const icon = document.createElement('div');
-                    icon.style.width = '60px';
-                    icon.style.height = '60px';
-                    icon.style.background = 'var(--primary)';
-                    icon.style.borderRadius = '8px';
-                    icon.style.display = 'flex';
-                    icon.style.alignItems = 'center';
-                    icon.style.justifyContent = 'center';
-                    icon.style.color = 'white';
-                    icon.style.fontSize = '24px';
-                    icon.innerHTML = '📄';
-                    preview.appendChild(icon);
-                }
-                
-                const info = document.createElement('div');
-                info.className = 'file-info';
-                info.innerHTML = `
-                    <div class="file-name">${file.name}</div>
-                    <div class="file-size">${formatFileSize(file.size)}</div>
-                `;
-                preview.appendChild(info);
-                
-                const removeBtn = document.createElement('button');
-                removeBtn.className = 'remove-file';
-                removeBtn.textContent = 'Remove';
-                removeBtn.onclick = () => {
-                    preview.remove();
-                    // Reset the input
-                    const input = previewDiv.parentElement.querySelector('input[type="file"]');
-                    input.value = '';
-                    
-                    // Update form data
-                    if (previewDiv.id === 'idPreview') {
-                        formData.idFiles = [];
-                    } else if (previewDiv.id === 'licensePreview') {
-                        formData.licenseFile = null;
-                    } else if (previewDiv.id === 'conductPreview') {
-                        formData.conductFile = null;
-                    } else if (previewDiv.id === 'insurancePreview') {
-                        formData.insuranceFile = null;
+                input.addEventListener('keydown', (e) => {
+                    if (e.key === 'Backspace' && !e.target.value && index > 0) {
+                        inputs[index - 1].focus();
                     }
-                    
-                    // Update upload div
-                    const uploadDiv = previewDiv.parentElement.querySelector('.file-upload');
-                    if (previewDiv.children.length === 0) {
-                        uploadDiv.classList.remove('has-file');
-                    }
-                };
-                preview.appendChild(removeBtn);
-                
-                previewDiv.appendChild(preview);
-            });
-        }
-
-        function formatFileSize(bytes) {
-            if (bytes < 1024) return bytes + ' B';
-            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-        }
-
-        // Camera Functions
-        let stream = null;
-        
-        async function initializeCamera() {
-            try {
-                const video = document.getElementById('videoElement');
-                stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: 'user' } 
                 });
-                video.srcObject = stream;
-            } catch (error) {
-                console.error('Camera access denied:', error);
-                // Show alternative upload option
-                showAlternativePhotoUpload();
-            }
-        }
-
-        function showAlternativePhotoUpload() {
-            const cameraContainer = document.querySelector('.camera-container');
-            cameraContainer.innerHTML = `
-                <div class="file-upload" style="max-width: 320px; margin: 0 auto;">
-                    <input type="file" id="photoFile" accept="image/*" capture="user">
-                    <div class="upload-icon">📸</div>
-                    <div class="upload-text">
-                        <div class="upload-title">Take or upload a selfie</div>
-                        <div class="upload-subtitle">Clear photo of your face</div>
-                    </div>
-                </div>
-                <div id="photoPreview"></div>
-            `;
-            
-            setupFileInput('photoFile', null, 'photoPreview', (file) => {
-                formData.profilePhoto = file;
-                document.getElementById('photoNextBtn').disabled = false;
             });
-        }
-
-        function capturePhoto() {
-            const video = document.getElementById('videoElement');
-            const canvas = document.getElementById('canvas');
-            const capturedPhoto = document.getElementById('capturedPhoto');
-            
-            // Set canvas size to match video
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            
-            // Draw video frame to canvas
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(video, 0, 0);
-            
-            // Convert to blob
-            canvas.toBlob((blob) => {
-                formData.profilePhoto = new File([blob], 'selfie.jpg', { type: 'image/jpeg' });
-                
-                // Show captured photo
-                capturedPhoto.src = URL.createObjectURL(blob);
-                capturedPhoto.style.display = 'block';
-                video.style.display = 'none';
-                
-                // Update buttons
-                document.getElementById('captureBtn').style.display = 'none';
-                document.getElementById('retakeBtn').style.display = 'block';
-                document.getElementById('photoNextBtn').disabled = false;
-            }, 'image/jpeg', 0.9);
-        }
-
-        function retakePhoto() {
-            const video = document.getElementById('videoElement');
-            const capturedPhoto = document.getElementById('capturedPhoto');
-            
-            // Reset
-            capturedPhoto.style.display = 'none';
-            video.style.display = 'block';
-            formData.profilePhoto = null;
-            
-            // Update buttons
-            document.getElementById('captureBtn').style.display = 'block';
-            document.getElementById('retakeBtn').style.display = 'none';
-            document.getElementById('photoNextBtn').disabled = true;
-        }
-
-        // Form Validation Setup
-        function setupFormValidation() {
-            // Phone number formatting
-            document.getElementById('phoneNumber').addEventListener('input', (e) => {
-                e.target.value = e.target.value.replace(/\D/g, '');
-            });
-            
-            // National ID formatting
-            document.getElementById('nationalId').addEventListener('input', (e) => {
-                e.target.value = e.target.value.replace(/\D/g, '');
-            });
-            
-            // License plate formatting
-            document.getElementById('licensePlate').addEventListener('input', (e) => {
-                e.target.value = e.target.value.toUpperCase();
-            });
-        }
-
-        // Populate Summary
-        function populateSummary() {
-            document.getElementById('summaryName').textContent = formData.fullName;
-            document.getElementById('summaryPhone').textContent = formData.phoneNumber;
-            document.getElementById('summaryId').textContent = formData.nationalId;
-            document.getElementById('summaryVehicle').textContent = 
-                `${formData.vehicleMake} ${formData.vehicleModel}`;
-            document.getElementById('summaryPlate').textContent = formData.licensePlate;
         }
 
         // Submit Application
         async function submitApplication() {
+            if (!validateStep4()) {
+                alert('Please complete all fields and accept the terms');
+                return;
+            }
+
             const loadingOverlay = document.getElementById('loadingOverlay');
             loadingOverlay.classList.add('active');
             
             try {
-                // Create FormData for file upload
-                const uploadData = new FormData();
-                
-                // Add basic info
-                uploadData.append('rider_name', formData.fullName);
-                uploadData.append('phone', formData.phoneNumber);
-                uploadData.append('email', formData.email || '');
-                uploadData.append('national_id', formData.nationalId);
-                uploadData.append('date_of_birth', formData.dateOfBirth);
-                
-                // Add vehicle info
-                uploadData.append('vehicle_make', formData.vehicleMake);
-                uploadData.append('vehicle_model', formData.vehicleModel);
-                uploadData.append('motorcycle_plate', formData.licensePlate);
-                uploadData.append('vehicle_color', formData.vehicleColor);
-                
-                // Add files
-                if (formData.idFiles.length > 0) {
-                    uploadData.append('national_id_front', formData.idFiles[0]);
-                    if (formData.idFiles[1]) {
-                        uploadData.append('national_id_back', formData.idFiles[1]);
-                    }
-                }
-                uploadData.append('license_front', formData.licenseFile);
-                uploadData.append('good_conduct_cert', formData.conductFile);
-                uploadData.append('insurance_cert', formData.insuranceFile);
-                uploadData.append('profile_photo', formData.profilePhoto);
-                
-                // Set initial status
-                uploadData.append('status', 'pending');
-                uploadData.append('verification_status', 'pending');
-                uploadData.append('rating', '5.00');
-                uploadData.append('total_deliveries', '0');
-                uploadData.append('total_earnings', '0.00');
+                // Hash PIN
+                const pinHash = await hashPIN(formData.pin);
                 
                 // Generate referral code
-                uploadData.append('referral_code', generateReferralCode());
+                const referralCode = generateReferralCode();
                 
-                // Submit to your backend
-                // const response = await fetch('/api/riders/signup', {
-                //     method: 'POST',
-                //     body: uploadData
-                // });
+                // Create rider record
+                const { data: riderData, error: riderError } = await supabaseClient
+                    .from('riders')
+                    .insert({
+                        rider_name: formData.fullName,
+                        phone: formData.phoneNumber,
+                        email: formData.email || null,
+                        national_id: formData.nationalId,
+                        date_of_birth: formData.dateOfBirth,
+                        emergency_contact_name: formData.emergencyName,
+                        emergency_contact_phone: formData.emergencyPhone,
+                        vehicle_make: formData.vehicleMake,
+                        vehicle_model: formData.vehicleModel,
+                        motorcycle_plate: formData.licensePlate,
+                        license_number: formData.licenseNumber,
+                        license_expiry: formData.licenseExpiry,
+                        mpesa_number: formData.mpesaNumber,
+                        status: 'pending',
+                        verification_status: 'pending',
+                        rating: 5.00,
+                        total_deliveries: 0,
+                        total_earnings: 0,
+                        is_online: false,
+                        license_verified: false,
+                        referral_code: referralCode,
+                        created_at: new Date().toISOString()
+                    })
+                    .select()
+                    .single();
+
+                if (riderError) {
+                    console.error('Error creating rider:', riderError);
+                    if (riderError.message.includes('duplicate')) {
+                        alert('This phone number is already registered. Please sign in instead.');
+                    } else {
+                        alert('Failed to submit application. Please try again.');
+                    }
+                    return;
+                }
+
+                // Create auth record for PIN login
+                const { error: authError } = await supabaseClient
+                    .from('user_auth')
+                    .insert({
+                        phone: formData.phoneNumber,
+                        pin_hash: pinHash,
+                        user_type: 'rider',
+                        email: formData.email || null,
+                        created_at: new Date().toISOString()
+                    });
+
+                if (authError && !authError.message.includes('duplicate')) {
+                    console.error('Error creating auth:', authError);
+                }
+
+                // Create Supabase Auth account (optional - for session management)
+                const email = `${formData.phoneNumber.replace('+254', '254')}@2ma.local`;
+                const password = generatePassword(formData.pin);
                 
-                // For demo, simulate success
-                await new Promise(resolve => setTimeout(resolve, 2000));
+                await supabaseClient.auth.signUp({
+                    email: email,
+                    password: password,
+                    options: {
+                        data: {
+                            phone: formData.phoneNumber,
+                            full_name: formData.fullName,
+                            user_type: 'rider'
+                        }
+                    }
+                });
+
+                // Clear temp data
+                localStorage.removeItem('2ma_temp_rider');
                 
                 // Show success
                 showStep('success');
@@ -1592,16 +1229,41 @@
             }
         }
 
-        function generateReferralCode() {
-            return Math.random().toString(36).substring(2, 10).toUpperCase();
+        async function hashPIN(pin) {
+            const encoder = new TextEncoder();
+            const data = encoder.encode(`${pin}:2ma-salt-2024`);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+            return Array.from(new Uint8Array(hashBuffer))
+                .map(b => b.toString(16).padStart(2, '0'))
+                .join('');
         }
 
-        // Stop camera when leaving page
-        window.addEventListener('beforeunload', () => {
-            if (stream) {
-                stream.getTracks().forEach(track => track.stop());
+        function generatePassword(pin) {
+            return `2MA2024!${pin}#Secure${pin}`;
+        }
+
+        function generateReferralCode() {
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+            let code = 'R'; // R for Rider
+            for (let i = 0; i < 7; i++) {
+                code += chars.charAt(Math.floor(Math.random() * chars.length));
             }
-        });
+            return code;
+        }
+
+        function showStep(step) {
+            document.querySelectorAll('.step-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            
+            if (step === 'success') {
+                document.getElementById('successStep').classList.add('active');
+            } else {
+                document.getElementById(`step${step}`).classList.add('active');
+            }
+            
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
     </script>
 </body>
 </html>
