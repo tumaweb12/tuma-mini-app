@@ -1,12 +1,54 @@
 /**
  * Partner Programme Script (agent.js)
  * Complete production-ready partner dashboard with real Supabase integration
- * PART 1 of 2
+ * Updated with proper authentication check
  */
 
 import { BUSINESS_CONFIG } from './config.js';
 import { agentsDB, vendorsDB, parcelsDB, supabase } from './supabaseClient.js';
 import { validation, dateTime, notifications, haptic } from './businessLogic.js';
+
+// Session Manager for secure authentication
+const sessionManager = {
+    create(userData, userType) {
+        const session = {
+            id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(),
+            phone: userData.phone,
+            name: userData.name || userData.agent_name,
+            type: userType,
+            status: userData.status,
+            timestamp: Date.now(),
+            expires: Date.now() + (30 * 24 * 60 * 60 * 1000) // 30 days
+        };
+        
+        localStorage.setItem(`tuma_${userType}_session`, JSON.stringify(session));
+        return session;
+    },
+    
+    validate(userType) {
+        try {
+            const stored = localStorage.getItem(`tuma_${userType}_session`);
+            if (!stored) return null;
+            
+            const session = JSON.parse(stored);
+            
+            // Check expiration
+            if (Date.now() > session.expires) {
+                this.destroy(userType);
+                return null;
+            }
+            
+            return session;
+        } catch (error) {
+            console.error('Session validation error:', error);
+            return null;
+        }
+    },
+    
+    destroy(userType) {
+        localStorage.removeItem(`tuma_${userType}_session`);
+    }
+};
 
 // State management
 const state = {
@@ -119,17 +161,20 @@ const elements = {
   header: document.getElementById('header')
 };
 
-// Authentication check
+// Enhanced Authentication check with proper validation
 async function checkAuthAndLoadAgent() {
-  const session = localStorage.getItem('tuma_agent_session');
-  if (!session) {
-    window.location.href = './auth.html?type=agent';
-    return null;
-  }
-  
   try {
-    const sessionData = JSON.parse(session);
-    const phone = sessionData.phone;
+    // First validate the session
+    const session = sessionManager.validate('agent');
+    
+    if (!session) {
+      // No valid session found, redirect to auth
+      window.location.href = './auth.html?type=agent';
+      return null;
+    }
+    
+    // Session exists, verify agent in database
+    const phone = session.phone;
     
     // Load agent from database using the actual Supabase client
     const { data: agent, error } = await supabase
@@ -138,30 +183,76 @@ async function checkAuthAndLoadAgent() {
       .eq('phone', phone)
       .single();
     
-    if (error) throw error;
+    if (error) {
+      console.error('Database error:', error);
+      throw error;
+    }
     
-    if (!agent || agent.status !== 'approved') {
-      if (agent && agent.status === 'pending') {
-        showNotification('Your partner account is pending approval', 'warning');
-        return agent;
-      } else if (agent && agent.status === 'suspended') {
+    // Check if agent exists
+    if (!agent) {
+      console.error('Agent not found in database');
+      sessionManager.destroy('agent');
+      window.location.href = './auth.html?type=agent';
+      return null;
+    }
+    
+    // Check agent status
+    switch (agent.status) {
+      case 'approved':
+        // Agent is approved, continue
+        break;
+        
+      case 'pending':
+        showNotification('Your partner account is pending approval. Please wait for admin approval.', 'warning');
+        // Show limited dashboard
+        document.body.classList.add('pending-status');
+        break;
+        
+      case 'suspended':
         showNotification('Your account has been suspended. Please contact support.', 'error');
-        localStorage.removeItem('tuma_agent_session');
+        sessionManager.destroy('agent');
         setTimeout(() => {
           window.location.href = './auth.html?type=agent';
         }, 2000);
         return null;
-      } else {
-        localStorage.removeItem('tuma_agent_session');
+        
+      case 'rejected':
+        showNotification('Your application was rejected. Please contact support for details.', 'error');
+        sessionManager.destroy('agent');
+        setTimeout(() => {
+          window.location.href = './auth.html?type=agent';
+        }, 2000);
+        return null;
+        
+      default:
+        console.error('Unknown agent status:', agent.status);
+        sessionManager.destroy('agent');
         window.location.href = './auth.html?type=agent';
         return null;
-      }
+    }
+    
+    // Update session if needed
+    if (session.status !== agent.status) {
+      sessionManager.create(agent, 'agent');
+    }
+    
+    // Set last active timestamp
+    const { error: updateError } = await supabase
+      .from('agents')
+      .update({ 
+        last_active: new Date().toISOString() 
+      })
+      .eq('id', agent.id);
+    
+    if (updateError) {
+      console.warn('Failed to update last active:', updateError);
     }
     
     return agent;
+    
   } catch (error) {
-    console.error('Session error:', error);
-    localStorage.removeItem('tuma_agent_session');
+    console.error('Auth check error:', error);
+    sessionManager.destroy('agent');
     window.location.href = './auth.html?type=agent';
     return null;
   }
@@ -170,6 +261,12 @@ async function checkAuthAndLoadAgent() {
 // Initialize page
 async function initialize() {
   try {
+    // Show loading overlay
+    const loadingOverlay = document.getElementById('loadingOverlay');
+    if (loadingOverlay) {
+      loadingOverlay.style.display = 'flex';
+    }
+    
     // Check auth first
     const agent = await checkAuthAndLoadAgent();
     if (!agent) return;
@@ -185,11 +282,17 @@ async function initialize() {
     // Initialize Telegram Web App if available
     initializeTelegramWebApp();
     
-    // Load all data
-    await Promise.all([
+    // Load all data in parallel for better performance
+    const loadPromises = [
       loadVendors(),
       loadParcels(),
-      loadTransactions(),
+      loadTransactions()
+    ];
+    
+    await Promise.all(loadPromises);
+    
+    // Calculate metrics after data is loaded
+    await Promise.all([
       calculateEarnings(),
       calculateStreak(),
       calculateWeeklyActivity(),
@@ -205,10 +308,12 @@ async function initialize() {
     // Check leaderboard preference
     checkLeaderboardPreference();
     
+    // Add logout button
+    addLogoutButton();
+    
     state.isLoading = false;
     
     // Hide loading overlay
-    const loadingOverlay = document.getElementById('loadingOverlay');
     if (loadingOverlay) {
       loadingOverlay.style.opacity = '0';
       setTimeout(() => {
@@ -216,24 +321,107 @@ async function initialize() {
       }, 300);
     }
     
+    // Show success notification
+    if (agent.status === 'approved') {
+      showNotification(`Welcome back, ${agent.name || 'Partner'}!`, 'success');
+    }
+    
   } catch (error) {
     console.error('Initialization error:', error);
-    showNotification('Failed to load partner data', 'error');
+    showNotification('Failed to load partner data. Please refresh the page.', 'error');
     state.isLoading = false;
+    
+    // Hide loading overlay on error
+    const loadingOverlay = document.getElementById('loadingOverlay');
+    if (loadingOverlay) {
+      loadingOverlay.style.display = 'none';
+    }
+  }
+}
+
+// Add logout button
+function addLogoutButton() {
+  const header = document.getElementById('header');
+  if (!header) return;
+  
+  // Check if logout button already exists
+  if (document.getElementById('logoutBtn')) return;
+  
+  const logoutBtn = document.createElement('button');
+  logoutBtn.id = 'logoutBtn';
+  logoutBtn.className = 'logout-btn';
+  logoutBtn.innerHTML = `
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+      <polyline points="16 17 21 12 16 7"/>
+      <line x1="21" y1="12" x2="9" y2="12"/>
+    </svg>
+    <span>Logout</span>
+  `;
+  
+  logoutBtn.onclick = handleLogout;
+  
+  // Add to header
+  const headerRight = header.querySelector('.header-right');
+  if (headerRight) {
+    headerRight.appendChild(logoutBtn);
+  } else {
+    header.appendChild(logoutBtn);
+  }
+}
+
+// Handle logout
+async function handleLogout() {
+  if (confirm('Are you sure you want to logout?')) {
+    try {
+      // Clear session
+      sessionManager.destroy('agent');
+      
+      // Update last active
+      if (state.agent?.id) {
+        await supabase
+          .from('agents')
+          .update({ 
+            last_active: new Date().toISOString() 
+          })
+          .eq('id', state.agent.id);
+      }
+      
+      // Show notification
+      showNotification('Logged out successfully', 'success');
+      
+      // Redirect to auth
+      setTimeout(() => {
+        window.location.href = './auth.html?type=agent';
+      }, 500);
+      
+    } catch (error) {
+      console.error('Logout error:', error);
+      // Still redirect even if update fails
+      window.location.href = './auth.html?type=agent';
+    }
   }
 }
 
 // Update agent UI with real data
 function updateAgentUI() {
   const agent = state.agent;
-  const name = agent.name || 'Partner';
+  const name = agent.name || agent.agent_name || 'Partner';
   
   elements.partnerName.textContent = name;
-  elements.partnerCode.textContent = agent.code || 'N/A';
+  elements.partnerCode.textContent = agent.code || agent.agent_code || 'N/A';
   elements.partnerInitial.textContent = name.charAt(0).toUpperCase();
   
   // Update tier based on actual performance
   updateTierDisplay();
+  
+  // Update status badge if pending
+  if (agent.status === 'pending') {
+    const statusBadge = document.createElement('span');
+    statusBadge.className = 'status-badge pending';
+    statusBadge.textContent = 'PENDING APPROVAL';
+    elements.partnerName.parentElement.appendChild(statusBadge);
+  }
 }
 
 // Update tier display based on real performance metrics
@@ -354,10 +542,23 @@ function updateEarningsDisplay() {
   const minCashout = state.tierInfo.minCashout;
   elements.cashoutBtn.disabled = available < minCashout;
   
+  // Disable cashout if agent is not approved
+  if (state.agent.status !== 'approved') {
+    elements.cashoutBtn.disabled = true;
+  }
+  
   // Update status message
   const statusElement = document.querySelector('.earnings-status');
   if (statusElement) {
-    if (available >= minCashout) {
+    if (state.agent.status !== 'approved') {
+      statusElement.className = 'earnings-status pending';
+      statusElement.innerHTML = `
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+        </svg>
+        <span>Account pending approval</span>
+      `;
+    } else if (available >= minCashout) {
       statusElement.className = 'earnings-status ready';
       statusElement.innerHTML = `
         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
@@ -376,10 +577,7 @@ function updateEarningsDisplay() {
       `;
     }
   }
-}/**
- * Partner Programme Script (agent.js)
- * PART 2 of 2 - Continues from line 600
- */
+}
 
 // Calculate personal rank from real agent performance data
 async function calculatePersonalRank() {
@@ -953,6 +1151,18 @@ function setupEventListeners() {
       elements.header?.classList.remove('scrolled');
     }
   });
+  
+  // Auto refresh data every 5 minutes
+  setInterval(async () => {
+    if (!state.isLoading && state.agent) {
+      await Promise.all([
+        loadParcels(),
+        loadVendors(),
+        calculateEarnings(),
+        calculateStats()
+      ]);
+    }
+  }, 5 * 60 * 1000);
 }
 
 // Initialize Telegram Web App
@@ -981,6 +1191,11 @@ function showNotification(message, type = 'success') {
 
 // Global functions for HTML onclick handlers
 window.showCashoutModal = function() {
+  if (state.agent.status !== 'approved') {
+    showNotification('Your account must be approved to cash out', 'error');
+    return;
+  }
+  
   const amount = Math.round(state.earnings.available);
   const fee = calculateMpesaFee(amount);
   const modal = elements.cashoutModal;
