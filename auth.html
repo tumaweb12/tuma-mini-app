@@ -480,6 +480,18 @@
                         <input type="tel" id="mpesaNumber" class="with-prefix" placeholder="712345678" maxlength="9">
                     </div>
                 </div>
+
+                <div style="background: rgba(0, 102, 255, 0.05); padding: 16px; border-radius: 10px; margin-top: 20px;">
+                    <p style="font-size: 14px; color: var(--text-secondary); margin-bottom: 12px;">
+                        📌 <strong>Document Verification</strong>
+                    </p>
+                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                        <input type="checkbox" id="documentsConfirm" style="width: 18px; height: 18px;">
+                        <span style="font-size: 14px;">
+                            I will provide my National ID and selfie for verification after account creation
+                        </span>
+                    </label>
+                </div>
             </div>
 
             <div class="form-group">
@@ -605,6 +617,20 @@
             }
 
             state.phone = '0' + phone; // Store with 0 prefix
+            
+            // Special handling for riders - go straight to application
+            if (state.userType === 'rider') {
+                // Store temp data and redirect to full application
+                localStorage.setItem('2ma_temp_rider', JSON.stringify({
+                    phone: state.phone
+                }));
+                
+                showInfo('Redirecting to rider application form...');
+                setTimeout(() => {
+                    window.location.href = './rider-signup.html';
+                }, 1500);
+                return;
+            }
             
             const btn = event.target.closest('.btn');
             btn.disabled = true;
@@ -738,13 +764,19 @@
                 return;
             }
 
-            // Affiliate validation
+            // Affiliate validation (simplified - no file uploads)
             if (state.userType === 'affiliate') {
                 const nationalId = document.getElementById('nationalId').value;
                 const mpesaNumber = document.getElementById('mpesaNumber').value;
+                const documentsConfirm = document.getElementById('documentsConfirm').checked;
                 
                 if (!nationalId || !mpesaNumber) {
                     showError('Please fill in all required fields');
+                    return;
+                }
+                
+                if (!documentsConfirm) {
+                    showError('Please confirm you will provide documents for verification');
                     return;
                 }
                 
@@ -836,12 +868,15 @@
                     pin: state.formData.pin, // Store plain PIN temporarily
                     national_id: state.formData.nationalId,
                     mpesa_number: state.formData.mpesaNumber,
-                    status: 'pending',
-                    commission_rate: 0.20, // Up to 20% based on performance
-                    type: 'external' // Keep original database value
+                    status: 'pending', // Will be approved after document verification
+                    commission_rate: 0.10, // Start at 10%, can go up to 20% based on performance
+                    type: 'external', // Keep original database value
+                    kyc_verified: false, // Documents pending
+                    is_active: true,
+                    created_at: new Date().toISOString()
                 });
                 
-                showSuccess(`Account created! Your affiliate code is: ${affiliateCode}`);
+                showSuccess(`Account created! Your affiliate code is: ${affiliateCode}\n\nPlease check your dashboard to complete document verification.`);
                 
             } else if (state.userType === 'vendor') {
                 await supabase.from('vendors').insert({
@@ -854,6 +889,19 @@
                 });
                 
                 showSuccess('Account created successfully!');
+            } else if (state.userType === 'rider') {
+                // Riders need full application - redirect to rider signup
+                localStorage.setItem('2ma_temp_rider', JSON.stringify({
+                    phone: state.phone,
+                    fullName: state.formData.fullName,
+                    email: state.formData.email
+                }));
+                
+                showInfo('Redirecting to complete rider application...');
+                setTimeout(() => {
+                    window.location.href = './rider-signup.html';
+                }, 1500);
+                return; // Don't continue with normal flow
             }
         }
 
