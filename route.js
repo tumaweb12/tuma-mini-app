@@ -1,9 +1,36 @@
 /**
- * Complete Enhanced Route Navigation Module with Dynamic Route Optimization
- * Intelligently interleaves pickups and deliveries based on proximity
- * Version: 3.1.0 - Enhanced with numbered markers and improved location tracking
- * COMPLETE FILE - PART 1 OF 6
+ * Enhanced Route Navigation Module - Part 1/4
+ * Setup, Configuration, and Core API Functions
+ * Version: 4.0.0 - Uses External Route Optimizer Module
  */
+
+// Import the route optimizer module (adjust path as needed)
+// For ES6 modules, ensure your HTML includes type="module" in script tag
+// <script type="module" src="route.js"></script>
+import RouteOptimizer from './route-optimizer.js';
+
+// Initialize the route optimizer with comprehensive settings
+const routeOptimizer = new RouteOptimizer({
+    // Distance thresholds
+    immediateDeliveryRadius: 1.5,      // km - deliver immediately if this close
+    clusterRadius: 2.0,                // km - stops within this are considered clustered
+    zoneRadius: 3.0,                   // km - for zone creation
+    
+    // Scoring weights
+    distanceWeight: 1.0,               // Base weight for distance
+    backtrackPenalty: 5.0,             // Penalty multiplier for going backwards
+    directionChangesPenalty: 2.0,      // Penalty for changing direction frequently
+    clusterBonus: 0.7,                 // Bonus multiplier for staying in cluster
+    
+    // Algorithm settings
+    enableZoning: true,                // Group stops into zones
+    enableSmartPairing: true,          // Pair pickups with nearby deliveries
+    maxLookahead: 3,                   // How many stops to look ahead for optimization
+    
+    // Performance settings
+    maxIterations: 1000,               // Max iterations for optimization algorithms
+    convergenceThreshold: 0.01         // Stop optimizing when improvement < this
+});
 
 // Development Configuration
 const DEV_CONFIG = {
@@ -25,17 +52,14 @@ const config = {
     smoothMovement: true,
     autoZoom: true,
     mapRotatable: true,
-    // New optimization settings
     optimization: {
         enableDynamicRouting: true,
-        deliveryPreferenceBonus: 0.85, // Slight preference for deliveries when nearby
-        maxProximityForImmediateDelivery: 2.5, // km - deliver immediately if this close
-        zoneProximityThreshold: 3, // km - consider stops in same zone
-        enableSmartInterleaving: true
+        autoReoptimize: false,
+        reoptimizeThreshold: 2.0 // km savings to trigger re-optimization
     }
 };
 
-// State management with enhanced properties
+// State management
 const state = {
     activeRoute: null,
     currentLocation: null,
@@ -53,6 +77,7 @@ const state = {
     lastLocation: null,
     lastLocationTime: null,
     lastLocationErrorTime: null,
+    lastOptimizationCheck: null,
     pickupPhaseCompleted: false,
     isPanelVisible: true,
     isPanelExpanded: false,
@@ -72,8 +97,7 @@ const state = {
     totalCashToCollect: 0,
     totalCashCollected: 0,
     paymentsByStop: {},
-    // New optimization state
-    routeOptimizationMode: 'dynamic', // 'dynamic' or 'phased'
+    routeOptimizationMode: 'dynamic',
     originalRouteOrder: null,
     optimizationStats: {
         originalDistance: 0,
@@ -81,9 +105,8 @@ const state = {
         savedDistance: 0,
         savedPercentage: 0
     },
-    // Enhanced features from paste.txt
-    stopOrderMap: {},  // Maps stop IDs to their route order
-    showNumberedMarkers: true  // Toggle for numbered vs P/D markers
+    stopOrderMap: {},
+    showNumberedMarkers: true
 };
 
 // API Configuration
@@ -152,6 +175,191 @@ async function supabaseUpdate(table, filter, data) {
 }
 
 // ============================================================================
+// ROUTE OPTIMIZATION FUNCTIONS (Using External Module)
+// ============================================================================
+
+/**
+ * Main route optimization function - calls external optimizer
+ */
+function optimizeRouteStops() {
+    if (!state.activeRoute || !state.activeRoute.stops) {
+        showNotification('No route to optimize', 'warning');
+        return;
+    }
+    
+    const hasCompletedStops = state.activeRoute.stops.some(s => s.completed);
+    
+    if (hasCompletedStops) {
+        // Only optimize remaining stops
+        reoptimizeRemainingStops();
+        showNotification('Remaining stops optimized!', 'success');
+    } else {
+        // Full route optimization
+        console.log('Starting full route optimization...');
+        
+        // Store original for undo
+        state.originalRouteOrder = [...state.activeRoute.stops];
+        const originalDistance = calculateTotalRouteDistance(state.originalRouteOrder);
+        
+        showOptimizingAnimation();
+        
+        setTimeout(() => {
+            // Call external RouteOptimizer module - NO currentLocation parameter
+            const optimizedStops = routeOptimizer.optimizeRoute(state.originalRouteOrder);
+            
+            // Get statistics from the optimizer
+            const stats = routeOptimizer.getStatistics();
+            
+            // Update state with optimizer's calculated stats
+            state.activeRoute.stops = optimizedStops;
+            state.activeRoute.isOptimized = true;
+            state.optimizationStats = {
+                originalDistance: stats.originalDistance || originalDistance,
+                optimizedDistance: stats.optimizedDistance,
+                savedDistance: stats.savedDistance,
+                savedPercentage: stats.savedPercentage
+            };
+            
+            // Update UI
+            updateStopOrderMap();
+            localStorage.setItem('tuma_active_route', JSON.stringify(state.activeRoute));
+            
+            console.log('Optimization complete:');
+            console.log(`Original distance: ${state.optimizationStats.originalDistance.toFixed(1)}km`);
+            console.log(`Optimized distance: ${state.optimizationStats.optimizedDistance.toFixed(1)}km`);
+            console.log(`Saved: ${state.optimizationStats.savedDistance.toFixed(1)}km (${state.optimizationStats.savedPercentage.toFixed(1)}%)`);
+            console.log(`Backtracking eliminated: ${stats.backtrackingEliminated} instances`);
+            console.log(`Zones created: ${stats.zonesCreated}`);
+            console.log(`Execution time: ${stats.executionTime?.toFixed(2)}ms`);
+            
+            console.log('\nOptimized route order:');
+            optimizedStops.forEach((stop, index) => {
+                console.log(`${index + 1}. ${stop.type.toUpperCase()} - ${stop.address} (${stop.parcelCode})`);
+            });
+            
+            displayRouteInfo();
+            plotRoute();
+            drawOptimizedRoute();
+            
+            hideOptimizingAnimation();
+            
+            if (state.optimizationStats.savedDistance > 0.1) {
+                showOptimizationResults(state.optimizationStats.savedDistance, state.optimizationStats.savedPercentage);
+            } else {
+                showNotification('Route optimized for efficient delivery sequence', 'success');
+            }
+            
+            updateOptimizeButton(true);
+        }, 1500);
+    }
+}
+
+/**
+ * Real-time route re-optimization for remaining stops
+ */
+function reoptimizeRemainingStops() {
+    if (!state.activeRoute || !state.activeRoute.stops) return;
+    
+    // Get only uncompleted stops
+    const remainingStops = state.activeRoute.stops.filter(s => !s.completed);
+    
+    if (remainingStops.length <= 1) return; // No need to optimize
+    
+    console.log('📍 Re-optimizing remaining stops...');
+    
+    // Re-optimize remaining stops using external optimizer
+    const reoptimized = routeOptimizer.optimizeRoute(remainingStops);
+    
+    // Get updated statistics
+    const stats = routeOptimizer.getStatistics();
+    console.log(`Re-optimization saved: ${stats.savedDistance.toFixed(1)}km`);
+    
+    // Update the route with completed + reoptimized stops
+    const completedStops = state.activeRoute.stops.filter(s => s.completed);
+    state.activeRoute.stops = [...completedStops, ...reoptimized];
+    
+    // Update UI
+    updateStopOrderMap();
+    displayRouteInfo();
+    plotRoute();
+    drawOptimizedRoute();
+    
+    console.log('Route re-optimized in real-time');
+}
+
+/**
+ * Check if re-optimization would provide significant savings
+ */
+function checkForBetterRoute() {
+    if (!state.navigationActive || !config.optimization.autoReoptimize) return;
+    
+    const remainingStops = state.activeRoute.stops.filter(s => !s.completed);
+    if (remainingStops.length <= 2) return; // Too few stops to matter
+    
+    // Test if re-optimization would save significant distance
+    const currentOrderDistance = calculateTotalRouteDistance(remainingStops);
+    const testOptimized = routeOptimizer.optimizeRoute(remainingStops);
+    const testStats = routeOptimizer.getStatistics();
+    
+    const savings = testStats.savedDistance;
+    
+    // If we can save more than threshold km, suggest re-optimization
+    if (savings > config.optimization.reoptimizeThreshold) {
+        showNotification(
+            `Route optimization available - Save ${savings.toFixed(1)}km! Tap to optimize.`,
+            'info'
+        );
+        
+        // Show a button to re-optimize
+        showReoptimizeButton();
+    }
+}
+
+/**
+ * Undo the last optimization
+ */
+function undoOptimization() {
+    if (!state.originalRouteOrder) {
+        showNotification('No original route to restore', 'warning');
+        return;
+    }
+    
+    state.activeRoute.stops = [...state.originalRouteOrder];
+    state.activeRoute.isOptimized = false;
+    
+    updateStopOrderMap();
+    localStorage.setItem('tuma_active_route', JSON.stringify(state.activeRoute));
+    
+    displayRouteInfo();
+    plotRoute();
+    drawOptimizedRoute();
+    
+    updateOptimizeButton(false);
+    showNotification('Route restored to original order', 'info');
+    
+    // Clear optimization stats
+    state.optimizationStats = {
+        originalDistance: 0,
+        optimizedDistance: 0,
+        savedDistance: 0,
+        savedPercentage: 0
+    };
+}
+
+/**
+ * Update optimizer configuration
+ */
+window.updateOptimizerSetting = function(setting, value) {
+    routeOptimizer.updateConfig({ [setting]: parseFloat(value) });
+    console.log(`Optimizer setting updated: ${setting} = ${value}`);
+    
+    // Optionally re-optimize current route with new settings
+    if (state.activeRoute && !state.activeRoute.stops.some(s => s.completed)) {
+        optimizeRouteStops();
+    }
+};
+
+// ============================================================================
 // UTILITY FUNCTIONS
 // ============================================================================
 
@@ -174,7 +382,6 @@ function getPaymentInfoForStop(stop) {
         };
     }
     
-    // First try to find parcel in parcels array
     let parcel = null;
     if (state.activeRoute.parcels && state.activeRoute.parcels.length > 0) {
         parcel = state.activeRoute.parcels.find(p => 
@@ -184,7 +391,6 @@ function getPaymentInfoForStop(stop) {
         );
     }
     
-    // If no parcel found, check if payment info is directly on the stop
     if (!parcel && stop.paymentInfo) {
         return {
             amount: parsePrice(stop.paymentInfo.amount || 0),
@@ -254,20 +460,6 @@ function calculateCashCollection() {
     });
 }
 
-async function syncRouteData() {
-    if (!state.activeRoute) return;
-    
-    try {
-        localStorage.setItem('tuma_active_route', JSON.stringify(state.activeRoute));
-        
-        if (state.activeRoute.stops && state.activeRoute.stops.every(s => s.completed)) {
-            await handleRouteCompletion();
-        }
-    } catch (error) {
-        console.error('Error syncing route data:', error);
-    }
-}
-
 function calculateRouteFinancials() {
     if (!state.activeRoute) return;
     
@@ -299,9 +491,6 @@ function calculateRouteFinancials() {
     });
 }
 
-// ============================================================================
-// NEW FUNCTION FROM PASTE.TXT - Update stop order mapping
-// ============================================================================
 function updateStopOrderMap() {
     state.stopOrderMap = {};
     if (!state.activeRoute || !state.activeRoute.stops) return;
@@ -311,1141 +500,6 @@ function updateStopOrderMap() {
     });
     
     console.log('Stop order map updated:', state.stopOrderMap);
-}
-
-// ============================================================================
-// ENHANCED DYNAMIC ROUTE OPTIMIZATION FUNCTIONS
-// ============================================================================
-
-function optimizeRouteStops() {
-    if (!state.activeRoute || !state.activeRoute.stops) {
-        showNotification('No route to optimize', 'warning');
-        return;
-    }
-    
-    if (state.activeRoute.stops.some(s => s.completed)) {
-        showNotification('Cannot optimize route in progress', 'warning');
-        return;
-    }
-    
-    console.log('Starting dynamic route optimization...');
-    
-    // Store original order for undo functionality
-    state.originalRouteOrder = [...state.activeRoute.stops];
-    const originalDistance = calculateTotalRouteDistance(state.originalRouteOrder);
-    
-    showOptimizingAnimation();
-    
-    setTimeout(() => {
-        // Use dynamic optimization if enabled, otherwise fall back to phased
-        const optimizedStops = config.optimization.enableDynamicRouting 
-            ? performDynamicOptimization(state.originalRouteOrder)
-            : performPhasedOptimization(state.originalRouteOrder);
-            
-        const optimizedDistance = calculateTotalRouteDistance(optimizedStops);
-        
-        const savedDistance = Math.max(0, originalDistance - optimizedDistance);
-        const savedPercentage = savedDistance > 0 
-            ? ((savedDistance / originalDistance) * 100).toFixed(1) 
-            : 0;
-        
-        // Update state with optimization results
-        state.activeRoute.stops = optimizedStops;
-        state.activeRoute.isOptimized = true;
-        state.optimizationStats = {
-            originalDistance: originalDistance,
-            optimizedDistance: optimizedDistance,
-            savedDistance: savedDistance,
-            savedPercentage: parseFloat(savedPercentage)
-        };
-        
-        // IMPORTANT: Update stop order map after optimization
-        updateStopOrderMap();
-        
-        localStorage.setItem('tuma_active_route', JSON.stringify(state.activeRoute));
-        
-        // Log optimization results
-        console.log('Optimization complete:');
-        console.log(`Mode: ${state.routeOptimizationMode}`);
-        console.log(`Original distance: ${originalDistance.toFixed(1)}km`);
-        console.log(`Optimized distance: ${optimizedDistance.toFixed(1)}km`);
-        console.log(`Saved: ${savedDistance.toFixed(1)}km (${savedPercentage}%)`);
-        
-        console.log('\nOptimized route order:');
-        optimizedStops.forEach((stop, index) => {
-            console.log(`${index + 1}. ${stop.type.toUpperCase()} - ${stop.address} (${stop.parcelCode})`);
-        });
-        
-        displayRouteInfo();
-        plotRoute();
-        drawOptimizedRoute();
-        
-        hideOptimizingAnimation();
-        
-        if (savedDistance > 0.1) {
-            showOptimizationResults(savedDistance, savedPercentage);
-        } else {
-            showNotification('Route optimized for efficient delivery sequence', 'success');
-        }
-        
-        updateOptimizeButton(true);
-    }, 1500);
-}
-/**
- * Order zones by traveling salesman approach from starting position
- */
-function orderZonesByProximity(zones, startPosition) {
-    if (zones.length <= 1) return zones;
-    
-    const ordered = [];
-    const remaining = [...zones];
-    let currentPos = startPosition;
-    
-    // Use nearest neighbor for zones
-    while (remaining.length > 0) {
-        let nearestIndex = 0;
-        let minDistance = Infinity;
-        
-        remaining.forEach((zone, index) => {
-            const distance = calculateDistance(currentPos, zone.center);
-            if (distance < minDistance) {
-                minDistance = distance;
-                nearestIndex = index;
-            }
-        });
-        
-        const nextZone = remaining.splice(nearestIndex, 1)[0];
-        ordered.push(nextZone);
-        currentPos = nextZone.center;
-    }
-    
-    return ordered;
-}// ============================================================================
-// PART 2 OF 6 - INTELLIGENT ROUTE OPTIMIZATION WITH FLOW ANALYSIS
-// ============================================================================
-
-/**
- * Enhanced route optimization using flow-based algorithm
- * Creates logical routes that minimize backtracking
- */
-function performDynamicOptimization(stops) {
-    console.log('🚀 Starting intelligent flow-based route optimization...');
-    
-    // Separate pickups and deliveries
-    const pickups = stops.filter(s => s.type === 'pickup');
-    const deliveries = stops.filter(s => s.type === 'delivery');
-    
-    // Create delivery map for quick lookup
-    const deliveryMap = {};
-    deliveries.forEach(d => {
-        const parcelId = d.parcelCode || d.parcelId;
-        deliveryMap[parcelId] = d;
-    });
-    
-    // Step 1: Analyze pickup-delivery relationships
-    const routeSegments = analyzePickupDeliveryPairs(pickups, deliveryMap);
-    
-    // Step 2: Find optimal route flow (linear, circular, or hub-based)
-    const routeFlow = determineOptimalFlow(routeSegments, stops);
-    console.log(`Optimal route flow: ${routeFlow.type}`);
-    
-    // Step 3: Build route following the optimal flow
-    const optimizedRoute = buildFlowBasedRoute(routeSegments, routeFlow);
-    
-    console.log(`✨ Optimization complete: ${optimizedRoute.length} stops optimized`);
-    return optimizedRoute;
-}
-
-/**
- * Analyze pickup-delivery pairs to understand route requirements
- */
-function analyzePickupDeliveryPairs(pickups, deliveryMap) {
-    const segments = [];
-    
-    pickups.forEach(pickup => {
-        const parcelId = pickup.parcelCode || pickup.parcelId;
-        const delivery = deliveryMap[parcelId];
-        
-        if (delivery) {
-            const segment = {
-                pickup: pickup,
-                delivery: delivery,
-                distance: calculateDistance(pickup.location, delivery.location),
-                vector: {
-                    start: pickup.location,
-                    end: delivery.location,
-                    bearing: calculateBearing(pickup.location, delivery.location)
-                }
-            };
-            
-            // Classify segment type
-            if (segment.distance < 1.0) {
-                segment.type = 'local'; // Pickup and delivery very close
-            } else if (segment.distance < 3.0) {
-                segment.type = 'short'; // Short distance delivery
-            } else {
-                segment.type = 'long'; // Long distance delivery
-            }
-            
-            segments.push(segment);
-        }
-    });
-    
-    return segments;
-}
-
-/**
- * Determine optimal flow pattern for the route
- */
-function determineOptimalFlow(segments, allStops) {
-    // Calculate route statistics
-    const stats = {
-        totalStops: allStops.length,
-        localSegments: segments.filter(s => s.type === 'local').length,
-        shortSegments: segments.filter(s => s.type === 'short').length,
-        longSegments: segments.filter(s => s.type === 'long').length,
-        averageSegmentDistance: segments.reduce((sum, s) => sum + s.distance, 0) / segments.length
-    };
-    
-    // Find general direction of travel
-    const directionVector = calculateGeneralDirection(segments);
-    
-    // Determine route pattern
-    let flowType;
-    let strategy;
-    
-    if (stats.localSegments > segments.length * 0.6) {
-        // Most pickups and deliveries are close together
-        flowType = 'clustered';
-        strategy = 'complete_pairs'; // Complete each pickup-delivery pair when close
-    } else if (directionVector.consistency > 0.7) {
-        // Route has a clear directional flow
-        flowType = 'directional';
-        strategy = 'follow_direction'; // Follow the general direction
-    } else if (stats.averageSegmentDistance < 2.5) {
-        // Mixed but generally short distances
-        flowType = 'mixed_short';
-        strategy = 'minimize_travel'; // Minimize total travel
-    } else {
-        // Complex route with long distances
-        flowType = 'complex';
-        strategy = 'batch_pickups'; // Batch pickups in areas then deliver
-    }
-    
-    return {
-        type: flowType,
-        strategy: strategy,
-        direction: directionVector,
-        stats: stats
-    };
-}
-
-/**
- * Calculate general direction of route flow
- */
-function calculateGeneralDirection(segments) {
-    if (segments.length === 0) {
-        return { bearing: 0, consistency: 0 };
-    }
-    
-    // Calculate average bearing weighted by distance
-    let totalX = 0, totalY = 0, totalWeight = 0;
-    
-    segments.forEach(segment => {
-        const bearing = segment.vector.bearing * Math.PI / 180;
-        const weight = segment.distance;
-        
-        totalX += Math.cos(bearing) * weight;
-        totalY += Math.sin(bearing) * weight;
-        totalWeight += weight;
-    });
-    
-    const avgBearing = Math.atan2(totalY, totalX) * 180 / Math.PI;
-    
-    // Calculate consistency (how aligned segments are)
-    let alignmentSum = 0;
-    segments.forEach(segment => {
-        const diff = Math.abs(segment.vector.bearing - avgBearing);
-        const normalizedDiff = Math.min(diff, 360 - diff);
-        alignmentSum += (1 - normalizedDiff / 180) * segment.distance;
-    });
-    
-    const consistency = alignmentSum / totalWeight;
-    
-    return {
-        bearing: (avgBearing + 360) % 360,
-        consistency: consistency
-    };
-}
-
-/**
- * Build route following the optimal flow pattern
- */
-function buildFlowBasedRoute(segments, routeFlow) {
-    let optimizedRoute = [];
-    
-    switch (routeFlow.strategy) {
-        case 'complete_pairs':
-            optimizedRoute = buildPairCompletionRoute(segments);
-            break;
-            
-        case 'follow_direction':
-            optimizedRoute = buildDirectionalRoute(segments, routeFlow.direction);
-            break;
-            
-        case 'minimize_travel':
-            optimizedRoute = buildMinimalTravelRoute(segments);
-            break;
-            
-        case 'batch_pickups':
-            optimizedRoute = buildBatchedRoute(segments);
-            break;
-            
-        default:
-            optimizedRoute = buildMinimalTravelRoute(segments);
-    }
-    
-    return optimizedRoute;
-}
-
-/**
- * Build route completing pickup-delivery pairs when they're close
- */
-function buildPairCompletionRoute(segments) {
-    const route = [];
-    const completed = new Set();
-    
-    // Sort segments by pickup-delivery distance (shortest first)
-    const sortedSegments = [...segments].sort((a, b) => a.distance - b.distance);
-    
-    // Find optimal starting segment
-    const startSegment = findOptimalStartSegment(sortedSegments);
-    let currentPosition = startSegment.pickup.location;
-    
-    // Process segments in order of proximity
-    const remaining = sortedSegments.filter(s => s !== startSegment);
-    const toProcess = [startSegment];
-    
-    while (toProcess.length > 0 || remaining.length > 0) {
-        if (toProcess.length === 0) {
-            // Find nearest segment
-            let nearest = null;
-            let minDist = Infinity;
-            
-            remaining.forEach(segment => {
-                const dist = calculateDistance(currentPosition, segment.pickup.location);
-                if (dist < minDist) {
-                    minDist = dist;
-                    nearest = segment;
-                }
-            });
-            
-            if (nearest) {
-                toProcess.push(nearest);
-                remaining.splice(remaining.indexOf(nearest), 1);
-            }
-        }
-        
-        const segment = toProcess.shift();
-        if (!segment) break;
-        
-        // Add pickup
-        route.push(segment.pickup);
-        currentPosition = segment.pickup.location;
-        
-        // If delivery is close or no other pickups are closer, complete it
-        const distToDelivery = calculateDistance(currentPosition, segment.delivery.location);
-        let shouldDeliver = distToDelivery < 2.0; // Within 2km
-        
-        if (!shouldDeliver && remaining.length > 0) {
-            // Check if any pickup is closer than the delivery
-            const closestPickup = remaining.reduce((closest, seg) => {
-                const dist = calculateDistance(currentPosition, seg.pickup.location);
-                return dist < closest.distance ? { segment: seg, distance: dist } : closest;
-            }, { segment: null, distance: Infinity });
-            
-            shouldDeliver = closestPickup.distance > distToDelivery * 0.8;
-        }
-        
-        if (shouldDeliver || remaining.length === 0) {
-            route.push(segment.delivery);
-            currentPosition = segment.delivery.location;
-            completed.add(segment);
-        } else {
-            // Defer delivery for later
-            toProcess.push({ 
-                pickup: null, 
-                delivery: segment.delivery,
-                distance: 0 
-            });
-        }
-    }
-    
-    return route.filter(stop => stop !== null);
-}
-
-/**
- * Build route following general direction
- */
-function buildDirectionalRoute(segments, direction) {
-    const route = [];
-    
-    // Sort all stops by projection along direction vector
-    const allStops = [];
-    segments.forEach(seg => {
-        allStops.push(seg.pickup);
-        allStops.push(seg.delivery);
-    });
-    
-    // Project each stop onto the direction vector
-    const projectedStops = allStops.map(stop => {
-        const bearing = direction.bearing * Math.PI / 180;
-        const projection = stop.location.lng * Math.cos(bearing) + 
-                          stop.location.lat * Math.sin(bearing);
-        return { stop, projection };
-    });
-    
-    // Sort by projection
-    projectedStops.sort((a, b) => a.projection - b.projection);
-    
-    // Build route respecting pickup-delivery constraints
-    const addedPickups = new Set();
-    const addedStops = new Set();
-    
-    projectedStops.forEach(({ stop }) => {
-        if (addedStops.has(stop)) return;
-        
-        if (stop.type === 'pickup') {
-            route.push(stop);
-            addedPickups.add(stop.parcelCode || stop.parcelId);
-            addedStops.add(stop);
-        } else if (stop.type === 'delivery') {
-            const parcelId = stop.parcelCode || stop.parcelId;
-            if (addedPickups.has(parcelId)) {
-                route.push(stop);
-                addedStops.add(stop);
-            }
-        }
-    });
-    
-    // Add any missed deliveries
-    projectedStops.forEach(({ stop }) => {
-        if (!addedStops.has(stop) && stop.type === 'delivery') {
-            route.push(stop);
-        }
-    });
-    
-    return route;
-}
-
-/**
- * Build route minimizing total travel distance
- */
-function buildMinimalTravelRoute(segments) {
-    const route = [];
-    const completed = new Set();
-    const pendingDeliveries = new Map(); // parcelId -> delivery
-    
-    // Get all pickups
-    const pickups = segments.map(s => s.pickup);
-    const remaining = new Set(pickups);
-    
-    // Initialize pending deliveries
-    segments.forEach(seg => {
-        const parcelId = seg.pickup.parcelCode || seg.pickup.parcelId;
-        pendingDeliveries.set(parcelId, seg.delivery);
-    });
-    
-    // Find starting point that minimizes total distance
-    let currentPosition = findOptimalStartPosition(pickups, segments);
-    
-    while (remaining.size > 0 || pendingDeliveries.size > 0) {
-        let nextStop = null;
-        let minDistance = Infinity;
-        
-        // Evaluate pickups
-        remaining.forEach(pickup => {
-            const dist = calculateDistance(currentPosition, pickup.location);
-            if (dist < minDistance) {
-                minDistance = dist;
-                nextStop = { stop: pickup, type: 'pickup' };
-            }
-        });
-        
-        // Evaluate available deliveries
-        pendingDeliveries.forEach((delivery, parcelId) => {
-            // Check if pickup is done
-            const pickup = segments.find(s => 
-                (s.pickup.parcelCode === parcelId || s.pickup.parcelId === parcelId)
-            )?.pickup;
-            
-            if (pickup && !remaining.has(pickup)) {
-                const dist = calculateDistance(currentPosition, delivery.location);
-                // Slight preference for deliveries to clear inventory
-                const adjustedDist = dist * 0.9;
-                
-                if (adjustedDist < minDistance) {
-                    minDistance = adjustedDist;
-                    nextStop = { stop: delivery, type: 'delivery', parcelId };
-                }
-            }
-        });
-        
-        if (!nextStop) break;
-        
-        route.push(nextStop.stop);
-        currentPosition = nextStop.stop.location;
-        
-        if (nextStop.type === 'pickup') {
-            remaining.delete(nextStop.stop);
-        } else {
-            pendingDeliveries.delete(nextStop.parcelId);
-        }
-    }
-    
-    return route;
-}
-
-/**
- * Build route with batched pickups
- */
-function buildBatchedRoute(segments) {
-    // Group segments by geographic area
-    const areas = groupSegmentsByArea(segments);
-    const route = [];
-    
-    // Process each area
-    areas.forEach(area => {
-        // Add all pickups in area first
-        area.segments.forEach(seg => {
-            route.push(seg.pickup);
-        });
-        
-        // Then add deliveries in optimal order
-        const deliveries = area.segments.map(s => s.delivery);
-        const optimizedDeliveries = optimizeStopOrder(deliveries);
-        route.push(...optimizedDeliveries);
-    });
-    
-    return route;
-}
-
-/**
- * Group segments by geographic area
- */
-function groupSegmentsByArea(segments) {
-    const areas = [];
-    const assigned = new Set();
-    
-    segments.forEach(segment => {
-        if (assigned.has(segment)) return;
-        
-        const area = {
-            center: segment.pickup.location,
-            segments: [segment]
-        };
-        
-        assigned.add(segment);
-        
-        // Find other segments with pickups nearby
-        segments.forEach(other => {
-            if (assigned.has(other)) return;
-            
-            const dist = calculateDistance(area.center, other.pickup.location);
-            if (dist < 3.0) { // 3km radius
-                area.segments.push(other);
-                assigned.add(other);
-            }
-        });
-        
-        if (area.segments.length > 0) {
-            areas.push(area);
-        }
-    });
-    
-    return areas;
-}
-
-/**
- * Find optimal starting position
- */
-function findOptimalStartPosition(stops, segments) {
-    // Calculate center of mass
-    const centroid = calculateCentroid(stops);
-    
-    // Find stop closest to centroid
-    let bestStop = stops[0];
-    let minDist = Infinity;
-    
-    stops.forEach(stop => {
-        const dist = calculateDistance(centroid, stop.location);
-        if (dist < minDist) {
-            minDist = dist;
-            bestStop = stop;
-        }
-    });
-    
-    return bestStop.location;
-}
-
-/**
- * Find optimal starting segment
- */
-function findOptimalStartSegment(segments) {
-    if (segments.length === 0) return null;
-    
-    // Prefer segments where pickup and delivery are close
-    // and located near the edge of the route area
-    let bestSegment = segments[0];
-    let bestScore = Infinity;
-    
-    segments.forEach(segment => {
-        // Score based on segment distance and position
-        const score = segment.distance;
-        
-        if (score < bestScore) {
-            bestScore = score;
-            bestSegment = segment;
-        }
-    });
-    
-    return bestSegment;
-}
-
-/**
- * Create geographical zones based on stop proximity
- */
-function createGeographicalZones(stops) {
-    const zones = [];
-    const assigned = new Set();
-    const ZONE_RADIUS = 2.0; // km - stops within this radius are in same zone
-    
-    stops.forEach(stop => {
-        if (assigned.has(stop.id)) return;
-        
-        // Create a new zone with this stop
-        const zone = {
-            center: stop.location,
-            stops: [stop],
-            bounds: {
-                north: stop.location.lat,
-                south: stop.location.lat,
-                east: stop.location.lng,
-                west: stop.location.lng
-            },
-            name: getZoneName(stop.location)
-        };
-        
-        assigned.add(stop.id);
-        
-        // Find all stops within zone radius
-        stops.forEach(otherStop => {
-            if (assigned.has(otherStop.id)) return;
-            
-            const distance = calculateDistance(zone.center, otherStop.location);
-            if (distance <= ZONE_RADIUS) {
-                zone.stops.push(otherStop);
-                assigned.add(otherStop.id);
-                
-                // Update zone bounds
-                zone.bounds.north = Math.max(zone.bounds.north, otherStop.location.lat);
-                zone.bounds.south = Math.min(zone.bounds.south, otherStop.location.lat);
-                zone.bounds.east = Math.max(zone.bounds.east, otherStop.location.lng);
-                zone.bounds.west = Math.min(zone.bounds.west, otherStop.location.lng);
-            }
-        });
-        
-        // Recalculate zone center as centroid of all stops
-        zone.center = calculateCentroid(zone.stops);
-        zones.push(zone);
-    });
-    
-    return zones;
-}
-
-/**
- * Get approximate zone name based on Nairobi geography
- */
-function getZoneName(location) {
-    // Nairobi zone approximations based on coordinates
-    const lat = location.lat;
-    const lng = location.lng;
-    
-    if (lat > -1.26 && lng < 36.78) return "Westlands/Parklands";
-    if (lat > -1.26 && lng > 36.84) return "Muthaiga/Gigiri";
-    if (lat < -1.28 && lat > -1.30 && lng < 36.78) return "Kilimani/Lavington";
-    if (lat < -1.28 && lat > -1.30 && lng > 36.82) return "CBD/Town";
-    if (lat < -1.30 && lng < 36.80) return "Ngong Road/Karen";
-    if (lat < -1.30 && lng > 36.82) return "South B/C";
-    if (lat > -1.24) return "Northern Nairobi";
-    
-    return "Nairobi";
-}
-
-/**
- * Find the optimal starting point for the route
- * Tests different starting points to minimize total route distance
- */
-function findOptimalRouteStart(zones, allStops) {
-    console.log('Finding optimal route starting point...');
-    
-    let bestTotalDistance = Infinity;
-    let bestStartPoint = null;
-    let bestZoneOrder = null;
-    
-    // Test starting from each zone
-    zones.forEach((startZone, startIndex) => {
-        // Test starting from each stop in the zone
-        startZone.stops.forEach(startStop => {
-            // Calculate total route distance starting from this point
-            const testRoute = simulateRouteFromStart(startStop.location, zones, allStops);
-            const totalDistance = calculateTotalRouteDistance(testRoute);
-            
-            if (totalDistance < bestTotalDistance) {
-                bestTotalDistance = totalDistance;
-                bestStartPoint = startStop.location;
-                bestZoneOrder = orderZonesByProximity(zones, startStop.location);
-                console.log(`New best start: ${startStop.address} (${totalDistance.toFixed(1)}km)`);
-            }
-        });
-    });
-    
-    // Also test starting from geographic extremes
-    const extremePoints = findGeographicExtremes(allStops);
-    extremePoints.forEach(point => {
-        const testRoute = simulateRouteFromStart(point, zones, allStops);
-        const totalDistance = calculateTotalRouteDistance(testRoute);
-        
-        if (totalDistance < bestTotalDistance) {
-            bestTotalDistance = totalDistance;
-            bestStartPoint = point;
-            bestZoneOrder = orderZonesByProximity(zones, point);
-            console.log(`New best start from extreme point (${totalDistance.toFixed(1)}km)`);
-        }
-    });
-    
-    console.log(`Optimal route distance: ${bestTotalDistance.toFixed(1)}km`);
-    
-    return {
-        optimalStart: bestStartPoint || calculateCentroid(allStops),
-        orderedZones: bestZoneOrder || zones
-    };
-}
-
-/**
- * Find geographic extreme points (north, south, east, west)
- */
-function findGeographicExtremes(stops) {
-    if (!stops || stops.length === 0) return [];
-    
-    let north = stops[0], south = stops[0], east = stops[0], west = stops[0];
-    
-    stops.forEach(stop => {
-        if (stop.location.lat > north.location.lat) north = stop;
-        if (stop.location.lat < south.location.lat) south = stop;
-        if (stop.location.lng > east.location.lng) east = stop;
-        if (stop.location.lng < west.location.lng) west = stop;
-    });
-    
-    return [
-        north.location,
-        south.location,
-        east.location,
-        west.location
-    ];
-}
-
-/**
- * Simulate a route from a starting point to estimate total distance
- */
-function simulateRouteFromStart(startPoint, zones, allStops) {
-    const simulatedRoute = [];
-    const orderedZones = orderZonesByProximity(zones, startPoint);
-    let currentPos = startPoint;
-    
-    // Quick simulation using zone centers
-    orderedZones.forEach(zone => {
-        // Add nearest stop in zone as entry point
-        let nearestStop = zone.stops[0];
-        let minDist = Infinity;
-        
-        zone.stops.forEach(stop => {
-            const dist = calculateDistance(currentPos, stop.location);
-            if (dist < minDist) {
-                minDist = dist;
-                nearestStop = stop;
-            }
-        });
-        
-        simulatedRoute.push(nearestStop);
-        
-        // Add other stops in zone (simplified)
-        zone.stops.forEach(stop => {
-            if (stop !== nearestStop) {
-                simulatedRoute.push(stop);
-            }
-        });
-        
-        // Update position to last stop in zone
-        if (zone.stops.length > 0) {
-            currentPos = zone.stops[zone.stops.length - 1].location;
-        }
-    });
-    
-    return simulatedRoute;
-}
-
-/**
- * Optimize stops within a zone
- */
-function optimizeZoneStops(pickups, deliveries, entryPoint, deliveryMap, completedParcels) {
-    const zoneStops = [];
-    const availablePickups = [...pickups];
-    const availableDeliveries = [];
-    
-    // First, check which deliveries can be done (pickup already completed)
-    deliveries.forEach(delivery => {
-        const parcelId = delivery.parcelCode || delivery.parcelId;
-        const pickup = pickups.find(p => 
-            (p.parcelCode === parcelId || p.parcelId === parcelId)
-        );
-        
-        // If pickup is in this zone or already completed, delivery is available
-        if (pickup || completedParcels.has(parcelId)) {
-            availableDeliveries.push(delivery);
-        }
-    });
-    
-    // Optimize order using 2-opt improvement
-    let allStops = [...availablePickups, ...availableDeliveries];
-    
-    // Start with nearest neighbor
-    const initialRoute = [];
-    let currentPos = entryPoint;
-    const unvisited = new Set(allStops);
-    
-    while (unvisited.size > 0) {
-        let nearest = null;
-        let minDist = Infinity;
-        
-        unvisited.forEach(stop => {
-            const dist = calculateDistance(currentPos, stop.location);
-            
-            // Apply penalties and bonuses
-            let adjustedDist = dist;
-            
-            // Penalize deliveries if their pickup isn't done yet
-            if (stop.type === 'delivery') {
-                const parcelId = stop.parcelCode || stop.parcelId;
-                const pickup = availablePickups.find(p => 
-                    p.parcelCode === parcelId || p.parcelId === parcelId
-                );
-                
-                if (pickup && !initialRoute.includes(pickup)) {
-                    adjustedDist *= 3.0; // Heavy penalty - do pickup first
-                } else {
-                    adjustedDist *= 0.9; // Slight bonus for deliveries
-                }
-            }
-            
-            if (adjustedDist < minDist) {
-                minDist = adjustedDist;
-                nearest = stop;
-            }
-        });
-        
-        if (nearest) {
-            initialRoute.push(nearest);
-            currentPos = nearest.location;
-            unvisited.delete(nearest);
-        }
-    }
-    
-    // Apply 2-opt improvement
-    return improve2Opt(initialRoute);
-}
-
-/**
- * 2-opt algorithm to improve route by eliminating crossings
- */
-function improve2Opt(route) {
-    if (route.length < 4) return route;
-    
-    let improved = [...route];
-    let improvement = true;
-    
-    while (improvement) {
-        improvement = false;
-        
-        for (let i = 0; i < improved.length - 2; i++) {
-            for (let j = i + 2; j < improved.length; j++) {
-                // Calculate current distance
-                const currentDist = 
-                    calculateDistance(improved[i].location, improved[i + 1].location) +
-                    calculateDistance(improved[j - 1].location, improved[j].location);
-                
-                // Calculate swapped distance
-                const swappedDist = 
-                    calculateDistance(improved[i].location, improved[j - 1].location) +
-                    calculateDistance(improved[i + 1].location, improved[j].location);
-                
-                // If swapping improves, do it
-                if (swappedDist < currentDist) {
-                    // Reverse the route between i+1 and j-1
-                    const reversed = improved.slice(i + 1, j).reverse();
-                    improved = [
-                        ...improved.slice(0, i + 1),
-                        ...reversed,
-                        ...improved.slice(j)
-                    ];
-                    improvement = true;
-                    break;
-                }
-            }
-            if (improvement) break;
-        }
-    }
-    
-    return improved;
-}
-
-/**
- * Validate route integrity and fix any issues
- */
-function validateAndFixRoute(route, allStops, deliveryMap) {
-    const validated = [];
-    const pickedUpParcels = new Set();
-    const addedStopIds = new Set();
-    const deferredDeliveries = [];
-    
-    // First pass - add all stops respecting pickup/delivery order
-    route.forEach(stop => {
-        if (addedStopIds.has(stop.id)) return; // Skip duplicates
-        
-        const parcelId = stop.parcelCode || stop.parcelId;
-        
-        if (stop.type === 'pickup') {
-            validated.push(stop);
-            addedStopIds.add(stop.id);
-            pickedUpParcels.add(parcelId);
-            
-            // Check for deferred deliveries
-            const deferredIndex = deferredDeliveries.findIndex(d => 
-                (d.parcelCode === parcelId) || (d.parcelId === parcelId)
-            );
-            if (deferredIndex > -1) {
-                const delivery = deferredDeliveries.splice(deferredIndex, 1)[0];
-                validated.push(delivery);
-                addedStopIds.add(delivery.id);
-            }
-        } else if (stop.type === 'delivery') {
-            if (pickedUpParcels.has(parcelId)) {
-                validated.push(stop);
-                addedStopIds.add(stop.id);
-            } else {
-                deferredDeliveries.push(stop);
-            }
-        }
-    });
-    
-    // Add any remaining deferred deliveries
-    deferredDeliveries.forEach(delivery => {
-        if (!addedStopIds.has(delivery.id)) {
-            validated.push(delivery);
-            addedStopIds.add(delivery.id);
-        }
-    });
-    
-    // Second pass - add any missing stops
-    allStops.forEach(stop => {
-        if (!addedStopIds.has(stop.id)) {
-            console.warn(`Adding missing stop: ${stop.id}`);
-            validated.push(stop);
-        }
-    });
-    
-    return validated;
-}
-
-/**
- * Fallback phased optimization (all pickups then deliveries)
- */
-function performPhasedOptimization(stops) {
-    console.log('Using phased optimization (pickups → deliveries)');
-    
-    const pickups = stops.filter(s => s.type === 'pickup');
-    const deliveries = stops.filter(s => s.type === 'delivery');
-    
-    // Optimize pickup order
-    const optimizedPickups = optimizeStopOrder(pickups);
-    
-    // Optimize delivery order
-    const optimizedDeliveries = optimizeStopOrder(deliveries);
-    
-    return [...optimizedPickups, ...optimizedDeliveries];
-}
-
-/**
- * Optimize order of stops using nearest neighbor algorithm
- */
-function optimizeStopOrder(stops) {
-    if (stops.length <= 1) return stops;
-    
-    const optimized = [];
-    const remaining = [...stops];
-    
-    // Start from current location or centroid
-    let currentPosition = state.currentLocation 
-        ? { lat: state.currentLocation.lat, lng: state.currentLocation.lng }
-        : calculateCentroid(stops);
-    
-    while (remaining.length > 0) {
-        let nearestIndex = 0;
-        let minDistance = Infinity;
-        
-        remaining.forEach((stop, index) => {
-            const distance = calculateDistance(currentPosition, stop.location);
-            if (distance < minDistance) {
-                minDistance = distance;
-                nearestIndex = index;
-            }
-        });
-        
-        const nextStop = remaining.splice(nearestIndex, 1)[0];
-        optimized.push(nextStop);
-        currentPosition = nextStop.location;
-    }
-    
-    return optimized;
-}
-
-/**
- * Validate that all deliveries come after their pickups
- */
-function validateRouteIntegrity(route) {
-    const validated = [];
-    const pickedUpParcels = new Set();
-    const deferredDeliveries = [];
-    
-    route.forEach(stop => {
-        const parcelId = stop.parcelCode || stop.parcelId;
-        
-        if (stop.type === 'pickup') {
-            validated.push(stop);
-            pickedUpParcels.add(parcelId);
-            
-            // Check if we have a deferred delivery for this parcel
-            const deferredIndex = deferredDeliveries.findIndex(d => 
-                (d.parcelCode === parcelId) || (d.parcelId === parcelId)
-            );
-            if (deferredIndex > -1) {
-                // Add the deferred delivery right after its pickup
-                validated.push(deferredDeliveries.splice(deferredIndex, 1)[0]);
-            }
-        } else if (stop.type === 'delivery') {
-            if (pickedUpParcels.has(parcelId)) {
-                validated.push(stop);
-            } else {
-                // Defer this delivery until after its pickup
-                deferredDeliveries.push(stop);
-                console.warn(`Deferring delivery ${parcelId} - pickup not yet completed`);
-            }
-        }
-    });
-    
-    // Add any remaining deferred deliveries (shouldn't happen with correct data)
-    if (deferredDeliveries.length > 0) {
-        console.error('Found deliveries without pickups:', deferredDeliveries);
-        validated.push(...deferredDeliveries);
-    }
-    
-    return validated;
-}
-
-/**
- * Calculate the geographic centroid of stops
- */
-function calculateCentroid(stops) {
-    if (!stops || stops.length === 0) {
-        return { lat: -1.2921, lng: 36.8219 }; // Default Nairobi center
-    }
-    
-    let sumLat = 0, sumLng = 0;
-    stops.forEach(stop => {
-        if (stop.location) {
-            sumLat += stop.location.lat;
-            sumLng += stop.location.lng;
-        }
-    });
-    
-    return {
-        lat: sumLat / stops.length,
-        lng: sumLng / stops.length
-    };
-}
-
-/**
- * Toggle between optimization modes
- */
-function toggleOptimizationMode() {
-    if (state.routeOptimizationMode === 'dynamic') {
-        state.routeOptimizationMode = 'phased';
-        config.optimization.enableDynamicRouting = false;
-        showNotification('Switched to phased optimization (pickups → deliveries)', 'info');
-    } else {
-        state.routeOptimizationMode = 'dynamic';
-        config.optimization.enableDynamicRouting = true;
-        showNotification('Switched to dynamic optimization (smart interleaving)', 'info');
-    }
-    
-    // Re-optimize if there's an active route
-    if (state.activeRoute && !state.activeRoute.stops.some(s => s.completed)) {
-        optimizeRouteStops();
-    }
-}
-
-/**
- * Analyze route efficiency and provide insights
- */
-function analyzeRouteEfficiency(stops) {
-    const metrics = {
-        totalStops: stops.length,
-        pickups: stops.filter(s => s.type === 'pickup').length,
-        deliveries: stops.filter(s => s.type === 'delivery').length,
-        totalDistance: calculateTotalRouteDistance(stops),
-        averageStopDistance: 0,
-        backtrackingInstances: 0,
-        efficiencyScore: 0
-    };
-    
-    // Calculate average distance between stops
-    let distanceSum = 0;
-    for (let i = 0; i < stops.length - 1; i++) {
-        distanceSum += calculateDistance(stops[i].location, stops[i + 1].location);
-    }
-    metrics.averageStopDistance = distanceSum / (stops.length - 1);
-    
-    // Detect backtracking
-    for (let i = 1; i < stops.length - 1; i++) {
-        const prev = stops[i - 1].location;
-        const curr = stops[i].location;
-        const next = stops[i + 1].location;
-        
-        // Check if we're going backwards
-        const forwardDistance = calculateDistance(prev, next);
-        const actualDistance = calculateDistance(prev, curr) + calculateDistance(curr, next);
-        
-        if (actualDistance > forwardDistance * 1.5) {
-            metrics.backtrackingInstances++;
-        }
-    }
-    
-    // Calculate efficiency score (0-100)
-    const backtrackPenalty = metrics.backtrackingInstances * 5;
-    const distanceEfficiency = Math.min(100, (20 / metrics.averageStopDistance) * 100);
-    metrics.efficiencyScore = Math.max(0, distanceEfficiency - backtrackPenalty);
-    
-    return metrics;
 }
 
 function calculateTotalRouteDistance(stops) {
@@ -1477,37 +531,76 @@ function calculateDistance(point1, point2) {
     return R * c;
 }
 
-function undoOptimization() {
-    if (!state.originalRouteOrder) {
-        showNotification('No original route to restore', 'warning');
-        return;
-    }
+function calculateBearing(start, end) {
+    const dLng = (end.lng - start.lng) * Math.PI / 180;
+    const lat1 = start.lat * Math.PI / 180;
+    const lat2 = end.lat * Math.PI / 180;
     
-    state.activeRoute.stops = [...state.originalRouteOrder];
-    state.activeRoute.isOptimized = false;
+    const y = Math.sin(dLng) * Math.cos(lat2);
+    const x = Math.cos(lat1) * Math.sin(lat2) - 
+              Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLng);
     
-    // Update stop order map after undo
-    updateStopOrderMap();
-    
-    localStorage.setItem('tuma_active_route', JSON.stringify(state.activeRoute));
-    
-    displayRouteInfo();
-    plotRoute();
-    drawOptimizedRoute();
-    
-    updateOptimizeButton(false);
-    showNotification('Route restored to original order', 'info');
-    
-    // Clear optimization stats
-    state.optimizationStats = {
-        originalDistance: 0,
-        optimizedDistance: 0,
-        savedDistance: 0,
-        savedPercentage: 0
-    };
+    const bearing = Math.atan2(y, x) * 180 / Math.PI;
+    return (bearing + 360) % 360;
 }
 
-// NEW FUNCTION FROM PASTE.TXT - Toggle numbered markers
+async function syncRouteData() {
+    if (!state.activeRoute) return;
+    
+    try {
+        localStorage.setItem('tuma_active_route', JSON.stringify(state.activeRoute));
+        
+        if (state.activeRoute.stops && state.activeRoute.stops.every(s => s.completed)) {
+            await handleRouteCompletion();
+        }
+    } catch (error) {
+        console.error('Error syncing route data:', error);
+    }
+}
+
+async function handleRouteCompletion() {
+    console.log('Handling route completion...');
+    
+    const deliveryCount = state.activeRoute.stops.filter(s => s.type === 'delivery').length;
+    
+    const completionData = {
+        completed: true,
+        earnings: Math.round(state.totalRouteEarnings),
+        commission: Math.round(state.routeCommission),
+        cashCollected: Math.round(state.totalCashCollected),
+        deliveries: deliveryCount,
+        stops: state.activeRoute.stops.length,
+        timestamp: new Date().toISOString(),
+        routeId: state.activeRoute.id,
+        parcels: state.activeRoute.parcels || [],
+        optimizationMode: state.routeOptimizationMode,
+        distanceSaved: state.optimizationStats.savedDistance
+    };
+    
+    console.log('Storing completion data:', completionData);
+    
+    localStorage.setItem('tuma_route_completion', JSON.stringify(completionData));
+    localStorage.removeItem('tuma_active_route');
+    
+    if (!state.activeRoute.id?.startsWith('demo-')) {
+        try {
+            for (const parcel of (state.activeRoute.parcels || [])) {
+                await supabaseUpdate('parcels',
+                    `id=eq.${parcel.id}`,
+                    {
+                        status: 'delivered',
+                        delivery_timestamp: new Date().toISOString(),
+                        payment_status: parcel.payment_method === 'cash' ? 'collected' : parcel.payment_status
+                    }
+                );
+            }
+        } catch (error) {
+            console.error('Error updating parcel status:', error);
+        }
+    }
+}
+
+// Toggle numbered markers
 window.toggleNumberedMarkers = function() {
     state.showNumberedMarkers = !state.showNumberedMarkers;
     plotRoute(); // Redraw with new marker style
@@ -1516,8 +609,14 @@ window.toggleNumberedMarkers = function() {
         'info'
     );
 };
+/**
+ * Enhanced Route Navigation Module - Part 2/4
+ * UI Functions, Styles, and Display Components
+ * Version: 4.0.0
+ */
+
 // ============================================================================
-// PART 3 OF 6 - ENHANCED UI FUNCTIONS AND STYLES (INTEGRATED VERSION)
+// UI STYLING & INITIALIZATION
 // ============================================================================
 
 function injectNavigationStyles() {
@@ -1525,9 +624,7 @@ function injectNavigationStyles() {
     style.textContent = `
         /* Import premium fonts */
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-        @import url('https://fonts.googleapis.com/css2?family=SF+Pro+Display:wght@400;500;600;700&display=swap');
         
-        /* Premium font stack */
         * {
             font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', 'Segoe UI', system-ui, sans-serif;
         }
@@ -1551,7 +648,7 @@ function injectNavigationStyles() {
             z-index: 1 !important;
         }
         
-        /* PREMIUM LEAFLET POPUP STYLES */
+        /* Premium Leaflet popup styles */
         .leaflet-popup {
             margin-bottom: 25px !important;
         }
@@ -1608,415 +705,7 @@ function injectNavigationStyles() {
             transform: rotate(90deg) !important;
         }
         
-        /* Enhanced Stop Popup Styles */
-        .stop-popup {
-            font-size: 14px;
-            line-height: 1.6;
-            position: relative;
-        }
-        
-        .stop-popup .popup-header {
-            padding: 18px 22px;
-            margin: 0;
-            font-weight: 700;
-            font-size: 14px;
-            letter-spacing: 1px;
-            text-transform: uppercase;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            position: relative;
-            overflow: hidden;
-        }
-        
-        .stop-popup .popup-header::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, transparent 100%);
-            pointer-events: none;
-        }
-        
-        .stop-popup .popup-header.pickup {
-            background: linear-gradient(135deg, #FF9F0A 0%, #FF6000 100%);
-            color: #000000;
-            text-shadow: 0 1px 2px rgba(0,0,0,0.1);
-        }
-        
-        .stop-popup .popup-header.delivery {
-            background: linear-gradient(135deg, #007AFF 0%, #0051D5 100%);
-            color: white;
-            text-shadow: 0 1px 3px rgba(0,0,0,0.3);
-        }
-        
-        .popup-order-badge {
-            position: absolute;
-            left: 20px;
-            top: 50%;
-            transform: translateY(-50%);
-            width: 36px;
-            height: 36px;
-            background: rgba(0, 0, 0, 0.25);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 18px;
-            font-weight: 800;
-            border: 2px solid rgba(255, 255, 255, 0.3);
-        }
-        
-        .popup-header.delivery .popup-order-badge {
-            background: rgba(255, 255, 255, 0.25);
-        }
-        
-        .popup-phase {
-            margin-left: 50px;
-            font-size: 13px;
-        }
-        
-        .popup-code {
-            background: rgba(0, 0, 0, 0.2);
-            padding: 5px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 700;
-            letter-spacing: 0.5px;
-        }
-        
-        .popup-header.delivery .popup-code {
-            background: rgba(255, 255, 255, 0.2);
-        }
-        
-        .stop-popup .popup-body {
-            padding: 22px;
-            background: transparent;
-        }
-        
-        .stop-popup .popup-body h3 {
-            margin: 0 0 18px 0;
-            font-size: 18px;
-            font-weight: 600;
-            color: white;
-            line-height: 1.4;
-            letter-spacing: -0.3px;
-        }
-        
-        .stop-popup .popup-info {
-            display: flex;
-            flex-direction: column;
-            gap: 14px;
-        }
-        
-        .stop-popup .info-row {
-            display: flex;
-            align-items: flex-start;
-            gap: 12px;
-            color: rgba(255, 255, 255, 0.9);
-            font-size: 14px;
-            padding: 10px;
-            background: rgba(255, 255, 255, 0.03);
-            border-radius: 10px;
-            transition: all 0.2s ease;
-        }
-        
-        .stop-popup .info-row:hover {
-            background: rgba(255, 255, 255, 0.06);
-        }
-        
-        .stop-popup .info-icon {
-            width: 24px;
-            font-size: 18px;
-            opacity: 0.9;
-            flex-shrink: 0;
-        }
-        
-        .stop-popup .info-row a {
-            color: #007AFF;
-            text-decoration: none;
-            font-weight: 600;
-            transition: all 0.2s ease;
-        }
-        
-        .stop-popup .info-row a:hover {
-            color: #0051D5;
-            text-decoration: underline;
-        }
-        
-        .stop-popup .info-row.instructions {
-            background: rgba(147, 51, 234, 0.1);
-            border: 1px solid rgba(147, 51, 234, 0.2);
-        }
-        
-        .stop-popup .info-row.payment {
-            background: linear-gradient(135deg, rgba(255, 159, 10, 0.15), rgba(255, 107, 0, 0.1));
-            border: 1px solid rgba(255, 159, 10, 0.3);
-            margin-top: 12px;
-        }
-        
-        .stop-popup .popup-actions {
-            display: flex;
-            gap: 10px;
-            margin-top: 22px;
-            padding-top: 22px;
-            border-top: 1px solid rgba(255, 255, 255, 0.08);
-        }
-        
-        .stop-popup .popup-actions button {
-            flex: 1;
-            padding: 14px 18px;
-            border: none;
-            border-radius: 14px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-            color: white;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            letter-spacing: 0.3px;
-            position: relative;
-            overflow: hidden;
-        }
-        
-        .stop-popup .popup-actions button::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: linear-gradient(135deg, rgba(255,255,255,0.2) 0%, transparent 100%);
-            opacity: 0;
-            transition: opacity 0.3s ease;
-        }
-        
-        .stop-popup .popup-actions button:hover::before {
-            opacity: 1;
-        }
-        
-        .stop-popup .popup-actions button:first-child {
-            background: linear-gradient(135deg, #34C759, #30D158);
-            box-shadow: 0 4px 12px rgba(52, 199, 89, 0.3);
-        }
-        
-        .stop-popup .popup-actions button:first-child:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(52, 199, 89, 0.4);
-        }
-        
-        .stop-popup .popup-actions button:last-child {
-            background: rgba(255, 255, 255, 0.08);
-            border: 1px solid rgba(255, 255, 255, 0.15);
-        }
-        
-        .stop-popup .popup-actions button:last-child:hover {
-            background: rgba(255, 255, 255, 0.12);
-            border-color: rgba(255, 255, 255, 0.25);
-        }
-        
-        .popup-completed-status {
-            margin-top: 18px;
-            padding: 14px;
-            background: linear-gradient(135deg, rgba(52, 199, 89, 0.15), rgba(48, 209, 88, 0.1));
-            border: 1px solid rgba(52, 199, 89, 0.3);
-            border-radius: 14px;
-            text-align: center;
-            color: #34C759;
-            font-weight: 600;
-            font-size: 14px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-        }
-        
-        /* Enhanced marker styles with route numbers */
-        .stop-marker-wrapper {
-            position: relative;
-            filter: drop-shadow(0 4px 8px rgba(0,0,0,0.4));
-        }
-        
-        .stop-marker-wrapper.completed {
-            opacity: 0.6;
-            filter: grayscale(0.5) drop-shadow(0 2px 4px rgba(0,0,0,0.3));
-        }
-        
-        .stop-marker-wrapper.active .marker-pulse {
-            display: block;
-        }
-        
-        .marker-pulse {
-            display: none;
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 80px;
-            height: 80px;
-            border-radius: 50%;
-            background: rgba(255, 255, 255, 0.5);
-            animation: pulse 2s ease-out infinite;
-        }
-        
-        @keyframes pulse {
-            0% {
-                transform: translate(-50%, -50%) scale(1);
-                opacity: 1;
-            }
-            100% {
-                transform: translate(-50%, -50%) scale(2.5);
-                opacity: 0;
-            }
-        }
-        
-        .marker-label {
-            position: absolute;
-            bottom: -24px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(28, 28, 31, 0.95);
-            color: white;
-            padding: 3px 10px;
-            border-radius: 10px;
-            font-size: 11px;
-            font-weight: 600;
-            white-space: nowrap;
-            pointer-events: none;
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        
-        .route-number-overlay {
-            position: absolute;
-            top: -10px;
-            right: -10px;
-            width: 26px;
-            height: 26px;
-            background: linear-gradient(135deg, #9333EA, #7928CA);
-            border: 2px solid white;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 13px;
-            font-weight: 800;
-            color: white;
-            box-shadow: 0 3px 10px rgba(147, 51, 234, 0.5);
-            z-index: 10;
-        }
-        
-        /* Rider Location Marker Styles */
-        .rider-location-marker {
-            z-index: 1000 !important;
-        }
-        
-        .rider-marker-wrapper {
-            position: relative;
-            width: 60px;
-            height: 60px;
-        }
-        
-        .rider-pulse {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 60px;
-            height: 60px;
-            border-radius: 50%;
-            background: rgba(0, 122, 255, 0.3);
-            animation: locationPulse 2s ease-out infinite;
-            z-index: 1;
-        }
-        
-        .rider-pulse::before {
-            content: '';
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 80px;
-            height: 80px;
-            border-radius: 50%;
-            background: rgba(0, 122, 255, 0.2);
-            animation: locationPulse 2s ease-out infinite;
-            animation-delay: 0.5s;
-        }
-        
-        @keyframes locationPulse {
-            0% {
-                transform: translate(-50%, -50%) scale(1);
-                opacity: 1;
-            }
-            100% {
-                transform: translate(-50%, -50%) scale(2.5);
-                opacity: 0;
-            }
-        }
-        
-        .rider-marker-container {
-            position: relative;
-            width: 60px;
-            height: 60px;
-            z-index: 2;
-            transition: transform 0.3s ease;
-        }
-        
-        .rider-direction-cone {
-            position: absolute;
-            top: -8px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 0;
-            height: 0;
-            border-left: 8px solid transparent;
-            border-right: 8px solid transparent;
-            border-bottom: 16px solid #007AFF;
-            opacity: 0.8;
-            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
-        }
-        
-        .rider-dot {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 24px;
-            height: 24px;
-            background: #007AFF;
-            border-radius: 50%;
-            border: 4px solid white;
-            box-shadow: 
-                0 0 0 2px rgba(0, 122, 255, 0.3),
-                0 4px 12px rgba(0, 0, 0, 0.3),
-                0 2px 4px rgba(0, 0, 0, 0.2);
-            z-index: 3;
-        }
-        
-        .rider-inner-dot {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 8px;
-            height: 8px;
-            background: white;
-            border-radius: 50%;
-        }
-        
-        .rider-accuracy-circle {
-            fill: rgba(0, 122, 255, 0.1);
-            stroke: rgba(0, 122, 255, 0.3);
-            stroke-width: 1;
-        }
-        
-        /* ELEGANT CASH COLLECTION WIDGET */
+        /* Cash Collection Widget */
         .cash-collection-widget {
             position: fixed;
             top: 80px;
@@ -2033,7 +722,7 @@ function injectNavigationStyles() {
             font-weight: 500;
         }
         
-        /* OPTIMIZATION BUTTON STYLES */
+        /* Optimization Button Styles */
         .optimize-button-container {
             display: flex;
             gap: 8px;
@@ -2060,17 +749,223 @@ function injectNavigationStyles() {
             letter-spacing: 0.5px;
         }
         
-        /* Enhanced navigation styles */
-        .enhanced-navigation {
-            pointer-events: none !important;
+        .optimize-route-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(147, 51, 234, 0.5);
+        }
+        
+        .optimize-route-btn.optimized {
+            background: linear-gradient(135deg, #34C759, #30D158);
+            cursor: default;
+        }
+        
+        .undo-optimize-btn {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 16px;
+            padding: 16px 20px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all 0.3s ease;
+        }
+        
+        .undo-optimize-btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+        
+        /* Optimization Animation */
+        .optimizing-animation {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.9);
+            backdrop-filter: blur(10px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 5000;
+        }
+        
+        .optimizing-content {
+            background: linear-gradient(135deg, #1C1C1F, #2C2C2E);
+            border-radius: 24px;
+            padding: 40px;
+            text-align: center;
+            box-shadow: 0 25px 80px rgba(0, 0, 0, 0.6);
+            max-width: 400px;
+        }
+        
+        .optimizing-spinner {
+            width: 60px;
+            height: 60px;
+            border: 3px solid rgba(147, 51, 234, 0.3);
+            border-top-color: #9333EA;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .optimizing-steps {
+            margin-top: 20px;
+        }
+        
+        .optimizing-steps .step {
+            padding: 8px;
+            margin: 5px 0;
+            border-radius: 8px;
+            opacity: 0.5;
+            transition: all 0.3s ease;
+        }
+        
+        .optimizing-steps .step.active {
+            opacity: 1;
+            background: rgba(147, 51, 234, 0.2);
+        }
+        
+        /* Optimization Results */
+        .optimization-results {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: linear-gradient(135deg, #1C1C1F, #2C2C2E);
+            border-radius: 24px;
+            padding: 40px;
+            text-align: center;
+            z-index: 5000;
+            box-shadow: 0 25px 80px rgba(0, 0, 0, 0.6);
+            max-width: 450px;
+            animation: slideIn 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+        
+        @keyframes slideIn {
+            from {
+                transform: translate(-50%, -50%) scale(0.9);
+                opacity: 0;
+            }
+            to {
+                transform: translate(-50%, -50%) scale(1);
+                opacity: 1;
+            }
+        }
+        
+        .optimization-results.fade-out {
+            animation: fadeOut 0.3s ease-out forwards;
+        }
+        
+        @keyframes fadeOut {
+            to {
+                opacity: 0;
+                transform: translate(-50%, -50%) scale(0.9);
+            }
+        }
+        
+        .results-icon {
+            font-size: 60px;
+            margin-bottom: 20px;
+        }
+        
+        .results-stats {
+            display: flex;
+            justify-content: space-around;
+            margin: 30px 0;
+        }
+        
+        .results-stats .stat {
+            text-align: center;
+        }
+        
+        .stat-value {
+            display: block;
+            font-size: 28px;
+            font-weight: 700;
+            color: #9333EA;
+            margin-bottom: 5px;
+        }
+        
+        .stat-label {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.6);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .results-comparison {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        
+        .comparison-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            color: rgba(255, 255, 255, 0.8);
+        }
+        
+        .comparison-value.success {
+            color: #34C759;
+            font-weight: 600;
+        }
+        
+        .efficiency-high { color: #34C759; }
+        .efficiency-medium { color: #FF9F0A; }
+        .efficiency-low { color: #FF3B30; }
+        
+        .results-close {
+            background: linear-gradient(135deg, #9333EA, #7928CA);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            padding: 12px 30px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+        
+        /* Reoptimize button */
+        .reoptimize-float-btn {
+            position: fixed;
+            bottom: 100px;
+            right: 20px;
+            background: linear-gradient(135deg, #FF9F0A, #FF6B00);
+            color: white;
+            border: none;
+            border-radius: 50px;
+            padding: 15px 25px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 6px 20px rgba(255, 159, 10, 0.4);
+            z-index: 1000;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
         }
     `;
     
-    // Add remaining styles (truncated for brevity - include all from original)
     document.head.appendChild(style);
 }
+
 // ============================================================================
-// PART 4 OF 6 - OPTIMIZATION UI & CORE DISPLAY FUNCTIONS WITH ENHANCEMENTS
+// UI DISPLAY FUNCTIONS
 // ============================================================================
 
 function addOptimizeButton() {
@@ -2082,21 +977,6 @@ function addOptimizeButton() {
     const optimizeContainer = document.createElement('div');
     optimizeContainer.className = 'optimize-button-container';
     optimizeContainer.innerHTML = `
-        <div class="optimization-mode-toggle">
-            <span>Mode:</span>
-            <span class="mode-indicator">
-                ${config.optimization.enableDynamicRouting ? '⚡ Dynamic' : '📦 Phased'}
-            </span>
-            <button onclick="toggleOptimizationMode()" style="
-                background: rgba(255, 255, 255, 0.1);
-                border: none;
-                border-radius: 6px;
-                padding: 4px 8px;
-                color: white;
-                font-size: 12px;
-                cursor: pointer;
-            ">Switch</button>
-        </div>
         <button id="optimizeBtn" class="optimize-route-btn" onclick="optimizeRouteStops()">
             <span class="optimize-icon">✨</span>
             <span class="optimize-text">Optimize Route</span>
@@ -2135,14 +1015,6 @@ function updateOptimizeButton(isOptimized) {
     if (undoBtn) {
         undoBtn.style.display = isOptimized ? 'flex' : 'none';
     }
-    
-    // Update mode indicator
-    const modeIndicator = document.querySelector('.mode-indicator');
-    if (modeIndicator) {
-        modeIndicator.innerHTML = config.optimization.enableDynamicRouting 
-            ? '⚡ Dynamic' 
-            : '📦 Phased';
-    }
 }
 
 function showOptimizingAnimation() {
@@ -2150,27 +1022,20 @@ function showOptimizingAnimation() {
     animation.id = 'optimizingAnimation';
     animation.className = 'optimizing-animation';
     
-    const steps = config.optimization.enableDynamicRouting
-        ? [
-            '📍 Analyzing stop locations',
-            '🧮 Calculating optimal paths',
-            '⚡ Smart interleaving stops',
-            '✅ Validating sequence'
-        ]
-        : [
-            '📍 Analyzing locations',
-            '📦 Organizing pickups',
-            '📍 Organizing deliveries',
-            '✅ Finalizing route'
-        ];
+    const steps = [
+        '📍 Analyzing stop locations',
+        '🗺️ Detecting route direction',
+        '⚡ Optimizing delivery sequence',
+        '✅ Validating route integrity'
+    ];
     
     animation.innerHTML = `
         <div class="optimizing-content">
             <div class="optimizing-spinner"></div>
-            <h3>Optimizing Route...</h3>
-            <p>${config.optimization.enableDynamicRouting 
-                ? 'Using smart dynamic routing' 
-                : 'Using phased routing'}</p>
+            <h3 style="color: white; margin-bottom: 10px;">Optimizing Route...</h3>
+            <p style="color: rgba(255, 255, 255, 0.6); margin-bottom: 20px;">
+                Using intelligent geographical flow analysis
+            </p>
             <div class="optimizing-steps">
                 ${steps.map((step, i) => `
                     <div class="step ${i === 0 ? 'active' : ''}" data-step="${i}">
@@ -2203,23 +1068,13 @@ function hideOptimizingAnimation() {
 }
 
 function showOptimizationResults(savedDistance, savedPercentage) {
-    // Store original route for undo
-    if (!state.originalRouteOrder) {
-        state.originalRouteOrder = [...state.activeRoute.stops];
-    }
-    
     const results = document.createElement('div');
     results.className = 'optimization-results';
-    
-    // Get route efficiency metrics
-    const efficiency = analyzeRouteEfficiency(state.activeRoute.stops);
-    const efficiencyClass = efficiency.efficiencyScore > 80 ? 'high' : 
-                           efficiency.efficiencyScore > 60 ? 'medium' : 'low';
     
     results.innerHTML = `
         <div class="results-content">
             <div class="results-icon">🎉</div>
-            <h2>Route Optimized!</h2>
+            <h2 style="color: white; margin-bottom: 10px;">Route Optimized!</h2>
             <div class="results-stats">
                 <div class="stat">
                     <span class="stat-value">${savedDistance.toFixed(1)} km</span>
@@ -2243,18 +1098,6 @@ function showOptimizationResults(savedDistance, savedPercentage) {
                     <span class="comparison-label">Optimized:</span>
                     <span class="comparison-value success">${state.optimizationStats.optimizedDistance.toFixed(1)} km</span>
                 </div>
-                <div class="comparison-item">
-                    <span class="comparison-label">Efficiency Score:</span>
-                    <span class="comparison-value efficiency-${efficiencyClass}">
-                        ${Math.round(efficiency.efficiencyScore)}%
-                    </span>
-                </div>
-            </div>
-            <div class="optimization-mode-info">
-                <strong>Optimization Mode:</strong> ${config.optimization.enableDynamicRouting ? 'Dynamic' : 'Phased'}<br>
-                ${config.optimization.enableDynamicRouting 
-                    ? 'Smart interleaving of pickups and deliveries based on proximity'
-                    : 'All pickups completed before deliveries'}
             </div>
             <button class="results-close" onclick="this.parentElement.parentElement.remove()">
                 Got it!
@@ -2273,17 +1116,25 @@ function showOptimizationResults(savedDistance, savedPercentage) {
     }, 7000);
 }
 
-function initializeOptimizeButton() {
-    setTimeout(() => {
-        addOptimizeButton();
-        
-        if (state.activeRoute && state.activeRoute.isOptimized) {
-            updateOptimizeButton(true);
-        }
-    }, 500);
+function showReoptimizeButton() {
+    // Remove existing button if any
+    const existing = document.querySelector('.reoptimize-float-btn');
+    if (existing) existing.remove();
+    
+    const btn = document.createElement('button');
+    btn.className = 'reoptimize-float-btn';
+    btn.innerHTML = '🔄 Re-optimize Route';
+    btn.onclick = () => {
+        reoptimizeRemainingStops();
+        btn.remove();
+    };
+    
+    document.body.appendChild(btn);
+    
+    // Auto-remove after 10 seconds
+    setTimeout(() => btn.remove(), 10000);
 }
 
-// Show elegant cash collection widget
 function showCashCollectionWidget() {
     const existingWidget = document.querySelector('.cash-collection-widget');
     if (existingWidget) existingWidget.remove();
@@ -2294,24 +1145,24 @@ function showCashCollectionWidget() {
     const widget = document.createElement('div');
     widget.className = `cash-collection-widget ${hasPending ? 'has-pending' : ''}`;
     widget.innerHTML = `
-        <div class="cash-widget-title">
+        <div class="cash-widget-title" style="font-size: 14px; font-weight: 600; margin-bottom: 10px; color: white;">
             ${hasPending ? '⚡' : '✓'} Cash Collection
         </div>
-        <div class="cash-widget-amount">
+        <div class="cash-widget-amount" style="font-size: 24px; font-weight: 700; color: #FF9F0A; margin-bottom: 15px;">
             KES ${pendingAmount.toLocaleString()}
         </div>
-        <div class="cash-widget-breakdown">
-            <div class="cash-breakdown-item">
-                <span class="cash-breakdown-label">Total Expected</span>
-                <span class="cash-breakdown-value">KES ${state.totalCashToCollect.toLocaleString()}</span>
+        <div class="cash-widget-breakdown" style="font-size: 13px; color: rgba(255,255,255,0.7);">
+            <div class="cash-breakdown-item" style="display: flex; justify-content: space-between; padding: 5px 0;">
+                <span>Total Expected</span>
+                <span style="font-weight: 600;">KES ${state.totalCashToCollect.toLocaleString()}</span>
             </div>
-            <div class="cash-breakdown-item">
-                <span class="cash-breakdown-label">✓ Collected</span>
-                <span class="cash-breakdown-value">KES ${state.totalCashCollected.toLocaleString()}</span>
+            <div class="cash-breakdown-item" style="display: flex; justify-content: space-between; padding: 5px 0;">
+                <span>✓ Collected</span>
+                <span style="font-weight: 600; color: #34C759;">KES ${state.totalCashCollected.toLocaleString()}</span>
             </div>
-            <div class="cash-breakdown-item">
-                <span class="cash-breakdown-label">⏳ Pending</span>
-                <span class="cash-breakdown-value">KES ${pendingAmount.toLocaleString()}</span>
+            <div class="cash-breakdown-item" style="display: flex; justify-content: space-between; padding: 5px 0; border-top: 1px solid rgba(255,255,255,0.1); margin-top: 5px; padding-top: 10px;">
+                <span>⏳ Pending</span>
+                <span style="font-weight: 600; color: #FF9F0A;">KES ${pendingAmount.toLocaleString()}</span>
             </div>
         </div>
     `;
@@ -2327,402 +1178,57 @@ function updateCashCollectionWidget() {
     }
 }
 
-async function handleRouteCompletion() {
-    console.log('Handling route completion...');
+function showNotification(message, type = 'info') {
+    const notification = document.createElement('div');
+    notification.className = `notification ${type}`;
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: ${type === 'success' ? 'linear-gradient(135deg, #34C759, #30D158)' : 
+                      type === 'error' ? 'linear-gradient(135deg, #FF3B30, #FF2D55)' : 
+                      type === 'warning' ? 'linear-gradient(135deg, #FF9F0A, #FF6B00)' : 
+                      'linear-gradient(135deg, #1C1C1F, #2C2C2E)'};
+        color: ${type === 'warning' ? '#0A0A0B' : 'white'};
+        padding: 16px 20px;
+        border-radius: 14px;
+        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        z-index: 4000;
+        animation: slideIn 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        max-width: 380px;
+        font-weight: 600;
+        font-size: 15px;
+        letter-spacing: 0.3px;
+    `;
+    notification.innerHTML = `
+        <span class="notification-icon" style="font-size: 20px;">
+            ${type === 'success' ? '✓' : type === 'error' ? '✗' : type === 'warning' ? '⚠' : 'ℹ'}
+        </span>
+        <span>${message}</span>
+    `;
     
-    const deliveryCount = state.activeRoute.stops.filter(s => s.type === 'delivery').length;
+    document.body.appendChild(notification);
     
-    const completionData = {
-        completed: true,
-        earnings: Math.round(state.totalRouteEarnings),
-        commission: Math.round(state.routeCommission),
-        cashCollected: Math.round(state.totalCashCollected),
-        deliveries: deliveryCount,
-        stops: state.activeRoute.stops.length,
-        timestamp: new Date().toISOString(),
-        routeId: state.activeRoute.id,
-        parcels: state.activeRoute.parcels || [],
-        optimizationMode: state.routeOptimizationMode,
-        distanceSaved: state.optimizationStats.savedDistance
-    };
-    
-    console.log('Storing completion data:', completionData);
-    
-    localStorage.setItem('tuma_route_completion', JSON.stringify(completionData));
-    localStorage.removeItem('tuma_active_route');
-    
-    if (!state.activeRoute.id?.startsWith('demo-')) {
-        try {
-            for (const parcel of (state.activeRoute.parcels || [])) {
-                await supabaseUpdate('parcels',
-                    `id=eq.${parcel.id}`,
-                    {
-                        status: 'delivered',
-                        delivery_timestamp: new Date().toISOString(),
-                        payment_status: parcel.payment_method === 'cash' ? 'collected' : parcel.payment_status
-                    }
-                );
-            }
-        } catch (error) {
-            console.error('Error updating parcel status:', error);
-        }
-    }
+    setTimeout(() => {
+        notification.style.animation = 'slideOut 0.3s ease-out';
+        setTimeout(() => notification.remove(), 300);
+    }, 3000);
 }
+/**
+ * Enhanced Route Navigation Module - Part 3/4
+ * Map, Navigation, and Location Tracking Functions
+ * Version: 4.0.0
+ */
 
-// Enhanced createRiderIcon function (from paste.txt)
-function createRiderIcon(heading = 0) {
-    return L.divIcon({
-        className: 'rider-location-marker',
-        html: `
-            <div class="rider-marker-wrapper">
-                <div class="rider-pulse"></div>
-                <div class="rider-marker-container" style="transform: rotate(${heading}deg)">
-                    <div class="rider-direction-cone"></div>
-                    <div class="rider-dot">
-                        <div class="rider-inner-dot"></div>
-                    </div>
-                </div>
-            </div>
-        `,
-        iconSize: [60, 60],
-        iconAnchor: [30, 30]
-    });
-}
-
-// Core display functions
-function displayRouteInfo() {
-    if (!state.activeRoute) return;
-    
-    const routeType = document.getElementById('routeType');
-    if (routeType) {
-        const nextStop = getNextStop();
-        if (nextStop) {
-            routeType.className = `route-badge verify-btn ${nextStop.type}`;
-            routeType.innerHTML = `
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
-                </svg>
-                <span>Verify ${nextStop.type === 'pickup' ? 'Pickup' : 'Delivery'}</span>
-            `;
-            routeType.onclick = () => openQuickVerification();
-        } else {
-            routeType.className = 'route-badge completed';
-            routeType.innerHTML = 'Route Complete';
-            routeType.onclick = null;
-        }
-    }
-    
-    updateRouteStats();
-    displayStops();
-}
-
-function getNextStop() {
-    if (!state.activeRoute || !state.activeRoute.stops) return null;
-    return state.activeRoute.stops.find(stop => !stop.completed);
-}
-
-function updateRouteStats() {
-    const remainingStops = state.activeRoute.stops.filter(s => !s.completed).length;
-    
-    // Calculate total distance more reliably
-    let totalDistance = 0;
-    if (state.activeRoute.distance) {
-        totalDistance = parseFloat(state.activeRoute.distance);
-    } else if (state.activeRoute.total_distance) {
-        totalDistance = parseFloat(state.activeRoute.total_distance);
-    } else {
-        totalDistance = calculateTotalRouteDistance(state.activeRoute.stops);
-    }
-    
-    const estimatedTime = Math.round(totalDistance * 2.5 + remainingStops * 5);
-    
-    const remainingEl = document.getElementById('remainingStops');
-    const distanceEl = document.getElementById('totalDistance');
-    const timeEl = document.getElementById('estimatedTime');
-    
-    if (remainingEl) remainingEl.textContent = remainingStops;
-    if (distanceEl) distanceEl.textContent = totalDistance.toFixed(1);
-    if (timeEl) timeEl.textContent = estimatedTime;
-    
-    // Also update in the stats display
-    const statsDistance = document.querySelector('.stat-value.distance');
-    if (statsDistance) statsDistance.textContent = `${totalDistance.toFixed(1)} km`;
-}
-
-function updateDynamicHeader() {
-    const routeTitle = document.getElementById('routeTitle');
-    if (!routeTitle || !state.activeRoute) return;
-    
-    const nextStop = getNextStop();
-    const currentStop = getCurrentStop();
-    
-    if (!nextStop) {
-        routeTitle.textContent = 'Route Complete';
-        return;
-    }
-    
-    let headerText = '';
-    
-    if (currentStop && state.currentLocation) {
-        headerText = `Your Location → ${getStopShortName(nextStop)}`;
-    } else if (currentStop) {
-        headerText = `${getStopShortName(currentStop)} → ${getStopShortName(nextStop)}`;
-    } else {
-        const firstStop = state.activeRoute.stops[0];
-        headerText = `Starting → ${getStopShortName(firstStop)}`;
-    }
-    
-    routeTitle.textContent = headerText;
-}
-
-function getStopShortName(stop) {
-    if (!stop) return '';
-    
-    const address = stop.address;
-    const patterns = [
-        /^([^,]+),/,
-        /^(.+?)(?:\s+Road|\s+Street|\s+Avenue|\s+Drive|\s+Centre|\s+Center)/i
-    ];
-    
-    for (const pattern of patterns) {
-        const match = address.match(pattern);
-        if (match) {
-            return match[1].trim();
-        }
-    }
-    
-    return address.length > 20 ? address.substring(0, 20) + '...' : address;
-}
-
-function getCurrentStop() {
-    if (!state.activeRoute) return null;
-    
-    const completedStops = state.activeRoute.stops.filter(s => s.completed);
-    if (completedStops.length === 0) return null;
-    
-    return completedStops[completedStops.length - 1];
-}
-
-function showRoutePanel() {
-    const routePanel = document.getElementById('routePanel');
-    const navControls = document.getElementById('navControls');
-    const emptyState = document.getElementById('emptyState');
-    
-    if (routePanel) {
-        routePanel.style.display = 'block';
-        state.isPanelVisible = true;
-        state.isPanelExpanded = false;
-    }
-    
-    if (navControls) {
-        navControls.style.display = 'flex';
-        navControls.style.bottom = 'calc(30px + var(--safe-area-bottom))';
-    }
-    
-    if (emptyState) {
-        emptyState.style.display = 'none';
-    }
-}
-
-function showEmptyState() {
-    const routePanel = document.getElementById('routePanel');
-    const navControls = document.getElementById('navControls');
-    const emptyState = document.getElementById('emptyState');
-    
-    if (routePanel) routePanel.style.display = 'none';
-    if (navControls) navControls.style.display = 'none';
-    if (emptyState) emptyState.style.display = 'block';
-}
-
-function enhanceRoutePanel() {
-    const routePanel = document.getElementById('routePanel');
-    if (!routePanel) return;
-    
-    const panelHandle = routePanel.querySelector('.panel-handle');
-    if (panelHandle) {
-        panelHandle.style.cursor = 'grab';
-        
-        let isDragging = false;
-        let startY = 0;
-        let startTransform = 0;
-        
-        panelHandle.addEventListener('touchstart', handleStart, { passive: true });
-        panelHandle.addEventListener('touchmove', handleMove, { passive: false });
-        panelHandle.addEventListener('touchend', handleEnd);
-        
-        panelHandle.addEventListener('mousedown', handleStart);
-        document.addEventListener('mousemove', handleMove);
-        document.addEventListener('mouseup', handleEnd);
-        
-        function handleStart(e) {
-            isDragging = true;
-            panelHandle.style.cursor = 'grabbing';
-            startY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
-            const transform = routePanel.style.transform;
-            const match = transform.match(/translateY\(calc\(100% - (\d+)px\)\)/);
-            startTransform = match ? parseInt(match[1]) : 0;
-        }
-        
-        function handleMove(e) {
-            if (!isDragging) return;
-            e.preventDefault();
-            
-            const currentY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
-            const deltaY = startY - currentY;
-            const newHeight = Math.max(140, Math.min(window.innerHeight * 0.6, startTransform + deltaY));
-            
-            routePanel.style.transform = `translateY(calc(100% - ${newHeight}px))`;
-            routePanel.style.maxHeight = `${newHeight}px`;
-        }
-        
-        function handleEnd() {
-            if (!isDragging) return;
-            isDragging = false;
-            panelHandle.style.cursor = 'grab';
-            
-            const currentHeight = parseInt(routePanel.style.maxHeight);
-            if (currentHeight > 300) {
-                routePanel.style.transform = 'translateY(0)';
-                routePanel.style.maxHeight = '60%';
-                state.isPanelExpanded = true;
-            } else {
-                routePanel.style.transform = 'translateY(calc(100% - 140px))';
-                routePanel.style.maxHeight = '140px';
-                state.isPanelExpanded = false;
-            }
-        }
-    }
-}
-
-function waitForLeaflet() {
-    return new Promise((resolve) => {
-        if (window.L) {
-            resolve();
-        } else {
-            const checkInterval = setInterval(() => {
-                if (window.L) {
-                    clearInterval(checkInterval);
-                    resolve();
-                }
-            }, 100);
-        }
-    });
-}
-
-function isNextStop(stop) {
-    const nextStop = getNextStop();
-    return nextStop && nextStop.id === stop.id;
-}
-
-function updateNavigationInfo() {
-    // Called during navigation to update real-time info
-}
-
-window.toggleRoutePanel = function() {
-    const routePanel = document.getElementById('routePanel');
-    const navControls = document.getElementById('navControls');
-    const toggleBtn = document.querySelector('.nav-button.secondary');
-    
-    if (!routePanel) return;
-    
-    if (routePanel.style.display === 'none' || !state.isPanelVisible) {
-        routePanel.style.display = 'block';
-        routePanel.style.transform = 'translateY(0)';
-        routePanel.style.maxHeight = '60%';
-        state.isPanelVisible = true;
-        state.isPanelExpanded = true;
-        
-        if (navControls) {
-            navControls.style.bottom = 'calc(60% + 20px + var(--safe-area-bottom))';
-        }
-        
-        if (toggleBtn) {
-            toggleBtn.innerHTML = `
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-                </svg>
-                <span>Hide</span>
-            `;
-        }
-    } else {
-        routePanel.style.display = 'none';
-        state.isPanelVisible = false;
-        state.isPanelExpanded = false;
-        
-        if (navControls) {
-            navControls.style.bottom = 'calc(30px + var(--safe-area-bottom))';
-        }
-        
-        if (toggleBtn) {
-            toggleBtn.innerHTML = `
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
-                </svg>
-                <span>Details</span>
-            `;
-        }
-    }
-    
-    if (state.map) {
-        setTimeout(() => {
-            state.map.invalidateSize();
-        }, 300);
-    }
-};
-
-window.toggleFollowMode = function() {
-    state.isFollowingUser = !state.isFollowingUser;
-    const followText = document.getElementById('followModeText');
-    if (followText) {
-        followText.textContent = state.isFollowingUser ? 'Following On' : 'Following Off';
-    }
-    
-    if (state.isFollowingUser && state.currentLocation) {
-        state.map.panTo([state.currentLocation.lat, state.currentLocation.lng], {
-            animate: true,
-            duration: 1
-        });
-    }
-    
-    showNotification(state.isFollowingUser ? 'Following mode enabled' : 'Following mode disabled', 'info');
-};
-
-window.toggleHeadingMode = function() {
-    state.config.headingUp = !state.config.headingUp;
-    showNotification(state.config.headingUp ? 'Heading up mode (rotation requires plugin)' : 'North up mode', 'info');
-};
-
-window.navigateToStop = function(stopId) {
-    const stop = state.activeRoute.stops.find(s => s.id === stopId);
-    if (!stop) return;
-    
-    state.navigationActive = true;
-    showEnhancedNavigation(stop);
-};
-
-window.selectStop = function(stopId) {
-    const stop = state.activeRoute.stops.find(s => s.id === stopId);
-    if (!stop || stop.completed) return;
-    
-    if (state.map) {
-        state.map.setView([stop.location.lat, stop.location.lng], 16);
-        
-        const marker = state.markers.find(m => {
-            const latLng = m.getLatLng();
-            return latLng.lat === stop.location.lat && latLng.lng === stop.location.lng;
-        });
-        
-        if (marker) {
-            marker.openPopup();
-        }
-    }
-};
 // ============================================================================
-// PART 5 OF 6 - MAP, NAVIGATION & ENHANCED LOCATION FUNCTIONS
+// MAP INITIALIZATION & MANAGEMENT
 // ============================================================================
 
 async function initializeMap() {
-    console.log('Initializing map with rotation support...');
+    console.log('Initializing map...');
     
     const mapContainer = document.getElementById('map');
     if (!mapContainer) {
@@ -2779,10 +1285,153 @@ async function initializeMap() {
         state.map.invalidateSize();
     }, 100);
     
-    console.log('Map initialized with rotation enabled');
+    console.log('Map initialized');
 }
 
-// ENHANCED updateCurrentLocation function from paste.txt
+// ============================================================================
+// LOCATION TRACKING FUNCTIONS
+// ============================================================================
+
+function startLocationTracking() {
+    if (!navigator.geolocation) {
+        showNotification('Location services not available', 'warning');
+        return;
+    }
+    
+    console.log('Starting location tracking...');
+    
+    const geoOptions = {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0
+    };
+    
+    // Get initial position
+    navigator.geolocation.getCurrentPosition(
+        position => {
+            console.log('Initial position obtained');
+            updateCurrentLocation(position);
+            state.isTracking = true;
+            
+            // Center map on location
+            if (state.map && state.currentLocation) {
+                state.map.setView([state.currentLocation.lat, state.currentLocation.lng], 17, {
+                    animate: true
+                });
+            }
+            
+            // Check for better route with new location
+            if (config.optimization.autoReoptimize) {
+                checkForBetterRoute();
+            }
+            
+            showNotification('Location tracking started', 'success');
+        },
+        error => {
+            console.error('Location error:', error);
+            let errorMessage = 'Unable to get location';
+            
+            switch(error.code) {
+                case error.PERMISSION_DENIED:
+                    errorMessage = 'Please enable location permissions';
+                    break;
+                case error.POSITION_UNAVAILABLE:
+                    errorMessage = 'Location information unavailable';
+                    break;
+                case error.TIMEOUT:
+                    errorMessage = 'Location request timed out';
+                    break;
+            }
+            
+            showNotification(errorMessage, 'error');
+            
+            // Use fallback location (Nairobi center)
+            state.currentLocation = { lat: -1.2921, lng: 36.8219 };
+            if (state.map) {
+                state.map.setView([state.currentLocation.lat, state.currentLocation.lng], 13);
+            }
+        },
+        geoOptions
+    );
+    
+    // Watch position for continuous updates
+    if (state.locationWatchId) {
+        navigator.geolocation.clearWatch(state.locationWatchId);
+    }
+    
+    state.locationWatchId = navigator.geolocation.watchPosition(
+        position => {
+            updateCurrentLocation(position);
+            
+            // Periodic optimization check
+            if (state.navigationActive && config.optimization.autoReoptimize) {
+                if (!state.lastOptimizationCheck || 
+                    Date.now() - state.lastOptimizationCheck > 300000) { // Every 5 minutes
+                    checkForBetterRoute();
+                    state.lastOptimizationCheck = Date.now();
+                }
+            }
+        },
+        error => {
+            console.error('Location update error:', error);
+            
+            if (Date.now() - (state.lastLocationErrorTime || 0) > 30000) {
+                state.lastLocationErrorTime = Date.now();
+                showNotification('Location update failed - using last known position', 'warning');
+            }
+        },
+        {
+            enableHighAccuracy: true,
+            timeout: 5000,
+            maximumAge: 0
+        }
+    );
+    
+    // Backup interval for location updates
+    if (state.trackingInterval) {
+        clearInterval(state.trackingInterval);
+    }
+    
+    state.trackingInterval = setInterval(() => {
+        if (navigator.geolocation && state.isTracking) {
+            navigator.geolocation.getCurrentPosition(
+                position => updateCurrentLocation(position),
+                error => console.log('Interval location update failed:', error),
+                { enableHighAccuracy: true, timeout: 5000, maximumAge: 5000 }
+            );
+        }
+    }, 10000); // Update every 10 seconds
+}
+
+function stopLocationTracking() {
+    console.log('Stopping location tracking...');
+    
+    if (state.locationWatchId) {
+        navigator.geolocation.clearWatch(state.locationWatchId);
+        state.locationWatchId = null;
+    }
+    
+    if (state.trackingInterval) {
+        clearInterval(state.trackingInterval);
+        state.trackingInterval = null;
+    }
+    
+    state.isTracking = false;
+    
+    // Remove location marker from map
+    if (state.currentLocationMarker) {
+        state.currentLocationMarker.remove();
+        state.currentLocationMarker = null;
+    }
+    
+    if (state.accuracyCircle) {
+        state.accuracyCircle.remove();
+        state.accuracyCircle = null;
+    }
+    
+    showNotification('Location tracking stopped', 'info');
+}
+
 function updateCurrentLocation(position) {
     const newLocation = {
         lat: position.coords.latitude,
@@ -2819,12 +1468,11 @@ function updateCurrentLocation(position) {
                 [state.currentLocation.lat, state.currentLocation.lng],
                 { 
                     icon: riderIcon,
-                    zIndexOffset: 2000, // Make sure it's above other markers
-                    interactive: false // Don't interfere with clicking
+                    zIndexOffset: 2000,
+                    interactive: false
                 }
             ).addTo(state.map);
             
-            // Add popup to location marker
             state.currentLocationMarker.bindPopup(`
                 <div style="text-align: center; padding: 10px;">
                     <strong>Your Location</strong><br>
@@ -2835,7 +1483,6 @@ function updateCurrentLocation(position) {
                 </div>
             `);
         } else {
-            // Update existing marker
             state.currentLocationMarker.setLatLng([state.currentLocation.lat, state.currentLocation.lng]);
             const riderIcon = createRiderIcon(state.currentHeading);
             state.currentLocationMarker.setIcon(riderIcon);
@@ -2902,191 +1549,6 @@ function updateCurrentLocation(position) {
     });
 }
 
-// ENHANCED startLocationTracking function from paste.txt
-function startLocationTracking() {
-    if (!navigator.geolocation) {
-        showNotification('Location services not available', 'warning');
-        return;
-    }
-    
-    console.log('Starting location tracking...');
-    
-    const geoOptions = {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 0
-    };
-    
-    // Get initial position
-    navigator.geolocation.getCurrentPosition(
-        position => {
-            console.log('Initial position obtained');
-            updateCurrentLocation(position);
-            state.isTracking = true;
-            
-            // Center map on location
-            if (state.map && state.currentLocation) {
-                state.map.setView([state.currentLocation.lat, state.currentLocation.lng], 17, {
-                    animate: true
-                });
-            }
-            
-            showNotification('Location tracking started', 'success');
-        },
-        error => {
-            console.error('Location error:', error);
-            let errorMessage = 'Unable to get location';
-            
-            switch(error.code) {
-                case error.PERMISSION_DENIED:
-                    errorMessage = 'Please enable location permissions';
-                    break;
-                case error.POSITION_UNAVAILABLE:
-                    errorMessage = 'Location information unavailable';
-                    break;
-                case error.TIMEOUT:
-                    errorMessage = 'Location request timed out';
-                    break;
-            }
-            
-            showNotification(errorMessage, 'error');
-            
-            // Use fallback location (Nairobi center)
-            state.currentLocation = { lat: -1.2921, lng: 36.8219 };
-            if (state.map) {
-                state.map.setView([state.currentLocation.lat, state.currentLocation.lng], 13);
-            }
-        },
-        geoOptions
-    );
-    
-    // Watch position for continuous updates
-    if (state.locationWatchId) {
-        navigator.geolocation.clearWatch(state.locationWatchId);
-    }
-    
-    state.locationWatchId = navigator.geolocation.watchPosition(
-        position => {
-            updateCurrentLocation(position);
-        },
-        error => {
-            console.error('Location update error:', error);
-            
-            // Don't show notification for every error, just log it
-            if (Date.now() - (state.lastLocationErrorTime || 0) > 30000) {
-                state.lastLocationErrorTime = Date.now();
-                showNotification('Location update failed - using last known position', 'warning');
-            }
-        },
-        {
-            enableHighAccuracy: true,
-            timeout: 5000,
-            maximumAge: 0
-        }
-    );
-    
-    // Also set up a backup interval for location updates
-    if (state.trackingInterval) {
-        clearInterval(state.trackingInterval);
-    }
-    
-    state.trackingInterval = setInterval(() => {
-        if (navigator.geolocation && state.isTracking) {
-            navigator.geolocation.getCurrentPosition(
-                position => updateCurrentLocation(position),
-                error => console.log('Interval location update failed:', error),
-                { enableHighAccuracy: true, timeout: 5000, maximumAge: 5000 }
-            );
-        }
-    }, 10000); // Update every 10 seconds as backup
-}
-
-// ENHANCED stopLocationTracking function from paste.txt
-function stopLocationTracking() {
-    console.log('Stopping location tracking...');
-    
-    if (state.locationWatchId) {
-        navigator.geolocation.clearWatch(state.locationWatchId);
-        state.locationWatchId = null;
-    }
-    
-    if (state.trackingInterval) {
-        clearInterval(state.trackingInterval);
-        state.trackingInterval = null;
-    }
-    
-    state.isTracking = false;
-    
-    // Remove location marker from map
-    if (state.currentLocationMarker) {
-        state.currentLocationMarker.remove();
-        state.currentLocationMarker = null;
-    }
-    
-    if (state.accuracyCircle) {
-        state.accuracyCircle.remove();
-        state.accuracyCircle = null;
-    }
-    
-    showNotification('Location tracking stopped', 'info');
-}
-
-// ENHANCED location control functions from paste.txt
-window.centerOnLocation = function() {
-    if (state.currentLocation && state.map) {
-        state.map.setView([state.currentLocation.lat, state.currentLocation.lng], 17, {
-            animate: true,
-            duration: 1
-        });
-        
-        // Flash the location marker
-        if (state.currentLocationMarker) {
-            const marker = state.currentLocationMarker.getElement();
-            if (marker) {
-                marker.style.animation = 'none';
-                setTimeout(() => {
-                    marker.style.animation = '';
-                }, 100);
-            }
-        }
-        
-        showNotification('Centered on your location', 'info');
-    } else {
-        showNotification('Getting your location...', 'info');
-        startLocationTracking();
-    }
-};
-
-window.toggleLocationTracking = function() {
-    if (state.isTracking) {
-        stopLocationTracking();
-    } else {
-        startLocationTracking();
-    }
-};
-
-function calculateZoomFromSpeed(speed) {
-    if (speed > 60) return 15;
-    if (speed > 40) return 16;
-    if (speed > 20) return 17;
-    if (speed > 5) return 18;
-    return 18;
-}
-
-function calculateBearing(start, end) {
-    const dLng = (end.lng - start.lng) * Math.PI / 180;
-    const lat1 = start.lat * Math.PI / 180;
-    const lat2 = end.lat * Math.PI / 180;
-    
-    const y = Math.sin(dLng) * Math.cos(lat2);
-    const x = Math.cos(lat1) * Math.sin(lat2) - 
-              Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLng);
-    
-    const bearing = Math.atan2(y, x) * 180 / Math.PI;
-    return (bearing + 360) % 360;
-}
-
-// ENHANCED checkStopProximity function from paste.txt
 function checkStopProximity() {
     if (!state.currentLocation || !state.activeRoute) return;
     
@@ -3129,167 +1591,10 @@ function checkStopProximity() {
     }
 }
 
-function calculateBounds(stops) {
-    let north = -90, south = 90, east = -180, west = 180;
-    
-    stops.forEach(stop => {
-        if (stop.location) {
-            north = Math.max(north, stop.location.lat);
-            south = Math.min(south, stop.location.lat);
-            east = Math.max(east, stop.location.lng);
-            west = Math.min(west, stop.location.lng);
-        }
-    });
-    
-    return { north, south, east, west };
-}
+// ============================================================================
+// MAP PLOTTING & ROUTE DISPLAY
+// ============================================================================
 
-// ENHANCED createLeafletIcon function with numbered markers support
-function createLeafletIcon(stop) {
-    const isCompleted = stop.completed;
-    const isActive = isNextStop(stop);
-    const type = stop.type;
-    
-    // Get the order number from the map
-    const orderNumber = state.stopOrderMap[stop.id] || '';
-    
-    // In dynamic mode with optimization, show order number; otherwise show P/D
-    const showOrderNumber = config.optimization.enableDynamicRouting && 
-                           state.activeRoute?.isOptimized && 
-                           orderNumber && 
-                           state.showNumberedMarkers !== false;
-    
-    const bgColor = isCompleted ? '#2C2C2E' : type === 'pickup' ? '#FF9F0A' : '#007AFF';
-    const borderColor = isCompleted ? '#48484A' : '#FFFFFF';
-    const symbol = isCompleted ? '✓' : showOrderNumber ? orderNumber : (type === 'pickup' ? 'P' : 'D');
-    
-    // Different sizes for number vs letter
-    const fontSize = showOrderNumber ? '17px' : '20px';
-    const markerSize = showOrderNumber ? '46px' : '44px';
-    
-    return L.divIcon({
-        className: 'custom-marker',
-        html: `
-            <div class="stop-marker-wrapper ${isCompleted ? 'completed' : ''} ${isActive ? 'active' : ''}">
-                <div class="stop-marker ${type}" style="
-                    background: ${bgColor};
-                    width: ${markerSize};
-                    height: ${markerSize};
-                    border-radius: 50%;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    box-shadow: 0 6px 16px rgba(0,0,0,0.6);
-                    border: 3px solid ${borderColor};
-                    position: relative;
-                    transition: all 0.3s ease;
-                ">
-                    <span style="
-                        color: ${isCompleted ? '#8E8E93' : 'white'};
-                        font-weight: 800;
-                        font-size: ${fontSize};
-                        text-shadow: 0 1px 2px rgba(0,0,0,0.3);
-                    ">${symbol}</span>
-                    ${isActive ? '<div class="marker-pulse"></div>' : ''}
-                </div>
-                ${showOrderNumber && !isCompleted ? `
-                    <div class="route-number-overlay">${orderNumber}</div>
-                ` : ''}
-                <div class="marker-label">${type === 'pickup' ? 'Pickup' : 'Delivery'}</div>
-            </div>
-        `,
-        iconSize: [parseInt(markerSize) + 20, 80],
-        iconAnchor: [(parseInt(markerSize) + 20) / 2, 60],
-        popupAnchor: [0, -60]
-    });
-}
-
-// ENHANCED createStopPopup function with order numbers
-function createStopPopup(stop) {
-    const type = stop.type;
-    const paymentInfo = getPaymentInfoForStop(stop);
-    const orderNumber = state.stopOrderMap[stop.id] || '';
-    const showOrderNumber = config.optimization.enableDynamicRouting && 
-                           state.activeRoute?.isOptimized && 
-                           orderNumber;
-    
-    // Different fields for pickup vs delivery
-    let customerName, customerPhone;
-    if (type === 'pickup') {
-        customerName = stop.vendor_name || stop.vendorName || stop.sender_name || stop.customerName || 'Vendor';
-        customerPhone = stop.vendor_phone || stop.vendorPhone || stop.sender_phone || stop.customerPhone || '';
-    } else {
-        customerName = stop.recipient_name || stop.recipientName || stop.customer_name || stop.customerName || 'Recipient';
-        customerPhone = stop.recipient_phone || stop.recipientPhone || stop.customer_phone || stop.customerPhone || '';
-    }
-    
-    const address = stop.address || stop.location_address || 'Address not available';
-    const parcelCode = stop.parcelCode || stop.parcel_code || stop.code || 'N/A';
-    const instructions = stop.specialInstructions || stop.special_instructions || stop.instructions || '';
-    
-    return `
-        <div class="stop-popup">
-            <div class="popup-header ${type}">
-                ${showOrderNumber ? `<div class="popup-order-badge">${orderNumber}</div>` : ''}
-                <span class="popup-phase">${showOrderNumber ? '' : ''} ${type.toUpperCase()}</span>
-                <span class="popup-code">${parcelCode}</span>
-            </div>
-            <div class="popup-body">
-                <h3>${address}</h3>
-                <div class="popup-info">
-                    <div class="info-row">
-                        <span class="info-icon">👤</span>
-                        <span>${customerName}</span>
-                    </div>
-                    ${customerPhone ? `
-                        <div class="info-row">
-                            <span class="info-icon">📞</span>
-                            <a href="tel:${customerPhone}">${customerPhone}</a>
-                        </div>
-                    ` : ''}
-                    ${instructions ? `
-                        <div class="info-row instructions">
-                            <span class="info-icon">💬</span>
-                            <span>${instructions}</span>
-                        </div>
-                    ` : ''}
-                    ${paymentInfo.needsCollection ? `
-                        <div class="info-row payment">
-                            <span class="info-icon">💰</span>
-                            <span style="font-weight: 700; color: #FF9F0A;">
-                                Collect: KES ${paymentInfo.amount.toLocaleString()}
-                            </span>
-                        </div>
-                    ` : paymentInfo.method === 'online' ? `
-                        <div class="info-row payment" style="background: rgba(52, 199, 89, 0.1); border-color: rgba(52, 199, 89, 0.3);">
-                            <span class="info-icon">✅</span>
-                            <span style="color: #34C759; font-weight: 600;">Already Paid Online</span>
-                        </div>
-                    ` : ''}
-                </div>
-                ${!stop.completed && canCompleteStop(stop) ? `
-                    <div class="popup-actions">
-                        <button onclick="openVerificationModal('${stop.id}')">
-                            <span>✓</span>
-                            <span>Verify ${stop.type}</span>
-                        </button>
-                        <button onclick="navigateToStop('${stop.id}')">
-                            <span>🧭</span>
-                            <span>Navigate</span>
-                        </button>
-                    </div>
-                ` : stop.completed ? `
-                    <div class="popup-completed-status">
-                        <span>✓</span>
-                        <span>Completed ${formatTimeAgo(stop.timestamp)}</span>
-                    </div>
-                ` : ''}
-            </div>
-        </div>
-    `;
-}
-
-// ENHANCED plotRoute function with stop order mapping
 async function plotRoute() {
     if (!state.map || !state.activeRoute || !state.activeRoute.stops) return;
     
@@ -3311,7 +1616,7 @@ async function plotRoute() {
     
     const bounds = L.latLngBounds();
     
-    // Add markers for each stop with enhanced icons and popups
+    // Add markers for each stop
     state.activeRoute.stops.forEach((stop, index) => {
         const marker = L.marker([stop.location.lat, stop.location.lng], {
             icon: createLeafletIcon(stop),
@@ -3323,11 +1628,10 @@ async function plotRoute() {
             className: 'enhanced-popup',
             autoPan: true,
             autoPanPadding: [20, 20],
-            autoClose: true,  // Auto close when another opens
-            closeOnClick: true  // Close when clicking elsewhere
+            autoClose: true,
+            closeOnClick: true
         });
         
-        // Remove auto-open on hover - only open on click
         marker.on('click', function() {
             this.openPopup();
         });
@@ -3478,7 +1782,314 @@ function decodePolyline(encoded) {
     return poly;
 }
 
-// Navigation control functions
+// ============================================================================
+// MARKER & POPUP CREATION
+// ============================================================================
+
+function createRiderIcon(heading = 0) {
+    return L.divIcon({
+        className: 'rider-location-marker',
+        html: `
+            <div class="rider-marker-wrapper">
+                <div class="rider-pulse"></div>
+                <div class="rider-marker-container" style="transform: rotate(${heading}deg)">
+                    <div class="rider-direction-cone"></div>
+                    <div class="rider-dot">
+                        <div class="rider-inner-dot"></div>
+                    </div>
+                </div>
+            </div>
+        `,
+        iconSize: [60, 60],
+        iconAnchor: [30, 30]
+    });
+}
+
+function createLeafletIcon(stop) {
+    const isCompleted = stop.completed;
+    const isActive = isNextStop(stop);
+    const type = stop.type;
+    
+    // Get the order number from the map
+    const orderNumber = state.stopOrderMap[stop.id] || '';
+    
+    // Show order number if route is optimized and numbered markers are enabled
+    const showOrderNumber = state.activeRoute?.isOptimized && 
+                           orderNumber && 
+                           state.showNumberedMarkers !== false;
+    
+    const bgColor = isCompleted ? '#2C2C2E' : type === 'pickup' ? '#FF9F0A' : '#007AFF';
+    const borderColor = isCompleted ? '#48484A' : '#FFFFFF';
+    const symbol = isCompleted ? '✓' : showOrderNumber ? orderNumber : (type === 'pickup' ? 'P' : 'D');
+    
+    // Different sizes for number vs letter
+    const fontSize = showOrderNumber ? '17px' : '20px';
+    const markerSize = showOrderNumber ? '46px' : '44px';
+    
+    return L.divIcon({
+        className: 'custom-marker',
+        html: `
+            <div class="stop-marker-wrapper ${isCompleted ? 'completed' : ''} ${isActive ? 'active' : ''}">
+                <div class="stop-marker ${type}" style="
+                    background: ${bgColor};
+                    width: ${markerSize};
+                    height: ${markerSize};
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    box-shadow: 0 6px 16px rgba(0,0,0,0.6);
+                    border: 3px solid ${borderColor};
+                    position: relative;
+                    transition: all 0.3s ease;
+                ">
+                    <span style="
+                        color: ${isCompleted ? '#8E8E93' : 'white'};
+                        font-weight: 800;
+                        font-size: ${fontSize};
+                        text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+                    ">${symbol}</span>
+                    ${isActive ? '<div class="marker-pulse"></div>' : ''}
+                </div>
+                <div class="marker-label" style="
+                    position: absolute;
+                    bottom: -24px;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    background: rgba(28, 28, 31, 0.95);
+                    color: white;
+                    padding: 3px 10px;
+                    border-radius: 10px;
+                    font-size: 11px;
+                    font-weight: 600;
+                    white-space: nowrap;
+                    pointer-events: none;
+                    backdrop-filter: blur(10px);
+                    border: 1px solid rgba(255, 255, 255, 0.1);
+                ">${type === 'pickup' ? 'Pickup' : 'Delivery'}</div>
+            </div>
+        `,
+        iconSize: [parseInt(markerSize) + 20, 80],
+        iconAnchor: [(parseInt(markerSize) + 20) / 2, 60],
+        popupAnchor: [0, -60]
+    });
+}
+
+function createStopPopup(stop) {
+    const type = stop.type;
+    const paymentInfo = getPaymentInfoForStop(stop);
+    const orderNumber = state.stopOrderMap[stop.id] || '';
+    const showOrderNumber = state.activeRoute?.isOptimized && orderNumber;
+    
+    // Different fields for pickup vs delivery
+    let customerName, customerPhone;
+    if (type === 'pickup') {
+        customerName = stop.vendor_name || stop.vendorName || stop.sender_name || stop.customerName || 'Vendor';
+        customerPhone = stop.vendor_phone || stop.vendorPhone || stop.sender_phone || stop.customerPhone || '';
+    } else {
+        customerName = stop.recipient_name || stop.recipientName || stop.customer_name || stop.customerName || 'Recipient';
+        customerPhone = stop.recipient_phone || stop.recipientPhone || stop.customer_phone || stop.customerPhone || '';
+    }
+    
+    const address = stop.address || stop.location_address || 'Address not available';
+    const parcelCode = stop.parcelCode || stop.parcel_code || stop.code || 'N/A';
+    const instructions = stop.specialInstructions || stop.special_instructions || stop.instructions || '';
+    
+    return `
+        <div class="stop-popup">
+            <div class="popup-header ${type}" style="
+                padding: 18px 22px;
+                margin: 0;
+                font-weight: 700;
+                font-size: 14px;
+                letter-spacing: 1px;
+                text-transform: uppercase;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                background: ${type === 'pickup' ? 'linear-gradient(135deg, #FF9F0A 0%, #FF6000 100%)' : 'linear-gradient(135deg, #007AFF 0%, #0051D5 100%)'};
+                color: ${type === 'pickup' ? '#000000' : 'white'};
+            ">
+                ${showOrderNumber ? `
+                    <div style="
+                        position: absolute;
+                        left: 20px;
+                        top: 50%;
+                        transform: translateY(-50%);
+                        width: 36px;
+                        height: 36px;
+                        background: rgba(0, 0, 0, 0.25);
+                        border-radius: 50%;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        font-size: 18px;
+                        font-weight: 800;
+                        border: 2px solid rgba(255, 255, 255, 0.3);
+                    ">${orderNumber}</div>
+                    <span style="margin-left: 50px;">${type.toUpperCase()}</span>
+                ` : `<span>${type.toUpperCase()}</span>`}
+                <span style="
+                    background: rgba(0, 0, 0, 0.2);
+                    padding: 5px 12px;
+                    border-radius: 20px;
+                    font-size: 12px;
+                    font-weight: 700;
+                    letter-spacing: 0.5px;
+                ">${parcelCode}</span>
+            </div>
+            <div class="popup-body" style="padding: 22px; background: transparent;">
+                <h3 style="margin: 0 0 18px 0; font-size: 18px; font-weight: 600; color: white;">${address}</h3>
+                <div class="popup-info" style="display: flex; flex-direction: column; gap: 14px;">
+                    <div class="info-row" style="display: flex; align-items: flex-start; gap: 12px; padding: 10px; background: rgba(255, 255, 255, 0.03); border-radius: 10px;">
+                        <span class="info-icon" style="width: 24px; font-size: 18px;">👤</span>
+                        <span style="color: rgba(255, 255, 255, 0.9);">${customerName}</span>
+                    </div>
+                    ${customerPhone ? `
+                        <div class="info-row" style="display: flex; align-items: flex-start; gap: 12px; padding: 10px; background: rgba(255, 255, 255, 0.03); border-radius: 10px;">
+                            <span class="info-icon" style="width: 24px; font-size: 18px;">📞</span>
+                            <a href="tel:${customerPhone}" style="color: #007AFF; text-decoration: none; font-weight: 600;">${customerPhone}</a>
+                        </div>
+                    ` : ''}
+                    ${instructions ? `
+                        <div class="info-row instructions" style="display: flex; align-items: flex-start; gap: 12px; padding: 10px; background: rgba(147, 51, 234, 0.1); border: 1px solid rgba(147, 51, 234, 0.2); border-radius: 10px;">
+                            <span class="info-icon" style="width: 24px; font-size: 18px;">💬</span>
+                            <span style="color: rgba(255, 255, 255, 0.9);">${instructions}</span>
+                        </div>
+                    ` : ''}
+                    ${paymentInfo.needsCollection ? `
+                        <div class="info-row payment" style="display: flex; align-items: flex-start; gap: 12px; padding: 14px; background: linear-gradient(135deg, rgba(255, 159, 10, 0.15), rgba(255, 107, 0, 0.1)); border: 1px solid rgba(255, 159, 10, 0.3); border-radius: 10px; margin-top: 12px;">
+                            <span class="info-icon" style="width: 24px; font-size: 18px;">💰</span>
+                            <span style="font-weight: 700; color: #FF9F0A;">
+                                Collect: KES ${paymentInfo.amount.toLocaleString()}
+                            </span>
+                        </div>
+                    ` : paymentInfo.method === 'online' ? `
+                        <div class="info-row payment" style="display: flex; align-items: flex-start; gap: 12px; padding: 14px; background: rgba(52, 199, 89, 0.1); border: 1px solid rgba(52, 199, 89, 0.3); border-radius: 10px;">
+                            <span class="info-icon" style="width: 24px; font-size: 18px;">✅</span>
+                            <span style="color: #34C759; font-weight: 600;">Already Paid Online</span>
+                        </div>
+                    ` : ''}
+                </div>
+                ${!stop.completed && canCompleteStop(stop) ? `
+                    <div class="popup-actions" style="display: flex; gap: 10px; margin-top: 22px; padding-top: 22px; border-top: 1px solid rgba(255, 255, 255, 0.08);">
+                        <button onclick="openVerificationModal('${stop.id}')" style="
+                            flex: 1;
+                            padding: 14px 18px;
+                            border: none;
+                            border-radius: 14px;
+                            font-size: 14px;
+                            font-weight: 600;
+                            cursor: pointer;
+                            background: linear-gradient(135deg, #34C759, #30D158);
+                            color: white;
+                            box-shadow: 0 4px 12px rgba(52, 199, 89, 0.3);
+                        ">
+                            <span>✓ Verify ${stop.type}</span>
+                        </button>
+                        <button onclick="navigateToStop('${stop.id}')" style="
+                            padding: 14px 18px;
+                            border: none;
+                            border-radius: 14px;
+                            font-size: 14px;
+                            font-weight: 600;
+                            cursor: pointer;
+                            background: rgba(255, 255, 255, 0.08);
+                            color: white;
+                            border: 1px solid rgba(255, 255, 255, 0.15);
+                        ">
+                            <span>🧭 Navigate</span>
+                        </button>
+                    </div>
+                ` : stop.completed ? `
+                    <div style="margin-top: 18px; padding: 14px; background: linear-gradient(135deg, rgba(52, 199, 89, 0.15), rgba(48, 209, 88, 0.1)); border: 1px solid rgba(52, 199, 89, 0.3); border-radius: 14px; text-align: center; color: #34C759; font-weight: 600; font-size: 14px;">
+                        <span>✓ Completed ${formatTimeAgo(stop.timestamp)}</span>
+                    </div>
+                ` : ''}
+            </div>
+        </div>
+    `;
+}
+
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
+
+function calculateBounds(stops) {
+    let north = -90, south = 90, east = -180, west = 180;
+    
+    stops.forEach(stop => {
+        if (stop.location) {
+            north = Math.max(north, stop.location.lat);
+            south = Math.min(south, stop.location.lat);
+            east = Math.max(east, stop.location.lng);
+            west = Math.min(west, stop.location.lng);
+        }
+    });
+    
+    return { north, south, east, west };
+}
+
+function calculateZoomFromSpeed(speed) {
+    if (speed > 60) return 15;
+    if (speed > 40) return 16;
+    if (speed > 20) return 17;
+    if (speed > 5) return 18;
+    return 18;
+}
+
+function waitForLeaflet() {
+    return new Promise((resolve) => {
+        if (window.L) {
+            resolve();
+        } else {
+            const checkInterval = setInterval(() => {
+                if (window.L) {
+                    clearInterval(checkInterval);
+                    resolve();
+                }
+            }, 100);
+        }
+    });
+}
+
+// ============================================================================
+// NAVIGATION CONTROL FUNCTIONS
+// ============================================================================
+
+window.centerOnLocation = function() {
+    if (state.currentLocation && state.map) {
+        state.map.setView([state.currentLocation.lat, state.currentLocation.lng], 17, {
+            animate: true,
+            duration: 1
+        });
+        
+        // Flash the location marker
+        if (state.currentLocationMarker) {
+            const marker = state.currentLocationMarker.getElement();
+            if (marker) {
+                marker.style.animation = 'none';
+                setTimeout(() => {
+                    marker.style.animation = '';
+                }, 100);
+            }
+        }
+        
+        showNotification('Centered on your location', 'info');
+    } else {
+        showNotification('Getting your location...', 'info');
+        startLocationTracking();
+    }
+};
+
+window.toggleLocationTracking = function() {
+    if (state.isTracking) {
+        stopLocationTracking();
+    } else {
+        startLocationTracking();
+    }
+};
+
 window.startNavigation = function() {
     const nextStop = getNextStop();
     if (!nextStop) {
@@ -3498,8 +2109,8 @@ window.startNavigation = function() {
 
 function proceedWithNavigation(nextStop) {
     startContinuousTracking();
-    showEnhancedNavigation(nextStop);
     state.navigationActive = true;
+    showNotification(`Navigating to ${nextStop.type} at ${nextStop.address}`, 'info');
 }
 
 function startContinuousTracking() {
@@ -3520,153 +2131,137 @@ function startContinuousTracking() {
         }
     }, 5000);
 }
+
+window.navigateToStop = function(stopId) {
+    const stop = state.activeRoute.stops.find(s => s.id === stopId);
+    if (!stop) return;
+    
+    state.navigationActive = true;
+    showNotification(`Navigating to ${stop.type} location`, 'info');
+    
+    // Center map on stop
+    if (state.map) {
+        state.map.setView([stop.location.lat, stop.location.lng], 16);
+    }
+};
+/**
+ * Enhanced Route Navigation Module - Part 4/4
+ * Display, Verification, and Completion Functions
+ * Version: 4.0.0
+ */
+
 // ============================================================================
-// PART 6 OF 6 (FINAL) - NAVIGATION UI, VERIFICATION & COMPLETION WITH ENHANCEMENTS
+// ROUTE DISPLAY FUNCTIONS
 // ============================================================================
 
-// Display functions continued from Part 4
+function displayRouteInfo() {
+    if (!state.activeRoute) return;
+    
+    const routeType = document.getElementById('routeType');
+    if (routeType) {
+        const nextStop = getNextStop();
+        if (nextStop) {
+            routeType.className = `route-badge verify-btn ${nextStop.type}`;
+            routeType.innerHTML = `
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                </svg>
+                <span>Verify ${nextStop.type === 'pickup' ? 'Pickup' : 'Delivery'}</span>
+            `;
+            routeType.onclick = () => openQuickVerification();
+        } else {
+            routeType.className = 'route-badge completed';
+            routeType.innerHTML = 'Route Complete';
+            routeType.onclick = null;
+        }
+    }
+    
+    updateRouteStats();
+    displayStops();
+}
+
 function displayStops() {
     const stopsList = document.getElementById('stopsList');
     if (!stopsList || !state.activeRoute) return;
-    
-    // In dynamic mode, show all stops in optimized order
-    // In phased mode, separate pickups and deliveries
-    if (config.optimization.enableDynamicRouting) {
-        displayDynamicStops();
-    } else {
-        displayPhasedStops();
-    }
-}
-
-function displayDynamicStops() {
-    const stopsList = document.getElementById('stopsList');
-    if (!stopsList) return;
     
     updateParcelsInPossession();
     
     let html = '';
     
-    // Add route efficiency badge
-    const efficiency = analyzeRouteEfficiency(state.activeRoute.stops);
-    const efficiencyClass = efficiency.efficiencyScore > 80 ? 'efficiency-high' : 
-                           efficiency.efficiencyScore > 60 ? 'efficiency-medium' : 'efficiency-low';
-    
-    html += `
-        <div class="route-header" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
-            <h3 style="margin: 0;">Optimized Route</h3>
-            <span class="route-efficiency-badge ${efficiencyClass}">
-                ⚡ ${Math.round(efficiency.efficiencyScore)}% Efficient
-            </span>
-        </div>
-    `;
+    // Add route efficiency badge if optimized
+    if (state.activeRoute.isOptimized) {
+        html += `
+            <div class="route-header" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+                <h3 style="margin: 0; color: white;">Optimized Route</h3>
+                ${state.optimizationStats.savedDistance > 0 ? `
+                    <span style="
+                        background: linear-gradient(135deg, #9333EA, #7928CA);
+                        color: white;
+                        padding: 6px 12px;
+                        border-radius: 20px;
+                        font-size: 12px;
+                        font-weight: 600;
+                    ">
+                        Saved ${state.optimizationStats.savedDistance.toFixed(1)}km
+                    </span>
+                ` : ''}
+            </div>
+        `;
+    }
     
     if (state.parcelsInPossession.length > 0) {
         html += createParcelsInPossessionWidget();
     }
     
-    // Display all stops in optimized order with route numbers
-    html += `<div class="optimized-stops">`;
+    // Display all stops in current order
+    html += `<div class="stops-container">`;
     state.activeRoute.stops.forEach((stop, index) => {
-        // Use the order number from stopOrderMap instead of index
         const orderNumber = state.stopOrderMap[stop.id] || (index + 1);
-        html += createStopCard(stop, orderNumber, stop.type, false);
+        html += createStopCard(stop, orderNumber, stop.type);
     });
     html += `</div>`;
     
     stopsList.innerHTML = html;
 }
 
-function displayPhasedStops() {
-    const stopsList = document.getElementById('stopsList');
-    if (!stopsList) return;
-    
-    const pickupStops = state.activeRoute.stops.filter(s => s.type === 'pickup');
-    const deliveryStops = state.activeRoute.stops.filter(s => s.type === 'delivery');
-    
-    updateParcelsInPossession();
-    
-    let html = '';
-    
-    html += createPhaseProgressWidget(pickupStops, deliveryStops);
-    
-    if (state.parcelsInPossession.length > 0) {
-        html += createParcelsInPossessionWidget();
-    }
-    
-    html += `
-        <div class="phase-section ${allCompleted(pickupStops) ? 'completed' : ''}">
-            <h3>
-                <span>📦 Pickup Phase</span>
-                <span class="phase-count">${pickupStops.filter(s => s.completed).length}/${pickupStops.length}</span>
-            </h3>
-            <div class="phase-stops">
-                ${pickupStops.map((stop, index) => createStopCard(stop, index + 1, 'pickup')).join('')}
-            </div>
-        </div>
-    `;
-    
-    const deliveryLocked = !allCompleted(pickupStops);
-    html += `
-        <div class="phase-section ${deliveryLocked ? 'locked' : ''} ${allCompleted(deliveryStops) ? 'completed' : ''}">
-            <h3>
-                <span>📍 Delivery Phase</span>
-                <span class="phase-count">${deliveryStops.filter(s => s.completed).length}/${deliveryStops.length}</span>
-            </h3>
-            <div class="phase-stops">
-                ${deliveryStops.map((stop, index) => createStopCard(stop, index + 1, 'delivery', deliveryLocked)).join('')}
-            </div>
-        </div>
-    `;
-    
-    stopsList.innerHTML = html;
-}
-
-function createPhaseProgressWidget(pickupStops, deliveryStops) {
-    const pickupsComplete = pickupStops.filter(s => s.completed).length;
-    const deliveriesComplete = deliveryStops.filter(s => s.completed).length;
-    
-    return `
-        <div class="route-phases">
-            <div class="phase ${pickupsComplete === pickupStops.length ? 'completed' : pickupsComplete > 0 ? 'active' : ''}">
-                <div class="phase-icon">📦</div>
-                <div class="phase-info">
-                    <div class="phase-title">Pickups</div>
-                    <div class="phase-progress">${pickupsComplete}/${pickupStops.length}</div>
-                </div>
-            </div>
-            
-            <div class="phase-arrow">→</div>
-            
-            <div class="phase ${deliveriesComplete === deliveryStops.length ? 'completed' : deliveriesComplete > 0 ? 'active' : ''}">
-                <div class="phase-icon">📍</div>
-                <div class="phase-info">
-                    <div class="phase-title">Deliveries</div>
-                    <div class="phase-progress">${deliveriesComplete}/${deliveryStops.length}</div>
-                </div>
-            </div>
-        </div>
-    `;
-}
-
 function createParcelsInPossessionWidget() {
     return `
-        <div class="parcels-possession-widget" style="background: linear-gradient(135deg, rgba(255, 159, 10, 0.15), rgba(255, 107, 0, 0.1)); border: 1px solid rgba(255, 159, 10, 0.3); border-radius: 16px; padding: 18px; margin-bottom: 20px;">
+        <div class="parcels-possession-widget" style="
+            background: linear-gradient(135deg, rgba(255, 159, 10, 0.15), rgba(255, 107, 0, 0.1));
+            border: 1px solid rgba(255, 159, 10, 0.3);
+            border-radius: 16px;
+            padding: 18px;
+            margin-bottom: 20px;
+        ">
             <div class="carrying-banner" style="display: flex; align-items: center; gap: 8px; margin-bottom: 14px;">
                 <span class="carrying-icon">📦</span>
-                <span style="font-weight: 700; color: white; font-size: 15px;">Carrying ${state.parcelsInPossession.length} parcel${state.parcelsInPossession.length > 1 ? 's' : ''}</span>
+                <span style="font-weight: 700; color: white; font-size: 15px;">
+                    Carrying ${state.parcelsInPossession.length} parcel${state.parcelsInPossession.length > 1 ? 's' : ''}
+                </span>
             </div>
             <div class="parcel-cards" style="display: flex; flex-direction: column; gap: 10px;">
                 ${state.parcelsInPossession.map(parcel => {
                     const deliveryStop = state.activeRoute.stops.find(s => 
-                        s.type === 'delivery' && s.parcelId === parcel.parcelId
+                        s.type === 'delivery' && (s.parcelId === parcel.parcelId || s.parcelCode === parcel.parcelCode)
                     );
                     const paymentInfo = deliveryStop ? getPaymentInfoForStop(deliveryStop) : null;
                     
                     return `
-                        <div class="parcel-card" style="background: rgba(255, 255, 255, 0.05); border-radius: 12px; padding: 14px; border-left: 3px solid #FF9F0A;">
-                            <div class="parcel-code" style="font-weight: 700; margin-bottom: 4px; color: white; font-size: 15px;">${parcel.parcelCode}</div>
-                            <div class="parcel-destination" style="font-size: 14px; color: rgba(255, 255, 255, 0.6); margin-bottom: 4px;">${parcel.destination}</div>
-                            <div class="parcel-time" style="font-size: 12px; color: rgba(255, 255, 255, 0.4);">Picked up ${formatTimeAgo(parcel.pickupTime)}</div>
+                        <div class="parcel-card" style="
+                            background: rgba(255, 255, 255, 0.05);
+                            border-radius: 12px;
+                            padding: 14px;
+                            border-left: 3px solid #FF9F0A;
+                        ">
+                            <div style="font-weight: 700; margin-bottom: 4px; color: white; font-size: 15px;">
+                                ${parcel.parcelCode}
+                            </div>
+                            <div style="font-size: 14px; color: rgba(255, 255, 255, 0.6); margin-bottom: 4px;">
+                                ${parcel.destination}
+                            </div>
+                            <div style="font-size: 12px; color: rgba(255, 255, 255, 0.4);">
+                                Picked up ${formatTimeAgo(parcel.pickupTime)}
+                            </div>
                             ${paymentInfo && paymentInfo.needsCollection ? `
                                 <div style="margin-top: 8px; font-size: 14px; font-weight: 700; color: #FF9F0A;">
                                     💰 Collect: KES ${paymentInfo.amount.toLocaleString()}
@@ -3688,7 +2283,8 @@ function updateParcelsInPossession() {
     state.activeRoute.stops.forEach(stop => {
         if (stop.type === 'pickup' && stop.completed) {
             const deliveryStop = state.activeRoute.stops.find(s => 
-                s.type === 'delivery' && s.parcelId === stop.parcelId
+                s.type === 'delivery' && 
+                (s.parcelId === stop.parcelId || s.parcelCode === stop.parcelCode)
             );
             
             if (deliveryStop && !deliveryStop.completed) {
@@ -3703,9 +2299,9 @@ function updateParcelsInPossession() {
     });
 }
 
-function createStopCard(stop, number, type, isLocked = false) {
+function createStopCard(stop, number, type) {
     const isActive = isNextStop(stop);
-    const canInteract = !stop.completed && !isLocked && (type === 'pickup' || canCompleteDelivery(stop));
+    const canInteract = !stop.completed && canCompleteStop(stop);
     const paymentInfo = getPaymentInfoForStop(stop);
     
     // Different fields for pickup vs delivery
@@ -3723,107 +2319,126 @@ function createStopCard(stop, number, type, isLocked = false) {
     const instructions = stop.specialInstructions || stop.special_instructions || stop.instructions || '';
     
     return `
-        <div class="stop-card ${stop.completed ? 'completed' : ''} ${isActive ? 'active' : ''} ${isLocked ? 'blocked' : ''}" 
+        <div class="stop-card ${stop.completed ? 'completed' : ''} ${isActive ? 'active' : ''}" 
              onclick="${canInteract ? `selectStop('${stop.id}')` : ''}"
-             data-stop-id="${stop.id}">
-            <div class="stop-number-badge ${type}">
-                ${stop.completed ? '✓' : number}
-            </div>
-            <div class="stop-content">
-                <div class="stop-header">
-                    <h3 class="stop-address">${address}</h3>
-                    ${stop.distance ? `<span class="stop-distance">${stop.distance} km</span>` : ''}
+             data-stop-id="${stop.id}"
+             style="
+                 background: ${stop.completed ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.05)'};
+                 border: 1px solid ${stop.completed ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.1)'};
+                 border-radius: 16px;
+                 padding: 16px;
+                 margin-bottom: 12px;
+                 cursor: ${canInteract ? 'pointer' : 'default'};
+                 transition: all 0.3s ease;
+                 ${isActive ? 'border-color: #9333EA; box-shadow: 0 0 20px rgba(147, 51, 234, 0.3);' : ''}
+             ">
+            <div style="display: flex; gap: 16px;">
+                <div class="stop-number-badge" style="
+                    width: 44px;
+                    height: 44px;
+                    background: ${stop.completed ? '#2C2C2E' : type === 'pickup' ? '#FF9F0A' : '#007AFF'};
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-weight: 800;
+                    font-size: 18px;
+                    color: ${stop.completed ? '#8E8E93' : 'white'};
+                    flex-shrink: 0;
+                ">
+                    ${stop.completed ? '✓' : number}
                 </div>
-                <div class="stop-details">
-                    <div class="detail-row">
-                        <span class="detail-icon">👤</span>
-                        <span>${customerName}${customerPhone ? ` • ${customerPhone}` : ''}</span>
+                <div style="flex: 1;">
+                    <h3 style="margin: 0 0 8px 0; font-size: 16px; color: white; font-weight: 600;">
+                        ${address}
+                    </h3>
+                    <div style="display: flex; flex-direction: column; gap: 6px; font-size: 14px;">
+                        <div style="color: rgba(255,255,255,0.7);">
+                            <span>👤 ${customerName}</span>
+                            ${customerPhone ? ` • ${customerPhone}` : ''}
+                        </div>
+                        <div style="color: rgba(255,255,255,0.6);">
+                            📋 Code: ${parcelCode}
+                        </div>
+                        ${instructions ? `
+                            <div style="color: rgba(255,255,255,0.6); font-style: italic;">
+                                💬 ${instructions}
+                            </div>
+                        ` : ''}
                     </div>
-                    <div class="detail-row">
-                        <span class="detail-icon">📋</span>
-                        <span>Code: ${parcelCode}</span>
-                    </div>
-                    ${instructions ? `
-                        <div class="detail-row instructions">
-                            <span class="detail-icon">💬</span>
-                            <span>${instructions}</span>
+                    
+                    ${type === 'delivery' && paymentInfo.needsCollection ? `
+                        <div style="
+                            margin-top: 10px;
+                            padding: 8px 12px;
+                            background: ${stop.completed ? 'rgba(52, 199, 89, 0.1)' : 'rgba(255, 159, 10, 0.15)'};
+                            border: 1px solid ${stop.completed ? 'rgba(52, 199, 89, 0.3)' : 'rgba(255, 159, 10, 0.3)'};
+                            border-radius: 8px;
+                            font-weight: 600;
+                            color: ${stop.completed ? '#34C759' : '#FF9F0A'};
+                        ">
+                            💵 ${stop.completed ? 'Collected' : 'COLLECT'}: KES ${paymentInfo.amount.toLocaleString()}
+                        </div>
+                    ` : type === 'delivery' && paymentInfo.method === 'online' ? `
+                        <div style="
+                            margin-top: 10px;
+                            padding: 8px 12px;
+                            background: rgba(52, 199, 89, 0.1);
+                            border: 1px solid rgba(52, 199, 89, 0.3);
+                            border-radius: 8px;
+                            color: #34C759;
+                            font-weight: 600;
+                        ">
+                            ✅ Already Paid Online
+                        </div>
+                    ` : ''}
+                    
+                    ${stop.completed ? `
+                        <div style="margin-top: 10px; color: #34C759; font-size: 13px; font-weight: 600;">
+                            ✓ Completed ${formatTimeAgo(stop.timestamp)}
+                        </div>
+                    ` : isActive ? `
+                        <div style="margin-top: 10px; color: #9333EA; font-size: 13px; font-weight: 600;">
+                            → Current Stop
                         </div>
                     ` : ''}
                 </div>
-                
-                ${type === 'delivery' && paymentInfo.needsCollection ? `
-                    <div class="payment-badge ${stop.completed ? 'collected' : ''}">
-                        <span>💵</span>
-                        <span>${stop.completed ? 'Collected' : 'COLLECT'}: KES ${paymentInfo.amount.toLocaleString()}</span>
+                ${!stop.completed && canInteract ? `
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                        <button onclick="event.stopPropagation(); navigateToStop('${stop.id}')" style="
+                            background: rgba(255,255,255,0.1);
+                            border: none;
+                            border-radius: 10px;
+                            width: 40px;
+                            height: 40px;
+                            cursor: pointer;
+                            font-size: 20px;
+                        ">🧭</button>
+                        ${customerPhone ? `
+                            <a href="tel:${customerPhone}" onclick="event.stopPropagation();" style="
+                                background: rgba(255,255,255,0.1);
+                                border: none;
+                                border-radius: 10px;
+                                width: 40px;
+                                height: 40px;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                text-decoration: none;
+                                font-size: 20px;
+                            ">📞</a>
+                        ` : ''}
                     </div>
-                ` : type === 'delivery' && paymentInfo.method === 'online' ? `
-                    <div class="payment-badge prepaid">
-                        <span>✅</span>
-                        <span>Already Paid</span>
-                    </div>
-                ` : ''}
-                
-                ${stop.completed ? `
-                    <div class="stop-status completed">
-                        ✓ Completed ${formatTimeAgo(stop.timestamp)}
-                    </div>
-                ` : isActive ? `
-                    <div class="stop-status active">
-                        → Current Stop
-                    </div>
-                ` : isLocked ? `
-                    <div class="stop-status blocked">
-                        🔒 Complete pickups first
-                    </div>
-                ` : ''}
-            </div>
-            <div class="stop-actions">
-                ${!stop.completed && canInteract && customerPhone ? `
-                    <button class="action-btn navigate" onclick="event.stopPropagation(); navigateToStop('${stop.id}')">
-                        🧭
-                    </button>
-                    <a href="tel:${customerPhone}" class="action-btn call" onclick="event.stopPropagation();">
-                        📞
-                    </a>
-                ` : !stop.completed && canInteract ? `
-                    <button class="action-btn navigate" onclick="event.stopPropagation(); navigateToStop('${stop.id}')">
-                        🧭
-                    </button>
                 ` : ''}
             </div>
         </div>
     `;
 }
 
-// Helper functions
-function canCompleteDelivery(deliveryStop) {
-    if (!state.activeRoute || !state.activeRoute.stops) return false;
-    
-    const pickupStop = state.activeRoute.stops.find(s => 
-        s.type === 'pickup' && s.parcelId === deliveryStop.parcelId
-    );
-    
-    return pickupStop && pickupStop.completed;
-}
+// ============================================================================
+// VERIFICATION & COMPLETION FUNCTIONS
+// ============================================================================
 
-function canCompleteStop(stop) {
-    if (stop.type === 'pickup') return true;
-    return canCompleteDelivery(stop);
-}
-
-function allCompleted(stops) {
-    return stops.every(s => s.completed);
-}
-
-function formatTimeAgo(timestamp) {
-    if (!timestamp) return '';
-    const minutes = Math.floor((Date.now() - new Date(timestamp)) / 60000);
-    if (minutes < 60) return `${minutes} min ago`;
-    const hours = Math.floor(minutes / 60);
-    return `${hours} hour${hours > 1 ? 's' : ''} ago`;
-}
-
-// Verification functions
 window.openQuickVerification = function() {
     const nextStop = getNextStop();
     if (nextStop) {
@@ -3875,7 +2490,7 @@ window.openVerificationModal = function(stopId) {
             border: 1px solid rgba(255, 255, 255, 0.1);
             box-shadow: 0 25px 80px rgba(0, 0, 0, 0.6);
         ">
-            <div class="modal-header ${stop.type}" style="
+            <div class="modal-header" style="
                 padding: 20px 24px;
                 background: ${stop.type === 'pickup' ? 'linear-gradient(135deg, #FF9F0A, #FF6B00)' : 'linear-gradient(135deg, #34C759, #30D158)'};
                 color: ${stop.type === 'pickup' ? '#0A0A0B' : 'white'};
@@ -3884,30 +2499,42 @@ window.openVerificationModal = function(stopId) {
                 gap: 12px;
                 border-radius: 24px 24px 0 0;
             ">
-                <span class="modal-icon" style="font-size: 24px;">${stop.type === 'pickup' ? '📦' : '📍'}</span>
-                <h2 style="margin: 0; font-size: 20px; font-weight: 700;">Verify ${stop.type === 'pickup' ? 'Pickup' : 'Delivery'}</h2>
+                <span style="font-size: 24px;">${stop.type === 'pickup' ? '📦' : '📍'}</span>
+                <h2 style="margin: 0; font-size: 20px; font-weight: 700;">
+                    Verify ${stop.type === 'pickup' ? 'Pickup' : 'Delivery'}
+                </h2>
             </div>
             <div class="modal-body" style="padding: 24px;">
                 <div class="stop-summary" style="margin-bottom: 24px;">
-                    <h3 style="font-size: 18px; margin-bottom: 14px; color: white; font-weight: 600;">${stop.address}</h3>
-                    <div class="summary-details" style="display: flex; flex-direction: column; gap: 12px;">
-                        <div class="summary-row" style="display: flex; gap: 12px; font-size: 15px;">
-                            <span class="summary-label" style="color: rgba(255, 255, 255, 0.5); min-width: 90px; font-weight: 500;">Customer:</span>
-                            <span class="summary-value" style="color: white; font-weight: 600;">${stop.customerName}</span>
+                    <h3 style="font-size: 18px; margin-bottom: 14px; color: white; font-weight: 600;">
+                        ${stop.address}
+                    </h3>
+                    <div style="display: flex; flex-direction: column; gap: 12px;">
+                        <div style="display: flex; gap: 12px; font-size: 15px;">
+                            <span style="color: rgba(255, 255, 255, 0.5); min-width: 90px;">Customer:</span>
+                            <span style="color: white; font-weight: 600;">
+                                ${stop.customerName || stop.vendor_name || stop.recipient_name || 'N/A'}
+                            </span>
                         </div>
-                        <div class="summary-row" style="display: flex; gap: 12px; font-size: 15px;">
-                            <span class="summary-label" style="color: rgba(255, 255, 255, 0.5); min-width: 90px; font-weight: 500;">Phone:</span>
-                            <span class="summary-value" style="color: white; font-weight: 600;">${stop.customerPhone}</span>
+                        <div style="display: flex; gap: 12px; font-size: 15px;">
+                            <span style="color: rgba(255, 255, 255, 0.5); min-width: 90px;">Phone:</span>
+                            <span style="color: white; font-weight: 600;">
+                                ${stop.customerPhone || stop.vendor_phone || stop.recipient_phone || 'N/A'}
+                            </span>
                         </div>
-                        <div class="summary-row" style="display: flex; gap: 12px; font-size: 15px;">
-                            <span class="summary-label" style="color: rgba(255, 255, 255, 0.5); min-width: 90px; font-weight: 500;">Parcel Code:</span>
-                            <span class="summary-value" style="color: white; font-weight: 600;">${stop.parcelCode}</span>
+                        <div style="display: flex; gap: 12px; font-size: 15px;">
+                            <span style="color: rgba(255, 255, 255, 0.5); min-width: 90px;">Parcel Code:</span>
+                            <span style="color: white; font-weight: 600;">
+                                ${stop.parcelCode || 'N/A'}
+                            </span>
                         </div>
                     </div>
                 </div>
                 
                 <div class="verification-section">
-                    <label style="font-weight: 600; font-size: 15px; color: white; display: block; margin-bottom: 12px;">Enter ${stop.type} verification code:</label>
+                    <label style="font-weight: 600; font-size: 15px; color: white; display: block; margin-bottom: 12px;">
+                        Enter ${stop.type} verification code:
+                    </label>
                     <input type="text" 
                            class="verification-input" 
                            id="verificationCode" 
@@ -3930,7 +2557,7 @@ window.openVerificationModal = function(stopId) {
                                transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
                                margin: 12px 0;
                            ">
-                    <p class="code-hint" style="font-size: 13px; color: rgba(255, 255, 255, 0.5); text-align: center; margin-top: 8px;">
+                    <p style="font-size: 13px; color: rgba(255, 255, 255, 0.5); text-align: center; margin-top: 8px;">
                         Ask the ${stop.type === 'pickup' ? 'sender' : 'recipient'} for their code
                     </p>
                 </div>
@@ -3939,7 +2566,9 @@ window.openVerificationModal = function(stopId) {
                     <div style="margin-top: 18px; padding: 14px; background: rgba(255, 255, 255, 0.05); border-radius: 12px;">
                         <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-weight: 600;">
                             <input type="checkbox" id="paymentCollected" style="width: 22px; height: 22px; cursor: pointer;">
-                            <span style="font-size: 15px; color: white;">I have collected KES ${paymentInfo.amount.toLocaleString()} cash</span>
+                            <span style="font-size: 15px; color: white;">
+                                I have collected KES ${paymentInfo.amount.toLocaleString()} cash
+                            </span>
                         </label>
                     </div>
                 ` : ''}
@@ -3953,17 +2582,10 @@ window.openVerificationModal = function(stopId) {
                         font-size: 16px;
                         font-weight: 700;
                         cursor: pointer;
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                        gap: 8px;
-                        transition: all 0.2s;
                         background: linear-gradient(135deg, #0066FF, #0052CC);
                         color: white;
-                        letter-spacing: 0.3px;
                     ">
-                        <span>✓</span>
-                        <span>Verify ${stop.type === 'pickup' ? 'Pickup' : 'Delivery'}</span>
+                        ✓ Verify ${stop.type === 'pickup' ? 'Pickup' : 'Delivery'}
                     </button>
                     <button class="modal-btn secondary" onclick="closeVerificationModal()" style="
                         padding: 18px 24px;
@@ -3972,7 +2594,6 @@ window.openVerificationModal = function(stopId) {
                         font-size: 16px;
                         font-weight: 600;
                         cursor: pointer;
-                        transition: all 0.2s;
                         background: rgba(255, 255, 255, 0.1);
                         color: white;
                     ">
@@ -4009,7 +2630,7 @@ window.verifyCode = async function(stopId) {
     // Demo mode - accept any code for testing
     const isValidCode = DEV_CONFIG.isDevelopment ? 
         code.length >= 6 : 
-        code === stop.verificationCode.toUpperCase().replace(/[^A-Z0-9]/g, '');
+        code === stop.verificationCode?.toUpperCase().replace(/[^A-Z0-9]/g, '');
     
     if (!isValidCode) {
         codeInput.classList.add('error');
@@ -4069,7 +2690,7 @@ function showSuccessAnimation(type) {
         border: 1px solid rgba(255, 255, 255, 0.1);
     `;
     animation.innerHTML = `
-        <div class="success-icon" style="
+        <div style="
             width: 84px;
             height: 84px;
             background: linear-gradient(135deg, #34C759, #30D158);
@@ -4082,7 +2703,7 @@ function showSuccessAnimation(type) {
             color: white;
             box-shadow: 0 8px 30px rgba(52, 199, 89, 0.4);
         ">✓</div>
-        <div class="success-text" style="
+        <div style="
             font-size: 26px;
             font-weight: 800;
             color: white;
@@ -4118,31 +2739,39 @@ async function completeRoute() {
     `;
     animation.innerHTML = `
         <div class="route-complete-content">
-            <div class="complete-icon" style="font-size: 72px; margin-bottom: 24px;">🏆</div>
-            <h1 style="font-size: 32px; font-weight: 800; margin-bottom: 14px; letter-spacing: -1px; color: white;">Route Complete!</h1>
-            <p style="font-size: 16px; color: rgba(255, 255, 255, 0.6); margin-bottom: 28px; font-weight: 500;">Excellent work! All deliveries completed successfully.</p>
-            <div class="route-stats" style="display: flex; justify-content: center; gap: 40px; margin-bottom: 36px;">
-                <div class="stat" style="text-align: center;">
-                    <span class="stat-value" style="display: block; font-size: 36px; font-weight: 800; color: #9333EA; margin-bottom: 6px; letter-spacing: -1px;">${state.activeRoute.stops.length}</span>
-                    <span class="stat-label" style="font-size: 13px; color: rgba(255, 255, 255, 0.5); text-transform: uppercase; letter-spacing: 1px; font-weight: 600;">Stops</span>
+            <div style="font-size: 72px; margin-bottom: 24px;">🏆</div>
+            <h1 style="font-size: 32px; font-weight: 800; margin-bottom: 14px; letter-spacing: -1px; color: white;">
+                Route Complete!
+            </h1>
+            <p style="font-size: 16px; color: rgba(255, 255, 255, 0.6); margin-bottom: 28px; font-weight: 500;">
+                Excellent work! All deliveries completed successfully.
+            </p>
+            <div style="display: flex; justify-content: center; gap: 40px; margin-bottom: 36px;">
+                <div style="text-align: center;">
+                    <span style="display: block; font-size: 36px; font-weight: 800; color: #9333EA; margin-bottom: 6px;">
+                        ${state.activeRoute.stops.length}
+                    </span>
+                    <span style="font-size: 13px; color: rgba(255, 255, 255, 0.5); text-transform: uppercase;">
+                        Stops
+                    </span>
                 </div>
-                <div class="stat" style="text-align: center;">
-                    <span class="stat-value" style="display: block; font-size: 36px; font-weight: 800; color: #9333EA; margin-bottom: 6px; letter-spacing: -1px;">KES ${Math.round(state.totalRouteEarnings)}</span>
-                    <span class="stat-label" style="font-size: 13px; color: rgba(255, 255, 255, 0.5); text-transform: uppercase; letter-spacing: 1px; font-weight: 600;">Earned</span>
+                <div style="text-align: center;">
+                    <span style="display: block; font-size: 36px; font-weight: 800; color: #9333EA; margin-bottom: 6px;">
+                        KES ${Math.round(state.totalRouteEarnings)}
+                    </span>
+                    <span style="font-size: 13px; color: rgba(255, 255, 255, 0.5); text-transform: uppercase;">
+                        Earned
+                    </span>
                 </div>
-                ${state.totalCashCollected > 0 ? `
-                    <div class="stat" style="text-align: center;">
-                        <span class="stat-value" style="display: block; font-size: 36px; font-weight: 800; color: #9333EA; margin-bottom: 6px; letter-spacing: -1px;">KES ${Math.round(state.totalCashCollected)}</span>
-                        <span class="stat-label" style="font-size: 13px; color: rgba(255, 255, 255, 0.5); text-transform: uppercase; letter-spacing: 1px; font-weight: 600;">Cash Collected</span>
-                    </div>
-                ` : ''}
             </div>
             ${state.optimizationStats.savedDistance > 0 ? `
-                <div class="optimization-summary" style="margin-bottom: 24px; padding: 14px; background: rgba(147, 51, 234, 0.1); border-radius: 12px;">
-                    <p style="margin: 0; color: #9333EA; font-weight: 600;">Route optimization saved ${state.optimizationStats.savedDistance.toFixed(1)}km (${state.optimizationStats.savedPercentage}%)</p>
+                <div style="margin-bottom: 24px; padding: 14px; background: rgba(147, 51, 234, 0.1); border-radius: 12px;">
+                    <p style="margin: 0; color: #9333EA; font-weight: 600;">
+                        Route optimization saved ${state.optimizationStats.savedDistance.toFixed(1)}km (${state.optimizationStats.savedPercentage}%)
+                    </p>
                 </div>
             ` : ''}
-            <button class="complete-btn" onclick="finishRoute()" style="
+            <button onclick="finishRoute()" style="
                 width: 100%;
                 background: linear-gradient(135deg, #9333EA, #7928CA);
                 color: white;
@@ -4152,9 +2781,6 @@ async function completeRoute() {
                 font-size: 17px;
                 font-weight: 700;
                 cursor: pointer;
-                letter-spacing: 0.5px;
-                transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-                box-shadow: 0 6px 20px rgba(147, 51, 234, 0.4);
             ">
                 Back to Dashboard
             </button>
@@ -4168,53 +2794,172 @@ window.finishRoute = function() {
     window.location.href = './rider.html';
 };
 
-function showNotification(message, type = 'info') {
-    const notification = document.createElement('div');
-    notification.className = `notification ${type}`;
-    notification.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        background: ${type === 'success' ? 'linear-gradient(135deg, #34C759, #30D158)' : 
-                      type === 'error' ? 'linear-gradient(135deg, #FF3B30, #FF2D55)' : 
-                      type === 'warning' ? 'linear-gradient(135deg, #FF9F0A, #FF6B00)' : 
-                      'linear-gradient(135deg, #1C1C1F, #2C2C2E)'};
-        color: ${type === 'warning' ? '#0A0A0B' : 'white'};
-        padding: 16px 20px;
-        border-radius: 14px;
-        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        z-index: 4000;
-        animation: slideIn 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-        max-width: 380px;
-        font-weight: 600;
-        font-size: 15px;
-        letter-spacing: 0.3px;
-    `;
-    notification.innerHTML = `
-        <span class="notification-icon" style="font-size: 20px;">
-            ${type === 'success' ? '✓' : type === 'error' ? '✗' : type === 'warning' ? '⚠' : 'ℹ'}
-        </span>
-        <span>${message}</span>
-    `;
-    
-    document.body.appendChild(notification);
-    
-    setTimeout(() => {
-        notification.style.animation = 'slideOut 0.3s ease-out';
-        setTimeout(() => notification.remove(), 300);
-    }, 3000);
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
+
+function getNextStop() {
+    if (!state.activeRoute || !state.activeRoute.stops) return null;
+    return state.activeRoute.stops.find(stop => !stop.completed);
 }
 
-// Initialize on DOM ready
+function getCurrentStop() {
+    if (!state.activeRoute) return null;
+    
+    const completedStops = state.activeRoute.stops.filter(s => s.completed);
+    if (completedStops.length === 0) return null;
+    
+    return completedStops[completedStops.length - 1];
+}
+
+function isNextStop(stop) {
+    const nextStop = getNextStop();
+    return nextStop && nextStop.id === stop.id;
+}
+
+function canCompleteStop(stop) {
+    if (stop.type === 'pickup') return true;
+    return canCompleteDelivery(stop);
+}
+
+function canCompleteDelivery(deliveryStop) {
+    if (!state.activeRoute || !state.activeRoute.stops) return false;
+    
+    const pickupStop = state.activeRoute.stops.find(s => 
+        s.type === 'pickup' && 
+        (s.parcelId === deliveryStop.parcelId || s.parcelCode === deliveryStop.parcelCode)
+    );
+    
+    return pickupStop && pickupStop.completed;
+}
+
+function formatTimeAgo(timestamp) {
+    if (!timestamp) return '';
+    const minutes = Math.floor((Date.now() - new Date(timestamp)) / 60000);
+    if (minutes < 60) return `${minutes} min ago`;
+    const hours = Math.floor(minutes / 60);
+    return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+}
+
+function updateRouteStats() {
+    const remainingStops = state.activeRoute.stops.filter(s => !s.completed).length;
+    
+    let totalDistance = 0;
+    if (state.activeRoute.distance) {
+        totalDistance = parseFloat(state.activeRoute.distance);
+    } else if (state.activeRoute.total_distance) {
+        totalDistance = parseFloat(state.activeRoute.total_distance);
+    } else {
+        totalDistance = calculateTotalRouteDistance(state.activeRoute.stops);
+    }
+    
+    const estimatedTime = Math.round(totalDistance * 2.5 + remainingStops * 5);
+    
+    const remainingEl = document.getElementById('remainingStops');
+    const distanceEl = document.getElementById('totalDistance');
+    const timeEl = document.getElementById('estimatedTime');
+    
+    if (remainingEl) remainingEl.textContent = remainingStops;
+    if (distanceEl) distanceEl.textContent = totalDistance.toFixed(1);
+    if (timeEl) timeEl.textContent = estimatedTime;
+}
+
+function updateDynamicHeader() {
+    const routeTitle = document.getElementById('routeTitle');
+    if (!routeTitle || !state.activeRoute) return;
+    
+    const nextStop = getNextStop();
+    const currentStop = getCurrentStop();
+    
+    if (!nextStop) {
+        routeTitle.textContent = 'Route Complete';
+        return;
+    }
+    
+    let headerText = '';
+    
+    if (currentStop && state.currentLocation) {
+        headerText = `Your Location → ${getStopShortName(nextStop)}`;
+    } else if (currentStop) {
+        headerText = `${getStopShortName(currentStop)} → ${getStopShortName(nextStop)}`;
+    } else {
+        const firstStop = state.activeRoute.stops[0];
+        headerText = `Starting → ${getStopShortName(firstStop)}`;
+    }
+    
+    routeTitle.textContent = headerText;
+}
+
+function getStopShortName(stop) {
+    if (!stop) return '';
+    
+    const address = stop.address;
+    const patterns = [
+        /^([^,]+),/,
+        /^(.+?)(?:\s+Road|\s+Street|\s+Avenue|\s+Drive|\s+Centre|\s+Center)/i
+    ];
+    
+    for (const pattern of patterns) {
+        const match = address.match(pattern);
+        if (match) {
+            return match[1].trim();
+        }
+    }
+    
+    return address.length > 20 ? address.substring(0, 20) + '...' : address;
+}
+
+function updateNavigationInfo() {
+    // Called during navigation to update real-time info
+}
+
+function initializeOptimizeButton() {
+    setTimeout(() => {
+        addOptimizeButton();
+        
+        if (state.activeRoute && state.activeRoute.isOptimized) {
+            updateOptimizeButton(true);
+        }
+    }, 500);
+}
+
+// ============================================================================
+// WINDOW FUNCTIONS
+// ============================================================================
+
+window.selectStop = function(stopId) {
+    const stop = state.activeRoute.stops.find(s => s.id === stopId);
+    if (!stop || stop.completed) return;
+    
+    if (state.map) {
+        state.map.setView([stop.location.lat, stop.location.lng], 16);
+        
+        const marker = state.markers.find(m => {
+            const latLng = m.getLatLng();
+            return latLng.lat === stop.location.lat && latLng.lng === stop.location.lng;
+        });
+        
+        if (marker) {
+            marker.openPopup();
+        }
+    }
+};
+
+window.goBack = function() {
+    if (confirm('Are you sure you want to exit navigation?')) {
+        window.location.href = './rider.html';
+    }
+};
+
+// ============================================================================
+// INITIALIZATION
+// ============================================================================
+
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log('Route.js v3.1.0 initializing with enhanced features...');
+    console.log('Route.js v4.0.0 initializing with external optimizer...');
     
     injectNavigationStyles();
     
-    // Wait for Leaflet to be available
     await waitForLeaflet();
     
     try {
@@ -4223,27 +2968,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (storedRoute) {
             state.activeRoute = JSON.parse(storedRoute);
             console.log('Route loaded:', state.activeRoute);
-            console.log('Optimization mode:', config.optimization.enableDynamicRouting ? 'Dynamic' : 'Phased');
+            console.log('Using external route optimizer module');
             
-            // Update stop order map immediately
             updateStopOrderMap();
-            
-            // Calculate financials
             calculateRouteFinancials();
             calculateCashCollection();
             
-            // Initialize map
             await initializeMap();
             
-            // Display route information
             displayRouteInfo();
             updateDynamicHeader();
             
-            // Plot route on map
             await plotRoute();
             await drawOptimizedRoute();
             
-            // CRITICAL: Explicitly show UI elements
+            // Show UI elements
             const routePanel = document.getElementById('routePanel');
             const navControls = document.getElementById('navControls');
             const emptyState = document.getElementById('emptyState');
@@ -4261,45 +3000,29 @@ document.addEventListener('DOMContentLoaded', async () => {
                 emptyState.style.display = 'none';
             }
             
-            // Initialize optimize button
             initializeOptimizeButton();
             
-            // Enhance route panel for dragging
-            enhanceRoutePanel();
-            
-            // Show cash collection widget if needed
             if (state.totalCashToCollect > 0) {
                 showCashCollectionWidget();
             }
             
-            // Start location tracking
             startLocationTracking();
             
             console.log('Route initialization complete');
         } else {
             console.log('No active route found');
             
-            // Hide route-related UI
             const routePanel = document.getElementById('routePanel');
             const navControls = document.getElementById('navControls');
             const emptyState = document.getElementById('emptyState');
             
-            if (routePanel) {
-                routePanel.style.display = 'none';
-            }
-            
-            if (navControls) {
-                navControls.style.display = 'none';
-            }
-            
-            if (emptyState) {
-                emptyState.style.display = 'block';
-            }
+            if (routePanel) routePanel.style.display = 'none';
+            if (navControls) navControls.style.display = 'none';
+            if (emptyState) emptyState.style.display = 'block';
         }
     } catch (error) {
         console.error('Error initializing route:', error);
         
-        // Show empty state on error
         const emptyState = document.getElementById('emptyState');
         if (emptyState) {
             emptyState.style.display = 'block';
@@ -4307,73 +3030,31 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 });
 
-// Add missing navigation functions
-window.showEnhancedNavigation = function(targetStop) {
-    console.log('Enhanced navigation starting for:', targetStop);
-    // This function is defined in Part 5 but needs to be available globally
-};
-
-window.goBack = function() {
-    if (confirm('Are you sure you want to exit navigation?')) {
-        window.location.href = './rider.html';
-    }
-};
-
 // Debug utilities
 window.routeDebug = {
     state,
     config,
-    toggleMode: toggleOptimizationMode,
-    toggleNumberedMarkers: window.toggleNumberedMarkers,
-    analyzeEfficiency: () => analyzeRouteEfficiency(state.activeRoute?.stops || []),
-    showControls: () => {
-        const navControls = document.getElementById('navControls');
-        if (navControls) {
-            navControls.style.display = 'flex';
-            console.log('Navigation controls shown');
-        }
-    },
-    hideEmptyState: () => {
-        const emptyState = document.getElementById('emptyState');
-        if (emptyState) {
-            emptyState.style.display = 'none';
-            console.log('Empty state hidden');
-        }
-    },
+    optimizer: routeOptimizer,
     testOptimization: () => {
         if (!state.activeRoute) {
             console.log('No route loaded');
             return;
         }
         
-        console.log('Testing both optimization modes...');
+        // Test optimization without current location
+        const result = routeOptimizer.optimizeRoute(state.activeRoute.stops);
         
-        // Test dynamic
-        config.optimization.enableDynamicRouting = true;
-        const dynamicResult = performDynamicOptimization([...state.activeRoute.stops]);
-        const dynamicDistance = calculateTotalRouteDistance(dynamicResult);
+        // Get statistics
+        const stats = routeOptimizer.getStatistics();
         
-        // Test phased
-        config.optimization.enableDynamicRouting = false;
-        const phasedResult = performPhasedOptimization([...state.activeRoute.stops]);
-        const phasedDistance = calculateTotalRouteDistance(phasedResult);
-        
-        console.log('=== Optimization Comparison ===');
-        console.log('Dynamic distance:', dynamicDistance.toFixed(1), 'km');
-        console.log('Phased distance:', phasedDistance.toFixed(1), 'km');
-        console.log('Dynamic saves:', (phasedDistance - dynamicDistance).toFixed(1), 'km');
-        
-        return {
-            dynamic: dynamicResult,
-            phased: phasedResult,
-            savings: phasedDistance - dynamicDistance
-        };
-    }
+        console.log('Optimization result:', result);
+        console.log('Statistics:', stats);
+        return { optimizedRoute: result, statistics: stats };
+    },
+    getOptimizerConfig: () => routeOptimizer.getConfig(),
+    updateOptimizerConfig: (newConfig) => routeOptimizer.updateConfig(newConfig)
 };
 
-console.log('✅ Enhanced Route.js v3.1.0 loaded successfully!');
-console.log('Features: Dynamic route optimization with smart pickup/delivery interleaving + numbered markers');
+console.log('✅ Route.js v4.0.0 loaded - Using external route-optimizer.js module');
 console.log('Debug: window.routeDebug');
-console.log('Commands: toggleNumberedMarkers(), toggleLocationTracking(), centerOnLocation()');
-
-// END OF COMPLETE ENHANCED ROUTE.JS FILE v3.1.0
+console.log('Optimizer config:', routeOptimizer.getConfig());
