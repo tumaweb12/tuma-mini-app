@@ -179,6 +179,24 @@
         .route-badge:active {
             transform: translateY(0);
         }
+        
+        /* Make verify button more prominent during navigation */
+        body.navigating .route-badge {
+            background: linear-gradient(135deg, var(--success), var(--success-dark));
+            animation: pulseGlow 2s infinite;
+            box-shadow: 0 4px 16px rgba(52, 199, 89, 0.4);
+        }
+        
+        @keyframes pulseGlow {
+            0%, 100% {
+                transform: scale(1);
+                box-shadow: 0 4px 16px rgba(52, 199, 89, 0.4);
+            }
+            50% {
+                transform: scale(1.05);
+                box-shadow: 0 6px 20px rgba(52, 199, 89, 0.6);
+            }
+        }
 
         /* Map Container */
         .map-container {
@@ -210,7 +228,71 @@
             margin-bottom: 80px !important;
         }
 
-        /* Premium Route Panel */
+        /* IMPROVED: Premium Cash Collection Widget */
+        .cash-collection-widget {
+            position: fixed;
+            top: 100px;
+            right: 20px;
+            background: linear-gradient(135deg, rgba(28, 28, 31, 0.95), rgba(44, 44, 46, 0.95));
+            backdrop-filter: blur(20px);
+            border-radius: 16px;
+            padding: 14px 16px;
+            min-width: 180px;
+            max-width: 220px;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+            z-index: 95;
+            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .cash-collection-widget:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+        }
+
+        .cash-widget-title {
+            font-size: 11px;
+            font-weight: 600;
+            margin-bottom: 6px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .cash-widget-amount {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--warning);
+            margin-bottom: 10px;
+            letter-spacing: -0.02em;
+        }
+
+        .cash-widget-breakdown {
+            font-size: 11px;
+            color: var(--text-secondary);
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            padding-top: 8px;
+            border-top: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .cash-breakdown-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 2px 0;
+        }
+
+        .cash-breakdown-value {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        /* IMPROVED: Premium Route Panel (Collapsible) */
         .route-panel {
             position: fixed;
             bottom: 0;
@@ -221,16 +303,48 @@
             padding: 24px;
             padding-bottom: calc(24px + var(--safe-area-bottom));
             z-index: 50;
-            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-            max-height: 70%;
+            transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            max-height: 70vh;
             overflow-y: auto;
             -webkit-overflow-scrolling: touch;
             box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.4);
             border-top: 1px solid rgba(255, 255, 255, 0.08);
+            transform: translateY(calc(100% - 140px)); /* Initially minimized showing stats only */
+        }
+
+        .route-panel.expanded {
+            transform: translateY(0);
+        }
+
+        .route-panel.minimized {
+            transform: translateY(calc(100% - 140px));
+        }
+
+        .route-panel.hidden {
+            transform: translateY(100%);
+            pointer-events: none;
         }
 
         .route-panel.navigation-hidden {
             display: none !important;
+        }
+        
+        /* During navigation, give map full priority */
+        body.navigating .route-panel {
+            display: none !important;
+        }
+        
+        body.navigating .nav-controls {
+            bottom: calc(20px + var(--safe-area-bottom));
+        }
+        
+        body.navigating .optimize-button-container,
+        body.navigating .nav-button.secondary {
+            display: none !important;
+        }
+        
+        body.navigating #map {
+            z-index: 1;
         }
 
         .panel-handle {
@@ -659,7 +773,7 @@
         /* Premium Location Button */
         .location-button {
             position: fixed;
-            bottom: 160px;
+            bottom: 280px;
             right: 20px;
             width: 48px;
             height: 48px;
@@ -685,21 +799,72 @@
             background: linear-gradient(135deg, var(--primary), var(--primary-dark));
             color: white;
         }
+        
+        /* Adjust location button position during navigation */
+        body.navigating .location-button {
+            bottom: 160px;
+        }
+        
+        /* NEW: Floating Verify Button */
+        .floating-verify-btn {
+            position: fixed;
+            bottom: 220px;
+            right: 20px;
+            background: linear-gradient(135deg, var(--success), var(--success-dark));
+            color: white;
+            border: none;
+            border-radius: 50px;
+            padding: 14px 20px;
+            font-size: 15px;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 6px 20px rgba(52, 199, 89, 0.4);
+            z-index: 91;
+            display: none;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            animation: slideInRight 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+        
+        @keyframes slideInRight {
+            from {
+                transform: translateX(100px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        
+        .floating-verify-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 24px rgba(52, 199, 89, 0.5);
+        }
+        
+        .floating-verify-btn:active {
+            transform: scale(0.95);
+        }
+        
+        body.navigating .floating-verify-btn {
+            display: flex;
+        }
 
         /* Premium Live Tracking Indicator */
         .tracking-indicator {
             position: fixed;
             top: 100px;
-            right: 20px;
+            left: 20px;
             background: linear-gradient(135deg, var(--success), var(--success-dark));
             color: white;
-            padding: 10px 18px;
-            border-radius: 24px;
-            font-size: 13px;
+            padding: 8px 14px;
+            border-radius: 20px;
+            font-size: 12px;
             font-weight: 700;
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
             z-index: 90;
             animation: pulse 2s infinite;
             box-shadow: 0 4px 12px rgba(52, 199, 89, 0.3);
@@ -718,12 +883,11 @@
         }
 
         .tracking-dot {
-            width: 8px;
-            height: 8px;
+            width: 6px;
+            height: 6px;
             background: white;
             border-radius: 50%;
             animation: blink 1s infinite;
-            box-shadow: 0 0 8px rgba(255, 255, 255, 0.8);
         }
 
         @keyframes blink {
@@ -731,7 +895,72 @@
             50% { opacity: 0.3; }
         }
 
-        /* Premium Navigation Controls */
+        /* NEW: Navigation Info Overlay */
+        .navigation-overlay {
+            position: fixed;
+            top: 100px;
+            left: 20px;
+            right: 120px;
+            background: linear-gradient(135deg, var(--surface-elevated), var(--surface-high));
+            border-radius: 16px;
+            padding: 16px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+            z-index: 95;
+            display: none;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            animation: slideDown 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+
+        @keyframes slideDown {
+            from {
+                transform: translateY(-20px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .navigation-overlay.active {
+            display: block;
+        }
+
+        .nav-info-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .nav-info-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        .nav-info-eta {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--primary);
+        }
+
+        .nav-info-address {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+            letter-spacing: -0.02em;
+        }
+
+        .nav-info-distance {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        /* FIXED: Premium Navigation Controls */
         .nav-controls {
             position: fixed;
             bottom: calc(20px + var(--safe-area-bottom));
@@ -742,6 +971,102 @@
             flex-direction: column;
             gap: 12px;
             transition: bottom 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+        
+        /* During navigation, simplify nav controls */
+        body.navigating .nav-controls {
+            flex-direction: row;
+            gap: 12px;
+        }
+        
+        /* NEW: Quick Verify Button during navigation */
+        .nav-verify-btn {
+            flex: 1;
+            background: linear-gradient(135deg, var(--success), var(--success-dark));
+            color: white;
+            border: none;
+            border-radius: 16px;
+            padding: 18px;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            box-shadow: 0 4px 16px rgba(52, 199, 89, 0.3);
+            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+        
+        body.navigating .nav-verify-btn {
+            display: flex;
+            animation: pulseGlow 2s infinite;
+        }
+        
+        .nav-verify-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 24px rgba(52, 199, 89, 0.4);
+        }
+
+        /* NEW: Optimize buttons */
+        .optimize-button-container {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        #optimizeBtn {
+            flex: 1;
+            background: linear-gradient(135deg, var(--purple), var(--purple-dark));
+            color: white;
+            border: none;
+            border-radius: 16px;
+            padding: 16px;
+            font-size: 15px;
+            font-weight: 700;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            box-shadow: 0 4px 16px rgba(147, 51, 234, 0.3);
+        }
+
+        #optimizeBtn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(147, 51, 234, 0.4);
+        }
+
+        #optimizeBtn:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+
+        #optimizeBtn.optimized {
+            background: linear-gradient(135deg, var(--success), var(--success-dark));
+            cursor: default;
+        }
+
+        #undoOptimizeBtn {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 16px;
+            padding: 16px 20px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all 0.3s ease;
+        }
+
+        #undoOptimizeBtn:hover {
+            background: rgba(255, 255, 255, 0.15);
+            border-color: rgba(255, 255, 255, 0.3);
         }
 
         .nav-button {
@@ -826,6 +1151,16 @@
         button, a, .stop-card, .stat-box, .phase, .action-btn {
             transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
         }
+
+        /* Animation for optimize/loading states */
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        @keyframes progress {
+            from { transform: translateX(-100%); }
+            to { transform: translateX(0); }
+        }
     </style>
 </head>
 <body>
@@ -861,11 +1196,29 @@
             <span>LIVE TRACKING</span>
         </div>
 
+        <!-- Navigation Info Overlay (NEW) -->
+        <div class="navigation-overlay" id="navigationOverlay">
+            <div class="nav-info-header">
+                <div class="nav-info-title">Navigating to</div>
+                <div class="nav-info-eta" id="navETA">5 min</div>
+            </div>
+            <div class="nav-info-address" id="navAddress">Loading destination...</div>
+            <div class="nav-info-distance" id="navDistance">Calculating distance...</div>
+        </div>
+
         <!-- Location Button -->
         <button class="location-button" id="locationButton" onclick="centerOnLocation()">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3c-.46-4.17-3.77-7.48-7.94-7.94V1h-2v2.06C6.83 3.52 3.52 6.83 3.06 11H1v2h2.06c.46 4.17 3.77 7.48 7.94 7.94V23h2v-2.06c4.17-.46 7.48-3.77 7.94-7.94H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/>
             </svg>
+        </button>
+        
+        <!-- Floating Verify Button (shows during navigation) -->
+        <button class="floating-verify-btn" id="floatingVerifyBtn" onclick="openQuickVerification()" style="display: none;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+            </svg>
+            <span>Verify Stop</span>
         </button>
 
         <!-- Empty State (hidden by default, shown only when no route) -->
@@ -875,9 +1228,9 @@
             <p class="empty-message">Claim a route from the rider dashboard to start navigating</p>
         </div>
 
-        <!-- Route Panel -->
-        <div class="route-panel" id="routePanel" style="display: none;">
-            <div class="panel-handle"></div>
+        <!-- Route Panel (Collapsible) -->
+        <div class="route-panel minimized" id="routePanel" style="display: none;">
+            <div class="panel-handle" onclick="togglePanelExpansion()"></div>
             
             <div class="route-stats">
                 <div class="stat-box">
@@ -901,13 +1254,23 @@
 
         <!-- Navigation Controls -->
         <div class="nav-controls" id="navControls" style="display: none;">
-            <!-- Optimize button will be inserted here by JS -->
+            <!-- Optimize buttons container (will be added by JS) -->
+            
             <button class="nav-button secondary" onclick="toggleRoutePanel()">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
                 </svg>
                 <span>Details</span>
             </button>
+            
+            <!-- Verify button that shows during navigation -->
+            <button class="nav-verify-btn" onclick="openQuickVerification()">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                </svg>
+                <span>Verify Stop</span>
+            </button>
+            
             <button class="nav-button" onclick="startNavigation()">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/>
@@ -917,7 +1280,194 @@
         </div>
     </div>
 
-    <!-- Load the enhanced route.js module -->
-    <script src="./route.js"></script>
+    <!-- Load the route.js module with type="module" -->
+    <script type="module" src="./route.js"></script>
+    
+    <!-- Add helper functions for UI interactions -->
+    <script>
+        // Toggle panel expansion state
+        window.togglePanelExpansion = function() {
+            const panel = document.getElementById('routePanel');
+            if (panel.classList.contains('expanded')) {
+                panel.classList.remove('expanded');
+                panel.classList.add('minimized');
+            } else {
+                panel.classList.remove('minimized');
+                panel.classList.add('expanded');
+            }
+        };
+
+        // Toggle route panel visibility
+        window.toggleRoutePanel = function() {
+            const panel = document.getElementById('routePanel');
+            if (panel.classList.contains('hidden')) {
+                panel.classList.remove('hidden');
+                panel.classList.add('expanded');
+                panel.classList.remove('minimized');
+            } else if (panel.classList.contains('expanded')) {
+                panel.classList.remove('expanded');
+                panel.classList.add('minimized');
+            } else {
+                panel.classList.remove('minimized');
+                panel.classList.add('expanded');
+            }
+        };
+
+        // Start navigation with UI feedback
+        window.startNavigation = function() {
+            const overlay = document.getElementById('navigationOverlay');
+            const trackingIndicator = document.getElementById('trackingIndicator');
+            const locationButton = document.getElementById('locationButton');
+            const panel = document.getElementById('routePanel');
+            const navControls = document.getElementById('navControls');
+            const optimizeContainer = document.querySelector('.optimize-button-container');
+            const detailsButton = document.querySelector('.nav-button.secondary');
+            const startNavButton = document.querySelector('.nav-button:not(.secondary)');
+            
+            // Show navigation overlay
+            if (overlay) {
+                overlay.classList.add('active');
+            }
+            
+            // Show tracking indicator
+            if (trackingIndicator) {
+                trackingIndicator.style.display = 'flex';
+            }
+            
+            // Activate location button
+            if (locationButton) {
+                locationButton.classList.add('active');
+            }
+            
+            // COMPLETELY HIDE route panel during navigation
+            if (panel) {
+                panel.classList.add('hidden');
+                panel.classList.remove('expanded', 'minimized');
+            }
+            
+            // Hide optimization buttons
+            if (optimizeContainer) {
+                optimizeContainer.style.display = 'none';
+            }
+            
+            // Hide details button
+            if (detailsButton) {
+                detailsButton.style.display = 'none';
+            }
+            
+            // Change Start Navigation button to Stop Navigation
+            if (startNavButton) {
+                startNavButton.innerHTML = `
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M6 6h12v12H6z"/>
+                    </svg>
+                    <span>Stop Navigation</span>
+                `;
+                startNavButton.style.background = 'linear-gradient(135deg, #FF3B30, #FF2D55)';
+                startNavButton.onclick = stopNavigation;
+            }
+            
+            // Store navigation state
+            window.isNavigating = true;
+            
+            // Add navigating class to body for CSS targeting
+            document.body.classList.add('navigating');
+            
+            // Call the actual navigation function from route.js if it exists
+            if (window.proceedWithNavigation) {
+                const nextStop = window.getNextStop ? window.getNextStop() : null;
+                if (nextStop) {
+                    // Update navigation overlay with stop info
+                    const navAddress = document.getElementById('navAddress');
+                    const navDistance = document.getElementById('navDistance');
+                    const navETA = document.getElementById('navETA');
+                    
+                    if (navAddress) {
+                        navAddress.textContent = nextStop.address || 'Unknown Location';
+                    }
+                    if (navDistance && window.calculateDistance && window.state && window.state.currentLocation) {
+                        const distance = window.calculateDistance(window.state.currentLocation, nextStop.location);
+                        navDistance.textContent = `${distance.toFixed(1)} km away`;
+                    }
+                    if (navETA) {
+                        const estimatedMinutes = Math.round(Math.random() * 10 + 5); // Placeholder
+                        navETA.textContent = `${estimatedMinutes} min`;
+                    }
+                    
+                    window.proceedWithNavigation(nextStop);
+                }
+            } else {
+                // Fallback if route.js isn't loaded yet
+                console.log('Navigation started - waiting for route.js to load');
+            }
+        };
+        
+        // Stop navigation function
+        window.stopNavigation = function() {
+            const overlay = document.getElementById('navigationOverlay');
+            const trackingIndicator = document.getElementById('trackingIndicator');
+            const locationButton = document.getElementById('locationButton');
+            const panel = document.getElementById('routePanel');
+            const navControls = document.getElementById('navControls');
+            const optimizeContainer = document.querySelector('.optimize-button-container');
+            const detailsButton = document.querySelector('.nav-button.secondary');
+            const stopNavButton = document.querySelector('.nav-button:not(.secondary)');
+            
+            // Hide navigation overlay
+            if (overlay) {
+                overlay.classList.remove('active');
+            }
+            
+            // Hide tracking indicator
+            if (trackingIndicator) {
+                trackingIndicator.style.display = 'none';
+            }
+            
+            // Deactivate location button
+            if (locationButton) {
+                locationButton.classList.remove('active');
+            }
+            
+            // Show route panel minimized
+            if (panel) {
+                panel.classList.remove('hidden');
+                panel.classList.add('minimized');
+                panel.classList.remove('expanded');
+            }
+            
+            // Show optimization buttons
+            if (optimizeContainer) {
+                optimizeContainer.style.display = 'flex';
+            }
+            
+            // Show details button
+            if (detailsButton) {
+                detailsButton.style.display = 'flex';
+            }
+            
+            // Change Stop Navigation button back to Start Navigation
+            if (stopNavButton) {
+                stopNavButton.innerHTML = `
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/>
+                    </svg>
+                    <span>Start Navigation</span>
+                `;
+                stopNavButton.style.background = 'linear-gradient(135deg, #0066FF, #0052CC)';
+                stopNavButton.onclick = startNavigation;
+            }
+            
+            // Clear navigation state
+            window.isNavigating = false;
+            
+            // Remove navigating class from body
+            document.body.classList.remove('navigating');
+            
+            // Stop actual navigation in route.js if available
+            if (window.stopLocationTracking) {
+                window.stopLocationTracking();
+            }
+        };
+    </script>
 </body>
 </html>
