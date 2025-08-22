@@ -9,6 +9,21 @@
     <meta name="telegram-web-app" content="true">
     <title>Tuma - Smart Delivery</title>
     
+    <!-- CRITICAL FIX: Initialize Supabase BEFORE any other scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+        // Initialize these FIRST before any other script loads
+        if (typeof window.SUPABASE_URL === 'undefined') {
+            window.SUPABASE_URL = 'https://btxavqfoirdzwpfrvezp.supabase.co';
+            window.SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ0eGF2cWZvaXJkendwZnJ2ZXpwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE0ODcxMTcsImV4cCI6MjA2NzA2MzExN30.kQKpukFGx-cBl1zZRuXmex02ifkZ751WCUfQPogYutk';
+        }
+        
+        // Initialize Supabase client BEFORE auth-check.js needs it
+        if (typeof window.supabase === 'undefined') {
+            window.supabase = window.supabaseClient.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+        }
+    </script>
+    
     <!-- 1) Telegram Web App runtime -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     
@@ -939,13 +954,13 @@
             inset: 0;
             background: rgba(0, 0, 0, 0.9);
             display: none;
-            align-items: flex-start; /* Changed: Start from top instead of center */
+            align-items: flex-start;
             justify-content: center;
             z-index: 2000;
             backdrop-filter: blur(10px);
-            overflow-y: auto; /* Added: Enable vertical scrolling */
-            -webkit-overflow-scrolling: touch; /* Added: Smooth scrolling on iOS */
-            padding: 20px 0; /* Added: Vertical padding for spacing */
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            padding: 20px 0;
         }
 
         .success-modal {
@@ -955,10 +970,10 @@
             text-align: center;
             max-width: 320px;
             width: 90%;
-            margin: 20px auto; /* Added: Margin for spacing */
+            margin: 20px auto;
             animation: modalBounce 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
-            max-height: none; /* Added: Remove height constraints */
-            height: auto; /* Added: Let modal grow as needed */
+            max-height: none;
+            height: auto;
         }
 
         @keyframes modalBounce {
@@ -1089,7 +1104,7 @@
             transform: scale(0.98);
         }
 
-        /* Added: Responsive adjustments for small screens */
+        /* Responsive adjustments for small screens */
         @media (max-height: 700px) {
             .success-overlay {
                 align-items: flex-start;
@@ -1122,7 +1137,7 @@
             }
         }
 
-        /* Added: Extra padding when mobile keyboard is open */
+        /* Extra padding when mobile keyboard is open */
         @media (max-height: 500px) {
             .success-overlay {
                 padding: 10px 0 60px;
@@ -1261,6 +1276,107 @@
                 animation-iteration-count: 1 !important;
                 transition-duration: 0.01ms !important;
             }
+        }
+
+        /* Additional Styles */
+        #simpleLocationModal::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 30px;
+            height: 40px;
+            background: url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCAzMCA0MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICAgIDxwYXRoIGQ9Ik0xNSAwQzYuNyAwIDAgNi43IDAgMTVjMCA4LjMgMTUgMjUgMTUgMjVzMTUtMTYuNyAxNS0yNUMzMCA2LjcgMjMuMyAwIDE1IDB6IiBmaWxsPSIjMDA2NkZGIi8+CiAgICA8Y2lyY2xlIGN4PSIxNSIgY3k9IjE1IiByPSI4IiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4=') no-repeat center;
+            pointer-events: none;
+            z-index: 1000;
+        }
+
+        /* Copy Code Tooltip */
+        .copy-toast {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: var(--success);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            transition: transform 0.3s ease;
+            z-index: 3000;
+        }
+
+        .copy-toast.show {
+            transform: translateX(-50%) translateY(0);
+        }
+
+        @keyframes dash {
+            to {
+                stroke-dashoffset: -20;
+            }
+        }
+        
+        .route-animation {
+            animation: dash 1s linear infinite;
+        }
+        
+        /* Fix mobile search button appearance */
+        input[type="search"]::-webkit-search-decoration,
+        input[type="search"]::-webkit-search-cancel-button,
+        input[type="search"]::-webkit-search-results-button,
+        input[type="search"]::-webkit-search-results-decoration {
+            -webkit-appearance: none;
+        }
+        
+        /* Ensure input doesn't show search button on mobile */
+        .input-field {
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+        }
+        
+        /* Style for Leaflet zoom controls */
+        .leaflet-control-zoom {
+            background: var(--surface-elevated) !important;
+            border: 1px solid var(--border) !important;
+            border-radius: 10px !important;
+            overflow: hidden;
+        }
+        
+        .leaflet-control-zoom a {
+            background: var(--surface-elevated) !important;
+            color: var(--text-primary) !important;
+            border-bottom: 1px solid var(--border) !important;
+        }
+        
+        .leaflet-control-zoom a:hover {
+            background: var(--surface-high) !important;
+        }
+        
+        .leaflet-control-zoom a:last-child {
+            border-bottom: none !important;
+        }
+        
+        /* Better mobile touch targets */
+        @media (max-width: 768px) {
+            .leaflet-control-zoom a {
+                width: 36px !important;
+                height: 36px !important;
+                line-height: 36px !important;
+                font-size: 20px !important;
+            }
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        
+        @keyframes slideOut {
+            from { transform: translateX(0); opacity: 1; }
+            to { transform: translateX(100%); opacity: 0; }
         }
     </style>
 </head>
@@ -1526,7 +1642,8 @@
                                 <option value="phone">📱 Phone / Mobile Device</option>
                                 <option value="laptop">💻 Laptop / Tablet</option>
                                 <option value="electronics-small">🔌 Small Electronics (earphones, chargers)</option>
-                                <option value="electronics-fragile">📷 Fragile Electronics (camera, hard drives)</option>
+                                <option value="electronics-fragile">📷
+                                    <option value="electronics-fragile">📷 Fragile Electronics (camera, hard drives)</option>
                             </optgroup>
                             <optgroup label="Clothing & Textiles">
                                 <option value="clothes">👕 Clothes & Apparel</option>
@@ -1779,48 +1896,8 @@
         </div>
     </div>
 
-    <!-- Map Pin Marker for Modal -->
-    <style>
-        #simpleLocationModal::after {
-            content: '';
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 30px;
-            height: 40px;
-            background: url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCAzMCA0MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICAgIDxwYXRoIGQ9Ik0xNSAwQzYuNyAwIDAgNi43IDAgMTVjMCA4LjMgMTUgMjUgMTUgMjVzMTUtMTYuNyAxNS0yNUMzMCA2LjcgMjMuMyAwIDE1IDB6IiBmaWxsPSIjMDA2NkZGIi8+CiAgICA8Y2lyY2xlIGN4PSIxNSIgY3k9IjE1IiByPSI4IiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4=') no-repeat center;
-            pointer-events: none;
-            z-index: 1000;
-        }
-
-        /* Copy Code Tooltip */
-        .copy-toast {
-            position: fixed;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%) translateY(100px);
-            background: var(--success);
-            color: white;
-            padding: 12px 24px;
-            border-radius: 8px;
-            font-size: 14px;
-            font-weight: 600;
-            transition: transform 0.3s ease;
-            z-index: 3000;
-        }
-
-        .copy-toast.show {
-            transform: translateX(-50%) translateY(0);
-        }
-    </style>
-
-    <!-- CRITICAL: Load configuration and vendor.js as regular scripts -->
+    <!-- CRITICAL FIX: Additional initialization script -->
     <script>
-        // Global configuration
-        window.SUPABASE_URL = 'https://btxavqfoirdzwpfrvezp.supabase.co';
-        window.SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ0eGF2cWZvaXJkendwZnJ2ZXpwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE0ODcxMTcsImV4cCI6MjA2NzA2MzExN30.kQKpukFGx-cBl1zZRuXmex02ifkZ751WCUfQPogYutk';
-        
         // Define initMap globally before loading Google Maps
         window.initMap = function() {
             console.log('✅ Google Maps initialized via callback');
@@ -1873,7 +1950,7 @@
         }
     </script>
 
-    <!-- Load vendor.js as regular script -->
+    <!-- Load auth-check.js and vendor.js AFTER Supabase is initialized -->
     <script src="./auth-check.js"></script>
     <script src="./vendor.js"></script>
     
@@ -2020,6 +2097,7 @@
             }
         });
     }
+    
     // Notification function (if not already defined)
     function showNotification(message, type = 'info') {
         // Create notification element
@@ -2046,20 +2124,6 @@
             setTimeout(() => notification.remove(), 300);
         }, 3000);
     }
-
-    // Add animation styles
-    const style = document.createElement('style');
-    style.textContent = `
-        @keyframes slideIn {
-            from { transform: translateX(100%); opacity: 0; }
-            to { transform: translateX(0); opacity: 1; }
-        }
-        @keyframes slideOut {
-            from { transform: translateX(0); opacity: 1; }
-            to { transform: translateX(100%); opacity: 0; }
-        }
-    `;
-    document.head.appendChild(style);
     </script>
     
     <!-- Route Preview Map Script -->
@@ -2254,65 +2318,5 @@
         }
     });
     </script>
-
-    <!-- Add CSS for route animation -->
-    <style>
-        @keyframes dash {
-            to {
-                stroke-dashoffset: -20;
-            }
-        }
-        
-        .route-animation {
-            animation: dash 1s linear infinite;
-        }
-        
-        /* Fix mobile search button appearance */
-        input[type="search"]::-webkit-search-decoration,
-        input[type="search"]::-webkit-search-cancel-button,
-        input[type="search"]::-webkit-search-results-button,
-        input[type="search"]::-webkit-search-results-decoration {
-            -webkit-appearance: none;
-        }
-        
-        /* Ensure input doesn't show search button on mobile */
-        .input-field {
-            -webkit-appearance: none;
-            -moz-appearance: none;
-            appearance: none;
-        }
-        
-        /* Style for Leaflet zoom controls */
-        .leaflet-control-zoom {
-            background: var(--surface-elevated) !important;
-            border: 1px solid var(--border) !important;
-            border-radius: 10px !important;
-            overflow: hidden;
-        }
-        
-        .leaflet-control-zoom a {
-            background: var(--surface-elevated) !important;
-            color: var(--text-primary) !important;
-            border-bottom: 1px solid var(--border) !important;
-        }
-        
-        .leaflet-control-zoom a:hover {
-            background: var(--surface-high) !important;
-        }
-        
-        .leaflet-control-zoom a:last-child {
-            border-bottom: none !important;
-        }
-        
-        /* Better mobile touch targets */
-        @media (max-width: 768px) {
-            .leaflet-control-zoom a {
-                width: 36px !important;
-                height: 36px !important;
-                line-height: 36px !important;
-                font-size: 20px !important;
-            }
-        }
-    </style>
 </body>
 </html>
