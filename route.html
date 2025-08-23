@@ -56,6 +56,8 @@
             --express: #FF9800;
             --smart: #2196F3;
             --eco: #4CAF50;
+            --mpesa: #4CAF50;
+            --mpesa-dark: #388E3C;
             --safe-area-top: env(safe-area-inset-top);
             --safe-area-bottom: env(safe-area-inset-bottom);
         }
@@ -228,8 +230,8 @@
             margin-bottom: 80px !important;
         }
 
-        /* IMPROVED: Premium Cash Collection Widget */
-        .cash-collection-widget {
+        /* Premium Wallet Widget (replacing Cash Collection) */
+        .wallet-widget {
             position: fixed;
             top: 100px;
             right: 20px;
@@ -245,12 +247,12 @@
             border: 1px solid rgba(255, 255, 255, 0.08);
         }
 
-        .cash-collection-widget:hover {
+        .wallet-widget:hover {
             transform: translateY(-2px);
             box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
         }
 
-        .cash-widget-title {
+        .wallet-widget-title {
             font-size: 11px;
             font-weight: 600;
             margin-bottom: 6px;
@@ -262,15 +264,15 @@
             gap: 4px;
         }
 
-        .cash-widget-amount {
+        .wallet-widget-amount {
             font-size: 20px;
             font-weight: 700;
-            color: var(--warning);
+            color: var(--mpesa);
             margin-bottom: 10px;
             letter-spacing: -0.02em;
         }
 
-        .cash-widget-breakdown {
+        .wallet-widget-breakdown {
             font-size: 11px;
             color: var(--text-secondary);
             display: flex;
@@ -280,19 +282,19 @@
             border-top: 1px solid rgba(255, 255, 255, 0.06);
         }
 
-        .cash-breakdown-item {
+        .wallet-breakdown-item {
             display: flex;
             justify-content: space-between;
             align-items: center;
             padding: 2px 0;
         }
 
-        .cash-breakdown-value {
+        .wallet-breakdown-value {
             font-weight: 600;
             color: var(--text-primary);
         }
 
-        /* IMPROVED: Premium Route Panel (Collapsible) */
+        /* Premium Route Panel (Collapsible) */
         .route-panel {
             position: fixed;
             bottom: 0;
@@ -309,7 +311,7 @@
             -webkit-overflow-scrolling: touch;
             box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.4);
             border-top: 1px solid rgba(255, 255, 255, 0.08);
-            transform: translateY(calc(100% - 140px)); /* Initially minimized showing stats only */
+            transform: translateY(calc(100% - 140px));
         }
 
         .route-panel.expanded {
@@ -329,7 +331,6 @@
             display: none !important;
         }
         
-        /* During navigation, give map full priority */
         body.navigating .route-panel {
             display: none !important;
         }
@@ -739,7 +740,6 @@
             max-width: 320px;
             border: 1px solid rgba(255, 255, 255, 0.08);
             box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
-            /* IMPORTANT: Hidden by default, shown only when no route */
             display: none;
         }
 
@@ -800,12 +800,11 @@
             color: white;
         }
         
-        /* Adjust location button position during navigation */
         body.navigating .location-button {
             bottom: 160px;
         }
         
-        /* NEW: Floating Verify Button */
+        /* Floating Verify Button */
         .floating-verify-btn {
             position: fixed;
             bottom: 220px;
@@ -895,7 +894,7 @@
             50% { opacity: 0.3; }
         }
 
-        /* NEW: Navigation Info Overlay */
+        /* Navigation Info Overlay */
         .navigation-overlay {
             position: fixed;
             top: 100px;
@@ -960,7 +959,7 @@
             color: var(--text-secondary);
         }
 
-        /* FIXED: Premium Navigation Controls */
+        /* Premium Navigation Controls */
         .nav-controls {
             position: fixed;
             bottom: calc(20px + var(--safe-area-bottom));
@@ -973,13 +972,12 @@
             transition: bottom 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
         }
         
-        /* During navigation, simplify nav controls */
         body.navigating .nav-controls {
             flex-direction: row;
             gap: 12px;
         }
         
-        /* NEW: Quick Verify Button during navigation */
+        /* Quick Verify Button during navigation */
         .nav-verify-btn {
             flex: 1;
             background: linear-gradient(135deg, var(--success), var(--success-dark));
@@ -1008,7 +1006,7 @@
             box-shadow: 0 6px 24px rgba(52, 199, 89, 0.4);
         }
 
-        /* NEW: Optimize buttons */
+        /* Optimize buttons */
         .optimize-button-container {
             display: flex;
             gap: 8px;
@@ -1132,6 +1130,98 @@
             border: 1px solid rgba(255, 255, 255, 0.08);
         }
 
+        /* Rider location marker styles */
+        .rider-location-marker {
+            z-index: 3000 !important;
+        }
+
+        .rider-marker-wrapper {
+            position: relative;
+            width: 60px;
+            height: 60px;
+        }
+
+        .rider-pulse {
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: rgba(0, 102, 255, 0.3);
+            animation: ripple 2s infinite;
+        }
+
+        @keyframes ripple {
+            0% {
+                transform: scale(0.8);
+                opacity: 1;
+            }
+            100% {
+                transform: scale(2);
+                opacity: 0;
+            }
+        }
+
+        .rider-marker-container {
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .rider-direction-cone {
+            position: absolute;
+            width: 0;
+            height: 0;
+            border-left: 10px solid transparent;
+            border-right: 10px solid transparent;
+            border-bottom: 20px solid rgba(0, 102, 255, 0.5);
+            top: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .rider-dot {
+            width: 24px;
+            height: 24px;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            border: 3px solid white;
+        }
+
+        .rider-inner-dot {
+            width: 8px;
+            height: 8px;
+            background: white;
+            border-radius: 50%;
+        }
+
+        /* Marker pulse animation */
+        .marker-pulse {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            border: 2px solid var(--primary);
+            animation: markerPulse 2s infinite;
+        }
+
+        @keyframes markerPulse {
+            0% {
+                transform: scale(1);
+                opacity: 1;
+            }
+            100% {
+                transform: scale(1.5);
+                opacity: 0;
+            }
+        }
+
         /* Responsive */
         @media (min-width: 428px) {
             .app {
@@ -1160,6 +1250,24 @@
         @keyframes progress {
             from { transform: translateX(-100%); }
             to { transform: translateX(0); }
+        }
+
+        /* Reoptimize button */
+        .reoptimize-float-btn {
+            position: fixed;
+            bottom: 100px;
+            right: 20px;
+            background: linear-gradient(135deg, #FF9F0A, #FF6B00);
+            color: white;
+            border: none;
+            border-radius: 50px;
+            padding: 15px 25px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 6px 20px rgba(255, 159, 10, 0.4);
+            z-index: 1000;
+            animation: pulse 2s infinite;
         }
     </style>
 </head>
@@ -1196,7 +1304,7 @@
             <span>LIVE TRACKING</span>
         </div>
 
-        <!-- Navigation Info Overlay (NEW) -->
+        <!-- Navigation Info Overlay -->
         <div class="navigation-overlay" id="navigationOverlay">
             <div class="nav-info-header">
                 <div class="nav-info-title">Navigating to</div>
@@ -1322,7 +1430,7 @@
             const navControls = document.getElementById('navControls');
             const optimizeContainer = document.querySelector('.optimize-button-container');
             const detailsButton = document.querySelector('.nav-button.secondary');
-            const startNavButton = document.querySelector('.nav-button:not(.secondary)');
+            const startNavButton = document.querySelector('.nav-button:not(.secondary):not(.nav-verify-btn)');
             
             // Show navigation overlay
             if (overlay) {
@@ -1411,7 +1519,7 @@
             const navControls = document.getElementById('navControls');
             const optimizeContainer = document.querySelector('.optimize-button-container');
             const detailsButton = document.querySelector('.nav-button.secondary');
-            const stopNavButton = document.querySelector('.nav-button:not(.secondary)');
+            const stopNavButton = document.querySelector('.nav-button:not(.secondary):not(.nav-verify-btn)');
             
             // Hide navigation overlay
             if (overlay) {
