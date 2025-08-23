@@ -1,5 +1,5 @@
 /**
- * Enhanced Route Navigation Module - Part 1/4
+ * Enhanced Route Navigation Module - Part 1/5
  * Setup, Configuration, Core API Functions, and Payment Integration
  * Version: 4.1.0 - With M-Pesa Integration
  */
@@ -329,7 +329,6 @@ function calculateRouteFinancials() {
         commission: state.routeCommission
     });
 }
-
 // ============================================================================
 // ROUTE OPTIMIZATION FUNCTIONS (Using External Module)
 // ============================================================================
@@ -589,6 +588,120 @@ async function handleRouteCompletion() {
     }
 }
 
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
+
+function getNextStop() {
+    if (!state.activeRoute || !state.activeRoute.stops) return null;
+    return state.activeRoute.stops.find(stop => !stop.completed);
+}
+
+function getCurrentStop() {
+    if (!state.activeRoute) return null;
+    
+    const completedStops = state.activeRoute.stops.filter(s => s.completed);
+    if (completedStops.length === 0) return null;
+    
+    return completedStops[completedStops.length - 1];
+}
+
+function isNextStop(stop) {
+    const nextStop = getNextStop();
+    return nextStop && nextStop.id === stop.id;
+}
+
+function canCompleteStop(stop) {
+    if (stop.type === 'pickup') return true;
+    return canCompleteDelivery(stop);
+}
+
+function canCompleteDelivery(deliveryStop) {
+    if (!state.activeRoute || !state.activeRoute.stops) return false;
+    
+    const pickupStop = state.activeRoute.stops.find(s => 
+        s.type === 'pickup' && 
+        (s.parcelId === deliveryStop.parcelId || s.parcelCode === deliveryStop.parcelCode)
+    );
+    
+    return pickupStop && pickupStop.completed;
+}
+
+function formatTimeAgo(timestamp) {
+    if (!timestamp) return '';
+    const minutes = Math.floor((Date.now() - new Date(timestamp)) / 60000);
+    if (minutes < 60) return `${minutes} min ago`;
+    const hours = Math.floor(minutes / 60);
+    return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+}
+
+function getStopShortName(stop) {
+    if (!stop) return '';
+    
+    const address = stop.address;
+    const patterns = [
+        /^([^,]+),/,
+        /^(.+?)(?:\s+Road|\s+Street|\s+Avenue|\s+Drive|\s+Centre|\s+Center)/i
+    ];
+    
+    for (const pattern of patterns) {
+        const match = address.match(pattern);
+        if (match) {
+            return match[1].trim();
+        }
+    }
+    
+    return address.length > 20 ? address.substring(0, 20) + '...' : address;
+}
+
+function initializeOptimizeButton() {
+    setTimeout(() => {
+        addOptimizeButton();
+        
+        if (state.activeRoute && state.activeRoute.isOptimized) {
+            updateOptimizeButton(true);
+        }
+    }, 500);
+}
+
+function waitForLeaflet() {
+    return new Promise((resolve) => {
+        if (window.L) {
+            resolve();
+        } else {
+            const checkInterval = setInterval(() => {
+                if (window.L) {
+                    clearInterval(checkInterval);
+                    resolve();
+                }
+            }, 100);
+        }
+    });
+}
+
+function calculateBounds(stops) {
+    let north = -90, south = 90, east = -180, west = 180;
+    
+    stops.forEach(stop => {
+        if (stop.location) {
+            north = Math.max(north, stop.location.lat);
+            south = Math.min(south, stop.location.lat);
+            east = Math.max(east, stop.location.lng);
+            west = Math.min(west, stop.location.lng);
+        }
+    });
+    
+    return { north, south, east, west };
+}
+
+function calculateZoomFromSpeed(speed) {
+    if (speed > 60) return 15;
+    if (speed > 40) return 16;
+    if (speed > 20) return 17;
+    if (speed > 5) return 18;
+    return 18;
+}
+
 // Toggle numbered markers
 window.toggleNumberedMarkers = function() {
     state.showNumberedMarkers = !state.showNumberedMarkers;
@@ -608,12 +721,6 @@ window.updateOptimizerSetting = function(setting, value) {
         optimizeRouteStops();
     }
 };
-/**
- * Enhanced Route Navigation Module - Part 2/4
- * UI Functions, Display, Widget Management, and Styles
- * Version: 4.1.0 - With M-Pesa Integration
- */
-
 // ============================================================================
 // UI STYLING & INITIALIZATION
 // ============================================================================
@@ -1179,7 +1286,6 @@ function showOptimizationResults(savedDistance, savedPercentage) {
         }
     }, 7000);
 }
-
 // ============================================================================
 // ROUTE DISPLAY FUNCTIONS
 // ============================================================================
@@ -1513,87 +1619,6 @@ function updateDynamicHeader() {
     
     routeTitle.textContent = headerText;
 }
-
-// ============================================================================
-// HELPER FUNCTIONS
-// ============================================================================
-
-function getNextStop() {
-    if (!state.activeRoute || !state.activeRoute.stops) return null;
-    return state.activeRoute.stops.find(stop => !stop.completed);
-}
-
-function getCurrentStop() {
-    if (!state.activeRoute) return null;
-    
-    const completedStops = state.activeRoute.stops.filter(s => s.completed);
-    if (completedStops.length === 0) return null;
-    
-    return completedStops[completedStops.length - 1];
-}
-
-function isNextStop(stop) {
-    const nextStop = getNextStop();
-    return nextStop && nextStop.id === stop.id;
-}
-
-function canCompleteStop(stop) {
-    if (stop.type === 'pickup') return true;
-    return canCompleteDelivery(stop);
-}
-
-function canCompleteDelivery(deliveryStop) {
-    if (!state.activeRoute || !state.activeRoute.stops) return false;
-    
-    const pickupStop = state.activeRoute.stops.find(s => 
-        s.type === 'pickup' && 
-        (s.parcelId === deliveryStop.parcelId || s.parcelCode === deliveryStop.parcelCode)
-    );
-    
-    return pickupStop && pickupStop.completed;
-}
-
-function formatTimeAgo(timestamp) {
-    if (!timestamp) return '';
-    const minutes = Math.floor((Date.now() - new Date(timestamp)) / 60000);
-    if (minutes < 60) return `${minutes} min ago`;
-    const hours = Math.floor(minutes / 60);
-    return `${hours} hour${hours > 1 ? 's' : ''} ago`;
-}
-
-function getStopShortName(stop) {
-    if (!stop) return '';
-    
-    const address = stop.address;
-    const patterns = [
-        /^([^,]+),/,
-        /^(.+?)(?:\s+Road|\s+Street|\s+Avenue|\s+Drive|\s+Centre|\s+Center)/i
-    ];
-    
-    for (const pattern of patterns) {
-        const match = address.match(pattern);
-        if (match) {
-            return match[1].trim();
-        }
-    }
-    
-    return address.length > 20 ? address.substring(0, 20) + '...' : address;
-}
-
-function initializeOptimizeButton() {
-    setTimeout(() => {
-        addOptimizeButton();
-        
-        if (state.activeRoute && state.activeRoute.isOptimized) {
-            updateOptimizeButton(true);
-        }
-    }, 500);
-}
-/**
- * Enhanced Route Navigation Module - Part 3/4
- * Map Functions, Navigation, Location Tracking, and Markers
- * Version: 4.1.0 - With M-Pesa Integration
- */
 
 // ============================================================================
 // MAP INITIALIZATION & MANAGEMENT
@@ -1963,6 +1988,29 @@ function checkStopProximity() {
     }
 }
 
+function updateNavigationInfo() {
+    const nextStop = getNextStop();
+    if (!nextStop || !state.currentLocation) return;
+    
+    const navAddress = document.getElementById('navAddress');
+    const navDistance = document.getElementById('navDistance');
+    const navETA = document.getElementById('navETA');
+    
+    if (navAddress) {
+        navAddress.textContent = nextStop.address || 'Unknown Location';
+    }
+    
+    if (navDistance) {
+        const distance = calculateDistance(state.currentLocation, nextStop.location);
+        navDistance.textContent = `${distance.toFixed(1)} km away`;
+    }
+    
+    if (navETA) {
+        const distance = calculateDistance(state.currentLocation, nextStop.location);
+        const estimatedMinutes = Math.round(distance * 2.5); // Rough estimate
+        navETA.textContent = `${estimatedMinutes} min`;
+    }
+}
 // ============================================================================
 // MAP PLOTTING & ROUTE DISPLAY
 // ============================================================================
@@ -2384,72 +2432,6 @@ function createStopPopup(stop) {
 }
 
 // ============================================================================
-// HELPER FUNCTIONS
-// ============================================================================
-
-function calculateBounds(stops) {
-    let north = -90, south = 90, east = -180, west = 180;
-    
-    stops.forEach(stop => {
-        if (stop.location) {
-            north = Math.max(north, stop.location.lat);
-            south = Math.min(south, stop.location.lat);
-            east = Math.max(east, stop.location.lng);
-            west = Math.min(west, stop.location.lng);
-        }
-    });
-    
-    return { north, south, east, west };
-}
-
-function calculateZoomFromSpeed(speed) {
-    if (speed > 60) return 15;
-    if (speed > 40) return 16;
-    if (speed > 20) return 17;
-    if (speed > 5) return 18;
-    return 18;
-}
-
-function waitForLeaflet() {
-    return new Promise((resolve) => {
-        if (window.L) {
-            resolve();
-        } else {
-            const checkInterval = setInterval(() => {
-                if (window.L) {
-                    clearInterval(checkInterval);
-                    resolve();
-                }
-            }, 100);
-        }
-    });
-}
-
-function updateNavigationInfo() {
-    const nextStop = getNextStop();
-    if (!nextStop || !state.currentLocation) return;
-    
-    const navAddress = document.getElementById('navAddress');
-    const navDistance = document.getElementById('navDistance');
-    const navETA = document.getElementById('navETA');
-    
-    if (navAddress) {
-        navAddress.textContent = nextStop.address || 'Unknown Location';
-    }
-    
-    if (navDistance) {
-        const distance = calculateDistance(state.currentLocation, nextStop.location);
-        navDistance.textContent = `${distance.toFixed(1)} km away`;
-    }
-    
-    if (navETA) {
-        const distance = calculateDistance(state.currentLocation, nextStop.location);
-        const estimatedMinutes = Math.round(distance * 2.5); // Rough estimate
-        navETA.textContent = `${estimatedMinutes} min`;
-    }
-}
-
-// ============================================================================
 // NAVIGATION CONTROL FUNCTIONS
 // ============================================================================
 
@@ -2540,11 +2522,6 @@ window.navigateToStop = function(stopId) {
         state.map.setView([stop.location.lat, stop.location.lng], 16);
     }
 };
-/**
- * Enhanced Route Navigation Module - Part 4/4
- * Verification, Completion, Initialization & Exposed Functions
- * Version: 4.1.0 - With M-Pesa Integration
- */
 
 // ============================================================================
 // VERIFICATION & COMPLETION FUNCTIONS
@@ -3083,735 +3060,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (navControls) navControls.style.display = 'none';
             if (emptyState) emptyState.style.display = 'block';
         }
-        function updateNavigationInfo() {
-    const nextStop = getNextStop();
-    if (!nextStop || !state.currentLocation) return;
-    
-    const navAddress = document.getElementById('navAddress');
-    const navDistance = document.getElementById('navDistance');
-    const navETA = document.getElementById('navETA');
-    
-    if (navAddress) {
-        navAddress.textContent = nextStop.address || 'Unknown Location';
-    }
-    
-    if (navDistance) {
-        const distance = calculateDistance(state.currentLocation, nextStop.location);
-        navDistance.textContent = `${distance.toFixed(1)} km away`;
-    }
-    
-    if (navETA) {
-        const distance = calculateDistance(state.currentLocation, nextStop.location);
-        const estimatedMinutes = Math.round(distance * 2.5); // Rough estimate
-        navETA.textContent = `${estimatedMinutes} min`;
-    }
-}
-
-// ============================================================================
-// NAVIGATION CONTROL FUNCTIONS
-// ============================================================================
-
-window.centerOnLocation = function() {
-    if (state.currentLocation && state.map) {
-        state.map.setView([state.currentLocation.lat, state.currentLocation.lng], 17, {
-            animate: true,
-            duration: 1
-        });
-        
-        // Flash the location marker
-        if (state.currentLocationMarker) {
-            const marker = state.currentLocationMarker.getElement();
-            if (marker) {
-                marker.style.animation = 'none';
-                setTimeout(() => {
-                    marker.style.animation = '';
-                }, 100);
-            }
-        }
-        
-        showNotification('Centered on your location', 'info');
-    } else {
-        showNotification('Getting your location...', 'info');
-        startLocationTracking();
-    }
-};
-
-window.toggleLocationTracking = function() {
-    if (state.isTracking) {
-        stopLocationTracking();
-    } else {
-        startLocationTracking();
-    }
-};
-
-window.startNavigation = function() {
-    const nextStop = getNextStop();
-    if (!nextStop) {
-        showNotification('No stops to navigate to', 'warning');
-        return;
-    }
-    
-    if (!state.routePolyline) {
-        showNotification('Optimizing route...', 'info');
-        drawOptimizedRoute().then(() => {
-            proceedWithNavigation(nextStop);
-        });
-    } else {
-        proceedWithNavigation(nextStop);
-    }
-};
-
-function proceedWithNavigation(nextStop) {
-    startContinuousTracking();
-    state.navigationActive = true;
-    showNotification(`Navigating to ${nextStop.type} at ${nextStop.address}`, 'info');
-}
-
-function startContinuousTracking() {
-    if (state.trackingInterval) {
-        clearInterval(state.trackingInterval);
-    }
-    
-    state.trackingInterval = setInterval(() => {
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
-                position => {
-                    updateCurrentLocation(position);
-                    checkStopProximity();
-                },
-                error => console.error('Tracking error:', error),
-                { enableHighAccuracy: true, maximumAge: 5000 }
-            );
-        }
-    }, 5000);
-}
-
-window.navigateToStop = function(stopId) {
-    const stop = state.activeRoute.stops.find(s => s.id === stopId);
-    if (!stop) return;
-    
-    state.navigationActive = true;
-    showNotification(`Navigating to ${stop.type} location`, 'info');
-    
-    // Center map on stop
-    if (state.map) {
-        state.map.setView([stop.location.lat, stop.location.lng], 16);
-    }
-};
-
-// ============================================================================
-// VERIFICATION & COMPLETION FUNCTIONS - PART 4
-// ============================================================================
-
-window.openQuickVerification = function() {
-    const nextStop = getNextStop();
-    if (nextStop) {
-        openVerificationModal(nextStop.id);
-    }
-};
-
-window.openVerificationModal = function(stopId) {
-    const stop = state.activeRoute.stops.find(s => s.id === stopId);
-    if (!stop || stop.completed) return;
-    
-    const paymentInfo = getPaymentInfoForStop(stop);
-    
-    const modal = document.createElement('div');
-    modal.className = 'verification-modal';
-    modal.style.cssText = `
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        z-index: 2000;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 20px;
-        overflow-y: auto;
-    `;
-    
-    modal.innerHTML = `
-        <div class="modal-overlay" onclick="closeVerificationModal()" style="
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(10, 10, 11, 0.9);
-            backdrop-filter: blur(20px);
-        "></div>
-        <div class="modal-content" style="
-            position: relative;
-            background: linear-gradient(135deg, #1C1C1F, #2C2C2E);
-            border-radius: 24px;
-            max-width: 420px;
-            width: 100%;
-            max-height: 90vh;
-            overflow-y: auto;
-            z-index: 1;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            box-shadow: 0 25px 80px rgba(0, 0, 0, 0.6);
-        ">
-            <div class="modal-header" style="
-                padding: 20px 24px;
-                background: ${stop.type === 'pickup' ? 'linear-gradient(135deg, #FF9F0A, #FF6B00)' : 'linear-gradient(135deg, #34C759, #30D158)'};
-                color: ${stop.type === 'pickup' ? '#0A0A0B' : 'white'};
-                display: flex;
-                align-items: center;
-                gap: 12px;
-                border-radius: 24px 24px 0 0;
-            ">
-                <span style="font-size: 24px;">${stop.type === 'pickup' ? '📦' : '📍'}</span>
-                <h2 style="margin: 0; font-size: 20px; font-weight: 700;">
-                    Verify ${stop.type === 'pickup' ? 'Pickup' : 'Delivery'}
-                </h2>
-            </div>
-            <div class="modal-body" style="padding: 24px;">
-                <div class="stop-summary" style="margin-bottom: 24px;">
-                    <h3 style="font-size: 18px; margin-bottom: 14px; color: white; font-weight: 600;">
-                        ${stop.address}
-                    </h3>
-                    <div style="display: flex; flex-direction: column; gap: 12px;">
-                        <div style="display: flex; gap: 12px; font-size: 15px;">
-                            <span style="color: rgba(255, 255, 255, 0.5); min-width: 90px;">Customer:</span>
-                            <span style="color: white; font-weight: 600;">
-                                ${stop.customerName || stop.vendor_name || stop.recipient_name || 'N/A'}
-                            </span>
-                        </div>
-                        <div style="display: flex; gap: 12px; font-size: 15px;">
-                            <span style="color: rgba(255, 255, 255, 0.5); min-width: 90px;">Phone:</span>
-                            <span style="color: white; font-weight: 600;">
-                                ${stop.customerPhone || stop.vendor_phone || stop.recipient_phone || 'N/A'}
-                            </span>
-                        </div>
-                        <div style="display: flex; gap: 12px; font-size: 15px;">
-                            <span style="color: rgba(255, 255, 255, 0.5); min-width: 90px;">Parcel Code:</span>
-                            <span style="color: white; font-weight: 600;">
-                                ${stop.parcelCode || 'N/A'}
-                            </span>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="verification-section">
-                    <label style="font-weight: 600; font-size: 15px; color: white; display: block; margin-bottom: 12px;">
-                        Enter ${stop.type} verification code:
-                    </label>
-                    <input type="text" 
-                           class="verification-input" 
-                           id="verificationCode" 
-                           placeholder="XXX-XXXX"
-                           maxlength="8"
-                           autocomplete="off"
-                           style="
-                               width: 100%;
-                               background: rgba(255, 255, 255, 0.05);
-                               border: 2px solid rgba(255, 255, 255, 0.2);
-                               border-radius: 14px;
-                               padding: 18px;
-                               font-size: 26px;
-                               font-weight: 700;
-                               text-align: center;
-                               color: white;
-                               letter-spacing: 5px;
-                               text-transform: uppercase;
-                               outline: none;
-                               transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-                               margin: 12px 0;
-                           ">
-                    <p style="font-size: 13px; color: rgba(255, 255, 255, 0.5); text-align: center; margin-top: 8px;">
-                        Ask the ${stop.type === 'pickup' ? 'sender' : 'recipient'} for their code
-                    </p>
-                </div>
-                
-                ${stop.type === 'delivery' && paymentInfo.needsPayment ? `
-                    <div style="margin-top: 24px; padding: 18px; background: linear-gradient(135deg, rgba(76, 175, 80, 0.15), rgba(56, 142, 60, 0.1)); border: 1px solid rgba(76, 175, 80, 0.3); border-radius: 14px;">
-                        <h4 style="margin: 0 0 14px 0; font-size: 16px; font-weight: 700; color: #4CAF50;">
-                            💳 M-Pesa Payment Required
-                        </h4>
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
-                            <span style="color: rgba(255, 255, 255, 0.7);">Amount:</span>
-                            <span style="font-size: 18px; font-weight: 700; color: white;">
-                                KES ${paymentInfo.amount.toLocaleString()}
-                            </span>
-                        </div>
-                        <div style="margin-top: 14px;">
-                            <label style="font-weight: 600; font-size: 14px; color: white; display: block; margin-bottom: 8px;">
-                                Enter M-Pesa Transaction Code:
-                            </label>
-                            <input type="text" 
-                                   id="mpesaCode" 
-                                   placeholder="e.g. QDR5K8XYZP"
-                                   maxlength="10"
-                                   style="
-                                       width: 100%;
-                                       background: rgba(255, 255, 255, 0.05);
-                                       border: 2px solid rgba(76, 175, 80, 0.3);
-                                       border-radius: 10px;
-                                       padding: 14px;
-                                       font-size: 16px;
-                                       font-weight: 600;
-                                       color: white;
-                                       text-transform: uppercase;
-                                       outline: none;
-                                       transition: all 0.3s ease;
-                                   ">
-                            <p style="font-size: 12px; color: rgba(255, 255, 255, 0.5); margin-top: 6px;">
-                                Customer should send payment to: <strong>0725046880</strong>
-                            </p>
-                        </div>
-                    </div>
-                ` : ''}
-                
-                <div class="modal-actions" style="display: flex; gap: 12px; margin-top: 24px;">
-                    <button class="modal-btn primary" onclick="verifyCode('${stop.id}')" style="
-                        flex: 1;
-                        padding: 18px;
-                        border: none;
-                        border-radius: 14px;
-                        font-size: 16px;
-                        font-weight: 700;
-                        cursor: pointer;
-                        background: linear-gradient(135deg, #0066FF, #0052CC);
-                        color: white;
-                    ">
-                        ✓ Verify ${stop.type === 'pickup' ? 'Pickup' : 'Delivery'}
-                    </button>
-                    <button class="modal-btn secondary" onclick="closeVerificationModal()" style="
-                        padding: 18px 24px;
-                        border: none;
-                        border-radius: 14px;
-                        font-size: 16px;
-                        font-weight: 600;
-                        cursor: pointer;
-                        background: rgba(255, 255, 255, 0.1);
-                        color: white;
-                    ">
-                        Cancel
-                    </button>
-                </div>
-            </div>
-        </div>
-    `;
-    
-    document.body.appendChild(modal);
-    
-    setTimeout(() => {
-        document.getElementById('verificationCode').focus();
-    }, 100);
-};
-
-window.closeVerificationModal = function() {
-    const modal = document.querySelector('.verification-modal');
-    if (modal) {
-        modal.classList.add('closing');
-        setTimeout(() => modal.remove(), 300);
-    }
-};
-
-window.verifyCode = async function(stopId) {
-    const stop = state.activeRoute.stops.find(s => s.id === stopId);
-    if (!stop) return;
-    
-    const codeInput = document.getElementById('verificationCode');
-    const code = codeInput.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
-    const paymentInfo = getPaymentInfoForStop(stop);
-    
-    // Demo mode - accept any code for testing
-    const isValidCode = DEV_CONFIG.isDevelopment ? 
-        code.length >= 6 : 
-        code === stop.verificationCode?.toUpperCase().replace(/[^A-Z0-9]/g, '');
-    
-    if (!isValidCode) {
-        codeInput.classList.add('error');
-        showNotification('Invalid code. Please try again.', 'error');
-        return;
-    }
-    
-    // Handle M-Pesa payment for delivery
-    if (stop.type === 'delivery' && paymentInfo.needsPayment) {
-        const mpesaCodeInput = document.getElementById('mpesaCode');
-        if (!mpesaCodeInput || !mpesaCodeInput.value) {
-            showNotification('Please enter M-Pesa transaction code', 'warning');
-            return;
-        }
-        
-        const mpesaCode = mpesaCodeInput.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
-        if (mpesaCode.length < 10) {
-            showNotification('Invalid M-Pesa code format', 'error');
-            return;
-        }
-        
-        // Record M-Pesa payment
-        const paymentRecorded = await recordMpesaPayment(stop.id, mpesaCode, paymentInfo.amount);
-        if (!paymentRecorded) {
-            showNotification('Failed to record payment. Please try again.', 'error');
-            return;
-        }
-    }
-    
-    stop.completed = true;
-    stop.timestamp = new Date();
-    
-    await syncRouteData();
-    
-    closeVerificationModal();
-    showSuccessAnimation(stop.type);
-    
-    displayRouteInfo();
-    plotRoute();
-    drawOptimizedRoute();
-    
-    updateWalletWidget();
-    
-    if (state.activeRoute.stops.every(s => s.completed)) {
-        await completeRoute();
-    }
-};
-
-function showSuccessAnimation(type) {
-    const animation = document.createElement('div');
-    animation.className = 'success-animation';
-    animation.style.cssText = `
-        position: fixed;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        background: linear-gradient(135deg, #1C1C1F, #2C2C2E);
-        border-radius: 24px;
-        padding: 48px;
-        text-align: center;
-        z-index: 3000;
-        box-shadow: 0 25px 80px rgba(0, 0, 0, 0.6);
-        animation: popIn 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-    `;
-    animation.innerHTML = `
-        <div style="
-            width: 84px;
-            height: 84px;
-            background: linear-gradient(135deg, #34C759, #30D158);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto 24px;
-            font-size: 48px;
-            color: white;
-            box-shadow: 0 8px 30px rgba(52, 199, 89, 0.4);
-        ">✓</div>
-        <div style="
-            font-size: 26px;
-            font-weight: 800;
-            color: white;
-            letter-spacing: -0.5px;
-        ">${type === 'pickup' ? 'Pickup' : 'Delivery'} Verified!</div>
-    `;
-    
-    document.body.appendChild(animation);
-    setTimeout(() => animation.remove(), 2000);
-}
-
-async function completeRoute() {
-    console.log('Completing route...');
-    
-    await handleRouteCompletion();
-    
-    const animation = document.createElement('div');
-    animation.className = 'route-complete-animation';
-    animation.style.cssText = `
-        position: fixed;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        background: linear-gradient(135deg, #1C1C1F, #2C2C2E);
-        border-radius: 24px;
-        padding: 48px;
-        text-align: center;
-        z-index: 3000;
-        box-shadow: 0 25px 80px rgba(0, 0, 0, 0.6);
-        animation: popIn 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        max-width: 420px;
-    `;
-    animation.innerHTML = `
-        <div class="route-complete-content">
-            <div style="font-size: 72px; margin-bottom: 24px;">🏆</div>
-            <h1 style="font-size: 32px; font-weight: 800; margin-bottom: 14px; letter-spacing: -1px; color: white;">
-                Route Complete!
-            </h1>
-            <p style="font-size: 16px; color: rgba(255, 255, 255, 0.6); margin-bottom: 28px; font-weight: 500;">
-                Excellent work! All deliveries completed successfully.
-            </p>
-            <div style="display: flex; justify-content: center; gap: 40px; margin-bottom: 36px;">
-                <div style="text-align: center;">
-                    <span style="display: block; font-size: 36px; font-weight: 800; color: #9333EA; margin-bottom: 6px;">
-                        ${state.activeRoute.stops.length}
-                    </span>
-                    <span style="font-size: 13px; color: rgba(255, 255, 255, 0.5); text-transform: uppercase;">
-                        Stops
-                    </span>
-                </div>
-                <div style="text-align: center;">
-                    <span style="display: block; font-size: 36px; font-weight: 800; color: #4CAF50; margin-bottom: 6px;">
-                        KES ${Math.round(state.totalPaymentsReceived)}
-                    </span>
-                    <span style="font-size: 13px; color: rgba(255, 255, 255, 0.5); text-transform: uppercase;">
-                        Collected
-                    </span>
-                </div>
-            </div>
-            ${state.optimizationStats.savedDistance > 0 ? `
-                <div style="margin-bottom: 24px; padding: 14px; background: rgba(147, 51, 234, 0.1); border-radius: 12px;">
-                    <p style="margin: 0; color: #9333EA; font-weight: 600;">
-                        Route optimization saved ${state.optimizationStats.savedDistance.toFixed(1)}km (${state.optimizationStats.savedPercentage}%)
-                    </p>
-                </div>
-            ` : ''}
-            <button onclick="finishRoute()" style="
-                width: 100%;
-                background: linear-gradient(135deg, #9333EA, #7928CA);
-                color: white;
-                border: none;
-                border-radius: 16px;
-                padding: 18px;
-                font-size: 17px;
-                font-weight: 700;
-                cursor: pointer;
-            ">
-                Back to Dashboard
-            </button>
-        </div>
-    `;
-    
-    document.body.appendChild(animation);
-}
-
-window.finishRoute = function() {
-    window.location.href = './rider.html';
-};
-
-// ============================================================================
-// HELPER FUNCTIONS
-// ============================================================================
-
-function getNextStop() {
-    if (!state.activeRoute || !state.activeRoute.stops) return null;
-    return state.activeRoute.stops.find(stop => !stop.completed);
-}
-
-function getCurrentStop() {
-    if (!state.activeRoute) return null;
-    
-    const completedStops = state.activeRoute.stops.filter(s => s.completed);
-    if (completedStops.length === 0) return null;
-    
-    return completedStops[completedStops.length - 1];
-}
-
-function isNextStop(stop) {
-    const nextStop = getNextStop();
-    return nextStop && nextStop.id === stop.id;
-}
-
-function canCompleteStop(stop) {
-    if (stop.type === 'pickup') return true;
-    return canCompleteDelivery(stop);
-}
-
-function canCompleteDelivery(deliveryStop) {
-    if (!state.activeRoute || !state.activeRoute.stops) return false;
-    
-    const pickupStop = state.activeRoute.stops.find(s => 
-        s.type === 'pickup' && 
-        (s.parcelId === deliveryStop.parcelId || s.parcelCode === deliveryStop.parcelCode)
-    );
-    
-    return pickupStop && pickupStop.completed;
-}
-
-function formatTimeAgo(timestamp) {
-    if (!timestamp) return '';
-    const minutes = Math.floor((Date.now() - new Date(timestamp)) / 60000);
-    if (minutes < 60) return `${minutes} min ago`;
-    const hours = Math.floor(minutes / 60);
-    return `${hours} hour${hours > 1 ? 's' : ''} ago`;
-}
-
-function getStopShortName(stop) {
-    if (!stop) return '';
-    
-    const address = stop.address;
-    const patterns = [
-        /^([^,]+),/,
-        /^(.+?)(?:\s+Road|\s+Street|\s+Avenue|\s+Drive|\s+Centre|\s+Center)/i
-    ];
-    
-    for (const pattern of patterns) {
-        const match = address.match(pattern);
-        if (match) {
-            return match[1].trim();
-        }
-    }
-    
-    return address.length > 20 ? address.substring(0, 20) + '...' : address;
-}
-
-function initializeOptimizeButton() {
-    setTimeout(() => {
-        addOptimizeButton();
-        
-        if (state.activeRoute && state.activeRoute.isOptimized) {
-            updateOptimizeButton(true);
-        }
-    }, 500);
-}
-
-// ============================================================================
-// WINDOW FUNCTIONS
-// ============================================================================
-
-window.selectStop = function(stopId) {
-    const stop = state.activeRoute.stops.find(s => s.id === stopId);
-    if (!stop || stop.completed) return;
-    
-    if (state.map) {
-        state.map.setView([stop.location.lat, stop.location.lng], 16);
-        
-        const marker = state.markers.find(m => {
-            const latLng = m.getLatLng();
-            return latLng.lat === stop.location.lat && latLng.lng === stop.location.lng;
-        });
-        
-        if (marker) {
-            marker.openPopup();
-        }
-    }
-};
-
-window.goBack = function() {
-    if (confirm('Are you sure you want to exit navigation?')) {
-        window.location.href = './rider.html';
-    }
-};
-
-window.togglePanelExpansion = function() {
-    const panel = document.getElementById('routePanel');
-    if (panel.classList.contains('expanded')) {
-        panel.classList.remove('expanded');
-        panel.classList.add('minimized');
-    } else {
-        panel.classList.remove('minimized');
-        panel.classList.add('expanded');
-    }
-};
-
-window.toggleRoutePanel = function() {
-    const panel = document.getElementById('routePanel');
-    if (panel.classList.contains('hidden')) {
-        panel.classList.remove('hidden');
-        panel.classList.add('expanded');
-        panel.classList.remove('minimized');
-    } else if (panel.classList.contains('expanded')) {
-        panel.classList.remove('expanded');
-        panel.classList.add('minimized');
-    } else {
-        panel.classList.remove('minimized');
-        panel.classList.add('expanded');
-    }
-};
-
-// ============================================================================
-// EXPOSE FUNCTIONS TO GLOBAL SCOPE FOR HTML ONCLICK HANDLERS
-// ============================================================================
-
-// Core functions
-window.optimizeRouteStops = optimizeRouteStops;
-window.undoOptimization = undoOptimization;
-window.reoptimizeRemainingStops = reoptimizeRemainingStops;
-window.proceedWithNavigation = proceedWithNavigation;
-window.stopLocationTracking = stopLocationTracking;
-window.getNextStop = getNextStop;
-window.calculateDistance = calculateDistance;
-window.showNotification = showNotification;
-
-// Also expose state and config for navigation UI
-window.state = state;
-window.config = config;
-
-// ============================================================================
-// INITIALIZATION
-// ============================================================================
-
-document.addEventListener('DOMContentLoaded', async () => {
-    console.log('Route.js v4.1.0 initializing with M-Pesa integration...');
-    
-    // Inject navigation styles
-    injectNavigationStyles();
-    
-    await waitForLeaflet();
-    
-    try {
-        const storedRoute = localStorage.getItem('tuma_active_route');
-        
-        if (storedRoute) {
-            state.activeRoute = JSON.parse(storedRoute);
-            console.log('Route loaded:', state.activeRoute);
-            console.log('M-Pesa payments enabled');
-            
-            updateStopOrderMap();
-            calculateRouteFinancials();
-            calculatePayments();
-            
-            await initializeMap();
-            
-            displayRouteInfo();
-            updateDynamicHeader();
-            
-            await plotRoute();
-            await drawOptimizedRoute();
-            
-            // Show UI elements
-            const routePanel = document.getElementById('routePanel');
-            const navControls = document.getElementById('navControls');
-            const emptyState = document.getElementById('emptyState');
-            
-            if (routePanel) {
-                routePanel.style.display = 'block';
-                state.isPanelVisible = true;
-            }
-            
-            if (navControls) {
-                navControls.style.display = 'flex';
-            }
-            
-            if (emptyState) {
-                emptyState.style.display = 'none';
-            }
-            
-            // Initialize optimize button
-            initializeOptimizeButton();
-            
-            if (state.totalPaymentsExpected > 0) {
-                showWalletWidget();
-            }
-            
-            startLocationTracking();
-            
-            console.log('Route initialization complete');
-        } else {
-            console.log('No active route found');
-            
-            const routePanel = document.getElementById('routePanel');
-            const navControls = document.getElementById('navControls');
-            const emptyState = document.getElementById('emptyState');
-            
-            if (routePanel) routePanel.style.display = 'none';
-            if (navControls) navControls.style.display = 'none';
-            if (emptyState) emptyState.style.display = 'block';
-        }
     } catch (error) {
         console.error('Error initializing route:', error);
         
@@ -3822,8 +3070,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 });
 
-console.log('✅ Route.js v4.1.0 loaded - With M-Pesa Integration');
-        // ============================================================================
+// ============================================================================
 // DEBUG UTILITIES
 // ============================================================================
 
