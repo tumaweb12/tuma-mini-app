@@ -3823,3 +3823,94 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 console.log('✅ Route.js v4.1.0 loaded - With M-Pesa Integration');
+        // ============================================================================
+// DEBUG UTILITIES
+// ============================================================================
+
+window.routeDebug = {
+    state,
+    config,
+    optimizer: routeOptimizer,
+    testOptimization: () => {
+        if (!state.activeRoute) {
+            console.log('No route loaded');
+            return;
+        }
+        
+        // Test optimization
+        const result = routeOptimizer.optimizeRoute(state.activeRoute.stops);
+        
+        // Get statistics
+        const stats = routeOptimizer.getStatistics();
+        
+        console.log('Optimization result:', result);
+        console.log('Statistics:', stats);
+        return { optimizedRoute: result, statistics: stats };
+    },
+    getOptimizerConfig: () => routeOptimizer.getConfig(),
+    updateOptimizerConfig: (newConfig) => routeOptimizer.updateConfig(newConfig),
+    forceOptimize: () => {
+        if (state.activeRoute) {
+            optimizeRouteStops();
+        }
+    },
+    resetRoute: () => {
+        if (state.originalRouteOrder) {
+            undoOptimization();
+        }
+    },
+    getPaymentStatus: () => ({
+        expected: state.totalPaymentsExpected,
+        received: state.totalPaymentsReceived,
+        pending: state.totalPaymentsExpected - state.totalPaymentsReceived,
+        payments: state.mpesaPayments
+    }),
+    clearRoute: () => {
+        localStorage.removeItem('tuma_active_route');
+        window.location.reload();
+    }
+};
+
+// ============================================================================
+// ERROR BOUNDARY
+// ============================================================================
+
+window.addEventListener('error', (event) => {
+    console.error('Route.js error:', event.error);
+    
+    // Try to recover from critical errors
+    if (event.error && event.error.message && event.error.message.includes('Cannot read')) {
+        console.log('Attempting to recover from error...');
+        
+        // Ensure critical elements exist
+        if (!document.getElementById('map')) {
+            const mapDiv = document.createElement('div');
+            mapDiv.id = 'map';
+            mapDiv.style.cssText = 'width: 100%; height: 100%; position: absolute;';
+            document.body.appendChild(mapDiv);
+        }
+    }
+});
+
+// ============================================================================
+// FINAL INITIALIZATION CHECK
+// ============================================================================
+
+// Ensure the module is properly loaded
+if (typeof RouteOptimizer === 'undefined') {
+    console.error('RouteOptimizer module not found! Make sure route-optimizer.js is loaded first.');
+}
+
+// Final console message
+console.log('✅ Route.js v4.1.0 loaded - With M-Pesa Integration');
+console.log('Debug tools available: window.routeDebug');
+console.log('Optimizer config:', routeOptimizer?.getConfig ? routeOptimizer.getConfig() : 'Not available');
+
+// Export for debugging
+window.RouteModule = {
+    version: '4.1.0',
+    features: ['M-Pesa Integration', 'Route Optimization', 'Real-time Tracking'],
+    state: state,
+    config: config,
+    optimizer: routeOptimizer
+};
