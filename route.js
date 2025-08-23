@@ -3025,7 +3025,66 @@ document.addEventListener('DOMContentLoaded', async () => {
         const storedRoute = localStorage.getItem('tuma_active_route');
         
         if (storedRoute) {
-            state.activeRoute = JSON.parse(storedRoute);
+            let routeData = JSON.parse(storedRoute);
+            
+            // Check if we need to transform parcels to stops
+            if (routeData.parcels && !routeData.stops) {
+                console.log('Transforming parcels to stops format...');
+                const stops = [];
+                
+                routeData.parcels.forEach(parcel => {
+                    // Add pickup stop
+                    stops.push({
+                        id: `pickup-${parcel.id}`,
+                        type: 'pickup',
+                        location: {
+                            lat: parcel.pickup_lat,
+                            lng: parcel.pickup_lng
+                        },
+                        address: parcel.pickup_location.address,
+                        parcelId: parcel.id,
+                        parcelCode: parcel.parcel_code,
+                        vendor_name: parcel.vendor_name,
+                        vendor_phone: parcel.vendor_phone,
+                        customerName: parcel.vendor_name,
+                        customerPhone: parcel.vendor_phone,
+                        verificationCode: parcel.pickup_code,
+                        completed: false
+                    });
+                    
+                    // Add delivery stop
+                    stops.push({
+                        id: `delivery-${parcel.id}`,
+                        type: 'delivery',
+                        location: {
+                            lat: parcel.delivery_lat,
+                            lng: parcel.delivery_lng
+                        },
+                        address: parcel.delivery_location.address,
+                        parcelId: parcel.id,
+                        parcelCode: parcel.parcel_code,
+                        recipient_name: parcel.recipient_name,
+                        recipient_phone: parcel.recipient_phone,
+                        customerName: parcel.recipient_name,
+                        customerPhone: parcel.recipient_phone,
+                        verificationCode: parcel.delivery_code,
+                        paymentInfo: {
+                            amount: parcel.price || parcel.total_price,
+                            method: parcel.payment_method || 'cash',
+                            status: parcel.payment_status || 'pending'
+                        },
+                        completed: false
+                    });
+                });
+                
+                routeData.stops = stops;
+                routeData.id = routeData.id || 'route-' + Date.now();
+                
+                // Save the transformed data back
+                localStorage.setItem('tuma_active_route', JSON.stringify(routeData));
+            }
+            
+            state.activeRoute = routeData;
             console.log('Route loaded:', state.activeRoute);
             console.log('M-Pesa payments enabled');
             
