@@ -5,7 +5,27 @@
  */
 
 // Import the route optimizer module
-import RouteOptimizer from './route-optimizer.js';
+let RouteOptimizer;
+try {
+    // Try ES6 import
+    const module = await import('./route-optimizer.js');
+    RouteOptimizer = module.RouteOptimizer || module.default;
+} catch (e) {
+    // Fallback to global
+    RouteOptimizer = window.RouteOptimizer;
+}
+
+if (!RouteOptimizer) {
+    console.error('RouteOptimizer not available!');
+    // Create a dummy class to prevent errors
+    RouteOptimizer = class {
+        constructor(config) { this.config = config; }
+        optimizeRoute(stops) { return stops; }
+        getStatistics() { return { originalDistance: 0, optimizedDistance: 0, savedDistance: 0, savedPercentage: 0 }; }
+        getConfig() { return this.config; }
+        updateConfig(config) { this.config = {...this.config, ...config}; }
+    };
+}
 
 // Initialize the route optimizer with comprehensive settings
 const routeOptimizer = new RouteOptimizer({
