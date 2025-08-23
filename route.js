@@ -1,35 +1,26 @@
 /**
  * Enhanced Route Navigation Module - Part 1/4
- * Setup, Configuration, and Core API Functions
- * Version: 4.0.0 - Uses External Route Optimizer Module
+ * Setup, Configuration, Core API Functions, and Payment Integration
+ * Version: 4.1.0 - With M-Pesa Integration
  */
 
-// Import the route optimizer module (adjust path as needed)
-// For ES6 modules, ensure your HTML includes type="module" in script tag
-// <script type="module" src="route.js"></script>
+// Import the route optimizer module
 import RouteOptimizer from './route-optimizer.js';
 
 // Initialize the route optimizer with comprehensive settings
 const routeOptimizer = new RouteOptimizer({
-    // Distance thresholds
-    immediateDeliveryRadius: 1.5,      // km - deliver immediately if this close
-    clusterRadius: 2.0,                // km - stops within this are considered clustered
-    zoneRadius: 3.0,                   // km - for zone creation
-    
-    // Scoring weights
-    distanceWeight: 1.0,               // Base weight for distance
-    backtrackPenalty: 5.0,             // Penalty multiplier for going backwards
-    directionChangesPenalty: 2.0,      // Penalty for changing direction frequently
-    clusterBonus: 0.7,                 // Bonus multiplier for staying in cluster
-    
-    // Algorithm settings
-    enableZoning: true,                // Group stops into zones
-    enableSmartPairing: true,          // Pair pickups with nearby deliveries
-    maxLookahead: 3,                   // How many stops to look ahead for optimization
-    
-    // Performance settings
-    maxIterations: 1000,               // Max iterations for optimization algorithms
-    convergenceThreshold: 0.01         // Stop optimizing when improvement < this
+    immediateDeliveryRadius: 1.5,
+    clusterRadius: 2.0,
+    zoneRadius: 3.0,
+    distanceWeight: 1.0,
+    backtrackPenalty: 5.0,
+    directionChangesPenalty: 2.0,
+    clusterBonus: 0.7,
+    enableZoning: true,
+    enableSmartPairing: true,
+    maxLookahead: 3,
+    maxIterations: 1000,
+    convergenceThreshold: 0.01
 });
 
 // Development Configuration
@@ -55,7 +46,7 @@ const config = {
     optimization: {
         enableDynamicRouting: true,
         autoReoptimize: false,
-        reoptimizeThreshold: 2.0 // km savings to trigger re-optimization
+        reoptimizeThreshold: 2.0
     }
 };
 
@@ -94,9 +85,10 @@ const state = {
     radiusCircle: null,
     totalRouteEarnings: 0,
     routeCommission: 0,
-    totalCashToCollect: 0,
-    totalCashCollected: 0,
+    totalPaymentsExpected: 0,
+    totalPaymentsReceived: 0,
     paymentsByStop: {},
+    mpesaPayments: [],
     routeOptimizationMode: 'dynamic',
     originalRouteOrder: null,
     optimizationStats: {
@@ -174,193 +166,29 @@ async function supabaseUpdate(table, filter, data) {
     return await response.json();
 }
 
-// ============================================================================
-// ROUTE OPTIMIZATION FUNCTIONS (Using External Module)
-// ============================================================================
-
-/**
- * Main route optimization function - calls external optimizer
- */
-function optimizeRouteStops() {
-    if (!state.activeRoute || !state.activeRoute.stops) {
-        showNotification('No route to optimize', 'warning');
-        return;
+async function supabaseInsert(table, data) {
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+        method: 'POST',
+        headers: {
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=representation'
+        },
+        body: JSON.stringify(data)
+    });
+    
+    if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`Insert Error: ${response.status} ${errorText}`);
+        throw new Error(`Insert Error: ${response.status}`);
     }
     
-    const hasCompletedStops = state.activeRoute.stops.some(s => s.completed);
-    
-    if (hasCompletedStops) {
-        // Only optimize remaining stops
-        reoptimizeRemainingStops();
-        showNotification('Remaining stops optimized!', 'success');
-    } else {
-        // Full route optimization
-        console.log('Starting full route optimization...');
-        
-        // Store original for undo
-        state.originalRouteOrder = [...state.activeRoute.stops];
-        const originalDistance = calculateTotalRouteDistance(state.originalRouteOrder);
-        
-        showOptimizingAnimation();
-        
-        setTimeout(() => {
-            // Call external RouteOptimizer module - NO currentLocation parameter
-            const optimizedStops = routeOptimizer.optimizeRoute(state.originalRouteOrder);
-            
-            // Get statistics from the optimizer
-            const stats = routeOptimizer.getStatistics();
-            
-            // Update state with optimizer's calculated stats
-            state.activeRoute.stops = optimizedStops;
-            state.activeRoute.isOptimized = true;
-            state.optimizationStats = {
-                originalDistance: stats.originalDistance || originalDistance,
-                optimizedDistance: stats.optimizedDistance,
-                savedDistance: stats.savedDistance,
-                savedPercentage: stats.savedPercentage
-            };
-            
-            // Update UI
-            updateStopOrderMap();
-            localStorage.setItem('tuma_active_route', JSON.stringify(state.activeRoute));
-            
-            console.log('Optimization complete:');
-            console.log(`Original distance: ${state.optimizationStats.originalDistance.toFixed(1)}km`);
-            console.log(`Optimized distance: ${state.optimizationStats.optimizedDistance.toFixed(1)}km`);
-            console.log(`Saved: ${state.optimizationStats.savedDistance.toFixed(1)}km (${state.optimizationStats.savedPercentage.toFixed(1)}%)`);
-            console.log(`Backtracking eliminated: ${stats.backtrackingEliminated} instances`);
-            console.log(`Zones created: ${stats.zonesCreated}`);
-            console.log(`Execution time: ${stats.executionTime?.toFixed(2)}ms`);
-            
-            console.log('\nOptimized route order:');
-            optimizedStops.forEach((stop, index) => {
-                console.log(`${index + 1}. ${stop.type.toUpperCase()} - ${stop.address} (${stop.parcelCode})`);
-            });
-            
-            displayRouteInfo();
-            plotRoute();
-            drawOptimizedRoute();
-            
-            hideOptimizingAnimation();
-            
-            if (state.optimizationStats.savedDistance > 0.1) {
-                showOptimizationResults(state.optimizationStats.savedDistance, state.optimizationStats.savedPercentage);
-            } else {
-                showNotification('Route optimized for efficient delivery sequence', 'success');
-            }
-            
-            updateOptimizeButton(true);
-        }, 1500);
-    }
+    return await response.json();
 }
-
-/**
- * Real-time route re-optimization for remaining stops
- */
-function reoptimizeRemainingStops() {
-    if (!state.activeRoute || !state.activeRoute.stops) return;
-    
-    // Get only uncompleted stops
-    const remainingStops = state.activeRoute.stops.filter(s => !s.completed);
-    
-    if (remainingStops.length <= 1) return; // No need to optimize
-    
-    console.log('📍 Re-optimizing remaining stops...');
-    
-    // Re-optimize remaining stops using external optimizer
-    const reoptimized = routeOptimizer.optimizeRoute(remainingStops);
-    
-    // Get updated statistics
-    const stats = routeOptimizer.getStatistics();
-    console.log(`Re-optimization saved: ${stats.savedDistance.toFixed(1)}km`);
-    
-    // Update the route with completed + reoptimized stops
-    const completedStops = state.activeRoute.stops.filter(s => s.completed);
-    state.activeRoute.stops = [...completedStops, ...reoptimized];
-    
-    // Update UI
-    updateStopOrderMap();
-    displayRouteInfo();
-    plotRoute();
-    drawOptimizedRoute();
-    
-    console.log('Route re-optimized in real-time');
-}
-
-/**
- * Check if re-optimization would provide significant savings
- */
-function checkForBetterRoute() {
-    if (!state.navigationActive || !config.optimization.autoReoptimize) return;
-    
-    const remainingStops = state.activeRoute.stops.filter(s => !s.completed);
-    if (remainingStops.length <= 2) return; // Too few stops to matter
-    
-    // Test if re-optimization would save significant distance
-    const currentOrderDistance = calculateTotalRouteDistance(remainingStops);
-    const testOptimized = routeOptimizer.optimizeRoute(remainingStops);
-    const testStats = routeOptimizer.getStatistics();
-    
-    const savings = testStats.savedDistance;
-    
-    // If we can save more than threshold km, suggest re-optimization
-    if (savings > config.optimization.reoptimizeThreshold) {
-        showNotification(
-            `Route optimization available - Save ${savings.toFixed(1)}km! Tap to optimize.`,
-            'info'
-        );
-        
-        // Show a button to re-optimize
-        showReoptimizeButton();
-    }
-}
-
-/**
- * Undo the last optimization
- */
-function undoOptimization() {
-    if (!state.originalRouteOrder) {
-        showNotification('No original route to restore', 'warning');
-        return;
-    }
-    
-    state.activeRoute.stops = [...state.originalRouteOrder];
-    state.activeRoute.isOptimized = false;
-    
-    updateStopOrderMap();
-    localStorage.setItem('tuma_active_route', JSON.stringify(state.activeRoute));
-    
-    displayRouteInfo();
-    plotRoute();
-    drawOptimizedRoute();
-    
-    updateOptimizeButton(false);
-    showNotification('Route restored to original order', 'info');
-    
-    // Clear optimization stats
-    state.optimizationStats = {
-        originalDistance: 0,
-        optimizedDistance: 0,
-        savedDistance: 0,
-        savedPercentage: 0
-    };
-}
-
-/**
- * Update optimizer configuration
- */
-window.updateOptimizerSetting = function(setting, value) {
-    routeOptimizer.updateConfig({ [setting]: parseFloat(value) });
-    console.log(`Optimizer setting updated: ${setting} = ${value}`);
-    
-    // Optionally re-optimize current route with new settings
-    if (state.activeRoute && !state.activeRoute.stops.some(s => s.completed)) {
-        optimizeRouteStops();
-    }
-};
 
 // ============================================================================
-// UTILITY FUNCTIONS
+// PAYMENT FUNCTIONS - M-PESA INTEGRATION
 // ============================================================================
 
 function parsePrice(priceValue) {
@@ -378,7 +206,8 @@ function getPaymentInfoForStop(stop) {
             amount: 0,
             method: 'unknown',
             status: 'unknown',
-            needsCollection: false
+            needsPayment: false,
+            mpesaCode: null
         };
     }
     
@@ -391,41 +220,61 @@ function getPaymentInfoForStop(stop) {
         );
     }
     
-    if (!parcel && stop.paymentInfo) {
-        return {
-            amount: parsePrice(stop.paymentInfo.amount || 0),
-            method: stop.paymentInfo.method || 'cash',
-            status: stop.paymentInfo.status || 'pending',
-            needsCollection: stop.type === 'delivery' && 
-                           (stop.paymentInfo.method || 'cash') === 'cash' && 
-                           (stop.paymentInfo.status || 'pending') === 'pending'
-        };
-    }
-    
-    if (!parcel) {
-        return {
-            amount: 0,
-            method: 'unknown',
-            status: 'unknown',
-            needsCollection: false
-        };
-    }
-    
-    const amount = parsePrice(parcel.price || parcel.total_price || parcel.amount || 0);
-    const method = parcel.payment_method || parcel.paymentMethod || 'cash';
-    const status = parcel.payment_status || parcel.paymentStatus || 'pending';
+    const amount = parsePrice(parcel?.price || parcel?.total_price || stop.paymentInfo?.amount || 0);
+    const method = parcel?.payment_method || stop.paymentInfo?.method || 'mpesa';
+    const status = parcel?.payment_status || stop.paymentInfo?.status || 'pending';
     
     return {
         amount: amount,
         method: method,
         status: status,
-        needsCollection: stop.type === 'delivery' && method === 'cash' && status === 'pending'
+        needsPayment: stop.type === 'delivery' && status === 'pending' && amount > 0,
+        mpesaCode: null
     };
 }
 
-function calculateCashCollection() {
-    state.totalCashToCollect = 0;
-    state.totalCashCollected = 0;
+async function recordMpesaPayment(stopId, mpesaCode, amount) {
+    try {
+        // Record M-Pesa payment in database
+        const paymentData = {
+            stop_id: stopId,
+            route_id: state.activeRoute.id,
+            rider_id: DEV_CONFIG.testRider.id,
+            mpesa_code: mpesaCode,
+            amount: amount,
+            payment_type: 'delivery',
+            status: 'verified',
+            timestamp: new Date().toISOString()
+        };
+        
+        // Store locally first
+        state.mpesaPayments.push(paymentData);
+        state.paymentsByStop[stopId] = {
+            amount: amount,
+            mpesaCode: mpesaCode,
+            verified: true,
+            timestamp: new Date()
+        };
+        
+        // Update totals
+        state.totalPaymentsReceived += amount;
+        
+        // If not in demo mode, save to database
+        if (!state.activeRoute.id?.startsWith('demo-')) {
+            await supabaseInsert('mpesa_payments', paymentData);
+        }
+        
+        console.log('M-Pesa payment recorded:', paymentData);
+        return true;
+    } catch (error) {
+        console.error('Error recording M-Pesa payment:', error);
+        return false;
+    }
+}
+
+function calculatePayments() {
+    state.totalPaymentsExpected = 0;
+    state.totalPaymentsReceived = 0;
     
     if (!state.activeRoute || !state.activeRoute.stops) return;
     
@@ -433,30 +282,20 @@ function calculateCashCollection() {
         if (stop.type === 'delivery') {
             const paymentInfo = getPaymentInfoForStop(stop);
             
-            if (paymentInfo.needsCollection) {
-                state.totalCashToCollect += paymentInfo.amount;
+            if (paymentInfo.needsPayment) {
+                state.totalPaymentsExpected += paymentInfo.amount;
                 
-                if (stop.completed) {
-                    state.totalCashCollected += paymentInfo.amount;
-                    state.paymentsByStop[stop.id] = {
-                        amount: paymentInfo.amount,
-                        collected: true,
-                        timestamp: stop.timestamp
-                    };
-                } else {
-                    state.paymentsByStop[stop.id] = {
-                        amount: paymentInfo.amount,
-                        collected: false
-                    };
+                if (stop.completed && state.paymentsByStop[stop.id]) {
+                    state.totalPaymentsReceived += paymentInfo.amount;
                 }
             }
         }
     });
     
-    console.log('Cash collection calculated:', {
-        total: state.totalCashToCollect,
-        collected: state.totalCashCollected,
-        pending: state.totalCashToCollect - state.totalCashCollected
+    console.log('Payments calculated:', {
+        expected: state.totalPaymentsExpected,
+        received: state.totalPaymentsReceived,
+        pending: state.totalPaymentsExpected - state.totalPaymentsReceived
     });
 }
 
@@ -490,6 +329,155 @@ function calculateRouteFinancials() {
         commission: state.routeCommission
     });
 }
+
+// ============================================================================
+// ROUTE OPTIMIZATION FUNCTIONS (Using External Module)
+// ============================================================================
+
+function optimizeRouteStops() {
+    if (!state.activeRoute || !state.activeRoute.stops) {
+        showNotification('No route to optimize', 'warning');
+        return;
+    }
+    
+    const hasCompletedStops = state.activeRoute.stops.some(s => s.completed);
+    
+    if (hasCompletedStops) {
+        reoptimizeRemainingStops();
+        showNotification('Remaining stops optimized!', 'success');
+    } else {
+        console.log('Starting full route optimization...');
+        
+        state.originalRouteOrder = [...state.activeRoute.stops];
+        const originalDistance = calculateTotalRouteDistance(state.originalRouteOrder);
+        
+        showOptimizingAnimation();
+        
+        setTimeout(() => {
+            const optimizedStops = routeOptimizer.optimizeRoute(state.originalRouteOrder);
+            const stats = routeOptimizer.getStatistics();
+            
+            state.activeRoute.stops = optimizedStops;
+            state.activeRoute.isOptimized = true;
+            state.optimizationStats = {
+                originalDistance: stats.originalDistance || originalDistance,
+                optimizedDistance: stats.optimizedDistance,
+                savedDistance: stats.savedDistance,
+                savedPercentage: stats.savedPercentage
+            };
+            
+            updateStopOrderMap();
+            localStorage.setItem('tuma_active_route', JSON.stringify(state.activeRoute));
+            
+            console.log('Optimization complete:', state.optimizationStats);
+            
+            displayRouteInfo();
+            plotRoute();
+            drawOptimizedRoute();
+            
+            hideOptimizingAnimation();
+            
+            if (state.optimizationStats.savedDistance > 0.1) {
+                showOptimizationResults(state.optimizationStats.savedDistance, state.optimizationStats.savedPercentage);
+            } else {
+                showNotification('Route optimized for efficient delivery sequence', 'success');
+            }
+            
+            updateOptimizeButton(true);
+        }, 1500);
+    }
+}
+
+function reoptimizeRemainingStops() {
+    if (!state.activeRoute || !state.activeRoute.stops) return;
+    
+    const remainingStops = state.activeRoute.stops.filter(s => !s.completed);
+    if (remainingStops.length <= 1) return;
+    
+    console.log('📍 Re-optimizing remaining stops...');
+    
+    const reoptimized = routeOptimizer.optimizeRoute(remainingStops);
+    const stats = routeOptimizer.getStatistics();
+    console.log(`Re-optimization saved: ${stats.savedDistance.toFixed(1)}km`);
+    
+    const completedStops = state.activeRoute.stops.filter(s => s.completed);
+    state.activeRoute.stops = [...completedStops, ...reoptimized];
+    
+    updateStopOrderMap();
+    displayRouteInfo();
+    plotRoute();
+    drawOptimizedRoute();
+    
+    console.log('Route re-optimized in real-time');
+}
+
+function undoOptimization() {
+    if (!state.originalRouteOrder) {
+        showNotification('No original route to restore', 'warning');
+        return;
+    }
+    
+    state.activeRoute.stops = [...state.originalRouteOrder];
+    state.activeRoute.isOptimized = false;
+    
+    updateStopOrderMap();
+    localStorage.setItem('tuma_active_route', JSON.stringify(state.activeRoute));
+    
+    displayRouteInfo();
+    plotRoute();
+    drawOptimizedRoute();
+    
+    updateOptimizeButton(false);
+    showNotification('Route restored to original order', 'info');
+    
+    state.optimizationStats = {
+        originalDistance: 0,
+        optimizedDistance: 0,
+        savedDistance: 0,
+        savedPercentage: 0
+    };
+}
+
+function checkForBetterRoute() {
+    if (!state.navigationActive || !config.optimization.autoReoptimize) return;
+    
+    const remainingStops = state.activeRoute.stops.filter(s => !s.completed);
+    if (remainingStops.length <= 2) return;
+    
+    const currentOrderDistance = calculateTotalRouteDistance(remainingStops);
+    const testOptimized = routeOptimizer.optimizeRoute(remainingStops);
+    const testStats = routeOptimizer.getStatistics();
+    
+    const savings = testStats.savedDistance;
+    
+    if (savings > config.optimization.reoptimizeThreshold) {
+        showNotification(
+            `Route optimization available - Save ${savings.toFixed(1)}km! Tap to optimize.`,
+            'info'
+        );
+        showReoptimizeButton();
+    }
+}
+
+function showReoptimizeButton() {
+    const existing = document.querySelector('.reoptimize-float-btn');
+    if (existing) existing.remove();
+    
+    const btn = document.createElement('button');
+    btn.className = 'reoptimize-float-btn';
+    btn.innerHTML = '🔄 Re-optimize Route';
+    btn.onclick = () => {
+        reoptimizeRemainingStops();
+        btn.remove();
+    };
+    
+    document.body.appendChild(btn);
+    setTimeout(() => btn.remove(), 10000);
+}
+
+// ============================================================================
+// UTILITY FUNCTIONS
+// ============================================================================
 
 function updateStopOrderMap() {
     state.stopOrderMap = {};
@@ -567,7 +555,8 @@ async function handleRouteCompletion() {
         completed: true,
         earnings: Math.round(state.totalRouteEarnings),
         commission: Math.round(state.routeCommission),
-        cashCollected: Math.round(state.totalCashCollected),
+        paymentsCollected: Math.round(state.totalPaymentsReceived),
+        mpesaPayments: state.mpesaPayments,
         deliveries: deliveryCount,
         stops: state.activeRoute.stops.length,
         timestamp: new Date().toISOString(),
@@ -590,7 +579,7 @@ async function handleRouteCompletion() {
                     {
                         status: 'delivered',
                         delivery_timestamp: new Date().toISOString(),
-                        payment_status: parcel.payment_method === 'cash' ? 'collected' : parcel.payment_status
+                        payment_status: 'paid'
                     }
                 );
             }
@@ -603,16 +592,26 @@ async function handleRouteCompletion() {
 // Toggle numbered markers
 window.toggleNumberedMarkers = function() {
     state.showNumberedMarkers = !state.showNumberedMarkers;
-    plotRoute(); // Redraw with new marker style
+    plotRoute();
     showNotification(
         state.showNumberedMarkers ? 'Showing route numbers' : 'Showing pickup/delivery labels',
         'info'
     );
 };
+
+// Update optimizer configuration
+window.updateOptimizerSetting = function(setting, value) {
+    routeOptimizer.updateConfig({ [setting]: parseFloat(value) });
+    console.log(`Optimizer setting updated: ${setting} = ${value}`);
+    
+    if (state.activeRoute && !state.activeRoute.stops.some(s => s.completed)) {
+        optimizeRouteStops();
+    }
+};
 /**
  * Enhanced Route Navigation Module - Part 2/4
- * UI Functions, Styles, and Display Components
- * Version: 4.0.0
+ * UI Functions, Display, Widget Management, and Styles
+ * Version: 4.1.0 - With M-Pesa Integration
  */
 
 // ============================================================================
@@ -705,8 +704,8 @@ function injectNavigationStyles() {
             transform: rotate(90deg) !important;
         }
         
-        /* Cash Collection Widget */
-        .cash-collection-widget {
+        /* Wallet Widget */
+        .wallet-widget {
             position: fixed;
             top: 80px;
             right: 20px;
@@ -777,6 +776,7 @@ function injectNavigationStyles() {
         
         .undo-optimize-btn:hover {
             background: rgba(255, 255, 255, 0.15);
+            border-color: rgba(255, 255, 255, 0.3);
         }
         
         /* Optimization Animation */
@@ -921,10 +921,6 @@ function injectNavigationStyles() {
             font-weight: 600;
         }
         
-        .efficiency-high { color: #34C759; }
-        .efficiency-medium { color: #FF9F0A; }
-        .efficiency-low { color: #FF3B30; }
-        
         .results-close {
             background: linear-gradient(135deg, #9333EA, #7928CA);
             color: white;
@@ -936,36 +932,104 @@ function injectNavigationStyles() {
             cursor: pointer;
             margin-top: 20px;
         }
-        
-        /* Reoptimize button */
-        .reoptimize-float-btn {
-            position: fixed;
-            bottom: 100px;
-            right: 20px;
-            background: linear-gradient(135deg, #FF9F0A, #FF6B00);
-            color: white;
-            border: none;
-            border-radius: 50px;
-            padding: 15px 25px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            box-shadow: 0 6px 20px rgba(255, 159, 10, 0.4);
-            z-index: 1000;
-            animation: pulse 2s infinite;
-        }
-        
-        @keyframes pulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.05); }
-        }
     `;
     
     document.head.appendChild(style);
 }
 
 // ============================================================================
-// UI DISPLAY FUNCTIONS
+// UI NOTIFICATION & FEEDBACK
+// ============================================================================
+
+function showNotification(message, type = 'info') {
+    const notification = document.createElement('div');
+    notification.className = `notification ${type}`;
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: ${type === 'success' ? 'linear-gradient(135deg, #34C759, #30D158)' : 
+                      type === 'error' ? 'linear-gradient(135deg, #FF3B30, #FF2D55)' : 
+                      type === 'warning' ? 'linear-gradient(135deg, #FF9F0A, #FF6B00)' : 
+                      'linear-gradient(135deg, #1C1C1F, #2C2C2E)'};
+        color: ${type === 'warning' ? '#0A0A0B' : 'white'};
+        padding: 16px 20px;
+        border-radius: 14px;
+        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        z-index: 4000;
+        animation: slideIn 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        max-width: 380px;
+        font-weight: 600;
+        font-size: 15px;
+        letter-spacing: 0.3px;
+    `;
+    notification.innerHTML = `
+        <span class="notification-icon" style="font-size: 20px;">
+            ${type === 'success' ? '✓' : type === 'error' ? '✗' : type === 'warning' ? '⚠' : 'ℹ'}
+        </span>
+        <span>${message}</span>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        notification.style.animation = 'slideOut 0.3s ease-out';
+        setTimeout(() => notification.remove(), 300);
+    }, 3000);
+}
+
+// ============================================================================
+// WALLET WIDGET (M-Pesa Payments)
+// ============================================================================
+
+function showWalletWidget() {
+    const existingWidget = document.querySelector('.wallet-widget');
+    if (existingWidget) existingWidget.remove();
+    
+    const pendingAmount = state.totalPaymentsExpected - state.totalPaymentsReceived;
+    const hasPending = pendingAmount > 0;
+    
+    const widget = document.createElement('div');
+    widget.className = `wallet-widget ${hasPending ? 'has-pending' : ''}`;
+    widget.innerHTML = `
+        <div class="wallet-widget-title" style="font-size: 14px; font-weight: 600; margin-bottom: 10px; color: white;">
+            ${hasPending ? '💳' : '✓'} M-Pesa Payments
+        </div>
+        <div class="wallet-widget-amount" style="font-size: 24px; font-weight: 700; color: #4CAF50; margin-bottom: 15px;">
+            KES ${pendingAmount.toLocaleString()}
+        </div>
+        <div class="wallet-widget-breakdown" style="font-size: 13px; color: rgba(255,255,255,0.7);">
+            <div class="wallet-breakdown-item" style="display: flex; justify-content: space-between; padding: 5px 0;">
+                <span>Total Expected</span>
+                <span style="font-weight: 600;">KES ${state.totalPaymentsExpected.toLocaleString()}</span>
+            </div>
+            <div class="wallet-breakdown-item" style="display: flex; justify-content: space-between; padding: 5px 0;">
+                <span>✓ Received</span>
+                <span style="font-weight: 600; color: #34C759;">KES ${state.totalPaymentsReceived.toLocaleString()}</span>
+            </div>
+            <div class="wallet-breakdown-item" style="display: flex; justify-content: space-between; padding: 5px 0; border-top: 1px solid rgba(255,255,255,0.1); margin-top: 5px; padding-top: 10px;">
+                <span>⏳ Pending</span>
+                <span style="font-weight: 600; color: #FF9F0A;">KES ${pendingAmount.toLocaleString()}</span>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(widget);
+}
+
+function updateWalletWidget() {
+    calculatePayments();
+    const widget = document.querySelector('.wallet-widget');
+    if (widget) {
+        showWalletWidget();
+    }
+}
+
+// ============================================================================
+// OPTIMIZATION UI
 // ============================================================================
 
 function addOptimizeButton() {
@@ -1116,111 +1180,419 @@ function showOptimizationResults(savedDistance, savedPercentage) {
     }, 7000);
 }
 
-function showReoptimizeButton() {
-    // Remove existing button if any
-    const existing = document.querySelector('.reoptimize-float-btn');
-    if (existing) existing.remove();
-    
-    const btn = document.createElement('button');
-    btn.className = 'reoptimize-float-btn';
-    btn.innerHTML = '🔄 Re-optimize Route';
-    btn.onclick = () => {
-        reoptimizeRemainingStops();
-        btn.remove();
-    };
-    
-    document.body.appendChild(btn);
-    
-    // Auto-remove after 10 seconds
-    setTimeout(() => btn.remove(), 10000);
-}
+// ============================================================================
+// ROUTE DISPLAY FUNCTIONS
+// ============================================================================
 
-function showCashCollectionWidget() {
-    const existingWidget = document.querySelector('.cash-collection-widget');
-    if (existingWidget) existingWidget.remove();
+function displayRouteInfo() {
+    if (!state.activeRoute) return;
     
-    const pendingAmount = state.totalCashToCollect - state.totalCashCollected;
-    const hasPending = pendingAmount > 0;
-    
-    const widget = document.createElement('div');
-    widget.className = `cash-collection-widget ${hasPending ? 'has-pending' : ''}`;
-    widget.innerHTML = `
-        <div class="cash-widget-title" style="font-size: 14px; font-weight: 600; margin-bottom: 10px; color: white;">
-            ${hasPending ? '⚡' : '✓'} Cash Collection
-        </div>
-        <div class="cash-widget-amount" style="font-size: 24px; font-weight: 700; color: #FF9F0A; margin-bottom: 15px;">
-            KES ${pendingAmount.toLocaleString()}
-        </div>
-        <div class="cash-widget-breakdown" style="font-size: 13px; color: rgba(255,255,255,0.7);">
-            <div class="cash-breakdown-item" style="display: flex; justify-content: space-between; padding: 5px 0;">
-                <span>Total Expected</span>
-                <span style="font-weight: 600;">KES ${state.totalCashToCollect.toLocaleString()}</span>
-            </div>
-            <div class="cash-breakdown-item" style="display: flex; justify-content: space-between; padding: 5px 0;">
-                <span>✓ Collected</span>
-                <span style="font-weight: 600; color: #34C759;">KES ${state.totalCashCollected.toLocaleString()}</span>
-            </div>
-            <div class="cash-breakdown-item" style="display: flex; justify-content: space-between; padding: 5px 0; border-top: 1px solid rgba(255,255,255,0.1); margin-top: 5px; padding-top: 10px;">
-                <span>⏳ Pending</span>
-                <span style="font-weight: 600; color: #FF9F0A;">KES ${pendingAmount.toLocaleString()}</span>
-            </div>
-        </div>
-    `;
-    
-    document.body.appendChild(widget);
-}
-
-function updateCashCollectionWidget() {
-    calculateCashCollection();
-    const widget = document.querySelector('.cash-collection-widget');
-    if (widget) {
-        showCashCollectionWidget();
+    const routeType = document.getElementById('routeType');
+    if (routeType) {
+        const nextStop = getNextStop();
+        if (nextStop) {
+            routeType.className = `route-badge verify-btn ${nextStop.type}`;
+            routeType.innerHTML = `
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                </svg>
+                <span>Verify ${nextStop.type === 'pickup' ? 'Pickup' : 'Delivery'}</span>
+            `;
+            routeType.onclick = () => openQuickVerification();
+        } else {
+            routeType.className = 'route-badge completed';
+            routeType.innerHTML = 'Route Complete';
+            routeType.onclick = null;
+        }
     }
+    
+    updateRouteStats();
+    displayStops();
 }
 
-function showNotification(message, type = 'info') {
-    const notification = document.createElement('div');
-    notification.className = `notification ${type}`;
-    notification.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        background: ${type === 'success' ? 'linear-gradient(135deg, #34C759, #30D158)' : 
-                      type === 'error' ? 'linear-gradient(135deg, #FF3B30, #FF2D55)' : 
-                      type === 'warning' ? 'linear-gradient(135deg, #FF9F0A, #FF6B00)' : 
-                      'linear-gradient(135deg, #1C1C1F, #2C2C2E)'};
-        color: ${type === 'warning' ? '#0A0A0B' : 'white'};
-        padding: 16px 20px;
-        border-radius: 14px;
-        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        z-index: 4000;
-        animation: slideIn 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-        max-width: 380px;
-        font-weight: 600;
-        font-size: 15px;
-        letter-spacing: 0.3px;
-    `;
-    notification.innerHTML = `
-        <span class="notification-icon" style="font-size: 20px;">
-            ${type === 'success' ? '✓' : type === 'error' ? '✗' : type === 'warning' ? '⚠' : 'ℹ'}
-        </span>
-        <span>${message}</span>
-    `;
+function displayStops() {
+    const stopsList = document.getElementById('stopsList');
+    if (!stopsList || !state.activeRoute) return;
     
-    document.body.appendChild(notification);
+    updateParcelsInPossession();
     
+    let html = '';
+    
+    // Add route efficiency badge if optimized
+    if (state.activeRoute.isOptimized) {
+        html += `
+            <div class="route-header" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+                <h3 style="margin: 0; color: white;">Optimized Route</h3>
+                ${state.optimizationStats.savedDistance > 0 ? `
+                    <span style="
+                        background: linear-gradient(135deg, #9333EA, #7928CA);
+                        color: white;
+                        padding: 6px 12px;
+                        border-radius: 20px;
+                        font-size: 12px;
+                        font-weight: 600;
+                    ">
+                        Saved ${state.optimizationStats.savedDistance.toFixed(1)}km
+                    </span>
+                ` : ''}
+            </div>
+        `;
+    }
+    
+    if (state.parcelsInPossession.length > 0) {
+        html += createParcelsInPossessionWidget();
+    }
+    
+    // Display all stops in current order
+    html += `<div class="stops-container">`;
+    state.activeRoute.stops.forEach((stop, index) => {
+        const orderNumber = state.stopOrderMap[stop.id] || (index + 1);
+        html += createStopCard(stop, orderNumber, stop.type);
+    });
+    html += `</div>`;
+    
+    stopsList.innerHTML = html;
+}
+
+function createParcelsInPossessionWidget() {
+    return `
+        <div class="parcels-possession-widget" style="
+            background: linear-gradient(135deg, rgba(76, 175, 80, 0.15), rgba(56, 142, 60, 0.1));
+            border: 1px solid rgba(76, 175, 80, 0.3);
+            border-radius: 16px;
+            padding: 18px;
+            margin-bottom: 20px;
+        ">
+            <div class="carrying-banner" style="display: flex; align-items: center; gap: 8px; margin-bottom: 14px;">
+                <span class="carrying-icon">📦</span>
+                <span style="font-weight: 700; color: white; font-size: 15px;">
+                    Carrying ${state.parcelsInPossession.length} parcel${state.parcelsInPossession.length > 1 ? 's' : ''}
+                </span>
+            </div>
+            <div class="parcel-cards" style="display: flex; flex-direction: column; gap: 10px;">
+                ${state.parcelsInPossession.map(parcel => {
+                    const deliveryStop = state.activeRoute.stops.find(s => 
+                        s.type === 'delivery' && (s.parcelId === parcel.parcelId || s.parcelCode === parcel.parcelCode)
+                    );
+                    const paymentInfo = deliveryStop ? getPaymentInfoForStop(deliveryStop) : null;
+                    
+                    return `
+                        <div class="parcel-card" style="
+                            background: rgba(255, 255, 255, 0.05);
+                            border-radius: 12px;
+                            padding: 14px;
+                            border-left: 3px solid #4CAF50;
+                        ">
+                            <div style="font-weight: 700; margin-bottom: 4px; color: white; font-size: 15px;">
+                                ${parcel.parcelCode}
+                            </div>
+                            <div style="font-size: 14px; color: rgba(255, 255, 255, 0.6); margin-bottom: 4px;">
+                                ${parcel.destination}
+                            </div>
+                            <div style="font-size: 12px; color: rgba(255, 255, 255, 0.4);">
+                                Picked up ${formatTimeAgo(parcel.pickupTime)}
+                            </div>
+                            ${paymentInfo && paymentInfo.needsPayment ? `
+                                <div style="margin-top: 8px; font-size: 14px; font-weight: 700; color: #4CAF50;">
+                                    💳 M-Pesa: KES ${paymentInfo.amount.toLocaleString()}
+                                </div>
+                            ` : ''}
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        </div>
+    `;
+}
+
+function updateParcelsInPossession() {
+    state.parcelsInPossession = [];
+    
+    if (!state.activeRoute || !state.activeRoute.stops) return;
+    
+    state.activeRoute.stops.forEach(stop => {
+        if (stop.type === 'pickup' && stop.completed) {
+            const deliveryStop = state.activeRoute.stops.find(s => 
+                s.type === 'delivery' && 
+                (s.parcelId === stop.parcelId || s.parcelCode === stop.parcelCode)
+            );
+            
+            if (deliveryStop && !deliveryStop.completed) {
+                state.parcelsInPossession.push({
+                    parcelId: stop.parcelId,
+                    parcelCode: stop.parcelCode,
+                    pickupTime: stop.timestamp,
+                    destination: deliveryStop.address
+                });
+            }
+        }
+    });
+}
+
+function createStopCard(stop, number, type) {
+    const isActive = isNextStop(stop);
+    const canInteract = !stop.completed && canCompleteStop(stop);
+    const paymentInfo = getPaymentInfoForStop(stop);
+    
+    // Different fields for pickup vs delivery
+    let customerName, customerPhone;
+    if (type === 'pickup') {
+        customerName = stop.vendor_name || stop.vendorName || stop.sender_name || stop.customerName || 'Vendor';
+        customerPhone = stop.vendor_phone || stop.vendorPhone || stop.sender_phone || stop.customerPhone || '';
+    } else {
+        customerName = stop.recipient_name || stop.recipientName || stop.customer_name || stop.customerName || 'Recipient';
+        customerPhone = stop.recipient_phone || stop.recipientPhone || stop.customer_phone || stop.customerPhone || '';
+    }
+    
+    const address = stop.address || stop.location_address || 'Address not available';
+    const parcelCode = stop.parcelCode || stop.parcel_code || stop.code || 'N/A';
+    const instructions = stop.specialInstructions || stop.special_instructions || stop.instructions || '';
+    
+    return `
+        <div class="stop-card ${stop.completed ? 'completed' : ''} ${isActive ? 'active' : ''}" 
+             onclick="${canInteract ? `selectStop('${stop.id}')` : ''}"
+             data-stop-id="${stop.id}"
+             style="
+                 background: ${stop.completed ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.05)'};
+                 border: 1px solid ${stop.completed ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.1)'};
+                 border-radius: 16px;
+                 padding: 16px;
+                 margin-bottom: 12px;
+                 cursor: ${canInteract ? 'pointer' : 'default'};
+                 transition: all 0.3s ease;
+                 ${isActive ? 'border-color: #9333EA; box-shadow: 0 0 20px rgba(147, 51, 234, 0.3);' : ''}
+             ">
+            <div style="display: flex; gap: 16px;">
+                <div class="stop-number-badge" style="
+                    width: 44px;
+                    height: 44px;
+                    background: ${stop.completed ? '#2C2C2E' : type === 'pickup' ? '#FF9F0A' : '#007AFF'};
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-weight: 800;
+                    font-size: 18px;
+                    color: ${stop.completed ? '#8E8E93' : 'white'};
+                    flex-shrink: 0;
+                ">
+                    ${stop.completed ? '✓' : number}
+                </div>
+                <div style="flex: 1;">
+                    <h3 style="margin: 0 0 8px 0; font-size: 16px; color: white; font-weight: 600;">
+                        ${address}
+                    </h3>
+                    <div style="display: flex; flex-direction: column; gap: 6px; font-size: 14px;">
+                        <div style="color: rgba(255,255,255,0.7);">
+                            <span>👤 ${customerName}</span>
+                            ${customerPhone ? ` • ${customerPhone}` : ''}
+                        </div>
+                        <div style="color: rgba(255,255,255,0.6);">
+                            📋 Code: ${parcelCode}
+                        </div>
+                        ${instructions ? `
+                            <div style="color: rgba(255,255,255,0.6); font-style: italic;">
+                                💬 ${instructions}
+                            </div>
+                        ` : ''}
+                    </div>
+                    
+                    ${type === 'delivery' && paymentInfo.needsPayment ? `
+                        <div style="
+                            margin-top: 10px;
+                            padding: 8px 12px;
+                            background: ${stop.completed ? 'rgba(76, 175, 80, 0.1)' : 'rgba(76, 175, 80, 0.15)'};
+                            border: 1px solid ${stop.completed ? 'rgba(76, 175, 80, 0.3)' : 'rgba(76, 175, 80, 0.3)'};
+                            border-radius: 8px;
+                            font-weight: 600;
+                            color: ${stop.completed ? '#4CAF50' : '#4CAF50'};
+                        ">
+                            💳 ${stop.completed ? 'Paid via M-Pesa' : 'M-PESA'}: KES ${paymentInfo.amount.toLocaleString()}
+                        </div>
+                    ` : type === 'delivery' && paymentInfo.method === 'online' ? `
+                        <div style="
+                            margin-top: 10px;
+                            padding: 8px 12px;
+                            background: rgba(52, 199, 89, 0.1);
+                            border: 1px solid rgba(52, 199, 89, 0.3);
+                            border-radius: 8px;
+                            color: #34C759;
+                            font-weight: 600;
+                        ">
+                            ✅ Already Paid Online
+                        </div>
+                    ` : ''}
+                    
+                    ${stop.completed ? `
+                        <div style="margin-top: 10px; color: #34C759; font-size: 13px; font-weight: 600;">
+                            ✓ Completed ${formatTimeAgo(stop.timestamp)}
+                        </div>
+                    ` : isActive ? `
+                        <div style="margin-top: 10px; color: #9333EA; font-size: 13px; font-weight: 600;">
+                            → Current Stop
+                        </div>
+                    ` : ''}
+                </div>
+                ${!stop.completed && canInteract ? `
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                        <button onclick="event.stopPropagation(); navigateToStop('${stop.id}')" style="
+                            background: rgba(255,255,255,0.1);
+                            border: none;
+                            border-radius: 10px;
+                            width: 40px;
+                            height: 40px;
+                            cursor: pointer;
+                            font-size: 20px;
+                        ">🧭</button>
+                        ${customerPhone ? `
+                            <a href="tel:${customerPhone}" onclick="event.stopPropagation();" style="
+                                background: rgba(255,255,255,0.1);
+                                border: none;
+                                border-radius: 10px;
+                                width: 40px;
+                                height: 40px;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                text-decoration: none;
+                                font-size: 20px;
+                            ">📞</a>
+                        ` : ''}
+                    </div>
+                ` : ''}
+            </div>
+        </div>
+    `;
+}
+
+function updateRouteStats() {
+    const remainingStops = state.activeRoute.stops.filter(s => !s.completed).length;
+    
+    let totalDistance = 0;
+    if (state.activeRoute.distance) {
+        totalDistance = parseFloat(state.activeRoute.distance);
+    } else if (state.activeRoute.total_distance) {
+        totalDistance = parseFloat(state.activeRoute.total_distance);
+    } else {
+        totalDistance = calculateTotalRouteDistance(state.activeRoute.stops);
+    }
+    
+    const estimatedTime = Math.round(totalDistance * 2.5 + remainingStops * 5);
+    
+    const remainingEl = document.getElementById('remainingStops');
+    const distanceEl = document.getElementById('totalDistance');
+    const timeEl = document.getElementById('estimatedTime');
+    
+    if (remainingEl) remainingEl.textContent = remainingStops;
+    if (distanceEl) distanceEl.textContent = totalDistance.toFixed(1);
+    if (timeEl) timeEl.textContent = estimatedTime;
+}
+
+function updateDynamicHeader() {
+    const routeTitle = document.getElementById('routeTitle');
+    if (!routeTitle || !state.activeRoute) return;
+    
+    const nextStop = getNextStop();
+    const currentStop = getCurrentStop();
+    
+    if (!nextStop) {
+        routeTitle.textContent = 'Route Complete';
+        return;
+    }
+    
+    let headerText = '';
+    
+    if (currentStop && state.currentLocation) {
+        headerText = `Your Location → ${getStopShortName(nextStop)}`;
+    } else if (currentStop) {
+        headerText = `${getStopShortName(currentStop)} → ${getStopShortName(nextStop)}`;
+    } else {
+        const firstStop = state.activeRoute.stops[0];
+        headerText = `Starting → ${getStopShortName(firstStop)}`;
+    }
+    
+    routeTitle.textContent = headerText;
+}
+
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
+
+function getNextStop() {
+    if (!state.activeRoute || !state.activeRoute.stops) return null;
+    return state.activeRoute.stops.find(stop => !stop.completed);
+}
+
+function getCurrentStop() {
+    if (!state.activeRoute) return null;
+    
+    const completedStops = state.activeRoute.stops.filter(s => s.completed);
+    if (completedStops.length === 0) return null;
+    
+    return completedStops[completedStops.length - 1];
+}
+
+function isNextStop(stop) {
+    const nextStop = getNextStop();
+    return nextStop && nextStop.id === stop.id;
+}
+
+function canCompleteStop(stop) {
+    if (stop.type === 'pickup') return true;
+    return canCompleteDelivery(stop);
+}
+
+function canCompleteDelivery(deliveryStop) {
+    if (!state.activeRoute || !state.activeRoute.stops) return false;
+    
+    const pickupStop = state.activeRoute.stops.find(s => 
+        s.type === 'pickup' && 
+        (s.parcelId === deliveryStop.parcelId || s.parcelCode === deliveryStop.parcelCode)
+    );
+    
+    return pickupStop && pickupStop.completed;
+}
+
+function formatTimeAgo(timestamp) {
+    if (!timestamp) return '';
+    const minutes = Math.floor((Date.now() - new Date(timestamp)) / 60000);
+    if (minutes < 60) return `${minutes} min ago`;
+    const hours = Math.floor(minutes / 60);
+    return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+}
+
+function getStopShortName(stop) {
+    if (!stop) return '';
+    
+    const address = stop.address;
+    const patterns = [
+        /^([^,]+),/,
+        /^(.+?)(?:\s+Road|\s+Street|\s+Avenue|\s+Drive|\s+Centre|\s+Center)/i
+    ];
+    
+    for (const pattern of patterns) {
+        const match = address.match(pattern);
+        if (match) {
+            return match[1].trim();
+        }
+    }
+    
+    return address.length > 20 ? address.substring(0, 20) + '...' : address;
+}
+
+function initializeOptimizeButton() {
     setTimeout(() => {
-        notification.style.animation = 'slideOut 0.3s ease-out';
-        setTimeout(() => notification.remove(), 300);
-    }, 3000);
+        addOptimizeButton();
+        
+        if (state.activeRoute && state.activeRoute.isOptimized) {
+            updateOptimizeButton(true);
+        }
+    }, 500);
 }
 /**
  * Enhanced Route Navigation Module - Part 3/4
- * Map, Navigation, and Location Tracking Functions
- * Version: 4.0.0
+ * Map Functions, Navigation, Location Tracking, and Markers
+ * Version: 4.1.0 - With M-Pesa Integration
  */
 
 // ============================================================================
@@ -1568,8 +1940,8 @@ function checkStopProximity() {
         
         let message = `Approaching ${nextStop.type} location - ${Math.round(distance * 1000)}m away`;
         
-        if (nextStop.type === 'delivery' && paymentInfo.needsCollection) {
-            message = `💰 Approaching delivery - Remember to collect KES ${paymentInfo.amount.toLocaleString()}`;
+        if (nextStop.type === 'delivery' && paymentInfo.needsPayment) {
+            message = `💳 Approaching delivery - M-Pesa payment: KES ${paymentInfo.amount.toLocaleString()}`;
         }
         
         showNotification(message, 'warning');
@@ -1957,11 +2329,11 @@ function createStopPopup(stop) {
                             <span style="color: rgba(255, 255, 255, 0.9);">${instructions}</span>
                         </div>
                     ` : ''}
-                    ${paymentInfo.needsCollection ? `
-                        <div class="info-row payment" style="display: flex; align-items: flex-start; gap: 12px; padding: 14px; background: linear-gradient(135deg, rgba(255, 159, 10, 0.15), rgba(255, 107, 0, 0.1)); border: 1px solid rgba(255, 159, 10, 0.3); border-radius: 10px; margin-top: 12px;">
-                            <span class="info-icon" style="width: 24px; font-size: 18px;">💰</span>
-                            <span style="font-weight: 700; color: #FF9F0A;">
-                                Collect: KES ${paymentInfo.amount.toLocaleString()}
+                    ${paymentInfo.needsPayment ? `
+                        <div class="info-row payment" style="display: flex; align-items: flex-start; gap: 12px; padding: 14px; background: linear-gradient(135deg, rgba(76, 175, 80, 0.15), rgba(56, 142, 60, 0.1)); border: 1px solid rgba(76, 175, 80, 0.3); border-radius: 10px; margin-top: 12px;">
+                            <span class="info-icon" style="width: 24px; font-size: 18px;">💳</span>
+                            <span style="font-weight: 700; color: #4CAF50;">
+                                M-Pesa: KES ${paymentInfo.amount.toLocaleString()}
                             </span>
                         </div>
                     ` : paymentInfo.method === 'online' ? `
@@ -2051,6 +2423,30 @@ function waitForLeaflet() {
             }, 100);
         }
     });
+}
+
+function updateNavigationInfo() {
+    const nextStop = getNextStop();
+    if (!nextStop || !state.currentLocation) return;
+    
+    const navAddress = document.getElementById('navAddress');
+    const navDistance = document.getElementById('navDistance');
+    const navETA = document.getElementById('navETA');
+    
+    if (navAddress) {
+        navAddress.textContent = nextStop.address || 'Unknown Location';
+    }
+    
+    if (navDistance) {
+        const distance = calculateDistance(state.currentLocation, nextStop.location);
+        navDistance.textContent = `${distance.toFixed(1)} km away`;
+    }
+    
+    if (navETA) {
+        const distance = calculateDistance(state.currentLocation, nextStop.location);
+        const estimatedMinutes = Math.round(distance * 2.5); // Rough estimate
+        navETA.textContent = `${estimatedMinutes} min`;
+    }
 }
 
 // ============================================================================
@@ -2146,294 +2542,9 @@ window.navigateToStop = function(stopId) {
 };
 /**
  * Enhanced Route Navigation Module - Part 4/4
- * Display, Verification, and Completion Functions
- * Version: 4.0.0
+ * Verification, Completion, Initialization & Exposed Functions
+ * Version: 4.1.0 - With M-Pesa Integration
  */
-
-// ============================================================================
-// ROUTE DISPLAY FUNCTIONS
-// ============================================================================
-
-function displayRouteInfo() {
-    if (!state.activeRoute) return;
-    
-    const routeType = document.getElementById('routeType');
-    if (routeType) {
-        const nextStop = getNextStop();
-        if (nextStop) {
-            routeType.className = `route-badge verify-btn ${nextStop.type}`;
-            routeType.innerHTML = `
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
-                </svg>
-                <span>Verify ${nextStop.type === 'pickup' ? 'Pickup' : 'Delivery'}</span>
-            `;
-            routeType.onclick = () => openQuickVerification();
-        } else {
-            routeType.className = 'route-badge completed';
-            routeType.innerHTML = 'Route Complete';
-            routeType.onclick = null;
-        }
-    }
-    
-    updateRouteStats();
-    displayStops();
-}
-
-function displayStops() {
-    const stopsList = document.getElementById('stopsList');
-    if (!stopsList || !state.activeRoute) return;
-    
-    updateParcelsInPossession();
-    
-    let html = '';
-    
-    // Add route efficiency badge if optimized
-    if (state.activeRoute.isOptimized) {
-        html += `
-            <div class="route-header" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
-                <h3 style="margin: 0; color: white;">Optimized Route</h3>
-                ${state.optimizationStats.savedDistance > 0 ? `
-                    <span style="
-                        background: linear-gradient(135deg, #9333EA, #7928CA);
-                        color: white;
-                        padding: 6px 12px;
-                        border-radius: 20px;
-                        font-size: 12px;
-                        font-weight: 600;
-                    ">
-                        Saved ${state.optimizationStats.savedDistance.toFixed(1)}km
-                    </span>
-                ` : ''}
-            </div>
-        `;
-    }
-    
-    if (state.parcelsInPossession.length > 0) {
-        html += createParcelsInPossessionWidget();
-    }
-    
-    // Display all stops in current order
-    html += `<div class="stops-container">`;
-    state.activeRoute.stops.forEach((stop, index) => {
-        const orderNumber = state.stopOrderMap[stop.id] || (index + 1);
-        html += createStopCard(stop, orderNumber, stop.type);
-    });
-    html += `</div>`;
-    
-    stopsList.innerHTML = html;
-}
-
-function createParcelsInPossessionWidget() {
-    return `
-        <div class="parcels-possession-widget" style="
-            background: linear-gradient(135deg, rgba(255, 159, 10, 0.15), rgba(255, 107, 0, 0.1));
-            border: 1px solid rgba(255, 159, 10, 0.3);
-            border-radius: 16px;
-            padding: 18px;
-            margin-bottom: 20px;
-        ">
-            <div class="carrying-banner" style="display: flex; align-items: center; gap: 8px; margin-bottom: 14px;">
-                <span class="carrying-icon">📦</span>
-                <span style="font-weight: 700; color: white; font-size: 15px;">
-                    Carrying ${state.parcelsInPossession.length} parcel${state.parcelsInPossession.length > 1 ? 's' : ''}
-                </span>
-            </div>
-            <div class="parcel-cards" style="display: flex; flex-direction: column; gap: 10px;">
-                ${state.parcelsInPossession.map(parcel => {
-                    const deliveryStop = state.activeRoute.stops.find(s => 
-                        s.type === 'delivery' && (s.parcelId === parcel.parcelId || s.parcelCode === parcel.parcelCode)
-                    );
-                    const paymentInfo = deliveryStop ? getPaymentInfoForStop(deliveryStop) : null;
-                    
-                    return `
-                        <div class="parcel-card" style="
-                            background: rgba(255, 255, 255, 0.05);
-                            border-radius: 12px;
-                            padding: 14px;
-                            border-left: 3px solid #FF9F0A;
-                        ">
-                            <div style="font-weight: 700; margin-bottom: 4px; color: white; font-size: 15px;">
-                                ${parcel.parcelCode}
-                            </div>
-                            <div style="font-size: 14px; color: rgba(255, 255, 255, 0.6); margin-bottom: 4px;">
-                                ${parcel.destination}
-                            </div>
-                            <div style="font-size: 12px; color: rgba(255, 255, 255, 0.4);">
-                                Picked up ${formatTimeAgo(parcel.pickupTime)}
-                            </div>
-                            ${paymentInfo && paymentInfo.needsCollection ? `
-                                <div style="margin-top: 8px; font-size: 14px; font-weight: 700; color: #FF9F0A;">
-                                    💰 Collect: KES ${paymentInfo.amount.toLocaleString()}
-                                </div>
-                            ` : ''}
-                        </div>
-                    `;
-                }).join('')}
-            </div>
-        </div>
-    `;
-}
-
-function updateParcelsInPossession() {
-    state.parcelsInPossession = [];
-    
-    if (!state.activeRoute || !state.activeRoute.stops) return;
-    
-    state.activeRoute.stops.forEach(stop => {
-        if (stop.type === 'pickup' && stop.completed) {
-            const deliveryStop = state.activeRoute.stops.find(s => 
-                s.type === 'delivery' && 
-                (s.parcelId === stop.parcelId || s.parcelCode === stop.parcelCode)
-            );
-            
-            if (deliveryStop && !deliveryStop.completed) {
-                state.parcelsInPossession.push({
-                    parcelId: stop.parcelId,
-                    parcelCode: stop.parcelCode,
-                    pickupTime: stop.timestamp,
-                    destination: deliveryStop.address
-                });
-            }
-        }
-    });
-}
-
-function createStopCard(stop, number, type) {
-    const isActive = isNextStop(stop);
-    const canInteract = !stop.completed && canCompleteStop(stop);
-    const paymentInfo = getPaymentInfoForStop(stop);
-    
-    // Different fields for pickup vs delivery
-    let customerName, customerPhone;
-    if (type === 'pickup') {
-        customerName = stop.vendor_name || stop.vendorName || stop.sender_name || stop.customerName || 'Vendor';
-        customerPhone = stop.vendor_phone || stop.vendorPhone || stop.sender_phone || stop.customerPhone || '';
-    } else {
-        customerName = stop.recipient_name || stop.recipientName || stop.customer_name || stop.customerName || 'Recipient';
-        customerPhone = stop.recipient_phone || stop.recipientPhone || stop.customer_phone || stop.customerPhone || '';
-    }
-    
-    const address = stop.address || stop.location_address || 'Address not available';
-    const parcelCode = stop.parcelCode || stop.parcel_code || stop.code || 'N/A';
-    const instructions = stop.specialInstructions || stop.special_instructions || stop.instructions || '';
-    
-    return `
-        <div class="stop-card ${stop.completed ? 'completed' : ''} ${isActive ? 'active' : ''}" 
-             onclick="${canInteract ? `selectStop('${stop.id}')` : ''}"
-             data-stop-id="${stop.id}"
-             style="
-                 background: ${stop.completed ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.05)'};
-                 border: 1px solid ${stop.completed ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.1)'};
-                 border-radius: 16px;
-                 padding: 16px;
-                 margin-bottom: 12px;
-                 cursor: ${canInteract ? 'pointer' : 'default'};
-                 transition: all 0.3s ease;
-                 ${isActive ? 'border-color: #9333EA; box-shadow: 0 0 20px rgba(147, 51, 234, 0.3);' : ''}
-             ">
-            <div style="display: flex; gap: 16px;">
-                <div class="stop-number-badge" style="
-                    width: 44px;
-                    height: 44px;
-                    background: ${stop.completed ? '#2C2C2E' : type === 'pickup' ? '#FF9F0A' : '#007AFF'};
-                    border-radius: 50%;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    font-weight: 800;
-                    font-size: 18px;
-                    color: ${stop.completed ? '#8E8E93' : 'white'};
-                    flex-shrink: 0;
-                ">
-                    ${stop.completed ? '✓' : number}
-                </div>
-                <div style="flex: 1;">
-                    <h3 style="margin: 0 0 8px 0; font-size: 16px; color: white; font-weight: 600;">
-                        ${address}
-                    </h3>
-                    <div style="display: flex; flex-direction: column; gap: 6px; font-size: 14px;">
-                        <div style="color: rgba(255,255,255,0.7);">
-                            <span>👤 ${customerName}</span>
-                            ${customerPhone ? ` • ${customerPhone}` : ''}
-                        </div>
-                        <div style="color: rgba(255,255,255,0.6);">
-                            📋 Code: ${parcelCode}
-                        </div>
-                        ${instructions ? `
-                            <div style="color: rgba(255,255,255,0.6); font-style: italic;">
-                                💬 ${instructions}
-                            </div>
-                        ` : ''}
-                    </div>
-                    
-                    ${type === 'delivery' && paymentInfo.needsCollection ? `
-                        <div style="
-                            margin-top: 10px;
-                            padding: 8px 12px;
-                            background: ${stop.completed ? 'rgba(52, 199, 89, 0.1)' : 'rgba(255, 159, 10, 0.15)'};
-                            border: 1px solid ${stop.completed ? 'rgba(52, 199, 89, 0.3)' : 'rgba(255, 159, 10, 0.3)'};
-                            border-radius: 8px;
-                            font-weight: 600;
-                            color: ${stop.completed ? '#34C759' : '#FF9F0A'};
-                        ">
-                            💵 ${stop.completed ? 'Collected' : 'COLLECT'}: KES ${paymentInfo.amount.toLocaleString()}
-                        </div>
-                    ` : type === 'delivery' && paymentInfo.method === 'online' ? `
-                        <div style="
-                            margin-top: 10px;
-                            padding: 8px 12px;
-                            background: rgba(52, 199, 89, 0.1);
-                            border: 1px solid rgba(52, 199, 89, 0.3);
-                            border-radius: 8px;
-                            color: #34C759;
-                            font-weight: 600;
-                        ">
-                            ✅ Already Paid Online
-                        </div>
-                    ` : ''}
-                    
-                    ${stop.completed ? `
-                        <div style="margin-top: 10px; color: #34C759; font-size: 13px; font-weight: 600;">
-                            ✓ Completed ${formatTimeAgo(stop.timestamp)}
-                        </div>
-                    ` : isActive ? `
-                        <div style="margin-top: 10px; color: #9333EA; font-size: 13px; font-weight: 600;">
-                            → Current Stop
-                        </div>
-                    ` : ''}
-                </div>
-                ${!stop.completed && canInteract ? `
-                    <div style="display: flex; flex-direction: column; gap: 8px;">
-                        <button onclick="event.stopPropagation(); navigateToStop('${stop.id}')" style="
-                            background: rgba(255,255,255,0.1);
-                            border: none;
-                            border-radius: 10px;
-                            width: 40px;
-                            height: 40px;
-                            cursor: pointer;
-                            font-size: 20px;
-                        ">🧭</button>
-                        ${customerPhone ? `
-                            <a href="tel:${customerPhone}" onclick="event.stopPropagation();" style="
-                                background: rgba(255,255,255,0.1);
-                                border: none;
-                                border-radius: 10px;
-                                width: 40px;
-                                height: 40px;
-                                display: flex;
-                                align-items: center;
-                                justify-content: center;
-                                text-decoration: none;
-                                font-size: 20px;
-                            ">📞</a>
-                        ` : ''}
-                    </div>
-                ` : ''}
-            </div>
-        </div>
-    `;
-}
 
 // ============================================================================
 // VERIFICATION & COMPLETION FUNCTIONS
@@ -2562,14 +2673,42 @@ window.openVerificationModal = function(stopId) {
                     </p>
                 </div>
                 
-                ${stop.type === 'delivery' && paymentInfo.needsCollection ? `
-                    <div style="margin-top: 18px; padding: 14px; background: rgba(255, 255, 255, 0.05); border-radius: 12px;">
-                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-weight: 600;">
-                            <input type="checkbox" id="paymentCollected" style="width: 22px; height: 22px; cursor: pointer;">
-                            <span style="font-size: 15px; color: white;">
-                                I have collected KES ${paymentInfo.amount.toLocaleString()} cash
+                ${stop.type === 'delivery' && paymentInfo.needsPayment ? `
+                    <div style="margin-top: 24px; padding: 18px; background: linear-gradient(135deg, rgba(76, 175, 80, 0.15), rgba(56, 142, 60, 0.1)); border: 1px solid rgba(76, 175, 80, 0.3); border-radius: 14px;">
+                        <h4 style="margin: 0 0 14px 0; font-size: 16px; font-weight: 700; color: #4CAF50;">
+                            💳 M-Pesa Payment Required
+                        </h4>
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                            <span style="color: rgba(255, 255, 255, 0.7);">Amount:</span>
+                            <span style="font-size: 18px; font-weight: 700; color: white;">
+                                KES ${paymentInfo.amount.toLocaleString()}
                             </span>
-                        </label>
+                        </div>
+                        <div style="margin-top: 14px;">
+                            <label style="font-weight: 600; font-size: 14px; color: white; display: block; margin-bottom: 8px;">
+                                Enter M-Pesa Transaction Code:
+                            </label>
+                            <input type="text" 
+                                   id="mpesaCode" 
+                                   placeholder="e.g. QDR5K8XYZP"
+                                   maxlength="10"
+                                   style="
+                                       width: 100%;
+                                       background: rgba(255, 255, 255, 0.05);
+                                       border: 2px solid rgba(76, 175, 80, 0.3);
+                                       border-radius: 10px;
+                                       padding: 14px;
+                                       font-size: 16px;
+                                       font-weight: 600;
+                                       color: white;
+                                       text-transform: uppercase;
+                                       outline: none;
+                                       transition: all 0.3s ease;
+                                   ">
+                            <p style="font-size: 12px; color: rgba(255, 255, 255, 0.5); margin-top: 6px;">
+                                Customer should send payment to: <strong>0725046880</strong>
+                            </p>
+                        </div>
                     </div>
                 ` : ''}
                 
@@ -2638,25 +2777,30 @@ window.verifyCode = async function(stopId) {
         return;
     }
     
-    if (stop.type === 'delivery' && paymentInfo.needsCollection) {
-        const paymentCheckbox = document.getElementById('paymentCollected');
-        if (paymentCheckbox && !paymentCheckbox.checked) {
-            showNotification('Please confirm cash collection before verifying', 'warning');
+    // Handle M-Pesa payment for delivery
+    if (stop.type === 'delivery' && paymentInfo.needsPayment) {
+        const mpesaCodeInput = document.getElementById('mpesaCode');
+        if (!mpesaCodeInput || !mpesaCodeInput.value) {
+            showNotification('Please enter M-Pesa transaction code', 'warning');
+            return;
+        }
+        
+        const mpesaCode = mpesaCodeInput.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+        if (mpesaCode.length < 10) {
+            showNotification('Invalid M-Pesa code format', 'error');
+            return;
+        }
+        
+        // Record M-Pesa payment
+        const paymentRecorded = await recordMpesaPayment(stop.id, mpesaCode, paymentInfo.amount);
+        if (!paymentRecorded) {
+            showNotification('Failed to record payment. Please try again.', 'error');
             return;
         }
     }
     
     stop.completed = true;
     stop.timestamp = new Date();
-    
-    if (stop.type === 'delivery' && paymentInfo.needsCollection) {
-        state.paymentsByStop[stop.id] = {
-            collected: true,
-            amount: paymentInfo.amount,
-            timestamp: stop.timestamp
-        };
-        updateCashCollectionWidget();
-    }
     
     await syncRouteData();
     
@@ -2666,6 +2810,8 @@ window.verifyCode = async function(stopId) {
     displayRouteInfo();
     plotRoute();
     drawOptimizedRoute();
+    
+    updateWalletWidget();
     
     if (state.activeRoute.stops.every(s => s.completed)) {
         await completeRoute();
@@ -2756,11 +2902,11 @@ async function completeRoute() {
                     </span>
                 </div>
                 <div style="text-align: center;">
-                    <span style="display: block; font-size: 36px; font-weight: 800; color: #9333EA; margin-bottom: 6px;">
-                        KES ${Math.round(state.totalRouteEarnings)}
+                    <span style="display: block; font-size: 36px; font-weight: 800; color: #4CAF50; margin-bottom: 6px;">
+                        KES ${Math.round(state.totalPaymentsReceived)}
                     </span>
                     <span style="font-size: 13px; color: rgba(255, 255, 255, 0.5); text-transform: uppercase;">
-                        Earned
+                        Collected
                     </span>
                 </div>
             </div>
@@ -2795,135 +2941,6 @@ window.finishRoute = function() {
 };
 
 // ============================================================================
-// HELPER FUNCTIONS
-// ============================================================================
-
-function getNextStop() {
-    if (!state.activeRoute || !state.activeRoute.stops) return null;
-    return state.activeRoute.stops.find(stop => !stop.completed);
-}
-
-function getCurrentStop() {
-    if (!state.activeRoute) return null;
-    
-    const completedStops = state.activeRoute.stops.filter(s => s.completed);
-    if (completedStops.length === 0) return null;
-    
-    return completedStops[completedStops.length - 1];
-}
-
-function isNextStop(stop) {
-    const nextStop = getNextStop();
-    return nextStop && nextStop.id === stop.id;
-}
-
-function canCompleteStop(stop) {
-    if (stop.type === 'pickup') return true;
-    return canCompleteDelivery(stop);
-}
-
-function canCompleteDelivery(deliveryStop) {
-    if (!state.activeRoute || !state.activeRoute.stops) return false;
-    
-    const pickupStop = state.activeRoute.stops.find(s => 
-        s.type === 'pickup' && 
-        (s.parcelId === deliveryStop.parcelId || s.parcelCode === deliveryStop.parcelCode)
-    );
-    
-    return pickupStop && pickupStop.completed;
-}
-
-function formatTimeAgo(timestamp) {
-    if (!timestamp) return '';
-    const minutes = Math.floor((Date.now() - new Date(timestamp)) / 60000);
-    if (minutes < 60) return `${minutes} min ago`;
-    const hours = Math.floor(minutes / 60);
-    return `${hours} hour${hours > 1 ? 's' : ''} ago`;
-}
-
-function updateRouteStats() {
-    const remainingStops = state.activeRoute.stops.filter(s => !s.completed).length;
-    
-    let totalDistance = 0;
-    if (state.activeRoute.distance) {
-        totalDistance = parseFloat(state.activeRoute.distance);
-    } else if (state.activeRoute.total_distance) {
-        totalDistance = parseFloat(state.activeRoute.total_distance);
-    } else {
-        totalDistance = calculateTotalRouteDistance(state.activeRoute.stops);
-    }
-    
-    const estimatedTime = Math.round(totalDistance * 2.5 + remainingStops * 5);
-    
-    const remainingEl = document.getElementById('remainingStops');
-    const distanceEl = document.getElementById('totalDistance');
-    const timeEl = document.getElementById('estimatedTime');
-    
-    if (remainingEl) remainingEl.textContent = remainingStops;
-    if (distanceEl) distanceEl.textContent = totalDistance.toFixed(1);
-    if (timeEl) timeEl.textContent = estimatedTime;
-}
-
-function updateDynamicHeader() {
-    const routeTitle = document.getElementById('routeTitle');
-    if (!routeTitle || !state.activeRoute) return;
-    
-    const nextStop = getNextStop();
-    const currentStop = getCurrentStop();
-    
-    if (!nextStop) {
-        routeTitle.textContent = 'Route Complete';
-        return;
-    }
-    
-    let headerText = '';
-    
-    if (currentStop && state.currentLocation) {
-        headerText = `Your Location → ${getStopShortName(nextStop)}`;
-    } else if (currentStop) {
-        headerText = `${getStopShortName(currentStop)} → ${getStopShortName(nextStop)}`;
-    } else {
-        const firstStop = state.activeRoute.stops[0];
-        headerText = `Starting → ${getStopShortName(firstStop)}`;
-    }
-    
-    routeTitle.textContent = headerText;
-}
-
-function getStopShortName(stop) {
-    if (!stop) return '';
-    
-    const address = stop.address;
-    const patterns = [
-        /^([^,]+),/,
-        /^(.+?)(?:\s+Road|\s+Street|\s+Avenue|\s+Drive|\s+Centre|\s+Center)/i
-    ];
-    
-    for (const pattern of patterns) {
-        const match = address.match(pattern);
-        if (match) {
-            return match[1].trim();
-        }
-    }
-    
-    return address.length > 20 ? address.substring(0, 20) + '...' : address;
-}
-
-function updateNavigationInfo() {
-    // Called during navigation to update real-time info
-}
-
-function initializeOptimizeButton() {
-    setTimeout(() => {
-        addOptimizeButton();
-        
-        if (state.activeRoute && state.activeRoute.isOptimized) {
-            updateOptimizeButton(true);
-        }
-    }, 500);
-}
-
-// ============================================================================
 // WINDOW FUNCTIONS
 // ============================================================================
 
@@ -2951,13 +2968,58 @@ window.goBack = function() {
     }
 };
 
+window.togglePanelExpansion = function() {
+    const panel = document.getElementById('routePanel');
+    if (panel.classList.contains('expanded')) {
+        panel.classList.remove('expanded');
+        panel.classList.add('minimized');
+    } else {
+        panel.classList.remove('minimized');
+        panel.classList.add('expanded');
+    }
+};
+
+window.toggleRoutePanel = function() {
+    const panel = document.getElementById('routePanel');
+    if (panel.classList.contains('hidden')) {
+        panel.classList.remove('hidden');
+        panel.classList.add('expanded');
+        panel.classList.remove('minimized');
+    } else if (panel.classList.contains('expanded')) {
+        panel.classList.remove('expanded');
+        panel.classList.add('minimized');
+    } else {
+        panel.classList.remove('minimized');
+        panel.classList.add('expanded');
+    }
+};
+
+// ============================================================================
+// EXPOSE FUNCTIONS TO GLOBAL SCOPE FOR HTML ONCLICK HANDLERS
+// ============================================================================
+
+// Core functions
+window.optimizeRouteStops = optimizeRouteStops;
+window.undoOptimization = undoOptimization;
+window.reoptimizeRemainingStops = reoptimizeRemainingStops;
+window.proceedWithNavigation = proceedWithNavigation;
+window.stopLocationTracking = stopLocationTracking;
+window.getNextStop = getNextStop;
+window.calculateDistance = calculateDistance;
+window.showNotification = showNotification;
+
+// Also expose state and config for navigation UI
+window.state = state;
+window.config = config;
+
 // ============================================================================
 // INITIALIZATION
 // ============================================================================
 
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log('Route.js v4.0.0 initializing with external optimizer...');
+    console.log('Route.js v4.1.0 initializing with M-Pesa integration...');
     
+    // Inject navigation styles
     injectNavigationStyles();
     
     await waitForLeaflet();
@@ -2968,11 +3030,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (storedRoute) {
             state.activeRoute = JSON.parse(storedRoute);
             console.log('Route loaded:', state.activeRoute);
-            console.log('Using external route optimizer module');
+            console.log('M-Pesa payments enabled');
             
             updateStopOrderMap();
             calculateRouteFinancials();
-            calculateCashCollection();
+            calculatePayments();
             
             await initializeMap();
             
@@ -3000,10 +3062,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 emptyState.style.display = 'none';
             }
             
+            // Initialize optimize button
             initializeOptimizeButton();
             
-            if (state.totalCashToCollect > 0) {
-                showCashCollectionWidget();
+            if (state.totalPaymentsExpected > 0) {
+                showWalletWidget();
             }
             
             startLocationTracking();
@@ -3020,41 +3083,3 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (navControls) navControls.style.display = 'none';
             if (emptyState) emptyState.style.display = 'block';
         }
-    } catch (error) {
-        console.error('Error initializing route:', error);
-        
-        const emptyState = document.getElementById('emptyState');
-        if (emptyState) {
-            emptyState.style.display = 'block';
-        }
-    }
-});
-
-// Debug utilities
-window.routeDebug = {
-    state,
-    config,
-    optimizer: routeOptimizer,
-    testOptimization: () => {
-        if (!state.activeRoute) {
-            console.log('No route loaded');
-            return;
-        }
-        
-        // Test optimization without current location
-        const result = routeOptimizer.optimizeRoute(state.activeRoute.stops);
-        
-        // Get statistics
-        const stats = routeOptimizer.getStatistics();
-        
-        console.log('Optimization result:', result);
-        console.log('Statistics:', stats);
-        return { optimizedRoute: result, statistics: stats };
-    },
-    getOptimizerConfig: () => routeOptimizer.getConfig(),
-    updateOptimizerConfig: (newConfig) => routeOptimizer.updateConfig(newConfig)
-};
-
-console.log('✅ Route.js v4.0.0 loaded - Using external route-optimizer.js module');
-console.log('Debug: window.routeDebug');
-console.log('Optimizer config:', routeOptimizer.getConfig());
