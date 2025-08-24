@@ -218,16 +218,6 @@
             transform: translateY(-1px);
         }
 
-        .btn-whatsapp {
-            background: var(--whatsapp);
-            color: white;
-        }
-
-        .btn-whatsapp:hover {
-            background: #20BA5C;
-            transform: translateY(-1px);
-        }
-
         .btn-secondary {
             background: transparent;
             color: var(--text-secondary);
@@ -281,51 +271,6 @@
             border: 1px solid rgba(0, 102, 255, 0.2);
         }
 
-        .divider {
-            text-align: center;
-            margin: 20px 0;
-            position: relative;
-        }
-
-        .divider::before {
-            content: '';
-            position: absolute;
-            top: 50%;
-            left: 0;
-            right: 0;
-            height: 1px;
-            background: var(--border);
-        }
-
-        .divider span {
-            background: var(--surface);
-            padding: 0 12px;
-            position: relative;
-            color: var(--text-secondary);
-            font-size: 14px;
-        }
-
-        .verification-info {
-            background: var(--surface-elevated);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 16px;
-            margin: 20px 0;
-        }
-
-        .verification-info h3 {
-            font-size: 16px;
-            margin-bottom: 12px;
-            color: var(--whatsapp);
-        }
-
-        .verification-info ol {
-            margin-left: 20px;
-            color: var(--text-secondary);
-            font-size: 14px;
-            line-height: 1.8;
-        }
-
         .loading {
             width: 16px;
             height: 16px;
@@ -357,8 +302,8 @@
 </head>
 <body>
     <div class="auth-container">
-        <div class="logo">2MA</div>
-        <h1>Welcome to 2MA</h1>
+        <div class="logo">TUMA</div>
+        <h1>Welcome to Tuma</h1>
         <p class="subtitle">Fast & Reliable Delivery</p>
 
         <!-- Messages -->
@@ -387,10 +332,10 @@
                     <div class="user-type-desc">Deliver & earn</div>
                 </div>
                 
-                <div class="user-type-card" onclick="selectUserType('affiliate')">
+                <div class="user-type-card" onclick="selectUserType('agent')">
                     <div class="user-icon">💼</div>
-                    <div class="user-type-name">Affiliate</div>
-                    <div class="user-type-desc">Earn up to 20% commission</div>
+                    <div class="user-type-name">Agent</div>
+                    <div class="user-type-desc">Earn commissions</div>
                 </div>
             </div>
         </div>
@@ -415,10 +360,6 @@
             <button class="btn btn-primary" onclick="checkPhone()">
                 <span>Continue</span>
             </button>
-
-            <div class="vendor-skip" id="vendorSkip" style="display: none;">
-                <a href="./vendor.html">Continue without account →</a>
-            </div>
 
             <button class="btn btn-secondary" onclick="backToStep1()">
                 Back
@@ -454,44 +395,22 @@
 
         <!-- Step 3: Register (New Users) -->
         <div id="step3Register" class="step">
-            <h2 style="margin-bottom: 20px;">Create Your Account</h2>
+            <h2 style="margin-bottom: 20px;">Quick Sign Up</h2>
+            <p style="text-align: center; color: var(--text-secondary); margin-bottom: 20px;">
+                Create an account to track all your deliveries
+            </p>
 
             <div class="form-group">
                 <label>Full Name</label>
-                <input type="text" id="fullName" placeholder="John Doe">
+                <input type="text" id="fullName" placeholder="John Doe" required>
             </div>
 
             <div class="form-group" id="emailGroup">
                 <label>Email (Optional)</label>
                 <input type="email" id="email" placeholder="john@example.com">
-            </div>
-
-            <!-- Affiliate-specific fields -->
-            <div id="affiliateFields" style="display: none;">
-                <div class="form-group">
-                    <label>National ID Number</label>
-                    <input type="text" id="nationalId" placeholder="12345678" maxlength="8">
-                </div>
-                
-                <div class="form-group">
-                    <label>M-Pesa Number (for payments)</label>
-                    <div class="input-wrapper">
-                        <span class="phone-prefix">+254</span>
-                        <input type="tel" id="mpesaNumber" class="with-prefix" placeholder="712345678" maxlength="9">
-                    </div>
-                </div>
-
-                <div style="background: rgba(0, 102, 255, 0.05); padding: 16px; border-radius: 10px; margin-top: 20px;">
-                    <p style="font-size: 14px; color: var(--text-secondary); margin-bottom: 12px;">
-                        📌 <strong>Document Verification</strong>
-                    </p>
-                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
-                        <input type="checkbox" id="documentsConfirm" style="width: 18px; height: 18px;">
-                        <span style="font-size: 14px;">
-                            I will provide my National ID and selfie for verification after account creation
-                        </span>
-                    </label>
-                </div>
+                <p style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
+                    For delivery receipts and notifications
+                </p>
             </div>
 
             <div class="form-group">
@@ -507,48 +426,15 @@
                 </div>
             </div>
 
-            <button class="btn btn-whatsapp" onclick="sendVerification()">
-                <svg class="whatsapp-icon" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.149-.67.149-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414-.074-.123-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
-                </svg>
-                <span>Verify via WhatsApp</span>
+            <button class="btn btn-primary" onclick="createAccount()">
+                <span>Create Account & Continue</span>
             </button>
+
+            <p style="text-align: center; margin-top: 16px; font-size: 13px; color: var(--text-secondary);">
+                By creating an account, you can track all your deliveries and save addresses for faster booking
+            </p>
 
             <button class="btn btn-secondary" onclick="backToStep2()">
-                Back
-            </button>
-        </div>
-
-        <!-- Step 4: WhatsApp Verification Sent -->
-        <div id="step4Verification" class="step">
-            <div style="text-align: center;">
-                <div style="font-size: 64px; margin-bottom: 24px;">📱</div>
-                <h2 style="margin-bottom: 16px;">Check WhatsApp!</h2>
-                <p style="color: var(--text-secondary); margin-bottom: 24px;">
-                    We've sent a verification link to<br>
-                    <strong id="phoneDisplay"></strong>
-                </p>
-            </div>
-
-            <div class="verification-info">
-                <h3>📌 Next Steps:</h3>
-                <ol>
-                    <li>Open WhatsApp on your phone</li>
-                    <li>Look for message from 2MA</li>
-                    <li>Click the verification link</li>
-                    <li>You'll be logged in automatically</li>
-                </ol>
-            </div>
-
-            <button class="btn btn-whatsapp" onclick="resendVerification()">
-                <span>Resend Link</span>
-            </button>
-
-            <button class="btn btn-secondary" onclick="checkVerification()">
-                I've Clicked the Link
-            </button>
-
-            <button class="btn btn-secondary" onclick="backToStep3()">
                 Back
             </button>
         </div>
@@ -559,15 +445,14 @@
         const SUPABASE_URL = 'https://btxavqfoirdzwpfrvezp.supabase.co';
         const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ0eGF2cWZvaXJkendwZnJ2ZXpwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE0ODcxMTcsImV4cCI6MjA2NzA2MzExN30.kQKpukFGx-cBl1zZRuXmex02ifkZ751WCUfQPogYutk';
         
-        const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        const { createClient } = supabase;
+        const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
 
         // State
         let state = {
-            userType: null, // Will be 'affiliate' in UI but 'agent' in DB
+            userType: null,
             phone: null,
-            isNewUser: false,
-            formData: {},
-            verificationToken: null
+            isNewUser: false
         };
 
         // Navigation functions
@@ -575,16 +460,6 @@
             state.userType = type;
             document.getElementById('step1').classList.remove('active');
             document.getElementById('step2').classList.add('active');
-            
-            // Show skip option for vendors
-            if (type === 'vendor') {
-                document.getElementById('vendorSkip').style.display = 'block';
-            }
-            
-            // Show affiliate fields
-            if (type === 'affiliate') {
-                document.getElementById('affiliateFields').style.display = 'block';
-            }
         }
 
         function goToTracking() {
@@ -602,9 +477,21 @@
             document.getElementById('step2').classList.add('active');
         }
 
-        function backToStep3() {
-            document.getElementById('step4Verification').classList.remove('active');
-            document.getElementById('step3Register').classList.add('active');
+        // Continue without account (for vendors)
+        function continueWithoutAccount() {
+            const phone = document.getElementById('phoneInput').value;
+            
+            if (!/^[0-9]{9}$/.test(phone)) {
+                showError('Please enter a valid 9-digit phone number first');
+                return;
+            }
+            
+            // Store phone in sessionStorage to pass to vendor.html
+            const phoneWithPrefix = '0' + phone;
+            sessionStorage.setItem('tuma_temp_phone', phoneWithPrefix);
+            
+            // Redirect to vendor.html with phone parameter
+            window.location.href = `./vendor.html?phone=${phoneWithPrefix}`;
         }
 
         // Check if phone exists
@@ -618,40 +505,46 @@
 
             state.phone = '0' + phone; // Store with 0 prefix
             
-            // Special handling for riders - go straight to application
-            if (state.userType === 'rider') {
-                // Store temp data and redirect to full application
-                localStorage.setItem('2ma_temp_rider', JSON.stringify({
-                    phone: state.phone
-                }));
-                
-                showInfo('Redirecting to rider application form...');
-                setTimeout(() => {
-                    window.location.href = './rider-signup.html';
-                }, 1500);
-                return;
-            }
-            
             const btn = event.target.closest('.btn');
             btn.disabled = true;
             btn.innerHTML = '<div class="loading"></div><span>Checking...</span>';
 
             try {
-                // Check if user exists in user_auth table
-                const { data, error } = await supabase
-                    .from('user_auth')
-                    .select('phone, user_type')
+                // Check in the appropriate table based on user type
+                let tableName = state.userType === 'vendor' ? 'vendors' : 
+                               state.userType === 'rider' ? 'riders' : 
+                               state.userType === 'agent' ? 'agents' : 'vendors';
+                
+                const { data, error } = await supabaseClient
+                    .from(tableName)
+                    .select('*')
                     .eq('phone', state.phone)
                     .single();
 
                 if (data) {
-                    // Existing user - show PIN login
-                    state.isNewUser = false;
-                    document.getElementById('step2').classList.remove('active');
-                    document.getElementById('step3Login').classList.add('active');
+                    // Check if they have a PIN in vendor_pins table
+                    const { data: pinData } = await supabaseClient
+                        .from('vendor_pins')
+                        .select('*')
+                        .eq('vendor_id', data.id)
+                        .eq('is_active', true)
+                        .single();
                     
-                    // Focus first PIN input
-                    document.querySelector('.login-pin').focus();
+                    if (pinData) {
+                        // Existing user with PIN - show login
+                        state.isNewUser = false;
+                        document.getElementById('step2').classList.remove('active');
+                        document.getElementById('step3Login').classList.add('active');
+                        
+                        // Focus first PIN input
+                        document.querySelector('.login-pin').focus();
+                    } else {
+                        // User exists but no PIN - show registration
+                        state.isNewUser = true;
+                        state.existingUserId = data.id;
+                        document.getElementById('step2').classList.remove('active');
+                        document.getElementById('step3Register').classList.add('active');
+                    }
                 } else {
                     // New user - show registration
                     state.isNewUser = true;
@@ -686,58 +579,93 @@
             btn.innerHTML = '<div class="loading"></div><span>Signing in...</span>';
 
             try {
+                // Get vendor ID first
+                const tableName = state.userType === 'vendor' ? 'vendors' : 
+                                 state.userType === 'rider' ? 'riders' : 
+                                 state.userType === 'agent' ? 'agents' : 'vendors';
+                
+                const { data: userData } = await supabaseClient
+                    .from(tableName)
+                    .select('*')
+                    .eq('phone', state.phone)
+                    .single();
+                
+                if (!userData) {
+                    showError('User not found');
+                    return;
+                }
+                
                 // Hash the PIN
                 const pinHash = await hashPIN(pin);
                 
                 // Verify PIN
-                const { data, error } = await supabase
-                    .from('user_auth')
+                const { data: pinData, error } = await supabaseClient
+                    .from('vendor_pins')
                     .select('*')
-                    .eq('phone', state.phone)
+                    .eq('vendor_id', userData.id)
                     .eq('pin_hash', pinHash)
+                    .eq('is_active', true)
                     .single();
 
-                if (error || !data) {
+                if (error || !pinData) {
+                    // Update failed attempts
+                    await updateFailedAttempts(userData.id);
                     showError('Incorrect PIN. Please try again.');
                     btn.disabled = false;
                     btn.innerHTML = '<span>Sign In</span>';
                     return;
                 }
 
-                // Update last login
-                await supabase
-                    .from('user_auth')
-                    .update({ last_login: new Date().toISOString() })
-                    .eq('phone', state.phone);
-
-                // Sign in with Supabase Auth
-                const email = `${state.phone.replace('+254', '254')}@2ma.local`;
-                const password = generatePassword(pin);
-                
-                const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-                    email: email,
-                    password: password
-                });
-
-                if (authError) {
-                    console.error('Auth error:', authError);
-                    // Still proceed if user_auth verification passed
+                // Check if account is locked
+                if (pinData.locked_until && new Date(pinData.locked_until) > new Date()) {
+                    const minutesLeft = Math.ceil((new Date(pinData.locked_until) - new Date()) / 60000);
+                    showError(`Account locked. Try again in ${minutesLeft} minutes`);
+                    return;
                 }
 
+                // Update last used
+                await supabaseClient
+                    .from('vendor_pins')
+                    .update({ 
+                        last_used: new Date().toISOString(),
+                        failed_attempts: 0
+                    })
+                    .eq('id', pinData.id);
+
+                // Create session
+                const sessionToken = generateSessionToken();
+                const sessionData = {
+                    vendor_id: userData.id,
+                    session_token: sessionToken,
+                    expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+                };
+                
+                await supabaseClient
+                    .from('vendor_sessions')
+                    .insert(sessionData);
+                
+                // Store in localStorage
+                localStorage.setItem('tuma_vendor_session', JSON.stringify({
+                    token: sessionToken,
+                    vendor: userData,
+                    timestamp: Date.now()
+                }));
+                
                 showSuccess('Welcome back!');
                 
                 // Redirect based on user type
                 setTimeout(() => {
-                    const redirects = {
-                        vendor: './vendor.html',
-                        agent: './agent.html', // Database uses 'agent'
-                        affiliate: './agent.html', // UI uses 'affiliate' but goes to agent.html
-                        rider: './rider.html'
-                    };
-                    window.location.href = redirects[data.user_type] || './';
+                    if (state.userType === 'vendor') {
+                        window.location.href = './vendor-dashboard.html';
+                    } else if (state.userType === 'agent') {
+                        window.location.href = './agent-dashboard.html';
+                    } else if (state.userType === 'rider') {
+                        window.location.href = './rider-dashboard.html';
+                    }
                 }, 1000);
 
             } catch (error) {
+                console.error('Login error:', error);
                 showError('Login failed. Please try again.');
             } finally {
                 btn.disabled = false;
@@ -745,9 +673,8 @@
             }
         }
 
-        // Send WhatsApp verification
-        async function sendVerification() {
-            // Validate form
+        // Create account
+        async function createAccount() {
             const fullName = document.getElementById('fullName').value.trim();
             const email = document.getElementById('email').value.trim();
             const pin = Array.from(document.querySelectorAll('.new-pin'))
@@ -764,203 +691,141 @@
                 return;
             }
 
-            // Affiliate validation (simplified - no file uploads)
-            if (state.userType === 'affiliate') {
-                const nationalId = document.getElementById('nationalId').value;
-                const mpesaNumber = document.getElementById('mpesaNumber').value;
-                const documentsConfirm = document.getElementById('documentsConfirm').checked;
-                
-                if (!nationalId || !mpesaNumber) {
-                    showError('Please fill in all required fields');
-                    return;
-                }
-                
-                if (!documentsConfirm) {
-                    showError('Please confirm you will provide documents for verification');
-                    return;
-                }
-                
-                state.formData.nationalId = nationalId;
-                state.formData.mpesaNumber = '0' + mpesaNumber;
-            }
+            const btn = event.target.closest('.btn');
+            btn.disabled = true;
+            btn.innerHTML = '<div class="loading"></div><span>Creating account...</span>';
 
-            // Store form data
-            state.formData = {
-                ...state.formData,
-                fullName,
-                email,
-                pin
-            };
-
-            // Generate verification token
-            state.verificationToken = generateToken();
-            
-            // Store pending registration
             try {
-                await storePendingRegistration();
+                let userId;
                 
-                // Generate WhatsApp link
-                const verificationUrl = `${window.location.origin}/verify.html?token=${state.verificationToken}`;
-                const message = `Welcome to 2MA! 🚀\n\nClick this link to verify your account:\n${verificationUrl}\n\nYour verification code: ${state.verificationToken}\n\nThis link expires in 30 minutes.`;
-                
-                // Open WhatsApp
-                const whatsappUrl = `https://wa.me/${state.phone.replace('0', '254')}?text=${encodeURIComponent(message)}`;
-                window.open(whatsappUrl, '_blank');
-                
-                // Show verification screen
-                document.getElementById('phoneDisplay').textContent = '+254' + state.phone.substring(1);
-                document.getElementById('step3Register').classList.remove('active');
-                document.getElementById('step4Verification').classList.add('active');
-                
-                showInfo('WhatsApp opened! Send the message to receive your verification link.');
-                
-            } catch (error) {
-                showError('Failed to create account. Please try again.');
-            }
-        }
-
-        // Store pending registration
-        async function storePendingRegistration() {
-            const pinHash = await hashPIN(state.formData.pin);
-            
-            // Create Supabase Auth account
-            const email = `${state.phone.replace('+254', '254')}@2ma.local`;
-            const password = generatePassword(state.formData.pin);
-            
-            const { data: authData, error: authError } = await supabase.auth.signUp({
-                email: email,
-                password: password,
-                options: {
-                    data: {
+                // Create or update user record
+                if (state.existingUserId) {
+                    // User exists, just update name if needed
+                    userId = state.existingUserId;
+                    
+                    const tableName = state.userType === 'vendor' ? 'vendors' : 
+                                     state.userType === 'rider' ? 'riders' : 
+                                     state.userType === 'agent' ? 'agents' : 'vendors';
+                    
+                    await supabaseClient
+                        .from(tableName)
+                        .update({
+                            [state.userType === 'vendor' ? 'vendor_name' : 
+                             state.userType === 'agent' ? 'agent_name' : 
+                             'rider_name']: fullName,
+                            email: email || null
+                        })
+                        .eq('id', userId);
+                } else {
+                    // Create new user
+                    const tableName = state.userType === 'vendor' ? 'vendors' : 
+                                     state.userType === 'rider' ? 'riders' : 
+                                     state.userType === 'agent' ? 'agents' : 'vendors';
+                    
+                    const userData = {
                         phone: state.phone,
-                        full_name: state.formData.fullName,
-                        user_type: state.userType
+                        email: email || null,
+                        status: 'active',
+                        created_at: new Date().toISOString()
+                    };
+                    
+                    // Add type-specific fields
+                    if (state.userType === 'vendor') {
+                        userData.vendor_name = fullName;
+                        userData.vendor_type = 'casual';
+                    } else if (state.userType === 'agent') {
+                        userData.agent_name = fullName;
+                        userData.agent_code = generateAgentCode(fullName);
+                        userData.commission_rate = 0.10;
+                    } else if (state.userType === 'rider') {
+                        userData.rider_name = fullName;
+                        userData.vehicle_type = 'motorcycle';
                     }
+                    
+                    const { data, error } = await supabaseClient
+                        .from(tableName)
+                        .insert(userData)
+                        .select()
+                        .single();
+                    
+                    if (error) throw error;
+                    userId = data.id;
                 }
-            });
-
-            if (authError) throw authError;
-
-            // Store in user_auth table
-            const { error: dbError } = await supabase
-                .from('user_auth')
-                .insert({
-                    phone: state.phone,
-                    pin_hash: pinHash,
-                    email: state.formData.email || null,
-                    user_type: state.userType === 'affiliate' ? 'agent' : state.userType, // Map affiliate to agent in DB
-                    created_at: new Date().toISOString()
-                });
-
-            if (dbError) throw dbError;
-
-            // Create type-specific record
-            if (state.userType === 'affiliate') {
-                const affiliateCode = generateAffiliateCode(state.formData.fullName);
                 
-                await supabase.from('agents').insert({
-                    auth_user_id: authData.user.id,
-                    agent_name: state.formData.fullName,
-                    agent_code: affiliateCode,
-                    phone: state.phone,
-                    email: state.formData.email || null,
-                    password_hash: pinHash, // For compatibility
-                    pin: state.formData.pin, // Store plain PIN temporarily
-                    national_id: state.formData.nationalId,
-                    mpesa_number: state.formData.mpesaNumber,
-                    status: 'pending', // Will be approved after document verification
-                    commission_rate: 0.10, // Start at 10%, can go up to 20% based on performance
-                    type: 'external', // Keep original database value
-                    kyc_verified: false, // Documents pending
-                    is_active: true,
-                    created_at: new Date().toISOString()
-                });
-                
-                showSuccess(`Account created! Your affiliate code is: ${affiliateCode}\n\nPlease check your dashboard to complete document verification.`);
-                
-            } else if (state.userType === 'vendor') {
-                await supabase.from('vendors').insert({
-                    auth_user_id: authData.user.id,
-                    vendor_name: state.formData.fullName,
-                    phone: state.phone,
-                    email: state.formData.email || null,
-                    vendor_type: 'casual',
-                    status: 'active'
-                });
+                // Create PIN
+                const pinHash = await hashPIN(pin);
+                await supabaseClient
+                    .from('vendor_pins')
+                    .insert({
+                        vendor_id: userId,
+                        pin_hash: pinHash,
+                        pin_type: 'primary',
+                        is_active: true,
+                        created_by: 'self'
+                    });
                 
                 showSuccess('Account created successfully!');
-            } else if (state.userType === 'rider') {
-                // Riders need full application - redirect to rider signup
-                localStorage.setItem('2ma_temp_rider', JSON.stringify({
-                    phone: state.phone,
-                    fullName: state.formData.fullName,
-                    email: state.formData.email
-                }));
                 
-                showInfo('Redirecting to complete rider application...');
+                // Auto-login
                 setTimeout(() => {
-                    window.location.href = './rider-signup.html';
-                }, 1500);
-                return; // Don't continue with normal flow
+                    loginWithPIN();
+                }, 1000);
+                
+            } catch (error) {
+                console.error('Registration error:', error);
+                showError('Failed to create account. Please try again.');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<span>Create Account</span>';
             }
         }
 
-        // Check verification status
-        async function checkVerification() {
-            // In production, this would check if the verification link was clicked
-            // For now, we'll assume it was verified
-            showSuccess('Account verified! Redirecting...');
+        // Update failed attempts
+        async function updateFailedAttempts(vendorId) {
+            const { data: pinData } = await supabaseClient
+                .from('vendor_pins')
+                .select('*')
+                .eq('vendor_id', vendorId)
+                .eq('is_active', true)
+                .single();
             
-            setTimeout(() => {
-                const redirects = {
-                    vendor: './vendor.html',
-                    agent: './agent.html', // Keep agent.html file
-                    affiliate: './agent.html', // UI shows affiliate but uses agent.html
-                    rider: './rider.html'
-                };
-                window.location.href = redirects[state.userType] || './';
-            }, 1500);
-        }
-
-        // Resend verification
-        function resendVerification() {
-            sendVerification();
-            showSuccess('Verification link resent!');
+            if (pinData) {
+                const newAttempts = (pinData.failed_attempts || 0) + 1;
+                const updateData = { failed_attempts: newAttempts };
+                
+                // Lock after 5 failed attempts
+                if (newAttempts >= 5) {
+                    updateData.locked_until = new Date(Date.now() + 15 * 60000).toISOString();
+                }
+                
+                await supabaseClient
+                    .from('vendor_pins')
+                    .update(updateData)
+                    .eq('id', pinData.id);
+            }
         }
 
         // Forgot PIN
         async function forgotPIN() {
-            showInfo('Opening WhatsApp for PIN reset...');
-            
-            const resetToken = generateToken();
-            const resetUrl = `${window.location.origin}/reset-pin.html?token=${resetToken}&phone=${state.phone}`;
-            const message = `2MA PIN Reset 🔐\n\nClick this link to reset your PIN:\n${resetUrl}\n\nThis link expires in 15 minutes.`;
-            
-            const whatsappUrl = `https://wa.me/${state.phone.replace('0', '254')}?text=${encodeURIComponent(message)}`;
-            window.open(whatsappUrl, '_blank');
+            showInfo('PIN reset feature coming soon. Please contact support.');
         }
 
         // Helper functions
         async function hashPIN(pin) {
             const encoder = new TextEncoder();
-            const data = encoder.encode(`${pin}:2ma-salt-2024`);
+            const data = encoder.encode(`${pin}:tuma-salt-2024`);
             const hashBuffer = await crypto.subtle.digest('SHA-256', data);
             return Array.from(new Uint8Array(hashBuffer))
                 .map(b => b.toString(16).padStart(2, '0'))
                 .join('');
         }
 
-        function generatePassword(pin) {
-            // Convert PIN to a complex password deterministically
-            return `2MA2024!${pin}#Secure${pin}`;
-        }
-
-        function generateToken() {
+        function generateSessionToken() {
             return Math.random().toString(36).substring(2, 15) + 
                    Math.random().toString(36).substring(2, 15);
         }
 
-        function generateAffiliateCode(name) {
+        function generateAgentCode(name) {
             const letters = name.toUpperCase()
                 .replace(/[^A-Z]/g, '')
                 .substring(0, 2)
@@ -1019,23 +884,26 @@
 
         // Check for existing session on load
         async function checkSession() {
-            const { data: { session } } = await supabase.auth.getSession();
+            const session = localStorage.getItem('tuma_vendor_session');
             if (session) {
-                // Get user type from user_auth
-                const phone = session.user.user_metadata.phone;
-                const { data } = await supabase
-                    .from('user_auth')
-                    .select('user_type')
-                    .eq('phone', phone)
-                    .single();
-                
-                if (data) {
-                    const redirects = {
-                        vendor: './vendor.html',
-                        agent: './agent.html', // Database returns 'agent'
-                        rider: './rider.html'
-                    };
-                    window.location.href = redirects[data.user_type] || './';
+                try {
+                    const sessionData = JSON.parse(session);
+                    
+                    // Verify session is still valid
+                    const { data } = await supabaseClient
+                        .from('vendor_sessions')
+                        .select('*')
+                        .eq('session_token', sessionData.token)
+                        .gt('expires_at', new Date().toISOString())
+                        .single();
+                    
+                    if (data) {
+                        // Valid session - redirect to dashboard
+                        window.location.href = './vendor-dashboard.html';
+                    }
+                } catch (error) {
+                    // Invalid session - clear it
+                    localStorage.removeItem('tuma_vendor_session');
                 }
             }
         }
