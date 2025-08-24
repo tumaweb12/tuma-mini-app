@@ -7,21 +7,21 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="telegram-web-app" content="true">
-    <title>Tuma - Smart Delivery</title>
+    <title>Vendor Dashboard - Tuma Delivery</title>
     
     <!-- Load Supabase SDK first -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
     
     <!-- Telegram Web App runtime -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     
     <!-- Leaflet (CSS+JS) -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
 
     <!-- Leaflet Control Geocoder (Search Plugin) -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
-    <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script> 
+    <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js" defer></script>
     
     <style>
         * {
@@ -69,36 +69,33 @@
             height: 100%;
             background: var(--surface);
             overflow: hidden;
+            max-width: 428px;
+            margin: 0 auto;
         }
 
-        /* Main Content */
-        .main-content {
+        /* Main Dashboard Layout - Mobile First */
+        .dashboard-container {
             position: absolute;
             top: 0;
             left: 0;
             right: 0;
             bottom: 0;
-            overflow-y: auto;
-            -webkit-overflow-scrolling: touch;
-            scroll-behavior: smooth;
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            max-width: 428px;
+            margin: 0 auto;
         }
 
-        /* Header */
-        .header {
-            position: sticky;
-            top: 0;
+        /* Dashboard Header */
+        .dashboard-header {
             background: rgba(10, 10, 11, 0.95);
             backdrop-filter: blur(20px) saturate(180%);
             -webkit-backdrop-filter: blur(20px) saturate(180%);
             border-bottom: 0.5px solid var(--border);
             z-index: 100;
             padding: 16px 20px;
-            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-        }
-
-        .header.scrolled {
-            padding: 12px 20px;
-            background: rgba(10, 10, 11, 0.98);
+            padding-top: calc(16px + var(--safe-area-top));
         }
 
         .header-content {
@@ -107,36 +104,55 @@
             justify-content: space-between;
         }
 
-        .logo-section {
+        .vendor-info {
             display: flex;
             align-items: center;
             gap: 12px;
+            flex: 1;
+            min-width: 0;
         }
 
-        .logo {
+        .vendor-avatar {
             width: 40px;
             height: 40px;
-            position: relative;
-        }
-
-        .logo svg {
-            width: 100%;
-            height: 100%;
-        }
-
-        .app-name {
-            font-size: 24px;
+            border-radius: 50%;
+            background: var(--primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
             font-weight: 700;
-            letter-spacing: -0.5px;
+            font-size: 18px;
+            flex-shrink: 0;
         }
 
-        .app-subtitle {
+        .vendor-details {
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+            flex: 1;
+        }
+
+        .vendor-name {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .vendor-phone {
             font-size: 12px;
             color: var(--text-secondary);
-            margin-top: 2px;
         }
 
-        .menu-button {
+        .header-actions {
+            display: flex;
+            gap: 12px;
+            flex-shrink: 0;
+        }
+
+        .logout-btn {
             width: 36px;
             height: 36px;
             border-radius: 50%;
@@ -149,9 +165,101 @@
             transition: all 0.2s;
         }
 
-        .menu-button:active {
+        .logout-btn:active {
             scale: 0.95;
-            background: var(--surface-high);
+            background: var(--danger);
+        }
+
+        /* Tab Navigation - Mobile Optimized */
+        .tab-navigation {
+            background: var(--surface-elevated);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            padding: 0;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+        }
+
+        .tab-navigation::-webkit-scrollbar {
+            display: none;
+        }
+
+        .tab-item {
+            flex: 1;
+            min-width: 80px;
+            padding: 12px 8px;
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            position: relative;
+        }
+
+        .tab-item .tab-icon {
+            font-size: 18px;
+        }
+
+        .tab-item .tab-label {
+            font-size: 10px;
+            white-space: nowrap;
+        }
+
+        .tab-item.active {
+            color: var(--primary);
+        }
+
+        .tab-item.active::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 20%;
+            right: 20%;
+            height: 3px;
+            background: var(--primary);
+            border-radius: 3px 3px 0 0;
+        }
+
+        .tab-badge {
+            position: absolute;
+            top: 6px;
+            right: calc(50% - 18px);
+            background: var(--danger);
+            color: white;
+            font-size: 9px;
+            font-weight: 700;
+            padding: 2px 5px;
+            border-radius: 10px;
+            min-width: 16px;
+            text-align: center;
+        }
+
+        /* Tab Content */
+        .tab-content {
+            position: relative;
+            flex: 1;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            padding: 0;
+        }
+
+        .tab-panel {
+            display: none;
+            height: 100%;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            scroll-behavior: smooth;
+        }
+
+        .tab-panel.active {
+            display: block;
         }
 
         /* Form Container */
@@ -204,14 +312,14 @@
         }
 
         .hero-title {
-            font-size: 28px;
+            font-size: 24px;
             font-weight: 700;
             margin-bottom: 8px;
             position: relative;
         }
 
         .hero-subtitle {
-            font-size: 16px;
+            font-size: 14px;
             color: var(--text-secondary);
             position: relative;
         }
@@ -224,10 +332,123 @@
             color: black;
             padding: 6px 12px;
             border-radius: 20px;
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 600;
             margin-top: 16px;
             position: relative;
+        }
+
+        /* Affiliate Section */
+        .affiliate-section {
+            background: var(--surface-elevated);
+            border-radius: 14px;
+            padding: 16px;
+            margin-bottom: 20px;
+            border: 1px solid var(--border);
+        }
+
+        .affiliate-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .affiliate-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .affiliate-toggle {
+            width: 48px;
+            height: 24px;
+            background: var(--surface-high);
+            border-radius: 12px;
+            position: relative;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .affiliate-toggle.active {
+            background: var(--primary);
+        }
+
+        .affiliate-toggle-handle {
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 20px;
+            height: 20px;
+            background: white;
+            border-radius: 50%;
+            transition: transform 0.3s;
+        }
+
+        .affiliate-toggle.active .affiliate-toggle-handle {
+            transform: translateX(24px);
+        }
+
+        .affiliate-input-group {
+            display: none;
+            margin-top: 12px;
+        }
+
+        .affiliate-input-group.active {
+            display: block;
+        }
+
+        .affiliate-input {
+            width: 100%;
+            background: var(--surface-high);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 12px;
+            font-size: 14px;
+            color: var(--text-primary);
+            font-family: 'SF Mono', Monaco, Consolas, monospace;
+            text-transform: uppercase;
+            outline: none;
+        }
+
+        .affiliate-input:focus {
+            border-color: var(--primary);
+            background: var(--surface);
+        }
+
+        .affiliate-input::placeholder {
+            color: var(--text-tertiary);
+            text-transform: none;
+            font-family: inherit;
+        }
+
+        .affiliate-status {
+            margin-top: 8px;
+            padding: 8px;
+            border-radius: 8px;
+            font-size: 12px;
+            display: none;
+        }
+
+        .affiliate-status.valid {
+            background: rgba(52, 199, 89, 0.1);
+            color: var(--success);
+            display: block;
+        }
+
+        .affiliate-status.invalid {
+            background: rgba(255, 59, 48, 0.1);
+            color: var(--danger);
+            display: block;
+        }
+
+        .affiliate-info {
+            margin-top: 8px;
+            font-size: 11px;
+            color: var(--text-tertiary);
+            line-height: 1.4;
         }
 
         /* Progress Steps */
@@ -273,7 +494,7 @@
         }
 
         .step-label {
-            font-size: 12px;
+            font-size: 10px;
             color: var(--text-secondary);
         }
 
@@ -331,6 +552,100 @@
             letter-spacing: 0.5px;
         }
 
+        /* Quick Actions */
+        .quick-actions {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .quick-action-btn {
+            flex: 1;
+            padding: 12px;
+            background: var(--surface-elevated);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            color: var(--text-primary);
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .quick-action-btn:hover {
+            background: var(--primary);
+            border-color: var(--primary);
+        }
+
+        .quick-action-btn:active {
+            transform: scale(0.98);
+        }
+
+        /* Saved Recipients Dropdown */
+        .saved-recipients-dropdown {
+            margin-bottom: 16px;
+            display: none;
+        }
+
+        .saved-recipients-dropdown.active {
+            display: block;
+        }
+
+        .saved-recipient-item {
+            padding: 12px;
+            background: var(--surface-elevated);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .saved-recipient-item:hover {
+            background: var(--surface-high);
+            border-color: var(--primary);
+        }
+
+        .recipient-name {
+            font-weight: 600;
+            margin-bottom: 4px;
+            font-size: 14px;
+        }
+
+        .recipient-details {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        /* Mobile Responsive Adjustments */
+        @media (max-width: 375px) {
+            .hero-title {
+                font-size: 20px;
+            }
+            
+            .hero-subtitle {
+                font-size: 12px;
+            }
+            
+            .tab-item .tab-icon {
+                font-size: 16px;
+            }
+            
+            .tab-item .tab-label {
+                font-size: 9px;
+            }
+        }
+
+        @media (min-width: 428px) {
+            .app,
+            .dashboard-container {
+                box-shadow: 0 0 60px rgba(0, 0, 0, 0.5);
+            }
+        }
         /* Input Fields */
         .input-container {
             position: relative;
@@ -729,6 +1044,11 @@
             transform: translateX(8px);
         }
 
+        .service-card.disabled {
+            opacity: 0.5;
+            pointer-events: none;
+        }
+
         .service-card::before {
             content: '';
             position: absolute;
@@ -839,1389 +1159,665 @@
             font-size: 13px;
             color: var(--text-secondary);
         }
-
-        /* Vendor Type Badge */
-        .vendor-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            background: var(--surface-high);
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-size: 14px;
-            margin-bottom: 20px;
-            border: 1px solid var(--border);
-        }
-
-        .vendor-badge.managed {
-            background: var(--primary);
-            color: white;
-            border-color: var(--primary);
-        }
-
-        /* Submit Button */
-        .submit-section {
-            position: sticky;
-            bottom: 0;
-            background: linear-gradient(to top, var(--surface) 50%, transparent);
-            padding: 20px 0;
-            padding-bottom: calc(20px + var(--safe-area-bottom));
-            margin-top: 32px;
-        }
-
-        .submit-button {
-            width: 100%;
-            background: var(--primary);
-            color: white;
-            border: none;
-            border-radius: 14px;
-            padding: 18px;
-            font-size: 17px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-            position: relative;
-            overflow: hidden;
-        }
-
-        .submit-button::before {
-            content: '';
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            width: 0;
-            height: 0;
-            background: rgba(255, 255, 255, 0.2);
-            border-radius: 50%;
-            transform: translate(-50%, -50%);
-            transition: all 0.6s;
-        }
-
-        .submit-button:active::before {
-            width: 400px;
-            height: 400px;
-        }
-
-        .submit-button:active {
-            scale: 0.98;
-        }
-
-        .submit-button:disabled {
-            background: var(--surface-high);
-            cursor: not-allowed;
-            opacity: 0.6;
-        }
-
-        .submit-button.loading {
-            pointer-events: none;
-            opacity: 0.8;
-        }
-
-        .submit-button.loading::after {
-            content: '';
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            width: 20px;
-            height: 20px;
-            border: 2px solid transparent;
-            border-top: 2px solid white;
-            border-radius: 50%;
-            transform: translate(-50%, -50%);
-            animation: spin 0.8s linear infinite;
-        }
-
-        @keyframes spin {
-            0% { transform: translate(-50%, -50%) rotate(0deg); }
-            100% { transform: translate(-50%, -50%) rotate(360deg); }
-        }
-
-        /* Success Screen - Now Scrollable */
-        .success-overlay {
-            position: fixed;
-            inset: 0;
-            background: rgba(0, 0, 0, 0.9);
-            display: none;
-            align-items: flex-start;
-            justify-content: center;
-            z-index: 2000;
-            backdrop-filter: blur(10px);
-            overflow-y: auto;
-            -webkit-overflow-scrolling: touch;
-            padding: 20px 0;
-        }
-
-        .success-modal {
-            background: var(--surface-elevated);
-            border-radius: 20px;
-            padding: 32px;
-            text-align: center;
-            max-width: 320px;
-            width: 90%;
-            margin: 20px auto;
-            animation: modalBounce 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
-            max-height: none;
-            height: auto;
-        }
-
-        @keyframes modalBounce {
-            0% { transform: scale(0.5) translateY(50px); opacity: 0; }
-            100% { transform: scale(1) translateY(0); opacity: 1; }
-        }
-
-        /* FIXED: Success Modal Styles */
-        .success-icon {
-            width: 64px;
-            height: 64px;
-            background: var(--success);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto 20px;
-            animation: successBounce 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
-        }
-
-        @keyframes successBounce {
-            0% { transform: scale(0); }
-            60% { transform: scale(1.2); }
-            100% { transform: scale(1); }
-        }
-
-        .success-title {
-            font-size: 24px;
-            font-weight: 700;
-            margin-bottom: 8px;
-            color: var(--text-primary);
-        }
-
-        .success-message {
-            font-size: 16px;
-            color: var(--text-secondary);
-            margin-bottom: 24px;
-        }
-
-        /* FIXED: Codes Container Styles */
-        .codes-container {
-            background: var(--surface-high);
-            border-radius: 16px;
-            padding: 20px;
-            margin-bottom: 24px;
-        }
-
-        .code-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 12px 0;
-            border-bottom: 1px solid var(--border);
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .code-item:last-child {
-            border-bottom: none;
-            padding-bottom: 0;
-        }
-
-        .code-item:first-child {
-            padding-top: 0;
-        }
-
-        .code-item:hover {
-            background: rgba(0, 102, 255, 0.05);
-            border-radius: 8px;
-            margin: 0 -8px;
-            padding-left: 8px;
-            padding-right: 8px;
-        }
-
-        .code-label {
-            font-size: 14px;
-            color: var(--text-secondary);
-            font-weight: 500;
-        }
-
-        .code-value {
-            font-size: 18px;
-            font-weight: 700;
-            color: var(--primary);
-            font-family: 'SF Mono', Monaco, Consolas, monospace;
-            letter-spacing: 1px;
-            text-transform: uppercase;
-        }
-
-        /* FIXED: Action Buttons */
-        .success-actions {
-            display: flex;
-            gap: 12px;
-            margin-bottom: 12px;
-        }
-
-        .success-button {
-            flex: 1;
-            padding: 14px;
-            border: none;
-            border-radius: 12px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-        }
-
-        .success-button.primary {
-            background: var(--primary);
-            color: white;
-        }
-
-        .success-button.secondary {
-            background: var(--surface-high);
-            color: var(--text-primary);
-        }
-
-        .success-button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
-        }
-
-        .success-button:active {
-            transform: scale(0.98);
-        }
-
-        /* Responsive adjustments for small screens */
-        @media (max-height: 700px) {
-            .success-overlay {
-                align-items: flex-start;
-            }
-            
-            .success-modal {
-                margin: 10px auto 40px;
-            }
-        }
-
-        @media (max-height: 600px) {
-            .success-modal {
-                padding: 24px;
-            }
-            
-            .success-icon {
-                width: 48px;
-                height: 48px;
-                margin: 0 auto 16px;
-            }
-            
-            .success-title {
-                font-size: 20px;
-                margin-bottom: 8px;
-            }
-            
-            .codes-container {
-                padding: 16px;
-                margin-bottom: 16px;
-            }
-        }
-
-        /* Extra padding when mobile keyboard is open */
-        @media (max-height: 500px) {
-            .success-overlay {
-                padding: 10px 0 60px;
-            }
-        }
-
-        /* Payment Button Styles */
-        .payment-button {
-            background: var(--surface-high);
-            border: 2px solid var(--border);
-            border-radius: 12px;
-            padding: 16px;
-            cursor: pointer;
-            transition: all 0.3s;
-            text-align: center;
-            color: var(--text-primary);
-            position: relative;
-            overflow: hidden;
-        }
-
-        .payment-button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-        }
-
-        .payment-button.selected {
-            border-color: var(--primary);
-            background: var(--surface-elevated);
-        }
-
-        .payment-button.selected::before {
-            content: '';
-            position: absolute;
-            top: 8px;
-            right: 8px;
-            width: 20px;
-            height: 20px;
-            background: var(--primary);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .payment-button.selected::after {
-            content: '✓';
-            position: absolute;
-            top: 8px;
-            right: 8px;
-            color: white;
-            font-size: 14px;
-            font-weight: bold;
-            width: 20px;
-            height: 20px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        /* Error Messages */
-        .error-message {
-            background: rgba(255, 59, 48, 0.1);
-            color: var(--danger);
-            padding: 12px;
-            border-radius: 8px;
-            margin-top: 8px;
-            font-size: 14px;
-            border: 1px solid rgba(255, 59, 48, 0.3);
-        }
-
-        /* Offline Banner */
-        .offline-banner {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            background: var(--warning);
-            color: black;
-            padding: 8px;
-            text-align: center;
-            font-size: 14px;
-            font-weight: 600;
-            transform: translateY(-100%);
-            transition: transform 0.3s;
-            z-index: 2000;
-        }
-
-        .offline-banner.show {
-            transform: translateY(0);
-        }
-
-        /* Bulk Delivery */
-        .bulk-delivery-item {
-            background: var(--surface-elevated);
-            border-radius: 14px;
-            padding: 16px;
-            margin-bottom: 12px;
-        }
-
-        /* Haptic Feedback Simulation */
-        @keyframes haptic {
-            0%, 100% { transform: translateX(0); }
-            25% { transform: translateX(-1px); }
-            75% { transform: translateX(1px); }
-        }
-
-        .haptic {
-            animation: haptic 0.1s ease-out;
-        }
-
-        /* Accessibility */
-        .sr-only {
-            position: absolute;
-            width: 1px;
-            height: 1px;
-            padding: 0;
-            margin: -1px;
-            overflow: hidden;
-            clip: rect(0, 0, 0, 0);
-            white-space: nowrap;
-            border-width: 0;
-        }
-
-        /* Responsive */
-        @media (min-width: 428px) {
-            .app {
-                max-width: 428px;
-                margin: 0 auto;
-                box-shadow: 0 0 60px rgba(0, 0, 0, 0.5);
-            }
-        }
-
-        @media (prefers-reduced-motion: reduce) {
-            * {
-                animation-duration: 0.01ms !important;
-                animation-iteration-count: 1 !important;
-                transition-duration: 0.01ms !important;
-            }
-        }
-
-        /* Additional Styles */
-        #simpleLocationModal::after {
-            content: '';
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 30px;
-            height: 40px;
-            background: url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCAzMCA0MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICAgIDxwYXRoIGQ9Ik0xNSAwQzYuNyAwIDAgNi43IDAgMTVjMCA4LjMgMTUgMjUgMTUgMjVzMTUtMTYuNyAxNS0yNUMzMCA2LjcgMjMuMyAwIDE1IDB6IiBmaWxsPSIjMDA2NkZGIi8+CiAgICA8Y2lyY2xlIGN4PSIxNSIgY3k9IjE1IiByPSI4IiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4=') no-repeat center;
-            pointer-events: none;
-            z-index: 1000;
-        }
-
-        /* Copy Code Tooltip */
-        .copy-toast {
-            position: fixed;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%) translateY(100px);
-            background: var(--success);
-            color: white;
-            padding: 12px 24px;
-            border-radius: 8px;
-            font-size: 14px;
-            font-weight: 600;
-            transition: transform 0.3s ease;
-            z-index: 3000;
-        }
-
-        .copy-toast.show {
-            transform: translateX(-50%) translateY(0);
-        }
-
-        @keyframes dash {
-            to {
-                stroke-dashoffset: -20;
-            }
-        }
-        
-        .route-animation {
-            animation: dash 1s linear infinite;
-        }
-        
-        /* Fix mobile search button appearance */
-        input[type="search"]::-webkit-search-decoration,
-        input[type="search"]::-webkit-search-cancel-button,
-        input[type="search"]::-webkit-search-results-button,
-        input[type="search"]::-webkit-search-results-decoration {
-            -webkit-appearance: none;
-        }
-        
-        /* Ensure input doesn't show search button on mobile */
-        .input-field {
-            -webkit-appearance: none;
-            -moz-appearance: none;
-            appearance: none;
-        }
-        
-        /* Style for Leaflet zoom controls */
-        .leaflet-control-zoom {
-            background: var(--surface-elevated) !important;
-            border: 1px solid var(--border) !important;
-            border-radius: 10px !important;
-            overflow: hidden;
-        }
-        
-        .leaflet-control-zoom a {
-            background: var(--surface-elevated) !important;
-            color: var(--text-primary) !important;
-            border-bottom: 1px solid var(--border) !important;
-        }
-        
-        .leaflet-control-zoom a:hover {
-            background: var(--surface-high) !important;
-        }
-        
-        .leaflet-control-zoom a:last-child {
-            border-bottom: none !important;
-        }
-        
-        /* Better mobile touch targets */
-        @media (max-width: 768px) {
-            .leaflet-control-zoom a {
-                width: 36px !important;
-                height: 36px !important;
-                line-height: 36px !important;
-                font-size: 20px !important;
-            }
-        }
-
-        @keyframes slideIn {
-            from { transform: translateX(100%); opacity: 0; }
-            to { transform: translateX(0); opacity: 1; }
-        }
-        
-        @keyframes slideOut {
-            from { transform: translateX(0); opacity: 1; }
-            to { transform: translateX(100%); opacity: 0; }
-        }
     </style>
 </head>
 <body>
-    <!-- HTML BODY STRUCTURE STARTS IN PART 2 -->
-    <!-- COPY THIS INSIDE THE <body> TAG FROM PART 1 -->
-<div class="app">
+    <div class="app">
+        <div class="dashboard-container">
+            <!-- Dashboard Header -->
+            <div class="dashboard-header">
+                <div class="header-content">
+                    <div class="vendor-info">
+                        <div class="vendor-avatar" id="vendorAvatar">V</div>
+                        <div class="vendor-details">
+                            <div class="vendor-name" id="vendorDisplayName">Loading...</div>
+                            <div class="vendor-phone" id="vendorDisplayPhone">-</div>
+                        </div>
+                    </div>
+                    <div class="header-actions">
+                        <button class="logout-btn" onclick="logout()" aria-label="Logout">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
+                                <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Navigation -->
+            <div class="tab-navigation">
+                <button class="tab-item active" onclick="switchTab('new-booking')">
+                    <span class="tab-icon">📦</span>
+                    <span class="tab-label">New Booking</span>
+                </button>
+                <button class="tab-item" onclick="switchTab('active')">
+                    <span class="tab-icon">🚀</span>
+                    <span class="tab-label">Active</span>
+                    <span class="tab-badge" id="activeBadge" style="display: none;">0</span>
+                </button>
+                <button class="tab-item" onclick="switchTab('history')">
+                    <span class="tab-icon">📜</span>
+                    <span class="tab-label">History</span>
+                </button>
+                <button class="tab-item" onclick="switchTab('track')">
+                    <span class="tab-icon">📍</span>
+                    <span class="tab-label">Track</span>
+                </button>
+            </div>
+
+            <!-- Tab Content -->
+            <div class="tab-content">
+            <!-- New Booking Tab -->
+                <div class="tab-panel active" id="new-booking-panel">
+                    <form class="form-container" id="dashboardDeliveryForm">
+                        <!-- Hero Section -->
+                        <div class="hero-section">
+                            <h2 class="hero-title">Book Your Delivery</h2>
+                            <p class="hero-subtitle">Clustered routing saves you money</p>
+                            <span class="savings-badge">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M12 2L14.09 8.26L20.5 9.27L16.25 13.41L17.33 19.5L12 16.19L6.67 19.5L7.75 13.41L3.5 9.27L9.91 8.26L12 2Z"/>
+                                </svg>
+                                Save 40-60% vs individual delivery
+                            </span>
+                        </div>
+
+                        <!-- Affiliate Code Section -->
+                        <div class="affiliate-section">
+                            <div class="affiliate-header">
+                                <span class="affiliate-title">Affiliate Code (Optional)</span>
+                                <div class="affiliate-toggle" id="affiliateToggle" onclick="toggleAffiliateCode()">
+                                    <div class="affiliate-toggle-handle"></div>
+                                </div>
+                            </div>
+                            <div class="affiliate-input-group" id="affiliateInputGroup">
+                                <input type="text" 
+                                       class="affiliate-input" 
+                                       id="affiliateCode" 
+                                       placeholder="Enter affiliate code (e.g., AFF123)"
+                                       maxlength="10"
+                                       onchange="validateAffiliateCode()">
+                                <div class="affiliate-status" id="affiliateStatus"></div>
+                                <div class="affiliate-info">
+                                    💡 Using an affiliate code gives them a commission from your booking. You can use your own code if you're an affiliate, or support someone else's business.
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Quick Actions -->
+                        <div class="quick-actions">
+                            <button type="button" class="quick-action-btn" onclick="repeatLastOrder()">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/>
+                                </svg>
+                                Repeat Last
+                            </button>
+                            <button type="button" class="quick-action-btn" onclick="showSavedRecipients()">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                                </svg>
+                                Saved Recipients
+                            </button>
+                        </div>
+
+                        <!-- Saved Recipients Dropdown -->
+                        <div id="savedRecipientsDropdown" class="saved-recipients-dropdown">
+                            <!-- Saved recipients will be loaded here dynamically -->
+                        </div>
+
+                        <!-- Progress Steps -->
+                        <div class="progress-steps">
+                            <div class="steps-container">
+                                <div class="progress-line">
+                                    <div class="progress-fill" id="progressFill" style="width: 25%;"></div>
+                                </div>
+                                <div class="step active" data-step="1">
+                                    <div class="step-icon">📍</div>
+                                    <div class="step-label">Locations</div>
+                                </div>
+                                <div class="step" data-step="2">
+                                    <div class="step-icon">📦</div>
+                                    <div class="step-label">Package</div>
+                                </div>
+                                <div class="step" data-step="3">
+                                    <div class="step-icon">🚀</div>
+                                    <div class="step-label">Service</div>
+                                </div>
+                                <div class="step" data-step="4">
+                                    <div class="step-icon">✅</div>
+                                    <div class="step-label">Confirm</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Recipient Information (moved to top since vendor is authenticated) -->
+                        <div class="form-section">
+                            <h2 class="section-title">Recipient Information</h2>
+                            <div class="contact-grid">
+                                <div class="input-container">
+                                    <input type="text" class="input-field" id="recipientName" placeholder="Recipient's name" required>
+                                </div>
+                                <div class="input-container">
+                                    <input type="tel" class="input-field" id="recipientPhone" placeholder="Recipient's phone (07XXXXXXXX)" pattern="0[0-9]{9}" required>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Delivery Type Toggle -->
+                        <div class="form-section">
+                            <h2 class="section-title">Delivery Type</h2>
+                            <div style="display: flex; gap: 12px;">
+                                <button type="button" class="location-btn active" id="singleBtn" onclick="toggleDeliveryType('single')">
+                                    Single Delivery
+                                </button>
+                                <button type="button" class="location-btn" id="bulkBtn" onclick="toggleDeliveryType('bulk')">
+                                    Bulk Deliveries
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Pickup Location -->
+                        <div class="form-section" id="singleDeliverySection">
+                            <h2 class="section-title">Pickup Location</h2>
+                            <div id="savedPickupLocations" style="margin-bottom: 12px;">
+                                <!-- Saved pickup locations will be loaded here -->
+                            </div>
+                            <div class="input-container">
+                                <input type="text" class="input-field" id="pickupLocation" placeholder="Enter pickup address" required>
+                                <button type="button" class="input-action" onclick="getLocation('pickup')" aria-label="Get current location">
+                                    <svg viewBox="0 0 24 24">
+                                        <path d="M12 2C8.13 2 5 5.13 5 9C5 14.25 12 22 12 22S19 14.25 19 9C19 5.13 15.87 2 12 2ZM12 11.5C10.62 11.5 9.5 10.38 9.5 9S10.62 6.5 12 6.5 14.5 7.62 14.5 9 13.38 11.5 12 11.5Z"/>
+                                    </svg>
+                                </button>
+                            </div>
+                            <div class="location-options">
+                                <button type="button" class="location-btn" onclick="useGPS('pickup')">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3A8.994 8.994 0 0 0 13 3.06V1h-2v2.06A8.994 8.994 0 0 0 3.06 11H1v2h2.06A8.994 8.994 0 0 0 11 20.94V23h2v-2.06A8.994 8.994 0 0 0 20.94 13H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/>
+                                    </svg>
+                                    GPS Location
+                                </button>
+                                <button type="button" class="location-btn" onclick="openSimpleLocationModal('pickupLocation')">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+                                    </svg>
+                                    Open Map
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Delivery Location -->
+                        <div class="form-section" id="singleDeliveryLocation">
+                            <h2 class="section-title">Delivery Location</h2>
+                            <div class="input-container">
+                                <input type="text" class="input-field" id="deliveryLocation" placeholder="Enter delivery address" required>
+                                <button type="button" class="input-action" onclick="getLocation('delivery')" aria-label="Get delivery location">
+                                    <svg viewBox="0 0 24 24">
+                                        <path d="M12 2C8.13 2 5 5.13 5 9C5 14.25 12 22 12 22S19 14.25 19 9C19 5.13 15.87 2 12 2ZM12 11.5C10.62 11.5 9.5 10.38 9.5 9S10.62 6.5 12 6.5 14.5 7.62 14.5 9 13.38 11.5 12 11.5Z"/>
+                                    </svg>
+                                </button>
+                            </div>
+                            <div class="location-options">
+                                <button type="button" class="location-btn" onclick="useGPS('delivery')">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3A8.994 8.994 0 0 0 13 3.06V1h-2v2.06A8.994 8.994 0 0 0 3.06 11H1v2h2.06A8.994 8.994 0 0 0 11 20.94V23h2v-2.06A8.994 8.994 0 0 0 20.94 13H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/>
+                                    </svg>
+                                    GPS Location
+                                </button>
+                                <button type="button" class="location-btn" onclick="openSimpleLocationModal('deliveryLocation')">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+                                    </svg>
+                                    Open Map
+                                </button>
+                            </div>
+                            
+                            <!-- Route Preview Map -->
+                            <div class="route-preview-container" id="routePreviewContainer">
+                                <div class="route-preview-placeholder" id="previewPlaceholder">
+                                    <span>📍 Preview your route here</span>
+                                </div>
+                                <div id="previewMap" style="display: none;"></div>
+                            </div>
+                        </div>
+
+                        <!-- Bulk Delivery Section -->
+                        <div class="form-section" id="bulkDeliverySection" style="display: none;">
+                            <h2 class="section-title">Bulk Pickup Location</h2>
+                            <div class="input-container">
+                                <input type="text" class="input-field" id="bulkPickupLocation" placeholder="Single pickup location for all deliveries">
+                                <button type="button" class="input-action" onclick="getLocation('bulkPickup')">
+                                    <svg viewBox="0 0 24 24">
+                                        <path d="M12 2C8.13 2 5 5.13 5 9C5 14.25 12 22 12 22S19 14.25 19 9C19 5.13 15.87 2 12 2ZM12 11.5C10.62 11.5 9.5 10.38 9.5 9S10.62 6.5 12 6.5 14.5 7.62 14.5 9 13.38 11.5 12 11.5Z"/>
+                                    </svg>
+                                </button>
+                            </div>
+                            
+                            <h2 class="section-title" style="margin-top: 24px;">Delivery Locations</h2>
+                            <div id="bulkDeliveries">
+                                <!-- Bulk delivery items will be added here -->
+                            </div>
+                            <button type="button" class="location-btn" onclick="addBulkDelivery()" style="width: 100%; margin-top: 12px;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+                                </svg>
+                                Add Delivery Location
+                            </button>
+                        </div>
+
+                        <!-- Distance Info -->
+                        <div id="distanceInfo" class="distance-info" style="display: none;">
+                            <div class="distance-value" id="calculatedDistance">0 km</div>
+                            <div class="distance-label">Estimated Distance</div>
+                            <div class="duration-value" id="estimatedDuration" style="font-size: 18px; color: var(--text-secondary); margin-top: 4px;">~0 min</div>
+                        </div>
+
+                        <!-- Package Details -->
+                        <div class="form-section">
+                            <h2 class="section-title">Package Details</h2>
+                            
+                            <!-- Item Count -->
+                            <div class="item-count-container">
+                                <span class="item-count-label">Number of Items</span>
+                                <div class="counter-control">
+                                    <button type="button" class="counter-button" onclick="updateItemCount(-1)" id="decreaseBtn">−</button>
+                                    <span class="counter-value" id="itemCount">1</span>
+                                    <button type="button" class="counter-button" onclick="updateItemCount(1)" id="increaseBtn">+</button>
+                                </div>
+                            </div>
+
+                            <!-- Size Selection -->
+                            <div class="package-grid" style="margin-top: 16px;">
+                                <div class="size-option selected" data-size="small" onclick="selectSize('small')">
+                                    <div class="size-emoji">📱</div>
+                                    <div class="size-name">Small</div>
+                                    <div class="size-desc">Documents, phone</div>
+                                </div>
+                                <div class="size-option" data-size="medium" onclick="selectSize('medium')">
+                                    <div class="size-emoji">📦</div>
+                                    <div class="size-name">Medium</div>
+                                    <div class="size-desc">Shoebox size</div>
+                                </div>
+                                <div class="size-option" data-size="large" onclick="selectSize('large')">
+                                    <div class="size-emoji">📋</div>
+                                    <div class="size-name">Large</div>
+                                    <div class="size-desc">Backpack size</div>
+                                </div>
+                                <div class="size-option" data-size="bulky" onclick="selectSize('bulky')">
+                                    <div class="size-emoji">🏋️</div>
+                                    <div class="size-name">Bulky</div>
+                                    <div class="size-desc">Large boxes</div>
+                                </div>
+                            </div>
+
+                            <!-- Capacity Indicator -->
+                            <div class="capacity-indicator">
+                                <div class="capacity-text">
+                                    <div class="capacity-icon" id="capacityIcon">✓</div>
+                                    <span id="capacityText">1 small item • Fits easily on motorcycle</span>
+                                </div>
+                                <div class="capacity-bar">
+                                    <div class="capacity-fill" id="capacityFill" style="width: 5%"></div>
+                                </div>
+                            </div>
+
+                            <!-- Package Category -->
+                            <div style="margin-top: 16px;">
+                                <select class="input-field" id="packageDescription" required style="cursor: pointer;">
+                                    <option value="" disabled selected>What are you sending?</option>
+                                    <optgroup label="Documents & Paper">
+                                        <option value="documents">📄 Documents & Papers</option>
+                                        <option value="books">📚 Books & Magazines</option>
+                                        <option value="certificates">📜 Certificates & Legal Papers</option>
+                                    </optgroup>
+                                    <optgroup label="Electronics">
+                                        <option value="phone">📱 Phone / Mobile Device</option>
+                                        <option value="laptop">💻 Laptop / Tablet</option>
+                                        <option value="electronics-small">🔌 Small Electronics (earphones, chargers)</option>
+                                        <option value="electronics-fragile">📷 Fragile Electronics (camera, hard drives)</option>
+                                    </optgroup>
+                                    <optgroup label="Clothing & Textiles">
+                                        <option value="clothes">👕 Clothes & Apparel</option>
+                                        <option value="shoes">👟 Shoes & Footwear</option>
+                                        <option value="textiles">🧵 Fabrics & Textiles</option>
+                                    </optgroup>
+                                    <optgroup label="Food & Consumables">
+                                        <option value="food-dry">🍪 Dry Food (packaged, non-perishable)</option>
+                                        <option value="food-fresh">🥗 Fresh Food (requires quick delivery)</option>
+                                        <option value="food-frozen">🧊 Frozen Food (requires cold chain)</option>
+                                        <option value="beverages">🥤 Beverages (sealed containers)</option>
+                                    </optgroup>
+                                    <optgroup label="Health & Medical">
+                                        <option value="pharmaceuticals">💊 Pharmaceuticals & Medicine</option>
+                                        <option value="medical-equipment">🏥 Medical Equipment</option>
+                                        <option value="supplements">💪 Supplements & Vitamins</option>
+                                    </optgroup>
+                                    <optgroup label="Beauty & Personal Care">
+                                        <option value="cosmetics">💄 Cosmetics & Makeup</option>
+                                        <option value="perfumes">🌸 Perfumes & Fragrances</option>
+                                        <option value="personal-care">🧴 Personal Care Products</option>
+                                    </optgroup>
+                                    <optgroup label="Home & Living">
+                                        <option value="household">🏠 Household Items</option>
+                                        <option value="kitchenware">🍽️ Kitchenware & Utensils</option>
+                                        <option value="decor">🖼️ Home Decor (non-fragile)</option>
+                                        <option value="tools">🔧 Tools & Hardware</option>
+                                    </optgroup>
+                                    <optgroup label="Fragile Items">
+                                        <option value="glassware">🍷 Glassware & Ceramics</option>
+                                        <option value="artwork">🎨 Artwork & Collectibles</option>
+                                        <option value="fragile-general">⚠️ Fragile Items (general)</option>
+                                    </optgroup>
+                                    <optgroup label="Liquids & Chemicals">
+                                        <option value="cleaning">🧹 Cleaning Supplies</option>
+                                        <option value="liquids-sealed">💧 Sealed Liquids (non-hazardous)</option>
+                                        <option value="paint">🎨 Paint & Art Supplies</option>
+                                    </optgroup>
+                                    <optgroup label="Other">
+                                        <option value="gifts">🎁 Gifts & Presents</option>
+                                        <option value="sports">⚽ Sports Equipment</option>
+                                        <option value="toys">🧸 Toys & Games</option>
+                                        <option value="automotive">🚗 Automotive Parts</option>
+                                        <option value="other">📦 Other (general items)</option>
+                                    </optgroup>
+                                </select>
+                                <div class="info-box">
+                                    <strong>💡 Smart Clustering:</strong> We group compatible items together for efficient delivery while keeping incompatible items separate (e.g., food away from chemicals).
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Service Type Selection -->
+                        <div class="form-section">
+                            <h2 class="section-title">Choose Your Service</h2>
+                            <div class="service-grid">
+                                <div class="service-card express" data-service="express" onclick="selectService('express')">
+                                    <div class="service-header">
+                                        <span class="service-name">🚀 Express</span>
+                                        <span class="service-price" id="expressPrice">+40%</span>
+                                    </div>
+                                    <p class="service-desc">Next available rider • 0-30 min pickup • Priority handling</p>
+                                    <div class="service-features">
+                                        <span class="service-badge">Fastest</span>
+                                        <span class="service-badge">Premium</span>
+                                    </div>
+                                </div>
+                                
+                                <div class="service-card smart selected" data-service="smart" onclick="selectService('smart')">
+                                    <div class="service-header">
+                                        <span class="service-name">🎯 Smart</span>
+                                        <span class="service-price" id="smartPrice">Best Value</span>
+                                    </div>
+                                    <p class="service-desc">Clustered delivery • 30-60 min pickup • Recommended</p>
+                                    <div class="service-features">
+                                        <span class="service-badge">Popular</span>
+                                        <span class="service-badge">Balanced</span>
+                                    </div>
+                                </div>
+                                
+                                <div class="service-card eco" data-service="eco" onclick="selectService('eco')">
+                                    <div class="service-header">
+                                        <span class="service-name">🌱 Eco</span>
+                                        <span class="service-price" id="ecoPrice">-20%</span>
+                                    </div>
+                                    <p class="service-desc">Maximum clustering • 1-2 hour pickup • Lowest price</p>
+                                    <div class="service-features">
+                                        <span class="service-badge">Save More</span>
+                                        <span class="service-badge">Flexible</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <p style="text-align: center; color: var(--text-secondary); font-size: 12px; margin-top: 12px;" id="servicePriceHint">
+                                Enter pickup and delivery locations to see exact prices
+                            </p>
+                        </div>
+
+                        <!-- Special Instructions -->
+                        <div class="form-section">
+                            <h2 class="section-title">Special Instructions</h2>
+                            <textarea class="textarea-field" id="specialInstructions" placeholder="Any special handling instructions, building details, or landmarks..." maxlength="200"></textarea>
+                            <div class="char-counter">
+                                <span id="charCount">0</span>/200
+                            </div>
+                        </div>
+
+                        <!-- Submit Section -->
+                        <div class="submit-section" style="position: sticky; bottom: 0; background: linear-gradient(to top, var(--surface) 50%, transparent); padding: 20px 0; padding-bottom: calc(20px + var(--safe-area-bottom)); margin-top: 32px;">
+                            <button type="submit" class="submit-button" id="submitBtn" disabled style="width: 100%; background: var(--primary); color: white; border: none; border-radius: 14px; padding: 18px; font-size: 17px; font-weight: 600; cursor: pointer; transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94); position: relative; overflow: hidden;">
+                                <span id="buttonText">Enter locations to see price</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Active Deliveries Tab -->
+                <div class="tab-panel" id="active-panel">
+                    <div class="stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 12px; padding: 16px;">
+                        <div class="stat-card" style="background: var(--surface-elevated); border-radius: 14px; padding: 16px; border: 1px solid var(--border);">
+                            <div class="stat-label" style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">Active Now</div>
+                            <div class="stat-value" id="activeCount" style="font-size: 24px; font-weight: 700; color: var(--text-primary);">0</div>
+                        </div>
+                        <div class="stat-card" style="background: var(--surface-elevated); border-radius: 14px; padding: 16px; border: 1px solid var(--border);">
+                            <div class="stat-label" style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">Today's Total</div>
+                            <div class="stat-value" id="todayCount" style="font-size: 24px; font-weight: 700; color: var(--text-primary);">0</div>
+                        </div>
+                        <div class="stat-card" style="background: var(--surface-elevated); border-radius: 14px; padding: 16px; border: 1px solid var(--border);">
+                            <div class="stat-label" style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">In Transit</div>
+                            <div class="stat-value" id="transitCount" style="font-size: 24px; font-weight: 700; color: var(--text-primary);">0</div>
+                        </div>
+                    </div>
+
+                    <div class="deliveries-container" style="padding: 16px;">
+                        <div class="section-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                            <h2 class="section-title" style="font-size: 18px; font-weight: 600;">Active Deliveries</h2>
+                        </div>
+                        <div id="activeDeliveriesList">
+                            <!-- Active deliveries will be loaded here -->
+                            <div class="empty-state" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 20px; text-align: center;">
+                                <div class="empty-icon" style="font-size: 64px; margin-bottom: 16px; opacity: 0.5;">📦</div>
+                                <div class="empty-title" style="font-size: 20px; font-weight: 600; margin-bottom: 8px;">No Active Deliveries</div>
+                                <div class="empty-message" style="font-size: 14px; color: var(--text-secondary);">Your active deliveries will appear here</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- History Tab -->
+                <div class="tab-panel" id="history-panel">
+                    <div class="stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 12px; padding: 16px;">
+                        <div class="stat-card" style="background: var(--surface-elevated); border-radius: 14px; padding: 16px; border: 1px solid var(--border);">
+                            <div class="stat-label" style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">Total Deliveries</div>
+                            <div class="stat-value" id="totalDeliveries" style="font-size: 24px; font-weight: 700; color: var(--text-primary);">0</div>
+                        </div>
+                        <div class="stat-card" style="background: var(--surface-elevated); border-radius: 14px; padding: 16px; border: 1px solid var(--border);">
+                            <div class="stat-label" style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">This Month</div>
+                            <div class="stat-value" id="monthlyDeliveries" style="font-size: 24px; font-weight: 700; color: var(--text-primary);">0</div>
+                        </div>
+                        <div class="stat-card" style="background: var(--surface-elevated); border-radius: 14px; padding: 16px; border: 1px solid var(--border);">
+                            <div class="stat-label" style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">Total Spent</div>
+                            <div class="stat-value" id="totalSpent" style="font-size: 20px; font-weight: 700; color: var(--text-primary);">0</div>
+                        </div>
+                    </div>
+
+                    <div class="search-container" style="padding: 16px; background: var(--surface-elevated); border-bottom: 1px solid var(--border);">
+                        <input type="search" class="search-input" id="historySearch" placeholder="Search by code, recipient, or location..." style="width: 100%; padding: 12px 16px; background: var(--surface-high); border: 1px solid var(--border); border-radius: 10px; color: var(--text-primary); font-size: 16px; outline: none;">
+                        <div class="filter-pills" style="display: flex; gap: 8px; overflow-x: auto; padding: 12px 0; -webkit-overflow-scrolling: touch;">
+                            <button class="filter-pill active" onclick="filterHistory('all')" style="padding: 8px 16px; background: var(--primary); color: white; border: 1px solid var(--primary); border-radius: 20px; font-size: 14px; cursor: pointer; white-space: nowrap; transition: all 0.2s;">All</button>
+                            <button class="filter-pill" onclick="filterHistory('delivered')" style="padding: 8px 16px; background: var(--surface-high); border: 1px solid var(--border); border-radius: 20px; font-size: 14px; color: var(--text-secondary); cursor: pointer; white-space: nowrap; transition: all 0.2s;">Delivered</button>
+                            <button class="filter-pill" onclick="filterHistory('failed')" style="padding: 8px 16px; background: var(--surface-high); border: 1px solid var(--border); border-radius: 20px; font-size: 14px; color: var(--text-secondary); cursor: pointer; white-space: nowrap; transition: all 0.2s;">Failed</button>
+                            <button class="filter-pill" onclick="filterHistory('cancelled')" style="padding: 8px 16px; background: var(--surface-high); border: 1px solid var(--border); border-radius: 20px; font-size: 14px; color: var(--text-secondary); cursor: pointer; white-space: nowrap; transition: all 0.2s;">Cancelled</button>
+                        </div>
+                    </div>
+
+                    <div class="deliveries-container" style="padding: 16px;">
+                        <div id="historyList">
+                            <!-- History items will be loaded here -->
+                            <div class="empty-state" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 20px; text-align: center;">
+                                <div class="empty-icon" style="font-size: 64px; margin-bottom: 16px; opacity: 0.5;">📜</div>
+                                <div class="empty-title" style="font-size: 20px; font-weight: 600; margin-bottom: 8px;">No Delivery History</div>
+                                <div class="empty-message" style="font-size: 14px; color: var(--text-secondary);">Your completed deliveries will appear here</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Track Tab -->
+                <div class="tab-panel" id="track-panel">
+                    <div class="track-container" style="padding: 20px;">
+                        <div class="track-input-group" style="display: flex; gap: 12px; margin-bottom: 20px;">
+                            <input type="text" class="track-input" id="trackInput" placeholder="Enter parcel code" maxlength="8" style="flex: 1; padding: 14px 16px; background: var(--surface-elevated); border: 1px solid var(--border); border-radius: 12px; color: var(--text-primary); font-size: 16px; font-family: 'SF Mono', Monaco, Consolas, monospace; text-transform: uppercase; outline: none;">
+                            <button class="track-btn" onclick="trackParcel()" style="padding: 14px 24px; background: var(--primary); color: white; border: none; border-radius: 12px; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.3s;">Track</button>
+                        </div>
+
+                        <div id="trackingResult">
+                            <!-- Tracking result will be displayed here -->
+                        </div>
+
+                        <div class="recent-tracks" style="margin-top: 32px;">
+                            <h3 class="recent-tracks-title" style="font-size: 14px; font-weight: 600; color: var(--text-secondary); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px;">Recent Tracks</h3>
+                            <div id="recentTracksList">
+                                <!-- Recent tracks will be loaded here -->
+                                <div class="empty-state" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px; text-align: center;">
+                                    <div class="empty-icon" style="font-size: 48px; margin-bottom: 12px; opacity: 0.5;">📍</div>
+                                    <div class="empty-title" style="font-size: 16px; font-weight: 600; margin-bottom: 6px;">No Recent Tracks</div>
+                                    <div class="empty-message" style="font-size: 12px; color: var(--text-secondary);">Your tracked parcels will appear here</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Success Overlay -->
+        <div class="success-overlay" id="successOverlay" style="position: fixed; inset: 0; background: rgba(0, 0, 0, 0.9); display: none; align-items: flex-start; justify-content: center; z-index: 2000; backdrop-filter: blur(10px); overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 20px 0;">
+            <div class="success-modal" style="background: var(--surface-elevated); border-radius: 20px; padding: 32px; text-align: center; max-width: 320px; width: 90%; margin: 20px auto; animation: modalBounce 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55); max-height: none; height: auto;">
+                <div class="success-icon" style="width: 64px; height: 64px; background: var(--success); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; animation: successBounce 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="white">
+                        <path d="M9 16.17L4.83 12L3.41 13.41L9 19L21 7L19.59 5.59L9 16.17Z"/>
+                    </svg>
+                </div>
+                <h3 class="success-title" style="font-size: 24px; font-weight: 700; margin-bottom: 8px; color: var(--text-primary);">Booking Confirmed!</h3>
+                <p class="success-message" style="font-size: 16px; color: var(--text-secondary); margin-bottom: 24px;">Your delivery has been scheduled</p>
+                
+                <div class="codes-container" style="background: var(--surface-high); border-radius: 16px; padding: 20px; margin-bottom: 24px;">
+                    <div class="code-item" onclick="copyCode('parcel')" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--border); cursor: pointer; transition: all 0.2s;">
+                        <span class="code-label" style="font-size: 14px; color: var(--text-secondary); font-weight: 500;">Parcel Code</span>
+                        <span class="code-value" id="displayParcelCode" style="font-size: 18px; font-weight: 700; color: var(--primary); font-family: 'SF Mono', Monaco, Consolas, monospace; letter-spacing: 1px; text-transform: uppercase;">-</span>
+                    </div>
+                    <div class="code-item" onclick="copyCode('pickup')" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--border); cursor: pointer; transition: all 0.2s;">
+                        <span class="code-label" style="font-size: 14px; color: var(--text-secondary); font-weight: 500;">Pickup Code</span>
+                        <span class="code-value" id="displayPickupCode" style="font-size: 18px; font-weight: 700; color: var(--primary); font-family: 'SF Mono', Monaco, Consolas, monospace; letter-spacing: 1px; text-transform: uppercase;">-</span>
+                    </div>
+                    <div class="code-item" onclick="copyCode('delivery')" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; cursor: pointer; transition: all 0.2s;">
+                        <span class="code-label" style="font-size: 14px; color: var(--text-secondary); font-weight: 500;">Delivery Code</span>
+                        <span class="code-value" id="displayDeliveryCode" style="font-size: 18px; font-weight: 700; color: var(--primary); font-family: 'SF Mono', Monaco, Consolas, monospace; letter-spacing: 1px; text-transform: uppercase;">-</span>
+                    </div>
+                </div>
+
+                <!-- Price Display -->
+                <div style="background: var(--surface-high); padding: 16px; border-radius: 12px; margin-bottom: 20px; text-align: center;">
+                    <div style="font-size: 14px; color: var(--text-secondary); margin-bottom: 4px;">Total Amount</div>
+                    <div style="font-size: 28px; font-weight: 700; color: var(--primary);" id="displayTotalPrice">KES 0</div>
+                </div>
+
+                <!-- Payment Options -->
+                <div style="margin-bottom: 20px;">
+                    <h4 style="font-size: 16px; margin-bottom: 12px; color: var(--text-secondary);">Payment Method</h4>
+                    <div class="payment-options" style="display: flex; gap: 12px;">
+                        <button class="payment-button cash-delivery selected" style="flex: 1; background: var(--primary); border: 2px solid var(--primary); border-radius: 12px; padding: 16px; cursor: pointer; transition: all 0.3s; text-align: center; color: white; position: relative; overflow: hidden;">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="margin-bottom: 4px;">
+                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1.41 16.09V20h-2.67v-1.93c-1.71-.36-3.16-1.46-3.27-3.4h1.96c.1.93.66 1.64 2.08 1.64 1.51 0 1.86-.79 1.86-1.3 0-.72-.41-1.21-2.06-1.54C9.84 13.09 8.13 12.42 8.13 10.46c0-1.65 1.39-2.87 3.23-3.21V6h2.67v1.26c1.42.32 2.56 1.34 2.66 2.91h-1.96c-.09-.72-.58-1.38-1.66-1.38-1.03 0-1.71.52-1.71 1.26 0 .65.49 1.01 2.01 1.33 1.65.36 3.37 1.02 3.37 3.13 0 1.93-1.44 3.06-3.33 3.4z"/>
+                            </svg>
+                            <div>Cash on Delivery</div>
+                        </button>
+                    </div>
+                </div>
+
+                <div style="background: rgba(255, 243, 205, 0.2); padding: 12px; border-radius: 8px; margin-bottom: 20px;">
+                    <p style="font-size: 14px; color: var(--text-secondary);">
+                        <strong>Important:</strong> Share the delivery code with your recipient. They'll need it to confirm delivery.
+                    </p>
+                </div>
+
+                <div class="success-actions" style="display: flex; gap: 12px; margin-bottom: 12px;">
+                    <button class="success-button secondary" onclick="shareDeliveryDetails()" style="flex: 1; padding: 14px; border: none; border-radius: 12px; background: var(--surface-high); color: var(--text-primary); font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94); display: flex; align-items: center; justify-content: center; gap: 8px;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/>
+                        </svg>
+                        Share
+                    </button>
+                    <button class="success-button primary" onclick="trackDelivery()" style="flex: 1; padding: 14px; border: none; border-radius: 12px; background: var(--primary); color: white; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94); display: flex; align-items: center; justify-content: center; gap: 8px;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3A8.994 8.994 0 0 0 13 3.06V1h-2v2.06A8.994 8.994 0 0 0 3.06 11H1v2h2.06A8.994 8.994 0 0 0 11 20.94V23h2v-2.06A8.994 8.994 0 0 0 20.94 13H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/>
+                        </svg>
+                        Track
+                    </button>
+                </div>
+                
+                <button class="success-button secondary" onclick="bookAnother()" style="width: 100%; padding: 14px; border: none; border-radius: 12px; background: var(--surface-high); color: var(--text-primary); font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);">
+                    New Booking
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Location Selection Modal -->
+    <div id="simpleLocationModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 3000;">
+        <div style="background: var(--surface-elevated); border-radius: 20px; margin: 20px; height: calc(100% - 40px); display: flex; flex-direction: column; max-width: 428px; margin: 20px auto;">
+            <div style="padding: 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between;">
+                <h3 style="font-size: 20px; font-weight: 600;">Select Location</h3>
+                <button onclick="closeLocationModal()" style="width: 36px; height: 36px; border-radius: 50%; background: var(--surface-high); border: none; display: flex; align-items: center; justify-content: center; cursor: pointer;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
+                        <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                    </svg>
+                </button>
+            </div>
+            <div style="padding: 20px; padding-bottom: 10px;">
+                <div class="input-container">
+                    <input type="text" id="simpleSearch" class="input-field" placeholder="Search for a location..." style="padding-right: 16px;">
+                </div>
+                <button id="simpleSearchBtn" class="location-btn" style="width: 100%; margin-top: 10px;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+                    </svg>
+                    Search
+                </button>
+            </div>
+            <div id="simpleMap" style="flex: 1; min-height: 300px;"></div>
+            <div style="padding: 20px; background: var(--surface-high); border-bottom-left-radius: 20px; border-bottom-right-radius: 20px;">
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 16px;">
+                    <div style="width: 40px; height: 40px; background: var(--primary); border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
+                            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                        </svg>
+                    </div>
+                    <div style="flex: 1;">
+                        <div id="selectedLocationName" style="font-weight: 600;">Move the map to select location</div>
+                        <div id="selectedLocationAddress" style="font-size: 14px; color: var(--text-secondary); margin-top: 4px;">Drag the map to pin your exact location</div>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 12px;">
+                    <button onclick="closeLocationModal()" class="success-button secondary" style="flex: 1; padding: 12px; border: none; border-radius: 10px; background: var(--surface-high); color: var(--text-primary); font-size: 14px; font-weight: 600; cursor: pointer;">Cancel</button>
+                    <button onclick="confirmSimpleLocation()" class="success-button primary" style="flex: 1; padding: 12px; border: none; border-radius: 10px; background: var(--primary); color: white; font-size: 14px; font-weight: 600; cursor: pointer;">Confirm Location</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Copy code toast element -->
+    <div class="copy-toast" id="copyToast" style="display: none; position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(100px); background: var(--success); color: white; padding: 12px 24px; border-radius: 8px; font-size: 14px; font-weight: 600; transition: transform 0.3s ease; z-index: 3000;"></div>
+
     <!-- Offline Banner -->
-    <div class="offline-banner" id="offlineBanner">
+    <div class="offline-banner" id="offlineBanner" style="position: fixed; top: 0; left: 0; right: 0; background: var(--warning); color: black; padding: 8px; text-align: center; font-size: 14px; font-weight: 600; transform: translateY(-100%); transition: transform 0.3s; z-index: 2000;">
         📵 You're offline - Bookings will sync when connected
     </div>
 
-    <!-- Main Content -->
-    <div class="main-content" id="mainContent">
-        <!-- Header -->
-        <div class="header" id="header">
-            <div class="header-content">
-                <div class="logo-section">
-                    <div class="logo">
-                        <svg viewBox="0 0 40 40" fill="none">
-                            <circle cx="20" cy="20" r="18" stroke="#0066FF" stroke-width="2"/>
-                            <path d="M20 8 L20 22 M14 8 L26 8" stroke="#0066FF" stroke-width="3" stroke-linecap="round"/>
-                            <circle cx="20" cy="28" r="3" fill="#0066FF"/>
-                            <path d="M8 20 Q12 16 16 18" stroke="#0066FF" stroke-width="1" opacity="0.5"/>
-                            <path d="M24 18 Q28 16 32 20" stroke="#0066FF" stroke-width="1" opacity="0.5"/>
-                        </svg>
-                    </div>
-                    <div>
-                        <h1 class="app-name">Tuma</h1>
-                        <p class="app-subtitle">Smart Delivery Clustering</p>
-                    </div>
-                </div>
-               <button class="menu-button" aria-label="Home" onclick="window.location.href='index.html'" style="cursor: pointer;">
-<svg width="20" height="20" viewBox="0 0 24 24" fill="white">
-    <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
-</svg>
-</button>
-            </div>
-        </div>
-
-        <!-- Form Container -->
-        <form class="form-container" id="deliveryForm">
-            <!-- Hero Section -->
-            <div class="hero-section">
-                <h2 class="hero-title">Book Your Delivery</h2>
-                <p class="hero-subtitle">Clustered routing saves you money</p>
-                <span class="savings-badge">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M12 2L14.09 8.26L20.5 9.27L16.25 13.41L17.33 19.5L12 16.19L6.67 19.5L7.75 13.41L3.5 9.27L9.91 8.26L12 2Z"/>
-                    </svg>
-                    Save 40-60% vs individual delivery
-                </span>
-            </div>
-
-            <!-- Vendor Type Badge -->
-            <div id="vendorBadge" style="display: none;">
-                <div class="vendor-badge" id="vendorBadgeContent">
-                    <span>Loading...</span>
-                </div>
-            </div>
-
-            <!-- Progress Steps -->
-            <div class="progress-steps">
-                <div class="steps-container">
-                    <div class="progress-line">
-                        <div class="progress-fill" id="progressFill" style="width: 25%;"></div>
-                    </div>
-                    <div class="step active" data-step="1">
-                        <div class="step-icon">📍</div>
-                        <div class="step-label">Locations</div>
-                    </div>
-                    <div class="step" data-step="2">
-                        <div class="step-icon">📦</div>
-                        <div class="step-label">Package</div>
-                    </div>
-                    <div class="step" data-step="3">
-                        <div class="step-icon">🚀</div>
-                        <div class="step-label">Service</div>
-                    </div>
-                    <div class="step" data-step="4">
-                        <div class="step-icon">✅</div>
-                        <div class="step-label">Confirm</div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Contact Information -->
-            <div class="form-section">
-                <h2 class="section-title">Your Information</h2>
-                <div class="contact-grid">
-                    <div class="input-container">
-                        <input type="text" class="input-field" id="vendorName" placeholder="Your name" required>
-                    </div>
-                    <div class="input-container">
-                        <input type="tel" class="input-field" id="phoneNumber" placeholder="Phone number (07XXXXXXXX)" pattern="0[0-9]{9}" required>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Delivery Type Toggle -->
-            <div class="form-section">
-                <h2 class="section-title">Delivery Type</h2>
-                <div style="display: flex; gap: 12px;">
-                    <button type="button" class="location-btn active" id="singleBtn" onclick="toggleDeliveryType('single')">
-                        Single Delivery
-                    </button>
-                    <button type="button" class="location-btn" id="bulkBtn" onclick="toggleDeliveryType('bulk')">
-                        Bulk Deliveries
-                    </button>
-                </div>
-            </div>
-
-            <!-- Pickup Location -->
-            <div class="form-section" id="singleDeliverySection">
-                <h2 class="section-title">Pickup Location</h2>
-                <div class="input-container">
-                    <input type="text" class="input-field" id="pickupLocation" placeholder="Enter pickup address" required>
-                    <button type="button" class="input-action" onclick="getLocation('pickup')" aria-label="Get current location">
-                        <svg viewBox="0 0 24 24">
-                            <path d="M12 2C8.13 2 5 5.13 5 9C5 14.25 12 22 12 22S19 14.25 19 9C19 5.13 15.87 2 12 2ZM12 11.5C10.62 11.5 9.5 10.38 9.5 9S10.62 6.5 12 6.5 14.5 7.62 14.5 9 13.38 11.5 12 11.5Z"/>
-                        </svg>
-                    </button>
-                </div>
-                <div class="location-options">
-                    <button type="button" class="location-btn" onclick="useGPS('pickup')">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3A8.994 8.994 0 0 0 13 3.06V1h-2v2.06A8.994 8.994 0 0 0 3.06 11H1v2h2.06A8.994 8.994 0 0 0 11 20.94V23h2v-2.06A8.994 8.994 0 0 0 20.94 13H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/>
-                        </svg>
-                        GPS Location
-                    </button>
-                    <button type="button" class="location-btn" onclick="openSimpleLocationModal('pickupLocation')">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
-                        </svg>
-                        Open Map
-                    </button>
-                </div>
-            </div>
-
-            <!-- Delivery Location -->
-            <div class="form-section" id="singleDeliveryLocation">
-                <h2 class="section-title">Delivery Location</h2>
-                <div class="input-container">
-                    <input type="text" class="input-field" id="deliveryLocation" placeholder="Enter delivery address" required>
-                    <button type="button" class="input-action" onclick="getLocation('delivery')" aria-label="Get delivery location">
-                        <svg viewBox="0 0 24 24">
-                            <path d="M12 2C8.13 2 5 5.13 5 9C5 14.25 12 22 12 22S19 14.25 19 9C19 5.13 15.87 2 12 2ZM12 11.5C10.62 11.5 9.5 10.38 9.5 9S10.62 6.5 12 6.5 14.5 7.62 14.5 9 13.38 11.5 12 11.5Z"/>
-                        </svg>
-                    </button>
-                </div>
-                <div class="location-options">
-                    <button type="button" class="location-btn" onclick="useGPS('delivery')">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3A8.994 8.994 0 0 0 13 3.06V1h-2v2.06A8.994 8.994 0 0 0 3.06 11H1v2h2.06A8.994 8.994 0 0 0 11 20.94V23h2v-2.06A8.994 8.994 0 0 0 20.94 13H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/>
-                        </svg>
-                        GPS Location
-                    </button>
-                    <button type="button" class="location-btn" onclick="openSimpleLocationModal('deliveryLocation')">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
-                        </svg>
-                        Open Map
-                    </button>
-                </div>
-                
-                <!-- Route Preview Map -->
-                <div class="route-preview-container" id="routePreviewContainer">
-                    <div class="route-preview-placeholder" id="previewPlaceholder">
-                        <span>📍 Preview your route here</span>
-                    </div>
-                    <div id="previewMap" style="display: none;"></div>
-                </div>
-            </div>
-
-            <!-- Bulk Delivery Section -->
-            <div class="form-section" id="bulkDeliverySection" style="display: none;">
-                <h2 class="section-title">Bulk Pickup Location</h2>
-                <div class="input-container">
-                    <input type="text" class="input-field" id="bulkPickupLocation" placeholder="Single pickup location for all deliveries">
-                    <button type="button" class="input-action" onclick="getLocation('bulkPickup')">
-                        <svg viewBox="0 0 24 24">
-                            <path d="M12 2C8.13 2 5 5.13 5 9C5 14.25 12 22 12 22S19 14.25 19 9C19 5.13 15.87 2 12 2ZM12 11.5C10.62 11.5 9.5 10.38 9.5 9S10.62 6.5 12 6.5 14.5 7.62 14.5 9 13.38 11.5 12 11.5Z"/>
-                        </svg>
-                    </button>
-                </div>
-                
-                <h2 class="section-title" style="margin-top: 24px;">Delivery Locations</h2>
-                <div id="bulkDeliveries">
-                    <!-- Bulk delivery items will be added here -->
-                </div>
-                <button type="button" class="location-btn" onclick="addBulkDelivery()" style="width: 100%; margin-top: 12px;">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
-                    </svg>
-                    Add Delivery Location
-                </button>
-            </div>
-
-            <!-- Distance Info -->
-            <div id="distanceInfo" class="distance-info" style="display: none;">
-                <div class="distance-value" id="calculatedDistance">0 km</div>
-                <div class="distance-label">Estimated Distance</div>
-                <div class="duration-value" id="estimatedDuration" style="font-size: 18px; color: var(--text-secondary); margin-top: 4px;">~0 min</div>
-            </div>
-
-            <!-- Package Details -->
-            <div class="form-section">
-                <h2 class="section-title">Package Details</h2>
-                
-                <!-- Item Count -->
-                <div class="item-count-container">
-                    <span class="item-count-label">Number of Items</span>
-                    <div class="counter-control">
-                        <button type="button" class="counter-button" onclick="updateItemCount(-1)" id="decreaseBtn">−</button>
-                        <span class="counter-value" id="itemCount">1</span>
-                        <button type="button" class="counter-button" onclick="updateItemCount(1)" id="increaseBtn">+</button>
-                    </div>
-                </div>
-
-                <!-- Size Selection -->
-                <div class="package-grid" style="margin-top: 16px;">
-                    <div class="size-option selected" data-size="small" onclick="selectSize('small')">
-                        <div class="size-emoji">📱</div>
-                        <div class="size-name">Small</div>
-                        <div class="size-desc">Documents, phone</div>
-                    </div>
-                    <div class="size-option" data-size="medium" onclick="selectSize('medium')">
-                        <div class="size-emoji">📦</div>
-                        <div class="size-name">Medium</div>
-                        <div class="size-desc">Shoebox size</div>
-                    </div>
-                    <div class="size-option" data-size="large" onclick="selectSize('large')">
-                        <div class="size-emoji">📋</div>
-                        <div class="size-name">Large</div>
-                        <div class="size-desc">Backpack size</div>
-                    </div>
-                    <div class="size-option" data-size="bulky" onclick="selectSize('bulky')">
-                        <div class="size-emoji">🏋️</div>
-                        <div class="size-name">Bulky</div>
-                        <div class="size-desc">Large boxes</div>
-                    </div>
-                </div>
-
-                <!-- Capacity Indicator -->
-                <div class="capacity-indicator">
-                    <div class="capacity-text">
-                        <div class="capacity-icon" id="capacityIcon">✓</div>
-                        <span id="capacityText">1 small item • Fits easily on motorcycle</span>
-                    </div>
-                    <div class="capacity-bar">
-                        <div class="capacity-fill" id="capacityFill" style="width: 5%"></div>
-                    </div>
-                </div>
-
-                <!-- Package Category -->
-                <div style="margin-top: 16px;">
-                    <select class="input-field" id="packageDescription" required style="cursor: pointer;">
-                        <option value="" disabled selected>What are you sending?</option>
-                        <optgroup label="Documents & Paper">
-                            <option value="documents">📄 Documents & Papers</option>
-                            <option value="books">📚 Books & Magazines</option>
-                            <option value="certificates">📜 Certificates & Legal Papers</option>
-                        </optgroup>
-                        <optgroup label="Electronics">
-                            <option value="phone">📱 Phone / Mobile Device</option>
-                            <option value="laptop">💻 Laptop / Tablet</option>
-                            <option value="electronics-small">🔌 Small Electronics (earphones, chargers)</option>
-                            <option value="electronics-fragile">📷 Fragile Electronics (camera, hard drives)</option>
-                        </optgroup>
-                        <optgroup label="Clothing & Textiles">
-                            <option value="clothes">👕 Clothes & Apparel</option>
-                            <option value="shoes">👟 Shoes & Footwear</option>
-                            <option value="textiles">🧵 Fabrics & Textiles</option>
-                        </optgroup>
-                        <optgroup label="Food & Consumables">
-                            <option value="food-dry">🍪 Dry Food (packaged, non-perishable)</option>
-                            <option value="food-fresh">🥗 Fresh Food (requires quick delivery)</option>
-                            <option value="food-frozen">🧊 Frozen Food (requires cold chain)</option>
-                            <option value="beverages">🥤 Beverages (sealed containers)</option>
-                        </optgroup>
-                        <optgroup label="Health & Medical">
-                            <option value="pharmaceuticals">💊 Pharmaceuticals & Medicine</option>
-                            <option value="medical-equipment">🏥 Medical Equipment</option>
-                            <option value="supplements">💪 Supplements & Vitamins</option>
-                        </optgroup>
-                        <optgroup label="Beauty & Personal Care">
-                            <option value="cosmetics">💄 Cosmetics & Makeup</option>
-                            <option value="perfumes">🌸 Perfumes & Fragrances</option>
-                            <option value="personal-care">🧴 Personal Care Products</option>
-                        </optgroup>
-                        <optgroup label="Home & Living">
-                            <option value="household">🏠 Household Items</option>
-                            <option value="kitchenware">🍽️ Kitchenware & Utensils</option>
-                            <option value="decor">🖼️ Home Decor (non-fragile)</option>
-                            <option value="tools">🔧 Tools & Hardware</option>
-                        </optgroup>
-                        <optgroup label="Fragile Items">
-                            <option value="glassware">🍷 Glassware & Ceramics</option>
-                            <option value="artwork">🎨 Artwork & Collectibles</option>
-                            <option value="fragile-general">⚠️ Fragile Items (general)</option>
-                        </optgroup>
-                        <optgroup label="Liquids & Chemicals">
-                            <option value="cleaning">🧹 Cleaning Supplies</option>
-                            <option value="liquids-sealed">💧 Sealed Liquids (non-hazardous)</option>
-                            <option value="paint">🎨 Paint & Art Supplies</option>
-                        </optgroup>
-                        <optgroup label="Other">
-                            <option value="gifts">🎁 Gifts & Presents</option>
-                            <option value="sports">⚽ Sports Equipment</option>
-                            <option value="toys">🧸 Toys & Games</option>
-                            <option value="automotive">🚗 Automotive Parts</option>
-                            <option value="other">📦 Other (general items)</option>
-                        </optgroup>
-                    </select>
-                    <div class="info-box">
-                        <strong>💡 Smart Clustering:</strong> We group compatible items together for efficient delivery while keeping incompatible items separate (e.g., food away from chemicals).
-                    </div>
-                </div>
-            </div>
-
-            <!-- Service Type Selection -->
-            <div class="form-section">
-                <h2 class="section-title">Choose Your Service</h2>
-                <div class="service-grid">
-                    <div class="service-card express" data-service="express" onclick="selectService('express')">
-                        <div class="service-header">
-                            <span class="service-name">🚀 Express</span>
-                            <span class="service-price" id="expressPrice">+40%</span>
-                        </div>
-                        <p class="service-desc">Next available rider • 0-30 min pickup • Priority handling</p>
-                        <div class="service-features">
-                            <span class="service-badge">Fastest</span>
-                            <span class="service-badge">Premium</span>
-                        </div>
-                    </div>
-                    
-                    <div class="service-card smart selected" data-service="smart" onclick="selectService('smart')">
-                        <div class="service-header">
-                            <span class="service-name">🎯 Smart</span>
-                            <span class="service-price" id="smartPrice">Best Value</span>
-                        </div>
-                        <p class="service-desc">Clustered delivery • 30-60 min pickup • Recommended</p>
-                        <div class="service-features">
-                            <span class="service-badge">Popular</span>
-                            <span class="service-badge">Balanced</span>
-                        </div>
-                    </div>
-                    
-                    <div class="service-card eco" data-service="eco" onclick="selectService('eco')">
-                        <div class="service-header">
-                            <span class="service-name">🌱 Eco</span>
-                            <span class="service-price" id="ecoPrice">-20%</span>
-                        </div>
-                        <p class="service-desc">Maximum clustering • 1-2 hour pickup • Lowest price</p>
-                        <div class="service-features">
-                            <span class="service-badge">Save More</span>
-                            <span class="service-badge">Flexible</span>
-                        </div>
-                    </div>
-                </div>
-                <p style="text-align: center; color: var(--text-secondary); font-size: 12px; margin-top: 12px;" id="servicePriceHint">
-                    Enter pickup and delivery locations to see exact prices
-                </p>
-            </div>
-
-            <!-- Recipient Information -->
-            <div class="form-section">
-                <h2 class="section-title">Recipient Information</h2>
-                <div class="contact-grid">
-                    <div class="input-container">
-                        <input type="text" class="input-field" id="recipientName" placeholder="Recipient's name" required>
-                    </div>
-                    <div class="input-container">
-                        <input type="tel" class="input-field" id="recipientPhone" placeholder="Recipient's phone (07XXXXXXXX)" pattern="0[0-9]{9}" required>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Special Instructions -->
-            <div class="form-section">
-                <h2 class="section-title">Special Instructions</h2>
-                <textarea class="textarea-field" id="specialInstructions" placeholder="Any special handling instructions, building details, or landmarks..." maxlength="200"></textarea>
-                <div class="char-counter">
-                    <span id="charCount">0</span>/200
-                </div>
-            </div>
-
-            <!-- Submit Button -->
-            <div class="submit-section">
-                <button type="submit" class="submit-button" id="submitBtn" disabled>
-                    <span id="buttonText">Enter locations to see price</span>
-                </button>
-            </div>
-        </form>
-    </div>
-
-    <!-- Success Overlay -->
-    <div class="success-overlay" id="successOverlay">
-        <div class="success-modal">
-            <div class="success-icon">
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="white">
-                    <path d="M9 16.17L4.83 12L3.41 13.41L9 19L21 7L19.59 5.59L9 16.17Z"/>
-                </svg>
-            </div>
-            <h3 class="success-title">Booking Confirmed!</h3>
-            <p class="success-message">Your delivery has been scheduled</p>
-            
-            <div class="codes-container">
-                <div class="code-item" onclick="copyCode('parcel')">
-                    <span class="code-label">Parcel Code</span>
-                    <span class="code-value" id="displayParcelCode">-</span>
-                </div>
-                <div class="code-item" onclick="copyCode('pickup')">
-                    <span class="code-label">Pickup Code</span>
-                    <span class="code-value" id="displayPickupCode">-</span>
-                </div>
-                <div class="code-item" onclick="copyCode('delivery')">
-                    <span class="code-label">Delivery Code</span>
-                    <span class="code-value" id="displayDeliveryCode">-</span>
-                </div>
-            </div>
-
-            <!-- Price Display -->
-            <div style="background: var(--surface-high); padding: 16px; border-radius: 12px; margin-bottom: 20px; text-align: center;">
-                <div style="font-size: 14px; color: var(--text-secondary); margin-bottom: 4px;">Total Amount</div>
-                <div style="font-size: 28px; font-weight: 700; color: var(--primary);" id="displayTotalPrice">KES 0</div>
-            </div>
-
-            <!-- Payment Options -->
-            <div style="margin-bottom: 20px;">
-                <h4 style="font-size: 16px; margin-bottom: 12px; color: var(--text-secondary);">Select Payment Method</h4>
-                <div class="payment-options" style="display: flex; gap: 12px;">
-                    <button class="payment-button pay-now" onclick="selectPaymentMethod('online')" style="flex: 1;">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="margin-bottom: 4px;">
-                            <path d="M20 4H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z"/>
-                        </svg>
-                        <div>Pay Now</div>
-                        <div style="font-size: 12px; opacity: 0.8;">Card/M-Pesa</div>
-                    </button>
-                    <button class="payment-button cash-delivery selected" onclick="selectPaymentMethod('cash')" style="flex: 1;">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="margin-bottom: 4px;">
-                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1.41 16.09V20h-2.67v-1.93c-1.71-.36-3.16-1.46-3.27-3.4h1.96c.1.93.66 1.64 2.08 1.64 1.51 0 1.86-.79 1.86-1.3 0-.72-.41-1.21-2.06-1.54C9.84 13.09 8.13 12.42 8.13 10.46c0-1.65 1.39-2.87 3.23-3.21V6h2.67v1.26c1.42.32 2.56 1.34 2.66 2.91h-1.96c-.09-.72-.58-1.38-1.66-1.38-1.03 0-1.71.52-1.71 1.26 0 .65.49 1.01 2.01 1.33 1.65.36 3.37 1.02 3.37 3.13 0 1.93-1.44 3.06-3.33 3.4z"/>
-                        </svg>
-                        <div>Cash on Delivery</div>
-                        <div style="font-size: 12px; opacity: 0.8;">Pay the rider</div>
-                    </button>
-                </div>
-            </div>
-
-            <div style="background: rgba(255, 243, 205, 0.2); padding: 12px; border-radius: 8px; margin-bottom: 20px;">
-                <p style="font-size: 14px; color: var(--text-secondary);">
-                    <strong>Important:</strong> Share the delivery code with your recipient. They'll need it to confirm delivery.
-                </p>
-            </div>
-
-            <div class="success-actions">
-                <button class="success-button secondary" onclick="shareDeliveryDetails()">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 8px;">
-                        <path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/>
-                    </svg>
-                    Share
-                </button>
-                <button class="success-button primary" id="trackDeliveryBtn" onclick="trackDelivery()">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 8px;">
-                        <path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3A8.994 8.994 0 0 0 13 3.06V1h-2v2.06A8.994 8.994 0 0 0 3.06 11H1v2h2.06A8.994 8.994 0 0 0 11 20.94V23h2v-2.06A8.994 8.994 0 0 0 20.94 13H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/>
-                    </svg>
-                    Track Delivery
-                </button>
-            </div>
-            
-            <button class="success-button secondary" onclick="bookAnother()" style="width: 100%; margin-top: 12px;">
-                New Booking
-            </button>
-        </div>
-    </div>
-</div>
-
-<!-- Location Selection Modal -->
-<div id="simpleLocationModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 3000;">
-    <div style="background: var(--surface-elevated); border-radius: 20px; margin: 20px; height: calc(100% - 40px); display: flex; flex-direction: column; max-width: 500px; margin: 20px auto;">
-        <div style="padding: 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between;">
-            <h3 style="font-size: 20px; font-weight: 600;">Select Location</h3>
-            <button onclick="closeLocationModal()" style="width: 36px; height: 36px; border-radius: 50%; background: var(--surface-high); border: none; display: flex; align-items: center; justify-content: center; cursor: pointer;">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
-                    <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-                </svg>
-            </button>
-        </div>
-        <div style="padding: 20px; padding-bottom: 10px;">
-            <div class="input-container">
-                <input type="text" id="simpleSearch" class="input-field" placeholder="Search for a location..." style="padding-right: 16px;">
-            </div>
-            <button id="simpleSearchBtn" class="location-btn" style="width: 100%; margin-top: 10px;">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
-                </svg>
-                Search
-            </button>
-        </div>
-        <div id="simpleMap" style="flex: 1; min-height: 300px;"></div>
-        <div style="padding: 20px; background: var(--surface-high); border-bottom-left-radius: 20px; border-bottom-right-radius: 20px;">
-            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 16px;">
-                <div style="width: 40px; height: 40px; background: var(--primary); border-radius: 50%; display: flex; align-items: center; justify-content: center;">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
-                        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
-                    </svg>
-                </div>
-                <div style="flex: 1;">
-                    <div id="selectedLocationName" style="font-weight: 600;">Move the map to select location</div>
-                    <div id="selectedLocationAddress" style="font-size: 14px; color: var(--text-secondary); margin-top: 4px;">Drag the map to pin your exact location</div>
-                </div>
-            </div>
-            <div style="display: flex; gap: 12px;">
-                <button onclick="closeLocationModal()" class="success-button secondary" style="flex: 1;">Cancel</button>
-                <button onclick="confirmSimpleLocation()" class="success-button primary" style="flex: 1;">Confirm Location</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Copy code toast element -->
-<div class="copy-toast" id="copyToast" style="display: none;"></div>
-
-<!-- ALL SCRIPTS START HERE -->
-<!-- Load vendor.js (which contains Supabase config) -->
-<script src="./vendor.js"></script>
-
-<!-- Load auth-check.js AFTER vendor.js -->
-<script src="./auth-check.js"></script>
-
-<!-- Route Preview Map Script -->
-<script>
-// Route Preview Map functionality
-let routePreviewMap = null;
-let pickupMarker = null;
-let deliveryMarker = null;
-let routeLine = null;
-let directionsRenderer = null;
-
-function initRoutePreview() {
-    if (!routePreviewMap) {
-        routePreviewMap = L.map('previewMap', {
-            zoomControl: true,
-            attributionControl: false,
-            dragging: true,
-            touchZoom: true,
-            scrollWheelZoom: true,
-            doubleClickZoom: true,
-            boxZoom: true,
-            keyboard: true
-        }).setView([-1.2921, 36.8219], 13);
-
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap'
-        }).addTo(routePreviewMap);
-    }
-}
-
-function updateRoutePreview() {
-    const pickupInput = document.getElementById('pickupLocation');
-    const deliveryInput = document.getElementById('deliveryLocation');
+    <!-- Scripts -->
+    <script src="./vendor-dashboard.js" defer></script>
     
-    const pickupLat = pickupInput.dataset.lat;
-    const pickupLng = pickupInput.dataset.lng;
-    const deliveryLat = deliveryInput.dataset.lat;
-    const deliveryLng = deliveryInput.dataset.lng;
-    
-    const previewPlaceholder = document.getElementById('previewPlaceholder');
-    const previewMapDiv = document.getElementById('previewMap');
-    
-    if (pickupLat && pickupLng && deliveryLat && deliveryLng) {
-        previewPlaceholder.style.display = 'none';
-        previewMapDiv.style.display = 'block';
-        
-        if (!routePreviewMap) {
-            initRoutePreview();
-        }
-        
-        if (pickupMarker) routePreviewMap.removeLayer(pickupMarker);
-        if (deliveryMarker) routePreviewMap.removeLayer(deliveryMarker);
-        if (routeLine) routePreviewMap.removeLayer(routeLine);
-        
-        const pickupIcon = L.divIcon({
-            className: 'custom-div-icon',
-            html: '<div style="background: #0066FF; color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 16px; box-shadow: 0 3px 10px rgba(0,0,0,0.5); border: 2px solid white;">P</div>',
-            iconSize: [30, 30],
-            iconAnchor: [15, 15]
-        });
-        
-        const deliveryIcon = L.divIcon({
-            className: 'custom-div-icon',
-            html: '<div style="background: #34C759; color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 16px; box-shadow: 0 3px 10px rgba(0,0,0,0.5); border: 2px solid white;">D</div>',
-            iconSize: [30, 30],
-            iconAnchor: [15, 15]
-        });
-        
-        const pickupCoords = [parseFloat(pickupLat), parseFloat(pickupLng)];
-        const deliveryCoords = [parseFloat(deliveryLat), parseFloat(deliveryLng)];
-        
-        pickupMarker = L.marker(pickupCoords, { icon: pickupIcon }).addTo(routePreviewMap);
-        deliveryMarker = L.marker(deliveryCoords, { icon: deliveryIcon }).addTo(routePreviewMap);
-        
-        pickupMarker.bindPopup('<strong>Pickup Location</strong><br>' + pickupInput.value.substring(0, 50) + '...').openPopup();
-        deliveryMarker.bindPopup('<strong>Delivery Location</strong><br>' + deliveryInput.value.substring(0, 50) + '...');
-        
-        if (window.google && window.google.maps) {
-            const directionsService = new google.maps.DirectionsService();
-            
-            directionsService.route({
-                origin: new google.maps.LatLng(pickupLat, pickupLng),
-                destination: new google.maps.LatLng(deliveryLat, deliveryLng),
-                travelMode: google.maps.TravelMode.DRIVING,
-                unitSystem: google.maps.UnitSystem.METRIC,
-                avoidHighways: false,
-                avoidTolls: false
-            }, (result, status) => {
-                if (status === 'OK' && result.routes[0]) {
-                    const route = result.routes[0];
-                    const path = [];
-                    
-                    route.legs[0].steps.forEach(step => {
-                        const points = google.maps.geometry.encoding.decodePath(step.polyline.points);
-                        points.forEach(point => {
-                            path.push([point.lat(), point.lng()]);
-                        });
-                    });
-                    
-                    routeLine = L.polyline(path, {
-                        color: '#0066FF',
-                        weight: 5,
-                        opacity: 0.8,
-                        smoothFactor: 1
-                    }).addTo(routePreviewMap);
-                    
-                    const distance = route.legs[0].distance.text;
-                    const duration = route.legs[0].duration.text;
-                    routeLine.bindPopup(`<strong>Route Info</strong><br>Distance: ${distance}<br>Duration: ${duration}`);
-                    
-                } else {
-                    drawFallbackRoute(pickupCoords, deliveryCoords);
-                }
-            });
-        } else {
-            drawFallbackRoute(pickupCoords, deliveryCoords);
-        }
-        
-        const bounds = L.latLngBounds([pickupCoords, deliveryCoords]);
-        routePreviewMap.fitBounds(bounds, { padding: [50, 50] });
-        
-        setTimeout(() => {
-            routePreviewMap.invalidateSize();
-        }, 100);
-    } else {
-        previewPlaceholder.style.display = 'flex';
-        previewMapDiv.style.display = 'none';
-    }
-}
-
-function drawFallbackRoute(pickupCoords, deliveryCoords) {
-    const midLat = (pickupCoords[0] + deliveryCoords[0]) / 2;
-    const midLng = (pickupCoords[1] + deliveryCoords[1]) / 2;
-    const offsetLat = midLat + (deliveryCoords[1] - pickupCoords[1]) * 0.1;
-    const offsetLng = midLng - (deliveryCoords[0] - pickupCoords[0]) * 0.1;
-    
-    const curvePoints = [];
-    for (let i = 0; i <= 20; i++) {
-        const t = i / 20;
-        const lat = (1 - t) * (1 - t) * pickupCoords[0] + 2 * (1 - t) * t * offsetLat + t * t * deliveryCoords[0];
-        const lng = (1 - t) * (1 - t) * pickupCoords[1] + 2 * (1 - t) * t * offsetLng + t * t * deliveryCoords[1];
-        curvePoints.push([lat, lng]);
-    }
-    
-    routeLine = L.polyline(curvePoints, {
-        color: '#0066FF',
-        weight: 4,
-        opacity: 0.8,
-        dashArray: '10, 10',
-        className: 'route-animation'
-    }).addTo(routePreviewMap);
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-    const pickupInput = document.getElementById('pickupLocation');
-    const deliveryInput = document.getElementById('deliveryLocation');
-    
-    if (pickupInput && deliveryInput) {
-        const observer = new MutationObserver(() => {
-            updateRoutePreview();
-        });
-        
-        const config = { attributes: true, attributeFilter: ['data-lat', 'data-lng'] };
-        observer.observe(pickupInput, config);
-        observer.observe(deliveryInput, config);
-        
-        pickupInput.addEventListener('change', updateRoutePreview);
-        deliveryInput.addEventListener('change', updateRoutePreview);
-    }
-});
-</script>
-
-<!-- Initialize scripts -->
-<script>
-// Check if all required functions are loaded
-window.addEventListener('DOMContentLoaded', function() {
-    // Verify vendor.js loaded properly
-    if (typeof window.updateItemCount === 'function') {
-        console.log('✅ Vendor.js loaded successfully');
-    } else {
-        console.error('❌ Vendor.js did not load properly');
-    }
-    
-    // Verify auth-check.js loaded
-    if (typeof window.checkOptionalVendorAuth === 'function') {
-        console.log('✅ Auth-check.js loaded successfully');
-        // Check for optional vendor authentication
-        checkOptionalVendorAuth();
-    } else {
-        console.error('❌ Auth-check.js did not load properly');
-    }
-});
-
-// Google Maps callback
-window.initMap = function() {
-    console.log('✅ Google Maps initialized');
-    if (typeof initializeGooglePlacesAutocomplete === 'function') {
-        initializeGooglePlacesAutocomplete();
-    }
-};
-
-// Copy code function
-function copyCode(codeType) {
-    let codeElement;
-    let codeName;
-    
-    switch(codeType) {
-        case 'parcel':
-            codeElement = document.getElementById('displayParcelCode');
-            codeName = 'Parcel';
-            break;
-        case 'pickup':
-            codeElement = document.getElementById('displayPickupCode');
-            codeName = 'Pickup';
-            break;
-        case 'delivery':
-            codeElement = document.getElementById('displayDeliveryCode');
-            codeName = 'Delivery';
-            break;
-    }
-    
-    if (codeElement && codeElement.textContent && codeElement.textContent !== '-') {
-        navigator.clipboard.writeText(codeElement.textContent).then(() => {
-            // Create and show toast
-            const toast = document.createElement('div');
-            toast.className = 'copy-toast';
-            toast.textContent = `${codeName} code copied!`;
-            document.body.appendChild(toast);
-            
-            // Trigger animation
-            setTimeout(() => toast.classList.add('show'), 10);
-            
-            // Remove after delay
-            setTimeout(() => {
-                toast.classList.remove('show');
-                setTimeout(() => toast.remove(), 300);
-            }, 2000);
-        }).catch(() => {
-            if (typeof showNotification === 'function') {
-                showNotification('Failed to copy code', 'error');
-            }
-        });
-    }
-}
-
-// Payment and success functions
-let selectedPaymentMethod = 'cash';
-
-function selectPaymentMethod(method) {
-    selectedPaymentMethod = method;
-    
-    document.querySelectorAll('.payment-button').forEach(btn => {
-        btn.classList.remove('selected');
-    });
-    
-    if (method === 'online') {
-        document.querySelector('.payment-button.pay-now').classList.add('selected');
-        if (typeof showNotification === 'function') {
-            showNotification('Online payment integration coming soon!', 'info');
-        }
-    } else {
-        document.querySelector('.payment-button.cash-delivery').classList.add('selected');
-    }
-}
-
-function trackDelivery() {
-    const parcelCode = document.getElementById('displayParcelCode').textContent;
-    if (parcelCode && parcelCode !== '-') {
-        window.location.href = `tracking.html?parcel=${parcelCode}`;
-    }
-}
-
-function shareDeliveryDetails() {
-    const parcelCode = document.getElementById('displayParcelCode').textContent;
-    const deliveryCode = document.getElementById('displayDeliveryCode').textContent;
-    const price = document.getElementById('displayTotalPrice').textContent;
-    
-    const message = `🚀 Tuma Delivery Booked!\n\nParcel Code: ${parcelCode}\nDelivery Code: ${deliveryCode}\nAmount: ${price}\n\nTrack your delivery: https://tuma.delivery/track/${parcelCode}`;
-    
-    if (navigator.share) {
-        navigator.share({
-            title: 'Tuma Delivery Details',
-            text: message
-        }).catch(err => console.log('Share cancelled'));
-    } else {
-        navigator.clipboard.writeText(message).then(() => {
-            if (typeof showNotification === 'function') {
-                showNotification('Delivery details copied to clipboard!', 'success');
-            }
-        });
-    }
-}
-
-function bookAnother() {
-    const overlay = document.getElementById('successOverlay');
-    if (overlay) {
-        overlay.style.display = 'none';
-        document.body.style.overflow = '';
-    }
-    window.location.reload();
-}
-
-// Success handler
-function showSuccess(codes, price) {
-    const displayParcelCode = document.getElementById('displayParcelCode');
-    const displayPickupCode = document.getElementById('displayPickupCode');
-    const displayDeliveryCode = document.getElementById('displayDeliveryCode');
-    const displayTotalPrice = document.getElementById('displayTotalPrice');
-    const successOverlay = document.getElementById('successOverlay');
-    
-    displayParcelCode.textContent = codes.parcel_code || codes.parcelCode || '-';
-    displayPickupCode.textContent = codes.pickup_code || codes.pickupCode || '-';
-    displayDeliveryCode.textContent = codes.delivery_code || codes.deliveryCode || '-';
-    
-    if (typeof pricing !== 'undefined' && pricing.formatPrice) {
-        displayTotalPrice.textContent = pricing.formatPrice(price);
-    } else {
-        displayTotalPrice.textContent = `KES ${Math.round(price)}`;
-    }
-    
-    successOverlay.style.display = 'flex';
-    successOverlay.scrollTop = 0;
-    document.body.style.overflow = 'hidden';
-}
-</script>
-
-<!-- Google Maps API - Load last -->
-<script async
-    src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCaWjP3TKWhJrtureRn7q6fIIKk0MPl7bY&libraries=places,geometry&callback=initMap">
-</script>
+    <!-- Google Maps API -->
+    <script async defer
+        src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCaWjP3TKWhJrtureRn7q6fIIKk0MPl7bY&libraries=places,geometry&callback=initMap">
+    </script>
 </body>
 </html>
