@@ -40,6 +40,7 @@
             --express: #FF9800;
             --smart: #2196F3;
             --eco: #4CAF50;
+            --bottom-nav-height: 65px;
             --safe-area-top: env(safe-area-inset-top);
             --safe-area-bottom: env(safe-area-inset-bottom);
         }
@@ -62,74 +63,95 @@
             height: 100%;
             background: var(--surface);
             overflow: hidden;
+            display: flex;
+            flex-direction: column;
         }
 
-        /* Main Content */
-        .main-content {
-            position: absolute;
+        /* Offline Indicator */
+        .offline-indicator {
+            position: fixed;
             top: 0;
             left: 0;
             right: 0;
-            bottom: 0;
+            background: var(--warning);
+            color: black;
+            padding: 8px;
+            text-align: center;
+            font-size: 12px;
+            font-weight: 600;
+            z-index: 1000;
+            display: none;
+            animation: slideDown 0.3s ease-out;
+        }
+
+        .offline-indicator.active {
+            display: block;
+        }
+
+        @keyframes slideDown {
+            from {
+                transform: translateY(-100%);
+            }
+            to {
+                transform: translateY(0);
+            }
+        }
+
+        /* Main Content Area */
+        .main-content {
+            flex: 1;
             overflow-y: auto;
             -webkit-overflow-scrolling: touch;
             scroll-behavior: smooth;
+            padding-bottom: calc(var(--bottom-nav-height) + var(--safe-area-bottom));
         }
 
         /* Header */
         .header {
-            position: sticky;
-            top: 0;
             background: rgba(10, 10, 11, 0.95);
             backdrop-filter: blur(20px) saturate(180%);
             -webkit-backdrop-filter: blur(20px) saturate(180%);
             border-bottom: 0.5px solid var(--border);
-            z-index: 100;
             padding: 16px 20px;
-            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-        }
-
-        .header.scrolled {
-            padding: 12px 20px;
-            background: rgba(10, 10, 11, 0.98);
-        }
-
-        .header-content {
             display: flex;
             align-items: center;
             justify-content: space-between;
         }
 
-        .logo-section {
+        .header-content {
             display: flex;
             align-items: center;
             gap: 12px;
+            flex: 1;
         }
 
         .logo {
-            width: 40px;
-            height: 40px;
-            position: relative;
+            width: 36px;
+            height: 36px;
         }
 
-        .logo svg {
-            width: 100%;
-            height: 100%;
+        .header-title {
+            flex: 1;
         }
 
-        .app-name {
-            font-size: 24px;
+        .header-title h1 {
+            font-size: 20px;
             font-weight: 700;
             letter-spacing: -0.5px;
         }
 
-        .app-subtitle {
+        .header-subtitle {
             font-size: 12px;
             color: var(--text-secondary);
             margin-top: 2px;
         }
 
-        .menu-button {
+        .header-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .header-button {
             width: 36px;
             height: 36px;
             border-radius: 50%;
@@ -140,20 +162,427 @@
             justify-content: center;
             cursor: pointer;
             transition: all 0.2s;
+            position: relative;
         }
 
-        .menu-button:active {
+        .header-button:active {
             scale: 0.95;
             background: var(--surface-high);
         }
 
-        /* Quick Actions Bar */
+        .notification-badge {
+            position: absolute;
+            top: -2px;
+            right: -2px;
+            width: 8px;
+            height: 8px;
+            background: var(--danger);
+            border-radius: 50%;
+            border: 2px solid var(--surface);
+        }
+
+        /* Bottom Navigation */
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(20, 20, 22, 0.98);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-top: 0.5px solid var(--border);
+            padding-bottom: var(--safe-area-bottom);
+            z-index: 100;
+        }
+
+        .nav-container {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            height: var(--bottom-nav-height);
+        }
+
+        .nav-item {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            padding: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .nav-item:active {
+            scale: 0.95;
+        }
+
+        .nav-icon {
+            font-size: 24px;
+            transition: all 0.2s;
+        }
+
+        .nav-label {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            transition: all 0.2s;
+        }
+
+        .nav-item.active .nav-icon {
+            color: var(--primary);
+        }
+
+        .nav-item.active .nav-label {
+            color: var(--primary);
+        }
+
+        .nav-badge {
+            position: absolute;
+            top: 8px;
+            right: calc(50% - 20px);
+            background: var(--danger);
+            color: white;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 6px;
+            border-radius: 10px;
+            min-width: 18px;
+            text-align: center;
+        }
+
+        /* Floating Action Button */
+        .fab {
+            position: fixed;
+            bottom: calc(var(--bottom-nav-height) + 20px + var(--safe-area-bottom));
+            right: 20px;
+            width: 56px;
+            height: 56px;
+            background: var(--primary);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 20px rgba(0, 102, 255, 0.4);
+            cursor: pointer;
+            transition: all 0.3s;
+            z-index: 90;
+        }
+
+        .fab:active {
+            scale: 0.9;
+        }
+
+        .fab.hidden {
+            transform: translateY(100px);
+            opacity: 0;
+        }
+
+        .fab-icon {
+            font-size: 24px;
+            color: white;
+        }
+
+        /* Page Content */
+        .page-content {
+            display: none;
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        .page-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Collapsible Cards */
+        .collapsible-card {
+            background: var(--surface-elevated);
+            border-radius: 14px;
+            margin-bottom: 16px;
+            border: 1px solid var(--border);
+            overflow: hidden;
+            transition: all 0.3s;
+        }
+
+        .card-header {
+            padding: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .card-header:active {
+            background: var(--surface-high);
+        }
+
+        .card-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .card-icon {
+            font-size: 20px;
+        }
+
+        .card-label {
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .card-value {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .expand-icon {
+            transition: transform 0.3s;
+            color: var(--text-secondary);
+        }
+
+        .collapsible-card.expanded .expand-icon {
+            transform: rotate(180deg);
+        }
+
+        .card-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+        }
+
+        .collapsible-card.expanded .card-content {
+            max-height: 1000px;
+        }
+
+        .card-body {
+            padding: 0 16px 16px;
+        }
+
+        /* Form Container */
+        .form-container {
+            padding: 16px;
+        }
+
+        /* Status Badge */
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--success);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .status-badge:active {
+            scale: 0.95;
+        }
+
+        .status-badge.offline {
+            background: var(--surface-high);
+            color: var(--text-secondary);
+        }
+
+        .status-badge.busy {
+            background: var(--warning);
+            color: black;
+        }
+
+        /* Quick Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: var(--surface-elevated);
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+            border: 1px solid var(--border);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stat-card.highlight {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            border-color: var(--primary);
+        }
+
+        .stat-value {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 4px;
+        }
+
+        .stat-card.highlight .stat-value {
+            color: white;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .stat-card.highlight .stat-label {
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .stat-trend {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .stat-trend.up {
+            color: var(--success);
+        }
+
+        .stat-trend.down {
+            color: var(--danger);
+        }
+
+        /* Commission Alert Banner */
+        .commission-alert {
+            background: linear-gradient(135deg, var(--warning) 0%, #FF7F00 100%);
+            color: black;
+            padding: 12px 16px;
+            margin: 0 16px 16px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        .commission-alert-icon {
+            font-size: 24px;
+        }
+
+        .commission-alert-content {
+            flex: 1;
+        }
+
+        .commission-alert-title {
+            font-size: 14px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .commission-alert-message {
+            font-size: 12px;
+            opacity: 0.9;
+        }
+
+        .commission-alert-action {
+            padding: 8px 16px;
+            background: rgba(0, 0, 0, 0.2);
+            border: none;
+            border-radius: 8px;
+            color: black;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.02);
+            }
+        }
+        /* Active Route Card */
+        .active-route-card {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            border-radius: 14px;
+            padding: 20px;
+            color: white;
+            margin-bottom: 20px;
+        }
+
+        .route-progress {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 16px;
+            font-size: 14px;
+        }
+
+        .progress-bar {
+            height: 6px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-bottom: 16px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: white;
+            border-radius: 3px;
+            transition: width 0.3s ease;
+        }
+
+        .stop-info {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 12px;
+            margin-bottom: 12px;
+        }
+
+        .stop-type {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 8px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .stop-address {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .stop-details {
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        /* Quick Actions */
         .quick-actions {
             display: flex;
             gap: 8px;
-            padding: 12px 20px;
-            background: var(--surface);
-            border-bottom: 1px solid var(--border);
+            padding: 0 16px 16px;
             overflow-x: auto;
             -webkit-overflow-scrolling: touch;
             scrollbar-width: none;
@@ -168,15 +597,14 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 4px;
+            gap: 6px;
             padding: 12px 16px;
             background: var(--surface-elevated);
             border: 1px solid var(--border);
             border-radius: 12px;
             cursor: pointer;
             transition: all 0.2s;
-            text-decoration: none;
-            color: var(--text-primary);
+            min-width: 80px;
         }
 
         .quick-action:active {
@@ -184,513 +612,17 @@
             background: var(--surface-high);
         }
 
-        .action-icon {
+        .quick-action-icon {
             font-size: 24px;
         }
 
-        .action-label {
+        .quick-action-label {
             font-size: 12px;
             color: var(--text-secondary);
-        }
-
-        /* Form Container */
-        .form-container {
-            padding: 20px;
-            padding-bottom: calc(20px + var(--safe-area-bottom));
-        }
-
-        /* Hero Section */
-        .hero-section {
-            background: linear-gradient(135deg, #1a1a1a 0%, #0f0f0f 100%);
-            border-radius: 16px;
-            padding: 24px;
-            margin-bottom: 20px;
             text-align: center;
-            position: relative;
-            overflow: hidden;
         }
 
-        .hero-section::before {
-            content: '';
-            position: absolute;
-            top: -50%;
-            left: -50%;
-            width: 200%;
-            height: 200%;
-            background: radial-gradient(circle, var(--primary) 0%, transparent 70%);
-            opacity: 0.1;
-            animation: pulse 4s ease-in-out infinite;
-        }
-
-        @keyframes pulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.1); }
-        }
-
-        .hero-title {
-            font-size: 28px;
-            font-weight: 700;
-            margin-bottom: 8px;
-            position: relative;
-        }
-
-        .hero-subtitle {
-            font-size: 16px;
-            color: var(--text-secondary);
-            position: relative;
-        }
-
-        .status-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            background: var(--success);
-            color: white;
-            padding: 6px 12px;
-            border-radius: 20px;
-            font-size: 14px;
-            font-weight: 600;
-            margin-top: 16px;
-            position: relative;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .status-badge:active {
-            scale: 0.95;
-        }
-
-        .status-badge.offline {
-            background: var(--surface-high);
-            color: var(--text-secondary);
-        }
-
-        /* Commission Status */
-        .commission-status {
-            background: var(--surface-elevated);
-            border-radius: 14px;
-            padding: 16px;
-            margin: 0 0 20px;
-            border: 1px solid var(--border);
-            transition: all 0.3s;
-        }
-        
-        .commission-status.warning {
-            border-color: var(--warning);
-            background: rgba(255, 159, 10, 0.1);
-        }
-        
-        .commission-status.blocked {
-            border-color: var(--danger);
-            background: rgba(255, 59, 48, 0.1);
-        }
-        
-        .commission-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 12px;
-        }
-        
-        .commission-title {
-            font-size: 14px;
-            font-weight: 600;
-            color: var(--text-secondary);
-        }
-        
-        .commission-amount {
-            font-size: 16px;
-            font-weight: 700;
-            color: var(--text-primary);
-        }
-        
-        .commission-progress {
-            height: 8px;
-            background: var(--surface-high);
-            border-radius: 4px;
-            overflow: hidden;
-            margin-bottom: 12px;
-        }
-        
-        .commission-progress-bar {
-            height: 100%;
-            background: var(--primary);
-            border-radius: 4px;
-            transition: width 0.3s ease;
-        }
-        
-        .commission-status.warning .commission-progress-bar {
-            background: var(--warning);
-        }
-        
-        .commission-status.blocked .commission-progress-bar {
-            background: var(--danger);
-        }
-        
-        .commission-actions {
-            display: flex;
-            gap: 8px;
-        }
-        
-        .commission-pay-button,
-        .commission-details-button {
-            flex: 1;
-            padding: 10px;
-            border-radius: 8px;
-            border: none;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        
-        .commission-pay-button {
-            background: var(--primary);
-            color: white;
-        }
-        
-        .commission-details-button {
-            background: var(--surface-high);
-            color: var(--text-secondary);
-        }
-
-        /* Form Sections */
-        .form-section {
-            margin-bottom: 24px;
-            animation: slideUp 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
-            opacity: 0;
-            transform: translateY(20px);
-        }
-
-        .form-section:nth-child(1) { animation-delay: 0.1s; }
-        .form-section:nth-child(2) { animation-delay: 0.15s; }
-        .form-section:nth-child(3) { animation-delay: 0.2s; }
-        .form-section:nth-child(4) { animation-delay: 0.25s; }
-        .form-section:nth-child(5) { animation-delay: 0.3s; }
-        .form-section:nth-child(6) { animation-delay: 0.35s; }
-        .form-section:nth-child(7) { animation-delay: 0.4s; }
-        .form-section:nth-child(8) { animation-delay: 0.45s; }
-        .form-section:nth-child(9) { animation-delay: 0.5s; }
-
-        @keyframes slideUp {
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .section-title {
-            font-size: 13px;
-            font-weight: 600;
-            color: var(--text-secondary);
-            margin-bottom: 12px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        /* Earnings Cards */
-        .earnings-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 12px;
-            margin-bottom: 24px;
-        }
-
-        .earnings-card {
-            background: var(--surface-elevated);
-            border-radius: 14px;
-            padding: 16px;
-            text-align: center;
-            border: 1px solid var(--border);
-            transition: all 0.3s;
-        }
-
-        .earnings-card.highlight {
-            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-            border-color: var(--primary);
-        }
-
-        .earnings-value {
-            font-size: 20px;
-            font-weight: 700;
-            color: var(--primary);
-            margin-bottom: 4px;
-        }
-
-        .earnings-card.highlight .earnings-value {
-            color: white;
-        }
-
-        .earnings-label {
-            font-size: 12px;
-            color: var(--text-secondary);
-        }
-
-        .earnings-card.highlight .earnings-label {
-            color: rgba(255, 255, 255, 0.9);
-        }
-
-        /* Incentive Widget */
-        .incentive-widget {
-            background: var(--surface-elevated);
-            border-radius: 14px;
-            overflow: hidden;
-            border: 1px solid var(--border);
-            margin-bottom: 20px;
-        }
-        
-        .peak-hour-banner {
-            background: linear-gradient(135deg, var(--warning) 0%, var(--express) 100%);
-            color: black;
-            padding: 12px 16px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-weight: 600;
-            font-size: 14px;
-        }
-        
-        .peak-icon {
-            font-size: 20px;
-            animation: pulse 2s ease-in-out infinite;
-        }
-        
-        .daily-bonus-progress {
-            padding: 16px;
-        }
-        
-        .bonus-title {
-            font-size: 14px;
-            font-weight: 600;
-            margin-bottom: 12px;
-        }
-        
-        .progress-container {
-            margin-bottom: 8px;
-        }
-        
-        .progress-bar {
-            height: 8px;
-            background: var(--surface-high);
-            border-radius: 4px;
-            overflow: hidden;
-            margin-bottom: 8px;
-        }
-        
-        .progress-fill {
-            height: 100%;
-            background: linear-gradient(90deg, var(--primary) 0%, var(--success) 100%);
-            border-radius: 4px;
-            transition: width 0.3s ease;
-        }
-        
-        .progress-text {
-            display: flex;
-            justify-content: space-between;
-            font-size: 14px;
-        }
-        
-        .bonus-amount {
-            color: var(--success);
-            font-weight: 700;
-        }
-        
-        .progress-message {
-            font-size: 14px;
-            color: var(--text-secondary);
-            margin-top: 8px;
-        }
-        
-        .max-bonus-reached {
-            text-align: center;
-            font-size: 16px;
-            font-weight: 600;
-            color: var(--success);
-            padding: 20px;
-        }
-
-        /* Stats Overview */
-        .stats-row {
-            display: flex;
-            gap: 12px;
-            margin-bottom: 16px;
-        }
-
-        .stat-item {
-            flex: 1;
-            background: var(--surface-elevated);
-            border-radius: 14px;
-            padding: 16px;
-            text-align: center;
-            border: 1px solid var(--border);
-        }
-
-        .stat-icon {
-            width: 40px;
-            height: 40px;
-            background: var(--surface-high);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto 8px;
-            font-size: 18px;
-        }
-
-        .stat-value {
-            font-size: 24px;
-            font-weight: 700;
-            margin-bottom: 4px;
-        }
-
-        .stat-label {
-            font-size: 12px;
-            color: var(--text-secondary);
-        }
-
-        /* Performance Metrics */
-        .performance-metrics {
-            margin-bottom: 24px;
-        }
-        
-        .metrics-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 12px;
-        }
-        
-        .metric-card {
-            background: var(--surface-elevated);
-            border-radius: 12px;
-            padding: 16px;
-            text-align: center;
-            border: 1px solid var(--border);
-            transition: all 0.3s;
-        }
-        
-        .metric-card:hover {
-            border-color: var(--primary);
-            transform: translateY(-2px);
-        }
-        
-        .metric-icon {
-            font-size: 24px;
-            margin-bottom: 8px;
-        }
-        
-        .metric-value {
-            font-size: 20px;
-            font-weight: 700;
-            color: var(--primary);
-            margin-bottom: 4px;
-        }
-        
-        .metric-label {
-            font-size: 12px;
-            color: var(--text-secondary);
-        }
-
-        /* Active Delivery with Multi-Stop Support */
-        .active-delivery {
-            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-            border-radius: 14px;
-            padding: 20px;
-            color: white;
-            margin-bottom: 20px;
-        }
-
-        .active-route-info {
-            margin-bottom: 16px;
-        }
-        
-        .route-progress-header {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 8px;
-            font-size: 14px;
-        }
-        
-        .route-progress-bar {
-            height: 6px;
-            background: rgba(255, 255, 255, 0.2);
-            border-radius: 3px;
-            overflow: hidden;
-        }
-        
-        .carrying-indicator {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            background: rgba(255, 159, 10, 0.2);
-            border: 1px solid var(--warning);
-            border-radius: 20px;
-            padding: 6px 12px;
-            margin-bottom: 16px;
-            font-size: 14px;
-            font-weight: 600;
-        }
-        
-        .next-stop-info {
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 12px;
-            padding: 16px;
-        }
-        
-        .stop-type-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            padding: 4px 8px;
-            border-radius: 6px;
-            font-size: 12px;
-            font-weight: 600;
-            margin-bottom: 8px;
-            background: rgba(255, 255, 255, 0.2);
-        }
-        
-        .stop-address {
-            font-size: 16px;
-            font-weight: 600;
-            margin-bottom: 8px;
-            line-height: 1.4;
-        }
-        
-        .stop-details {
-            display: flex;
-            justify-content: space-between;
-            font-size: 14px;
-            opacity: 0.9;
-        }
-
-        /* Available Routes with Enhanced Info */
-        .route-tabs {
-            display: flex;
-            gap: 8px;
-            margin-bottom: 16px;
-            background: var(--surface-elevated);
-            padding: 4px;
-            border-radius: 10px;
-        }
-
-        .route-tab {
-            flex: 1;
-            padding: 8px;
-            border: none;
-            background: transparent;
-            color: var(--text-secondary);
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            border-radius: 8px;
-            transition: all 0.2s;
-        }
-
-        .route-tab.active {
-            background: var(--primary);
-            color: white;
-        }
-
-        /* Route Cards Enhanced */
+        /* Routes List */
         .route-list {
             display: flex;
             flex-direction: column;
@@ -703,18 +635,18 @@
             padding: 16px;
             border: 1px solid var(--border);
             transition: all 0.3s;
+            cursor: pointer;
             position: relative;
-            overflow: hidden;
-            cursor: default;
         }
 
-        .route-card:not(.claimed) {
-            transition: all 0.3s ease;
+        .route-card:active {
+            scale: 0.98;
+            background: var(--surface-high);
         }
 
         .route-card.claimed {
             opacity: 0.6;
-            background: var(--surface-dim);
+            pointer-events: none;
         }
 
         .route-header {
@@ -730,9 +662,6 @@
         }
 
         .route-type {
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
             padding: 4px 8px;
             border-radius: 6px;
             font-size: 12px;
@@ -757,26 +686,42 @@
         .route-stats {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
-            gap: 12px;
+            gap: 8px;
             margin-bottom: 12px;
             padding: 12px;
             background: var(--surface-high);
             border-radius: 10px;
+        }
+
+        .route-stat {
             text-align: center;
         }
 
-        .route-stats > div {
-            font-size: 14px;
+        .route-stat-value {
+            font-size: 16px;
             font-weight: 600;
+            margin-bottom: 4px;
         }
 
-        .route-meta {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+        .route-stat-label {
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
+
+        .route-commission-offset {
+            background: rgba(255, 159, 10, 0.1);
+            border: 1px solid var(--warning);
+            border-radius: 8px;
+            padding: 8px 12px;
             margin-bottom: 12px;
             font-size: 13px;
-            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .offset-icon {
+            font-size: 16px;
         }
 
         .claim-button {
@@ -790,19 +735,10 @@
             font-weight: 600;
             cursor: pointer;
             transition: all 0.2s;
-            position: relative;
-            z-index: 2;
-        }
-
-        .claim-button:hover:not(:disabled) {
-            background: var(--primary-dark);
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(0, 102, 255, 0.3);
         }
 
         .claim-button:active:not(:disabled) {
             scale: 0.98;
-            transform: translateY(0);
         }
 
         .claim-button:disabled {
@@ -811,89 +747,126 @@
             cursor: not-allowed;
         }
 
-        /* Code Verification */
-        .code-input-container {
+        /* Wallet Cards */
+        .wallet-overview {
+            display: grid;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .wallet-card {
             background: var(--surface-elevated);
             border-radius: 14px;
-            padding: 20px;
-            text-align: center;
-        }
-
-        .code-input-label {
-            font-size: 16px;
-            font-weight: 600;
-            margin-bottom: 16px;
-        }
-
-        .code-input {
-            width: 100%;
-            background: var(--surface-high);
-            border: 2px solid var(--border);
-            border-radius: 12px;
             padding: 16px;
-            font-size: 24px;
-            font-weight: 700;
-            text-align: center;
-            color: var(--text-primary);
-            letter-spacing: 4px;
-            text-transform: uppercase;
-            outline: none;
-            transition: all 0.3s;
+            border: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 16px;
         }
 
-        .code-input:focus {
-            border-color: var(--primary);
-            transform: translateY(-2px);
-            box-shadow: 0 4px 20px rgba(0, 102, 255, 0.2);
-        }
-
-        .code-actions {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px;
-            margin-top: 16px;
-        }
-
-        .code-button {
-            padding: 14px;
-            border-radius: 10px;
-            border: none;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .code-button.pickup {
-            background: var(--warning);
-            color: black;
-        }
-
-        .code-button.delivery {
-            background: var(--success);
+        .wallet-card.mpesa {
+            background: linear-gradient(135deg, #00B761 0%, #00854A 100%);
             color: white;
         }
 
-        .code-button:active {
-            scale: 0.95;
+        .wallet-card.cash {
+            background: linear-gradient(135deg, #FF9F0A 0%, #FF7F00 100%);
+            color: white;
         }
 
-        /* Empty State */
+        .wallet-icon {
+            font-size: 32px;
+        }
+
+        .wallet-info {
+            flex: 1;
+        }
+
+        .wallet-label {
+            font-size: 13px;
+            opacity: 0.9;
+            margin-bottom: 4px;
+        }
+
+        .wallet-amount {
+            font-size: 24px;
+            font-weight: 700;
+        }
+
+        .wallet-action {
+            padding: 8px 16px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 13px;
+        }
+
+        /* Transaction List */
+        .transaction-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .transaction-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            background: var(--surface-elevated);
+            border-radius: 12px;
+            border: 1px solid var(--border);
+        }
+
+        .transaction-icon {
+            font-size: 24px;
+        }
+
+        .transaction-info {
+            flex: 1;
+        }
+
+        .transaction-desc {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .transaction-time {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .transaction-amount {
+            font-size: 16px;
+            font-weight: 700;
+        }
+
+        .transaction-amount.positive {
+            color: var(--success);
+        }
+
+        .transaction-amount.negative {
+            color: var(--danger);
+        }
+
+        .transaction-amount.offset {
+            color: var(--warning);
+        }
+
+        /* Empty States */
         .empty-state {
             padding: 48px 24px;
             text-align: center;
         }
 
         .empty-icon {
-            width: 64px;
-            height: 64px;
-            background: var(--surface-high);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto 16px;
-            font-size: 24px;
+            font-size: 48px;
+            margin-bottom: 16px;
+            opacity: 0.5;
         }
 
         .empty-title {
@@ -907,228 +880,79 @@
             color: var(--text-secondary);
         }
 
-        /* Navigation Button */
-        .nav-button {
-            position: fixed;
-            bottom: 30px;
-            right: 20px;
-            width: 56px;
-            height: 56px;
-            background: var(--primary);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 4px 20px rgba(0, 102, 255, 0.4);
-            cursor: pointer;
-            transition: all 0.3s;
-            z-index: 90;
+        /* Loading States */
+        .skeleton {
+            background: linear-gradient(90deg, var(--surface-elevated) 25%, var(--surface-high) 50%, var(--surface-elevated) 75%);
+            background-size: 200% 100%;
+            animation: loading 1.5s infinite;
+            border-radius: 8px;
         }
 
-        .nav-button:active {
-            scale: 0.9;
-        }
-
-        .nav-button svg {
-            width: 24px;
-            height: 24px;
-            color: white;
-        }
-
-        /* Notifications */
-        @keyframes slideIn {
-            from {
-                transform: translateX(100%);
-                opacity: 0;
+        @keyframes loading {
+            0% {
+                background-position: 200% 0;
             }
-            to {
-                transform: translateX(0);
-                opacity: 1;
+            100% {
+                background-position: -200% 0;
             }
         }
 
-        @keyframes slideOut {
-            from {
-                transform: translateX(0);
-                opacity: 1;
-            }
-            to {
-                transform: translateX(100%);
-                opacity: 0;
-            }
+        .skeleton-card {
+            height: 120px;
+            margin-bottom: 12px;
         }
 
-        /* Menu Styles */
-        .menu-overlay {
+        /* Modals */
+        .modal-overlay {
             position: fixed;
             top: 0;
             left: 0;
             right: 0;
             bottom: 0;
-            background: rgba(0, 0, 0, 0.6);
+            background: rgba(0, 0, 0, 0.9);
             backdrop-filter: blur(10px);
-            z-index: 200;
-            opacity: 0;
-            transition: opacity 0.3s ease;
-        }
-
-        .menu-overlay.active {
-            opacity: 1;
-        }
-
-        .menu-drawer {
-            position: fixed;
-            top: 0;
-            left: -320px;
-            width: 320px;
-            height: 100%;
-            background: var(--surface-elevated);
-            z-index: 201;
-            transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-            overflow-y: auto;
+            z-index: 1000;
             display: flex;
-            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            animation: fadeIn 0.3s ease-out;
         }
 
-        .menu-drawer.active {
-            transform: translateX(320px);
+        .modal-content {
+            background: var(--surface-elevated);
+            border-radius: 20px;
+            padding: 24px;
+            max-width: 400px;
+            width: 100%;
+            max-height: 80vh;
+            overflow-y: auto;
         }
 
-        .menu-header {
-            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-            padding: 30px 20px 20px;
-            padding-top: calc(30px + var(--safe-area-top));
-            position: relative;
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
         }
 
-        .menu-close {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            width: 40px;
-            height: 40px;
+        .modal-title {
+            font-size: 24px;
+            font-weight: 700;
+        }
+
+        .modal-close {
+            width: 32px;
+            height: 32px;
+            background: var(--surface-high);
             border: none;
-            background: rgba(255, 255, 255, 0.2);
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
-        }
-
-        .menu-profile {
-            display: flex;
-            align-items: center;
-            gap: 16px;
-            color: white;
-        }
-
-        .profile-avatar {
-            width: 60px;
-            height: 60px;
-            background: rgba(255, 255, 255, 0.3);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 24px;
-            font-weight: 700;
-        }
-
-        .profile-info {
-            flex: 1;
-        }
-
-        .profile-name {
-            font-size: 20px;
-            font-weight: 700;
-            margin-bottom: 4px;
-        }
-
-        .profile-phone {
-            font-size: 14px;
-            opacity: 0.9;
-            margin-bottom: 4px;
-        }
-
-        .profile-rating {
-            font-size: 14px;
-            opacity: 0.9;
-        }
-
-        .menu-items {
-            flex: 1;
-            padding: 20px 0;
-        }
-
-        .menu-item {
-            display: flex;
-            align-items: center;
-            padding: 16px 20px;
-            color: var(--text-primary);
-            text-decoration: none;
-            transition: background 0.2s;
-        }
-
-        .menu-item:active {
-            background: var(--surface-high);
-        }
-
-        .menu-icon {
-            font-size: 24px;
-            width: 40px;
-        }
-
-        .menu-label {
-            flex: 1;
-            font-size: 16px;
-            font-weight: 500;
-        }
-
-        .menu-arrow {
             font-size: 20px;
             color: var(--text-secondary);
-        }
-
-        .menu-divider {
-            height: 1px;
-            background: var(--border);
-            margin: 10px 20px;
-        }
-
-        .menu-item.logout {
-            color: var(--danger);
-        }
-
-        .menu-footer {
-            padding: 20px;
-            text-align: center;
-            border-top: 1px solid var(--border);
-        }
-
-        .app-version {
-            font-size: 12px;
-            color: var(--text-tertiary);
-        }
-
-        /* Loading Spinner */
-        .loading-routes {
-            text-align: center;
-            padding: 60px 20px;
-        }
-        
-        .loading-spinner {
-            width: 40px;
-            height: 40px;
-            border: 3px solid var(--surface-high);
-            border-top-color: var(--primary);
-            border-radius: 50%;
-            margin: 0 auto 20px;
-            animation: spin 1s linear infinite;
-        }
-        
-        @keyframes spin {
-            to { transform: rotate(360deg); }
         }
 
         /* Responsive */
@@ -1139,166 +963,1002 @@
                 box-shadow: 0 0 60px rgba(0, 0, 0, 0.5);
             }
         }
-
-        @media (prefers-reduced-motion: reduce) {
-            * {
-                animation-duration: 0.01ms !important;
-                animation-iteration-count: 1 !important;
-                transition-duration: 0.01ms !important;
-            }
-        }
     </style>
 </head>
 <body>
     <div class="app">
-        <!-- Main Content -->
-        <div class="main-content" id="mainContent">
-            <!-- Header -->
-            <div class="header" id="header">
-                <div class="header-content">
-                    <div class="logo-section">
-                        <div class="logo">
-                            <svg viewBox="0 0 40 40" fill="none">
-                                <circle cx="20" cy="20" r="18" stroke="#0066FF" stroke-width="2"/>
-                                <path d="M20 8 L20 22 M14 8 L26 8" stroke="#0066FF" stroke-width="3" stroke-linecap="round"/>
-                                <circle cx="20" cy="28" r="3" fill="#0066FF"/>
-                                <path d="M8 20 Q12 16 16 18" stroke="#0066FF" stroke-width="1" opacity="0.5"/>
-                                <path d="M24 18 Q28 16 32 20" stroke="#0066FF" stroke-width="1" opacity="0.5"/>
-                            </svg>
-                        </div>
-                        <div>
-                            <h1 class="app-name">Tuma</h1>
-                            <p class="app-subtitle">Rider Dashboard</p>
-                        </div>
-                    </div>
-                    <button type="button" class="menu-button" onclick="showMenu()" aria-label="Menu">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
-                            <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
-                        </svg>
-                    </button>
+        <!-- Offline Indicator -->
+        <div class="offline-indicator" id="offlineIndicator">
+            <span>📡 No internet connection - Working offline</span>
+        </div>
+
+        <!-- Header -->
+        <div class="header">
+            <div class="header-content">
+                <div class="logo">
+                    <svg viewBox="0 0 40 40" fill="none">
+                        <circle cx="20" cy="20" r="18" stroke="#0066FF" stroke-width="2"/>
+                        <path d="M20 8 L20 22 M14 8 L26 8" stroke="#0066FF" stroke-width="3" stroke-linecap="round"/>
+                        <circle cx="20" cy="28" r="3" fill="#0066FF"/>
+                    </svg>
+                </div>
+                <div class="header-title">
+                    <h1>Hi, <span id="riderName">Rider</span> 👋</h1>
+                    <p class="header-subtitle">
+                        <span class="status-badge" id="statusBadge" onclick="toggleStatus()">
+                            <span class="status-dot">●</span>
+                            <span id="statusText">Online</span>
+                        </span>
+                    </p>
                 </div>
             </div>
+            <div class="header-actions">
+                <button class="header-button" onclick="showNotifications()">
+                    <span class="notification-badge" id="notificationBadge" style="display: none;"></span>
+                    🔔
+                </button>
+                <button class="header-button" onclick="showSettings()">
+                    ⚙️
+                </button>
+            </div>
+        </div>
 
-            <!-- Quick Actions Bar will be added by JS -->
-
-            <!-- Form Container - Changed from form to div to prevent submission -->
-            <div class="form-container">
-                <!-- Hero Section -->
-                <div class="hero-section">
-                    <h2 class="hero-title">Welcome, <span id="riderName">Rider</span></h2>
-                    <p class="hero-subtitle">Your earnings and deliveries</p>
-                    <span class="status-badge" id="statusBadge">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                            <circle cx="12" cy="12" r="4"/>
-                        </svg>
-                        <span>Online</span>
-                    </span>
-                </div>
-
-                <!-- Commission container will be injected here by JS -->
-                <div id="commissionContainer"></div>
-
-                <!-- Earnings Overview -->
-                <div class="form-section">
-                    <h2 class="section-title">Earnings Overview</h2>
-                    <div class="earnings-grid">
-                        <div class="earnings-card">
-                            <div class="earnings-value">KES <span id="dailyEarnings">0</span></div>
-                            <div class="earnings-label">Today</div>
+        <!-- Main Content -->
+        <div class="main-content" id="mainContent">
+            <!-- Dashboard Page -->
+            <div id="dashboardPage" class="page-content active">
+                <div class="form-container">
+                    <!-- Commission Alert (shows when debt exists) -->
+                    <div class="commission-alert" id="commissionAlert" style="display: none;">
+                        <span class="commission-alert-icon">⚠️</span>
+                        <div class="commission-alert-content">
+                            <div class="commission-alert-title">Commission Due</div>
+                            <div class="commission-alert-message">
+                                KES <span id="commissionDebt">0</span> will be deducted from your next earnings
+                            </div>
                         </div>
-                        <div class="earnings-card highlight">
-                            <div class="earnings-value">KES <span id="weeklyEarnings">0</span></div>
-                            <div class="earnings-label">This Week</div>
-                        </div>
-                        <div class="earnings-card">
-                            <div class="earnings-value">KES <span id="monthlyEarnings">0</span></div>
-                            <div class="earnings-label">This Month</div>
-                        </div>
+                        <button class="commission-alert-action" onclick="showCommissionDetails()">
+                            Details
+                        </button>
                     </div>
-                </div>
 
-                <!-- Performance Stats -->
-                <div class="form-section">
-                    <h2 class="section-title">Performance Stats</h2>
-                    <div class="stats-row">
-                        <div class="stat-item">
-                            <div class="stat-icon">📦</div>
-                            <div class="stat-value" id="totalDeliveries">0</div>
+                    <!-- Quick Stats -->
+                    <div class="stats-grid">
+                        <div class="stat-card highlight">
+                            <span class="stat-trend up" id="earningsTrend">↑ 12%</span>
+                            <div class="stat-value">KES <span id="todayEarnings">0</span></div>
+                            <div class="stat-label">Today</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value"><span id="todayDeliveries">0</span></div>
                             <div class="stat-label">Deliveries</div>
                         </div>
-                        <div class="stat-item">
-                            <div class="stat-icon">🏍️</div>
-                            <div class="stat-value"><span id="totalDistance">0</span> km</div>
+                        <div class="stat-card">
+                            <div class="stat-value"><span id="todayDistance">0</span> km</div>
                             <div class="stat-label">Distance</div>
                         </div>
-                        <div class="stat-item">
-                            <div class="stat-icon">⭐</div>
-                            <div class="stat-value" id="riderRating">5.0</div>
-                            <div class="stat-label">Rating</div>
-                        </div>
                     </div>
-                </div>
 
-                <!-- Active Delivery (Hidden by default) -->
-                <div class="form-section" id="activeDeliverySection" style="display: none;">
-                    <h2 class="section-title">Current Route</h2>
-                    <div class="active-delivery">
-                        <!-- Content will be populated by JS -->
-                    </div>
-                </div>
-
-                <!-- Code Verification -->
-                <div class="form-section">
-                    <h2 class="section-title">Code Verification</h2>
-                    <div class="code-input-container">
-                        <div class="code-input-label">Enter Pickup or Delivery Code</div>
-                        <input type="text" class="code-input" id="codeInput" placeholder="XXX-XXXX" maxlength="8">
-                        <div class="code-actions">
-                            <button type="button" class="code-button pickup" onclick="verifyCode('pickup')">
-                                Verify Pickup
-                            </button>
-                            <button type="button" class="code-button delivery" onclick="verifyCode('delivery')">
-                                Verify Delivery
+                    <!-- Active Route (if any) -->
+                    <div id="activeRouteSection" style="display: none;">
+                        <div class="active-route-card">
+                            <div class="route-progress">
+                                <span>Route Progress</span>
+                                <span><span id="completedStops">0</span>/<span id="totalStops">0</span> stops</span>
+                            </div>
+                            <div class="progress-bar">
+                                <div class="progress-fill" id="routeProgress" style="width: 0%"></div>
+                            </div>
+                            <div class="stop-info">
+                                <div class="stop-type" id="stopType">📦 PICKUP</div>
+                                <div class="stop-address" id="stopAddress">Loading...</div>
+                                <div class="stop-details">
+                                    <span>Code: <span id="stopCode">XXX-XXXX</span></span>
+                                    <span id="stopCustomer">Customer</span>
+                                </div>
+                            </div>
+                            <button class="claim-button" onclick="navigateToRoute()">
+                                Navigate to Stop
                             </button>
                         </div>
                     </div>
-                </div>
 
-                <!-- Available Routes -->
-                <div class="form-section">
-                    <h2 class="section-title">Available Clustered Routes</h2>
-                    <div class="route-tabs">
-                        <button type="button" class="route-tab active" onclick="filterRoutes('all')">All Routes</button>
-                        <button type="button" class="route-tab" onclick="filterRoutes('express')">Express</button>
-                        <button type="button" class="route-tab" onclick="filterRoutes('smart')">Smart</button>
-                        <button type="button" class="route-tab" onclick="filterRoutes('eco')">Eco</button>
+                    <!-- Quick Actions -->
+                    <div class="quick-actions">
+                        <div class="quick-action" onclick="quickVerify()">
+                            <span class="quick-action-icon">✅</span>
+                            <span class="quick-action-label">Quick Verify</span>
+                        </div>
+                        <div class="quick-action" onclick="scanQRCode()">
+                            <span class="quick-action-icon">📷</span>
+                            <span class="quick-action-label">Scan QR</span>
+                        </div>
+                        <div class="quick-action" onclick="callSupport()">
+                            <span class="quick-action-icon">📞</span>
+                            <span class="quick-action-label">Support</span>
+                        </div>
+                        <div class="quick-action" onclick="viewHotspots()">
+                            <span class="quick-action-icon">🔥</span>
+                            <span class="quick-action-label">Hotspots</span>
+                        </div>
+                        <div class="quick-action" onclick="toggleBreak()">
+                            <span class="quick-action-icon">☕</span>
+                            <span class="quick-action-label">Break</span>
+                        </div>
                     </div>
+
+                    <!-- Collapsible Sections -->
+                    <div class="collapsible-card" id="earningsCard">
+                        <div class="card-header" onclick="toggleCard('earningsCard')">
+                            <div class="card-title">
+                                <span class="card-icon">💰</span>
+                                <span class="card-label">Earnings Summary</span>
+                            </div>
+                            <div>
+                                <span class="card-value">KES <span id="weeklyTotal">0</span></span>
+                                <span class="expand-icon">▼</span>
+                            </div>
+                        </div>
+                        <div class="card-content">
+                            <div class="card-body">
+                                <div class="stats-grid">
+                                    <div class="stat-card">
+                                        <div class="stat-value">KES <span id="dailyEarnings">0</span></div>
+                                        <div class="stat-label">Today</div>
+                                    </div>
+                                    <div class="stat-card">
+                                        <div class="stat-value">KES <span id="weeklyEarnings">0</span></div>
+                                        <div class="stat-label">This Week</div>
+                                    </div>
+                                    <div class="stat-card">
+                                        <div class="stat-value">KES <span id="monthlyEarnings">0</span></div>
+                                        <div class="stat-label">This Month</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="collapsible-card" id="performanceCard">
+                        <div class="card-header" onclick="toggleCard('performanceCard')">
+                            <div class="card-title">
+                                <span class="card-icon">📊</span>
+                                <span class="card-label">Performance</span>
+                            </div>
+                            <div>
+                                <span class="card-value">⭐ <span id="riderRating">5.0</span></span>
+                                <span class="expand-icon">▼</span>
+                            </div>
+                        </div>
+                        <div class="card-content">
+                            <div class="card-body">
+                                <div class="stats-grid">
+                                    <div class="stat-card">
+                                        <div class="stat-value"><span id="totalDeliveries">0</span></div>
+                                        <div class="stat-label">Total Deliveries</div>
+                                    </div>
+                                    <div class="stat-card">
+                                        <div class="stat-value"><span id="totalDistance">0</span> km</div>
+                                        <div class="stat-label">Total Distance</div>
+                                    </div>
+                                    <div class="stat-card">
+                                        <div class="stat-value"><span id="acceptRate">95</span>%</div>
+                                        <div class="stat-label">Accept Rate</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- Routes Page -->
+            <div id="routesPage" class="page-content">
+                <div class="form-container">
+                    <h2 style="font-size: 18px; font-weight: 700; margin-bottom: 16px;">Available Routes</h2>
                     
                     <div class="route-list" id="routeList">
                         <!-- Routes will be populated by JS -->
+                        <div class="skeleton skeleton-card"></div>
+                        <div class="skeleton skeleton-card"></div>
+                        <div class="skeleton skeleton-card"></div>
+                    </div>
+
+                    <div class="empty-state" id="noRoutesState" style="display: none;">
+                        <div class="empty-icon">🗺️</div>
+                        <div class="empty-title">No Routes Available</div>
+                        <div class="empty-message">Check back soon for new routes</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Earnings Page -->
+            <div id="earningsPage" class="page-content">
+                <div class="form-container">
+                    <h2 style="font-size: 18px; font-weight: 700; margin-bottom: 16px;">Earnings Overview</h2>
+                    
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-value">KES <span id="earningsDailyPage">0</span></div>
+                            <div class="stat-label">Today</div>
+                        </div>
+                        <div class="stat-card highlight">
+                            <div class="stat-value">KES <span id="earningsWeeklyPage">0</span></div>
+                            <div class="stat-label">This Week</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value">KES <span id="earningsMonthlyPage">0</span></div>
+                            <div class="stat-label">This Month</div>
+                        </div>
+                    </div>
+
+                    <div class="collapsible-card expanded" id="earningsBreakdownCard">
+                        <div class="card-header" onclick="toggleCard('earningsBreakdownCard')">
+                            <div class="card-title">
+                                <span class="card-icon">📊</span>
+                                <span class="card-label">Today's Breakdown</span>
+                            </div>
+                            <span class="expand-icon">▼</span>
+                        </div>
+                        <div class="card-content">
+                            <div class="card-body">
+                                <div class="transaction-list" id="earningsBreakdown">
+                                    <!-- Will be populated by JS -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="collapsible-card" id="bonusCard">
+                        <div class="card-header" onclick="toggleCard('bonusCard')">
+                            <div class="card-title">
+                                <span class="card-icon">🎯</span>
+                                <span class="card-label">Bonuses & Incentives</span>
+                            </div>
+                            <span class="expand-icon">▼</span>
+                        </div>
+                        <div class="card-content">
+                            <div class="card-body">
+                                <div style="padding: 20px; text-align: center; color: var(--text-secondary);">
+                                    <p>Complete 10 deliveries today for KES 500 bonus!</p>
+                                    <div style="margin-top: 12px;">
+                                        <div class="progress-bar" style="height: 8px; background: var(--surface-high); border-radius: 4px;">
+                                            <div class="progress-fill" style="width: 30%; background: var(--success);"></div>
+                                        </div>
+                                        <p style="margin-top: 8px; font-size: 14px;">3/10 deliveries completed</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Wallet Page -->
+            <div id="walletPage" class="page-content">
+                <div class="form-container">
+                    <h2 style="font-size: 18px; font-weight: 700; margin-bottom: 16px;">Wallet</h2>
+                    
+                    <div class="wallet-overview">
+                        <div class="wallet-card mpesa">
+                            <div class="wallet-icon">📱</div>
+                            <div class="wallet-info">
+                                <p class="wallet-label">M-Pesa Balance</p>
+                                <p class="wallet-amount">KES <span id="mpesaBalance">0</span></p>
+                            </div>
+                            <button class="wallet-action" onclick="showWithdrawalModal()">
+                                Withdraw
+                            </button>
+                        </div>
+                        
+                        <div class="wallet-card cash" id="cashCard">
+                            <div class="wallet-icon">💵</div>
+                            <div class="wallet-info">
+                                <p class="wallet-label">Cash Collected</p>
+                                <p class="wallet-amount">KES <span id="cashBalance">0</span></p>
+                            </div>
+                            <button class="wallet-action" onclick="showPaymentInstructions()">
+                                Pay Now
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="commissionDebtCard" style="display: none;">
+                        <div class="commission-alert" style="margin: 0 0 16px 0;">
+                            <span class="commission-alert-icon">ℹ️</span>
+                            <div class="commission-alert-content">
+                                <div class="commission-alert-title">Commission Balance</div>
+                                <div class="commission-alert-message">
+                                    You owe KES <span id="walletCommissionDebt">0</span> in commission. This will be automatically deducted from your next earnings.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="collapsible-card expanded" id="transactionsCard">
+                        <div class="card-header" onclick="toggleCard('transactionsCard')">
+                            <div class="card-title">
+                                <span class="card-icon">📋</span>
+                                <span class="card-label">Recent Transactions</span>
+                            </div>
+                            <span class="expand-icon">▼</span>
+                        </div>
+                        <div class="card-content">
+                            <div class="card-body">
+                                <div class="transaction-list" id="transactionList">
+                                    <!-- Will be populated by JS -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Profile Page -->
+            <div id="profilePage" class="page-content">
+                <div class="form-container">
+                    <div style="text-align: center; padding: 20px 0;">
+                        <div style="width: 80px; height: 80px; background: var(--primary); border-radius: 50%; 
+                                    display: flex; align-items: center; justify-content: center; 
+                                    margin: 0 auto 16px; font-size: 32px; font-weight: 700; color: white;">
+                            <span id="profileInitial">R</span>
+                        </div>
+                        <h2 style="font-size: 24px; font-weight: 700; margin-bottom: 4px;">
+                            <span id="profileName">Rider Name</span>
+                        </h2>
+                        <p style="color: var(--text-secondary);">
+                            <span id="profilePhone">+254700000000</span>
+                        </p>
+                        <div style="display: flex; gap: 8px; justify-content: center; margin-top: 12px;">
+                            <span class="status-badge" style="background: var(--success);">
+                                ✓ Verified
+                            </span>
+                            <span class="status-badge" style="background: var(--warning); color: black;">
+                                ⭐ <span id="profileRating">5.0</span>
+                            </span>
+                        </div>
+                    </div>
+                    <div class="collapsible-card expanded">
+                        <div class="card-header" onclick="toggleCard('personalInfoCard')">
+                            <div class="card-title">
+                                <span class="card-icon">👤</span>
+                                <span class="card-label">Personal Information</span>
+                            </div>
+                            <span class="expand-icon">▼</span>
+                        </div>
+                        <div class="card-content">
+                            <div class="card-body">
+                                <div style="display: flex; flex-direction: column; gap: 16px;">
+                                    <div style="display: flex; justify-content: space-between;">
+                                        <span style="color: var(--text-secondary);">Full Name</span>
+                                        <span id="infoName">-</span>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between;">
+                                        <span style="color: var(--text-secondary);">Phone</span>
+                                        <span id="infoPhone">-</span>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between;">
+                                        <span style="color: var(--text-secondary);">Email</span>
+                                        <span id="infoEmail">-</span>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between;">
+                                        <span style="color: var(--text-secondary);">National ID</span>
+                                        <span id="infoID">-</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="collapsible-card">
+                        <div class="card-header" onclick="toggleCard('vehicleCard')">
+                            <div class="card-title">
+                                <span class="card-icon">🏍️</span>
+                                <span class="card-label">Vehicle Details</span>
+                            </div>
+                            <span class="expand-icon">▼</span>
+                        </div>
+                        <div class="card-content">
+                            <div class="card-body">
+                                <div style="display: flex; flex-direction: column; gap: 16px;">
+                                    <div style="display: flex; justify-content: space-between;">
+                                        <span style="color: var(--text-secondary);">Type</span>
+                                        <span id="vehicleType">Motorcycle</span>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between;">
+                                        <span style="color: var(--text-secondary);">Registration</span>
+                                        <span id="vehicleReg">KXX 123X</span>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between;">
+                                        <span style="color: var(--text-secondary);">Model</span>
+                                        <span id="vehicleModel">-</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="collapsible-card">
+                        <div class="card-header" onclick="toggleCard('statsCard')">
+                            <div class="card-title">
+                                <span class="card-icon">📈</span>
+                                <span class="card-label">Statistics</span>
+                            </div>
+                            <span class="expand-icon">▼</span>
+                        </div>
+                        <div class="card-content">
+                            <div class="card-body">
+                                <div style="display: flex; flex-direction: column; gap: 16px;">
+                                    <div style="display: flex; justify-content: space-between;">
+                                        <span style="color: var(--text-secondary);">Total Deliveries</span>
+                                        <span id="statDeliveries">0</span>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between;">
+                                        <span style="color: var(--text-secondary);">Total Distance</span>
+                                        <span id="statDistance">0 km</span>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between;">
+                                        <span style="color: var(--text-secondary);">Member Since</span>
+                                        <span id="statJoined">-</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="padding: 20px 0; display: flex; flex-direction: column; gap: 12px;">
+                        <button class="claim-button" onclick="showSupport()">
+                            Contact Support
+                        </button>
+                        <button class="claim-button" style="background: var(--danger);" onclick="logout()">
+                            Logout
+                        </button>
                     </div>
                 </div>
             </div>
         </div>
-
-        <!-- Navigation Button (shows when route is active) -->
-        <button type="button" class="nav-button" id="navButton" onclick="navigateToRoute()" style="display: none;">
-            <svg viewBox="0 0 24 24" fill="white">
-                <path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/>
-            </svg>
+        <!-- Floating Action Button -->
+        <button class="fab" id="fab" onclick="handleFAB()">
+            <span class="fab-icon" id="fabIcon">➕</span>
         </button>
+
+        <!-- Bottom Navigation -->
+        <div class="bottom-nav">
+            <div class="nav-container">
+                <div class="nav-item active" onclick="switchPage('dashboard')">
+                    <span class="nav-icon">🏠</span>
+                    <span class="nav-label">Home</span>
+                </div>
+                <div class="nav-item" onclick="switchPage('routes')">
+                    <span class="nav-badge" id="routesBadge" style="display: none;">3</span>
+                    <span class="nav-icon">🗺️</span>
+                    <span class="nav-label">Routes</span>
+                </div>
+                <div class="nav-item" onclick="switchPage('earnings')">
+                    <span class="nav-icon">💰</span>
+                    <span class="nav-label">Earnings</span>
+                </div>
+                <div class="nav-item" onclick="switchPage('wallet')">
+                    <span class="nav-badge" id="walletBadge" style="display: none;">!</span>
+                    <span class="nav-icon">👝</span>
+                    <span class="nav-label">Wallet</span>
+                </div>
+                <div class="nav-item" onclick="switchPage('profile')">
+                    <span class="nav-icon">👤</span>
+                    <span class="nav-label">Profile</span>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <!-- Ensure all global functions are available before rider.js loads -->
+    <!-- Scripts -->
     <script>
-        // State placeholder (will be overridden by rider.js)
-        window.state = {
-            rider: null,
-            status: 'online',
-            earnings: { daily: 0, weekly: 0, monthly: 0 },
-            stats: { deliveries: 0, distance: 0, rating: 5.0 }
+        // Global state
+        window.appState = {
+            currentPage: 'dashboard',
+            isOnline: true,
+            hasActiveRoute: false,
+            commissionDebt: 0,
+            offlineQueue: []
         };
-        
+
+        // Page switching
+        window.switchPage = function(page) {
+            // Update nav items
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            event.currentTarget.classList.add('active');
+            
+            // Hide all pages
+            document.querySelectorAll('.page-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            
+            // Show selected page
+            document.getElementById(page + 'Page').classList.add('active');
+            
+            // Update FAB based on page
+            updateFAB(page);
+            
+            // Update current page
+            window.appState.currentPage = page;
+            
+            // Load page-specific data
+            loadPageData(page);
+            
+            // Haptic feedback
+            if (window.haptic) window.haptic('light');
+        };
+
+        // Update FAB icon and action based on current page
+        function updateFAB(page) {
+            const fab = document.getElementById('fab');
+            const fabIcon = document.getElementById('fabIcon');
+            
+            switch(page) {
+                case 'dashboard':
+                    if (window.appState.hasActiveRoute) {
+                        fabIcon.textContent = '🧭';
+                        fab.onclick = () => window.navigateToRoute();
+                    } else {
+                        fabIcon.textContent = '🚀';
+                        fab.onclick = () => window.switchPage('routes');
+                    }
+                    break;
+                case 'routes':
+                    fabIcon.textContent = '🔍';
+                    fab.onclick = () => window.searchRoutes();
+                    break;
+                case 'earnings':
+                    fabIcon.textContent = '📊';
+                    fab.onclick = () => window.showEarningsDetails();
+                    break;
+                case 'wallet':
+                    fabIcon.textContent = '💳';
+                    fab.onclick = () => window.showPaymentInstructions();
+                    break;
+                case 'profile':
+                    fab.classList.add('hidden');
+                    break;
+                default:
+                    fab.classList.remove('hidden');
+            }
+        }
+
+        // Load page-specific data
+        function loadPageData(page) {
+            switch(page) {
+                case 'routes':
+                    if (window.loadAvailableRoutes) window.loadAvailableRoutes();
+                    break;
+                case 'earnings':
+                    if (window.updateEarningsDisplay) window.updateEarningsDisplay();
+                    break;
+                case 'wallet':
+                    if (window.updateWalletDisplay) window.updateWalletDisplay();
+                    break;
+                case 'profile':
+                    if (window.updateProfileDisplay) window.updateProfileDisplay();
+                    break;
+            }
+        }
+
+        // Toggle collapsible cards
+        window.toggleCard = function(cardId) {
+            const card = document.getElementById(cardId);
+            if (card) {
+                card.classList.toggle('expanded');
+                // Save preference
+                localStorage.setItem('card_' + cardId, card.classList.contains('expanded'));
+            }
+            if (window.haptic) window.haptic('light');
+        };
+
+        // Restore card preferences
+        function restoreCardPreferences() {
+            document.querySelectorAll('.collapsible-card').forEach(card => {
+                const saved = localStorage.getItem('card_' + card.id);
+                if (saved === 'false') {
+                    card.classList.remove('expanded');
+                }
+            });
+        }
+
+        // Offline detection
+        window.addEventListener('online', function() {
+            document.getElementById('offlineIndicator').classList.remove('active');
+            window.appState.isOnline = true;
+            // Process offline queue
+            processOfflineQueue();
+        });
+
+        window.addEventListener('offline', function() {
+            document.getElementById('offlineIndicator').classList.add('active');
+            window.appState.isOnline = false;
+        });
+
+        // Process offline queue
+        function processOfflineQueue() {
+            if (window.appState.offlineQueue.length > 0) {
+                console.log('Processing offline queue:', window.appState.offlineQueue);
+                // Process each queued action
+                window.appState.offlineQueue.forEach(action => {
+                    // Process based on action type
+                    if (action.type === 'verification') {
+                        // Sync verification
+                        if (window.syncVerification) {
+                            window.syncVerification(action.data);
+                        }
+                    }
+                });
+                // Clear queue
+                window.appState.offlineQueue = [];
+                localStorage.removeItem('offline_queue');
+            }
+        }
+
+        // Show payment instructions
+        window.showPaymentInstructions = function() {
+            const cashBalance = document.getElementById('cashBalance')?.textContent || '0';
+            const modal = document.createElement('div');
+            modal.className = 'modal-overlay';
+            modal.innerHTML = `
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2 class="modal-title">Pay Commission</h2>
+                        <button class="modal-close" onclick="closeModal(this)">×</button>
+                    </div>
+                    <div style="padding: 20px 0;">
+                        <h3 style="margin-bottom: 16px; font-size: 16px;">M-Pesa Paybill Instructions:</h3>
+                        <ol style="padding-left: 20px; line-height: 2; color: var(--text-secondary);">
+                            <li>Go to M-Pesa on your phone</li>
+                            <li>Select "Lipa na M-Pesa"</li>
+                            <li>Select "Pay Bill"</li>
+                            <li>Enter Business Number: <strong style="color: var(--primary);">247247</strong></li>
+                            <li>Enter Account Number: <strong style="color: var(--primary);">${window.state?.rider?.rider_name || 'Your Name'}</strong></li>
+                            <li>Enter Amount: <strong style="color: var(--primary);">KES ${cashBalance}</strong></li>
+                            <li>Enter your M-Pesa PIN</li>
+                            <li>Confirm the transaction</li>
+                        </ol>
+                        <div style="background: rgba(255, 159, 10, 0.1); border: 1px solid var(--warning); 
+                                    border-radius: 8px; padding: 12px; margin-top: 16px;">
+                            <p style="font-size: 13px; line-height: 1.5;">
+                                ⚠️ <strong>Important:</strong> Use your exact name as registered with Tuma as the account number
+                            </p>
+                        </div>
+                    </div>
+                    <button class="claim-button" onclick="closeModal(this)">
+                        Got it
+                    </button>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        };
+
+        // Show withdrawal modal
+        window.showWithdrawalModal = function() {
+            const mpesaBalance = parseFloat(document.getElementById('mpesaBalance')?.textContent || '0');
+            const modal = document.createElement('div');
+            modal.className = 'modal-overlay';
+            modal.innerHTML = `
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2 class="modal-title">Withdraw Funds</h2>
+                        <button class="modal-close" onclick="closeModal(this)">×</button>
+                    </div>
+                    <div style="background: var(--surface-high); padding: 16px; border-radius: 12px; 
+                                text-align: center; margin-bottom: 20px;">
+                        <p style="font-size: 14px; color: var(--text-secondary); margin-bottom: 8px;">Available Balance</p>
+                        <p style="font-size: 28px; font-weight: 700; color: var(--primary);">KES ${mpesaBalance}</p>
+                    </div>
+                    
+                    <div>
+                        <label style="display: block; margin-bottom: 8px; font-weight: 600;">Amount to Withdraw</label>
+                        <input type="number" id="withdrawAmount" placeholder="Enter amount" max="${mpesaBalance}" 
+                               style="width: 100%; padding: 16px; background: var(--surface-high); 
+                                      border: 2px solid var(--border); border-radius: 12px; 
+                                      color: white; font-size: 18px; margin-bottom: 16px;">
+                        
+                        <div id="feeCalculator" style="display: none; background: var(--surface-high); 
+                                                       padding: 16px; border-radius: 12px; margin-bottom: 16px;">
+                            <div style="display: flex; justify-content: space-between; padding: 8px 0;">
+                                <span>Withdrawal Amount:</span>
+                                <span id="withdrawalAmount">KES 0</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; padding: 8px 0;">
+                                <span>M-Pesa Fee:</span>
+                                <span id="mpesaFee">KES 0</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; padding: 8px 0; 
+                                        border-top: 1px solid var(--border); margin-top: 8px; 
+                                        padding-top: 12px; font-weight: 600;">
+                                <span>Total Deduction:</span>
+                                <span id="totalDeduction">KES 0</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; padding: 8px 0;">
+                                <span>You'll Receive:</span>
+                                <span id="amountReceived" style="color: var(--success); font-weight: 700;">KES 0</span>
+                            </div>
+                        </div>
+                        
+                        <div style="background: rgba(255, 159, 10, 0.1); border: 1px solid var(--warning); 
+                                    border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+                            <p style="font-size: 13px; line-height: 1.5;">
+                                ⚠️ M-Pesa transaction fees apply and will be deducted from your wallet balance
+                            </p>
+                        </div>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                            <button class="claim-button" style="background: var(--surface-high);" 
+                                    onclick="closeModal(this)">Cancel</button>
+                            <button class="claim-button" onclick="processWithdrawal()">Withdraw</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            
+            // Add event listener for amount input
+            document.getElementById('withdrawAmount').addEventListener('input', function(e) {
+                const amount = parseFloat(e.target.value) || 0;
+                if (amount > 0) {
+                    const fee = calculateMpesaFee(amount);
+                    const total = amount + fee;
+                    
+                    document.getElementById('feeCalculator').style.display = 'block';
+                    document.getElementById('withdrawalAmount').textContent = 'KES ' + amount;
+                    document.getElementById('mpesaFee').textContent = 'KES ' + fee;
+                    document.getElementById('totalDeduction').textContent = 'KES ' + total;
+                    document.getElementById('amountReceived').textContent = 'KES ' + amount;
+                } else {
+                    document.getElementById('feeCalculator').style.display = 'none';
+                }
+            });
+        };
+
+        // Calculate M-Pesa fees
+        function calculateMpesaFee(amount) {
+            const fees = [
+                { min: 0, max: 49, fee: 0 },
+                { min: 50, max: 100, fee: 7 },
+                { min: 101, max: 500, fee: 13 },
+                { min: 501, max: 1000, fee: 23 },
+                { min: 1001, max: 1500, fee: 33 },
+                { min: 1501, max: 2500, fee: 53 },
+                { min: 2501, max: 3500, fee: 58 },
+                { min: 3501, max: 5000, fee: 68 },
+                { min: 5001, max: 7500, fee: 78 },
+                { min: 7501, max: 10000, fee: 88 },
+                { min: 10001, max: 15000, fee: 98 },
+                { min: 15001, max: 20000, fee: 108 },
+                { min: 20001, max: 250000, fee: 108 }
+            ];
+            
+            for (const tier of fees) {
+                if (amount >= tier.min && amount <= tier.max) {
+                    return tier.fee;
+                }
+            }
+            return 108;
+        }
+
+        // Process withdrawal
+        window.processWithdrawal = function() {
+            const amount = parseFloat(document.getElementById('withdrawAmount').value);
+            
+            if (!amount || amount <= 0) {
+                alert('Please enter a valid amount');
+                return;
+            }
+            
+            // In production, this would process the withdrawal
+            alert('Withdrawal of KES ' + amount + ' initiated. You will receive an M-Pesa notification shortly.');
+            closeModal(document.querySelector('.modal-overlay'));
+        };
+
+        // Close modal
+        window.closeModal = function(element) {
+            const modal = element.closest('.modal-overlay');
+            if (modal) {
+                modal.remove();
+            }
+        };
+    </script>
+      
+    <script>
+    // Show commission details
+        window.showCommissionDetails = function() {
+            const modal = document.createElement('div');
+            modal.className = 'modal-overlay';
+            modal.innerHTML = `
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2 class="modal-title">Commission Details</h2>
+                        <button class="modal-close" onclick="closeModal(this)">×</button>
+                    </div>
+                    <div style="padding: 20px 0;">
+                        <div style="background: var(--surface-high); border-radius: 12px; padding: 16px; margin-bottom: 16px;">
+                            <h3 style="font-size: 14px; color: var(--text-secondary); margin-bottom: 8px;">Outstanding Commission</h3>
+                            <p style="font-size: 28px; font-weight: 700; color: var(--warning);">
+                                KES ${window.appState.commissionDebt || 0}
+                            </p>
+                        </div>
+                        
+                        <div style="background: rgba(0, 122, 255, 0.1); border: 1px solid var(--primary); 
+                                    border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+                            <p style="font-size: 14px; line-height: 1.5;">
+                                <strong>How it works:</strong><br>
+                                When you complete deliveries, we'll automatically deduct any outstanding commission 
+                                from your earnings before adding the balance to your wallet.
+                            </p>
+                        </div>
+                        
+                        <div style="margin-top: 20px;">
+                            <h4 style="font-size: 14px; margin-bottom: 12px;">Example:</h4>
+                            <div style="background: var(--surface-high); border-radius: 8px; padding: 12px; 
+                                        font-size: 13px; line-height: 1.8;">
+                                <div>Next delivery earnings: KES 500</div>
+                                <div>Commission owed: KES ${window.appState.commissionDebt || 0}</div>
+                                <div style="border-top: 1px solid var(--border); margin: 8px 0; padding-top: 8px;">
+                                    You'll receive: KES ${Math.max(0, 500 - (window.appState.commissionDebt || 0))}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <button class="claim-button" onclick="closeModal(this)">
+                        Understood
+                    </button>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        };
+
+        // Quick verify
+        window.quickVerify = function() {
+            const modal = document.createElement('div');
+            modal.className = 'modal-overlay';
+            modal.innerHTML = `
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2 class="modal-title">Quick Verify</h2>
+                        <button class="modal-close" onclick="closeModal(this)">×</button>
+                    </div>
+                    <div style="padding: 20px 0;">
+                        <input type="text" id="quickCode" placeholder="Enter code (XXX-XXXX)" 
+                               style="width: 100%; padding: 16px; background: var(--surface-high); 
+                                      border: 2px solid var(--border); border-radius: 12px; 
+                                      color: white; font-size: 20px; text-align: center; 
+                                      letter-spacing: 2px; text-transform: uppercase;">
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 20px;">
+                            <button class="claim-button" style="background: var(--warning); color: black;" 
+                                    onclick="quickVerifyCode('pickup')">
+                                📦 Pickup
+                            </button>
+                            <button class="claim-button" style="background: var(--success);" 
+                                    onclick="quickVerifyCode('delivery')">
+                                📍 Delivery
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            
+            // Focus on input
+            setTimeout(() => {
+                document.getElementById('quickCode').focus();
+            }, 100);
+        };
+
+        // Quick verify code
+        window.quickVerifyCode = function(type) {
+            const code = document.getElementById('quickCode').value;
+            if (!code) {
+                alert('Please enter a code');
+                return;
+            }
+            
+            // Close modal
+            closeModal(document.querySelector('.modal-overlay'));
+            
+            // Process verification
+            if (window.verifyCode) {
+                window.verifyCode(type, code);
+            }
+        };
+
+        // Other quick actions
+        window.scanQRCode = function() {
+            alert('QR Scanner will open camera (coming soon)');
+        };
+
+        window.callSupport = function() {
+            window.location.href = 'tel:+254700123456';
+        };
+
+        window.viewHotspots = function() {
+            alert('High demand areas: Westlands, CBD, Kilimani');
+        };
+
+        window.toggleBreak = function() {
+            const statusBadge = document.getElementById('statusBadge');
+            const statusText = document.getElementById('statusText');
+            
+            if (statusText.textContent === 'Online') {
+                statusText.textContent = 'On Break';
+                statusBadge.classList.add('busy');
+                alert('Break started. Take your time!');
+            } else {
+                statusText.textContent = 'Online';
+                statusBadge.classList.remove('busy');
+                alert('Welcome back! You\'re online again.');
+            }
+        };
+
+        window.toggleStatus = function() {
+            const statusBadge = document.getElementById('statusBadge');
+            const statusText = document.getElementById('statusText');
+            
+            if (statusText.textContent === 'Online') {
+                statusText.textContent = 'Offline';
+                statusBadge.classList.add('offline');
+            } else if (statusText.textContent === 'Offline') {
+                statusText.textContent = 'Online';
+                statusBadge.classList.remove('offline');
+                statusBadge.classList.remove('busy');
+            }
+            
+            if (window.haptic) window.haptic('light');
+        };
+
+        window.showNotifications = function() {
+            alert('No new notifications');
+        };
+
+        window.showSettings = function() {
+            window.switchPage('profile');
+        };
+
+        window.showSupport = function() {
+            window.location.href = 'tel:+254700123456';
+        };
+
+        window.logout = function() {
+            if (confirm('Are you sure you want to logout?')) {
+                localStorage.clear();
+                window.location.href = './index.html';
+            }
+        };
+
+        // Initialize on load
+        document.addEventListener('DOMContentLoaded', function() {
+            // Restore card preferences
+            restoreCardPreferences();
+            
+            // Check offline queue
+            const savedQueue = localStorage.getItem('offline_queue');
+            if (savedQueue) {
+                window.appState.offlineQueue = JSON.parse(savedQueue);
+                if (navigator.onLine) {
+                    processOfflineQueue();
+                }
+            }
+            
+            // Initialize FAB
+            updateFAB('dashboard');
+            
+            console.log('Enhanced Rider Dashboard initialized');
+        });
+
+        // Save offline queue on unload
+        window.addEventListener('beforeunload', function() {
+            if (window.appState.offlineQueue.length > 0) {
+                localStorage.setItem('offline_queue', JSON.stringify(window.appState.offlineQueue));
+            }
+        });
+
         // Haptic feedback helper
         window.haptic = function(type = 'light') {
             if (window.navigator && window.navigator.vibrate) {
@@ -1311,255 +1971,158 @@
                 }
             }
         };
-        
-        // Menu functions
-        window.showMenu = function() {
-            // Create menu overlay
-            const menuOverlay = document.createElement('div');
-            menuOverlay.className = 'menu-overlay';
-            menuOverlay.onclick = closeMenu;
-            
-            // Create menu drawer
-            const menuDrawer = document.createElement('div');
-            menuDrawer.className = 'menu-drawer';
-            
-            menuDrawer.innerHTML = `
-                <div class="menu-header">
-                    <div class="menu-profile">
-                        <div class="profile-avatar">
-                            <span>${window.state?.rider?.rider_name?.charAt(0) || 'R'}</span>
-                        </div>
-                        <div class="profile-info">
-                            <div class="profile-name">${window.state?.rider?.rider_name || 'Test Rider'}</div>
-                            <div class="profile-phone">${window.state?.rider?.phone || '+254700000000'}</div>
-                            <div class="profile-rating">
-                                ⭐ ${window.state?.rider?.rating || '5.0'} • ${window.state?.rider?.completed_deliveries || '0'} deliveries
-                            </div>
-                        </div>
-                    </div>
-                    <button type="button" class="menu-close" onclick="closeMenu()">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
-                            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-                        </svg>
-                    </button>
-                </div>
-                
-                <div class="menu-items">
-                    <a href="#" class="menu-item" onclick="navigateToEarnings()">
-                        <span class="menu-icon">💰</span>
-                        <span class="menu-label">Earnings History</span>
-                        <span class="menu-arrow">›</span>
-                    </a>
-                    
-                    <a href="#" class="menu-item" onclick="navigateToProfile()">
-                        <span class="menu-icon">👤</span>
-                        <span class="menu-label">My Profile</span>
-                        <span class="menu-arrow">›</span>
-                    </a>
-                    
-                    <a href="#" class="menu-item" onclick="navigateToVehicle()">
-                        <span class="menu-icon">🏍️</span>
-                        <span class="menu-label">Vehicle Details</span>
-                        <span class="menu-arrow">›</span>
-                    </a>
-                    
-                    <a href="#" class="menu-item" onclick="navigateToDocuments()">
-                        <span class="menu-icon">📄</span>
-                        <span class="menu-label">Documents</span>
-                        <span class="menu-arrow">›</span>
-                    </a>
-                    
-                    <div class="menu-divider"></div>
-                    
-                    <a href="#" class="menu-item" onclick="navigateToSupport()">
-                        <span class="menu-icon">🎧</span>
-                        <span class="menu-label">Support Center</span>
-                        <span class="menu-arrow">›</span>
-                    </a>
-                    
-                    <a href="#" class="menu-item" onclick="navigateToFAQ()">
-                        <span class="menu-icon">❓</span>
-                        <span class="menu-label">FAQs</span>
-                        <span class="menu-arrow">›</span>
-                    </a>
-                    
-                    <a href="#" class="menu-item" onclick="navigateToTraining()">
-                        <span class="menu-icon">🎓</span>
-                        <span class="menu-label">Training Videos</span>
-                        <span class="menu-arrow">›</span>
-                    </a>
-                    
-                    <div class="menu-divider"></div>
-                    
-                    <a href="#" class="menu-item" onclick="navigateToSettings()">
-                        <span class="menu-icon">⚙️</span>
-                        <span class="menu-label">Settings</span>
-                        <span class="menu-arrow">›</span>
-                    </a>
-                    
-                    <a href="#" class="menu-item" onclick="showAbout()">
-                        <span class="menu-icon">ℹ️</span>
-                        <span class="menu-label">About Tuma</span>
-                        <span class="menu-arrow">›</span>
-                    </a>
-                    
-                    <a href="#" class="menu-item logout" onclick="logout()">
-                        <span class="menu-icon">🚪</span>
-                        <span class="menu-label">Logout</span>
-                    </a>
-                </div>
-                
-                <div class="menu-footer">
-                    <div class="app-version">Version 1.0.0</div>
-                </div>
-            `;
-            
-            // Add to body
-            document.body.appendChild(menuOverlay);
-            document.body.appendChild(menuDrawer);
-            
-            // Animate in
-            setTimeout(() => {
-                menuOverlay.classList.add('active');
-                menuDrawer.classList.add('active');
-            }, 10);
-            
-            window.haptic('light');
-        };
-
-        window.closeMenu = function() {
-            const overlay = document.querySelector('.menu-overlay');
-            const drawer = document.querySelector('.menu-drawer');
-            
-            if (overlay) overlay.classList.remove('active');
-            if (drawer) drawer.classList.remove('active');
-            
-            setTimeout(() => {
-                if (overlay) overlay.remove();
-                if (drawer) drawer.remove();
-            }, 300);
-        };
-        
-        // Menu navigation functions
-        window.navigateToEarnings = function() {
-            closeMenu();
-            console.log('Navigate to earnings - will be implemented');
-        };
-        
-        window.navigateToProfile = function() {
-            closeMenu();
-            console.log('Navigate to profile - will be implemented');
-        };
-        
-        window.navigateToVehicle = function() {
-            closeMenu();
-            console.log('Navigate to vehicle - will be implemented');
-        };
-        
-        window.navigateToDocuments = function() {
-            closeMenu();
-            console.log('Navigate to documents - will be implemented');
-        };
-        
-        window.navigateToSupport = function() {
-            closeMenu();
-            window.location.href = 'tel:+254700123456';
-        };
-        
-        window.navigateToFAQ = function() {
-            closeMenu();
-            console.log('Navigate to FAQ - will be implemented');
-        };
-        
-        window.navigateToTraining = function() {
-            closeMenu();
-            console.log('Navigate to training - will be implemented');
-        };
-        
-        window.navigateToSettings = function() {
-            closeMenu();
-            console.log('Navigate to settings - will be implemented');
-        };
-        
-        window.showAbout = function() {
-            closeMenu();
-            alert('Tuma - Your Reliable Delivery Partner\n\nVersion 1.0.0\n\n© 2024 Tuma Technologies');
-        };
-        
-        window.logout = function() {
-            if (confirm('Are you sure you want to logout?')) {
-                closeMenu();
-                localStorage.removeItem('tuma_rider_phone');
-                localStorage.removeItem('tuma_active_route');
-                window.location.href = './index.html';
-            }
-        };
-        
-        // Placeholder functions that will be overridden by rider.js
-        window.toggleBreakMode = function() {
-            console.log('Break mode - will be overridden by rider.js');
-        };
-        
-        window.viewEarningsDetails = function() {
-            console.log('Earnings details - will be overridden by rider.js');
-        };
-        
-        window.showHotZones = function() {
-            console.log('Hot zones - will be overridden by rider.js');
-        };
-        
-        window.callSupport = function() {
-            window.location.href = 'tel:+254700123456';
-        };
-        
-        window.filterRoutes = function(type) {
-            console.log('Filter routes:', type, '- will be overridden by rider.js');
-        };
-        
-        window.claimRoute = function(routeId) {
-            console.log('Claim route:', routeId, '- will be overridden by rider.js');
-        };
-        
-        window.verifyCode = function(type) {
-            console.log('Verify code:', type, '- will be overridden by rider.js');
-        };
-        
-        window.navigateToRoute = function() {
-            console.log('Navigate to route - will be overridden by rider.js');
-        };
-        
-        window.openPaymentModal = function() {
-            console.log('Open payment modal - will be overridden by rider.js');
-        };
-        
-        window.viewCommissionDetails = function() {
-            console.log('View commission details - will be overridden by rider.js');
-        };
-        
-        window.closePaymentModal = function() {
-            const modal = document.querySelector('.payment-modal');
-            if (modal) {
-                modal.remove();
-            }
-        };
     </script>
 
     <!-- Clustering Algorithm -->
     <script src="./clustering.js"></script>
-        <!-- Add auth-check.js here -->
-    <script src="./auth-check.js"></script>  <!-- ADD THIS LINE -->
-
-    <!-- Load rider.js after clustering.js -->
+    
+    <!-- Auth Check -->
+    <script src="./auth-check.js"></script>
+    
+    <!-- Commission Offset System -->
     <script>
-        // Verify clustering loaded before loading rider.js
-        if (typeof TumaRouteClustering === 'undefined') {
-            console.error('Clustering.js not loaded properly - TumaRouteClustering is not defined');
-        } else {
-            console.log('Clustering.js loaded successfully');
+        // Commission Offset Manager
+        class CommissionOffsetManager {
+            constructor() {
+                this.commissionDebt = 0;
+                this.offsetHistory = [];
+            }
+            
+            // Check if earnings should be offset
+            shouldOffsetEarnings(earnings) {
+                return this.commissionDebt > 0 && earnings > 0;
+            }
+            
+            // Calculate offset amount
+            calculateOffset(earnings) {
+                if (this.commissionDebt <= 0) {
+                    return {
+                        offset: 0,
+                        riderReceives: earnings,
+                        remainingDebt: 0
+                    };
+                }
+                
+                const offset = Math.min(this.commissionDebt, earnings);
+                const riderReceives = earnings - offset;
+                const remainingDebt = this.commissionDebt - offset;
+                
+                return {
+                    offset: offset,
+                    riderReceives: riderReceives,
+                    remainingDebt: remainingDebt
+                };
+            }
+            
+            // Apply offset to delivery
+            applyOffset(deliveryId, earnings) {
+                const result = this.calculateOffset(earnings);
+                
+                if (result.offset > 0) {
+                    // Record the offset
+                    this.offsetHistory.push({
+                        deliveryId: deliveryId,
+                        originalEarnings: earnings,
+                        offsetAmount: result.offset,
+                        riderReceived: result.riderReceives,
+                        timestamp: new Date().toISOString()
+                    });
+                    
+                    // Update debt
+                    this.commissionDebt = result.remainingDebt;
+                    
+                    // Update UI
+                    this.updateUI();
+                    
+                    // Save to localStorage
+                    this.save();
+                }
+                
+                return result;
+            }
+            
+            // Update UI elements
+            updateUI() {
+                // Update commission alert
+                const commissionAlert = document.getElementById('commissionAlert');
+                const commissionDebt = document.getElementById('commissionDebt');
+                const walletCommissionDebt = document.getElementById('walletCommissionDebt');
+                const commissionDebtCard = document.getElementById('commissionDebtCard');
+                
+                if (this.commissionDebt > 0) {
+                    if (commissionAlert) commissionAlert.style.display = 'flex';
+                    if (commissionDebt) commissionDebt.textContent = Math.round(this.commissionDebt);
+                    if (walletCommissionDebt) walletCommissionDebt.textContent = Math.round(this.commissionDebt);
+                    if (commissionDebtCard) commissionDebtCard.style.display = 'block';
+                    
+                    // Update wallet badge
+                    const walletBadge = document.getElementById('walletBadge');
+                    if (walletBadge) walletBadge.style.display = 'block';
+                    
+                    // Store in app state
+                    window.appState.commissionDebt = this.commissionDebt;
+                } else {
+                    if (commissionAlert) commissionAlert.style.display = 'none';
+                    if (commissionDebtCard) commissionDebtCard.style.display = 'none';
+                    const walletBadge = document.getElementById('walletBadge');
+                    if (walletBadge) walletBadge.style.display = 'none';
+                    window.appState.commissionDebt = 0;
+                }
+            }
+            
+            // Save to localStorage
+            save() {
+                localStorage.setItem('commission_debt', this.commissionDebt);
+                localStorage.setItem('offset_history', JSON.stringify(this.offsetHistory));
+            }
+            
+            // Load from localStorage
+            load() {
+                const debt = localStorage.getItem('commission_debt');
+                const history = localStorage.getItem('offset_history');
+                
+                if (debt) this.commissionDebt = parseFloat(debt);
+                if (history) this.offsetHistory = JSON.parse(history);
+                
+                this.updateUI();
+            }
+            
+            // Set commission debt (for testing or admin override)
+            setDebt(amount) {
+                this.commissionDebt = amount;
+                this.updateUI();
+                this.save();
+            }
+            
+            // Get transaction history with offsets
+            getOffsetTransactions() {
+                return this.offsetHistory.map(item => ({
+                    type: 'commission_offset',
+                    description: `Commission deducted from delivery`,
+                    amount: item.offsetAmount,
+                    originalAmount: item.originalEarnings,
+                    receivedAmount: item.riderReceived,
+                    timestamp: item.timestamp,
+                    icon: '💳'
+                }));
+            }
         }
+        
+        // Initialize commission offset manager
+        window.commissionOffsetManager = new CommissionOffsetManager();
+        window.commissionOffsetManager.load();
     </script>
     
     <!-- Main rider logic -->
     <script src="./rider.js"></script>
+    
+    <!-- Additional initialization -->
+    <script>
+        // Override or extend rider.js functions as needed
+        console.log('Enhanced Rider Dashboard with Bottom Navigation loaded successfully');
+        
+        // For testing: Set commission debt
+        // window.commissionOffsetManager.setDebt(300);
+    </script>
 </body>
 </html>
