@@ -585,7 +585,7 @@ const authService = {
 // Vendor Dashboard Functions
 // ═══════════════════════════════════════════════════════════════════════════
 
-cconst vendorDashboard = {
+const vendorDashboard = {
     async initialize() {
         console.log('🚀 Initializing vendor dashboard...');
         
