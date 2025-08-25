@@ -1159,6 +1159,30 @@
             font-size: 13px;
             color: var(--text-secondary);
         }
+
+        /* Animation for modals */
+        @keyframes modalBounce {
+            0% {
+                transform: scale(0.8);
+                opacity: 0;
+            }
+            50% {
+                transform: scale(1.05);
+            }
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        @keyframes successBounce {
+            0%, 100% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.1);
+            }
+        }
     </style>
 </head>
 <body>
@@ -1207,7 +1231,7 @@
 
             <!-- Tab Content -->
             <div class="tab-content">
-            <!-- New Booking Tab -->
+                <!-- New Booking Tab -->
                 <div class="tab-panel active" id="new-booking-panel">
                     <form class="form-container" id="dashboardDeliveryForm">
                         <!-- Hero Section -->
@@ -1290,7 +1314,20 @@
                             </div>
                         </div>
 
-                        <!-- Recipient Information (moved to top since vendor is authenticated) -->
+                        <!-- Vendor Information (for non-authenticated users) -->
+                        <div class="form-section" id="vendorInfoSection">
+                            <h2 class="section-title">Your Information</h2>
+                            <div class="contact-grid">
+                                <div class="input-container">
+                                    <input type="text" class="input-field" id="vendorName" placeholder="Your name" required>
+                                </div>
+                                <div class="input-container">
+                                    <input type="tel" class="input-field" id="phoneNumber" placeholder="Your phone (07XXXXXXXX)" pattern="0[0-9]{9}" required>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Recipient Information -->
                         <div class="form-section">
                             <h2 class="section-title">Recipient Information</h2>
                             <div class="contact-grid">
@@ -1460,7 +1497,6 @@
                                     <div class="capacity-fill" id="capacityFill" style="width: 5%"></div>
                                 </div>
                             </div>
-
                             <!-- Package Category -->
                             <div style="margin-top: 16px;">
                                 <select class="input-field" id="packageDescription" required style="cursor: pointer;">
@@ -1666,7 +1702,7 @@
                     <div class="track-container" style="padding: 20px;">
                         <div class="track-input-group" style="display: flex; gap: 12px; margin-bottom: 20px;">
                             <input type="text" class="track-input" id="trackInput" placeholder="Enter parcel code" maxlength="8" style="flex: 1; padding: 14px 16px; background: var(--surface-elevated); border: 1px solid var(--border); border-radius: 12px; color: var(--text-primary); font-size: 16px; font-family: 'SF Mono', Monaco, Consolas, monospace; text-transform: uppercase; outline: none;">
-                            <button class="track-btn" onclick="trackParcel()" style="padding: 14px 24px; background: var(--primary); color: white; border: none; border-radius: 12px; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.3s;">Track</button>
+                            <button class="track-btn" onclick="window.trackingService && window.trackingService.trackParcel()" style="padding: 14px 24px; background: var(--primary); color: white; border: none; border-radius: 12px; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.3s;">Track</button>
                         </div>
 
                         <div id="trackingResult">
@@ -1688,6 +1724,7 @@
                 </div>
             </div>
         </div>
+
         <!-- Success Overlay -->
         <div class="success-overlay" id="successOverlay" style="position: fixed; inset: 0; background: rgba(0, 0, 0, 0.9); display: none; align-items: flex-start; justify-content: center; z-index: 2000; backdrop-filter: blur(10px); overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 20px 0;">
             <div class="success-modal" style="background: var(--surface-elevated); border-radius: 20px; padding: 32px; text-align: center; max-width: 320px; width: 90%; margin: 20px auto; animation: modalBounce 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55); max-height: none; height: auto;">
@@ -1814,10 +1851,78 @@
 
     <!-- Scripts -->
     <script src="./vendor.js" defer></script>
-    
+
     <!-- Google Maps API -->
-    <script async defer
-        src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCaWjP3TKWhJrtureRn7q6fIIKk0MPl7bY&libraries=places,geometry&callback=initMap">
+    <script async
+        src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCaWjP3TKWhJrtureRn7q6fIIKk0MPl7bY&libraries=places,geometry&loading=async">
+    </script>
+
+    <script>
+        // Initialize Leaflet map when modal opens
+        window.openSimpleLocationModal = function(inputId) {
+            const modal = document.getElementById('simpleLocationModal');
+            if (modal) {
+                modal.style.display = 'block';
+                window.currentLocationInput = inputId;
+                
+                // Delay map initialization to ensure container is visible
+                setTimeout(() => {
+                    if (typeof L !== 'undefined' && !window.simpleMap) {
+                        window.simpleMap = L.map('simpleMap').setView([-1.2921, 36.8219], 13);
+                        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                            attribution: '© OpenStreetMap contributors'
+                        }).addTo(window.simpleMap);
+                        
+                        // Add marker
+                        window.simpleMarker = L.marker([-1.2921, 36.8219], {
+                            draggable: true
+                        }).addTo(window.simpleMap);
+                    }
+                    if (window.simpleMap) {
+                        window.simpleMap.invalidateSize();
+                    }
+                }, 100);
+            }
+        };
+
+        // Wait for vendor.js to load, then initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM Content Loaded');
+            
+            // Give vendor.js time to load and initialize
+            setTimeout(() => {
+                if (window.TumaVendorDashboard) {
+                    console.log('Initializing Vendor Dashboard...');
+                    window.TumaVendorDashboard.initialize();
+                } else {
+                    console.error('TumaVendorDashboard not found. Check vendor.js for errors.');
+                    // Fallback initialization if needed
+                    if (typeof initializeDashboard === 'function') {
+                        initializeDashboard();
+                    }
+                }
+            }, 100);
+        });
+
+        // Global functions that might be called from HTML
+        window.closeLocationModal = function() {
+            const modal = document.getElementById('simpleLocationModal');
+            if (modal) {
+                modal.style.display = 'none';
+            }
+        };
+
+        window.confirmSimpleLocation = function() {
+            if (window.currentLocationInput && window.simpleMarker) {
+                const latLng = window.simpleMarker.getLatLng();
+                const input = document.getElementById(window.currentLocationInput);
+                if (input) {
+                    input.value = `${latLng.lat.toFixed(6)}, ${latLng.lng.toFixed(6)}`;
+                    input.classList.add('location-confirmed');
+                }
+                closeLocationModal();
+            }
+        };
     </script>
 </body>
 </html>
