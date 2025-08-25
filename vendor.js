@@ -618,21 +618,6 @@ const vendorDashboard = {
             console.error('Dashboard initialization error:', error);
         }
     },
-        
-        // Setup event listeners
-        this.setupEventListeners();
-        
-        // Initialize UI components
-        this.initializeUI();
-        
-        // Load initial data
-        await this.loadInitialData();
-        
-        // Setup real-time updates
-        this.setupRealtimeUpdates();
-        
-        console.log('✅ Dashboard initialized');
-    },
     
     async handleURLParameters() {
         const urlParams = new URLSearchParams(window.location.search);
