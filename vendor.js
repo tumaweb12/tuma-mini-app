@@ -6,6 +6,22 @@
 // ═══════════════════════════════════════════════════════════════════════════
 // Configuration & Constants
 // ═══════════════════════════════════════════════════════════════════════════
+// Add this at the very top of vendor.js for debugging
+console.log('vendor.js is loading...');
+
+// Also define critical functions immediately
+window.switchTab = function(tab) {
+    console.log('Switching to tab:', tab);
+    // Temporary implementation
+};
+
+window.repeatLastOrder = function() {
+    console.log('Repeat last order clicked');
+};
+
+window.showSavedRecipients = function() {
+    console.log('Show saved recipients clicked');
+};
 
 const SUPABASE_URL = 'https://btxavqfoirdzwpfrvezp.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ0eGF2cWZvaXJkendwZnJ2ZXpwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE0ODcxMTcsImV4cCI6MjA2NzA2MzExN30.kQKpukFGx-cBl1zZRuXmex02ifkZ751WCUfQPogYutk';
@@ -569,20 +585,39 @@ const authService = {
 // Vendor Dashboard Functions
 // ═══════════════════════════════════════════════════════════════════════════
 
-const vendorDashboard = {
+cconst vendorDashboard = {
     async initialize() {
         console.log('🚀 Initializing vendor dashboard...');
         
-        // Check authentication
-        const vendor = await authService.checkSession();
-        if (vendor) {
-            console.log('✅ Vendor authenticated:', vendor.vendor_name || vendor.name);
-            this.displayVendorInfo(vendor);
-            await this.loadDashboardData();
-        } else {
-            // Check URL parameters for WhatsApp login
-            await this.handleURLParameters();
+        try {
+            // Check authentication
+            const vendor = await authService.checkSession();
+            if (vendor) {
+                console.log('✅ Vendor authenticated:', vendor.vendor_name || vendor.name);
+                this.displayVendorInfo(vendor);
+                await this.loadDashboardData();
+            } else {
+                // Check URL parameters for WhatsApp login
+                await this.handleURLParameters();
+            }
+            
+            // Setup event listeners
+            this.setupEventListeners();
+            
+            // Initialize UI components
+            this.initializeUI();
+            
+            // Load initial data
+            await this.loadInitialData();
+            
+            // Setup real-time updates
+            this.setupRealtimeUpdates();
+            
+            console.log('✅ Dashboard initialized');
+        } catch (error) {
+            console.error('Dashboard initialization error:', error);
         }
+    },
         
         // Setup event listeners
         this.setupEventListeners();
@@ -3698,3 +3733,10 @@ window.TumaVendorDashboard = {
 };
 
 console.log('✅ Vendor Dashboard v1.0.0 loaded successfully');
+// Add this to make initMap globally available
+window.initMap = function() {
+    console.log('Google Maps loaded via callback');
+    if (typeof initializeGooglePlaces === 'function') {
+        initializeGooglePlaces();
+    }
+};
