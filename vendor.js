@@ -6,13 +6,12 @@
 // ═══════════════════════════════════════════════════════════════════════════
 // Configuration & Constants
 // ═══════════════════════════════════════════════════════════════════════════
-// Add this at the very top of vendor.js for debugging
 console.log('vendor.js is loading...');
 
-// Also define critical functions immediately
+// Define critical functions immediately
 window.switchTab = function(tab) {
     console.log('Switching to tab:', tab);
-    // Temporary implementation
+    // Temporary implementation - will be replaced later
 };
 
 window.repeatLastOrder = function() {
@@ -48,7 +47,7 @@ const BUSINESS_CONFIG = {
                 eco: 0.8
             },
             managedVendor: 0.9,
-            affiliate: 0.05 // 5% commission for affiliates
+            affiliate: 0.05
         }
     },
     serviceArea: {
@@ -73,17 +72,12 @@ const BUSINESS_CONFIG = {
 class DashboardState {
     constructor() {
         this.state = {
-            // Authentication
             isAuthenticated: false,
             currentVendor: null,
             vendorId: null,
-            
-            // Dashboard
             activeTab: 'new-booking',
             activeDeliveries: [],
             deliveryHistory: [],
-            
-            // Form State
             deliveryType: 'single',
             affiliateCode: null,
             affiliateData: null,
@@ -96,8 +90,6 @@ class DashboardState {
             selectedSize: 'small',
             itemCount: 1,
             packageType: '',
-            
-            // UI State
             isLoading: false,
             savedRecipients: [],
             savedLocations: [],
@@ -150,8 +142,11 @@ class DashboardState {
             preserved[key] = this.state[key];
         });
         
+        // Create a new instance to get default state
+        const defaultState = new DashboardState().state;
+        
         this.state = {
-            ...this.constructor().state,
+            ...defaultState,
             ...preserved
         };
         
@@ -314,7 +309,7 @@ const utils = {
     calculateDistance: (point1, point2) => {
         if (!point1 || !point2) return 0;
         
-        const R = 6371; // Earth's radius in km
+        const R = 6371;
         const dLat = toRad(point2.lat - point1.lat);
         const dLng = toRad(point2.lng - point1.lng);
         const lat1 = toRad(point1.lat);
@@ -398,7 +393,7 @@ class CacheService {
         this.loadFromStorage();
     }
     
-    set(key, value, ttl = 3600000) { // Default 1 hour TTL
+    set(key, value, ttl = 3600000) {
         const item = {
             value: value,
             expires: Date.now() + ttl,
@@ -455,10 +450,6 @@ class CacheService {
 
 const geocodeCache = new CacheService('tuma_geocode');
 const distanceCache = new CacheService('tuma_distance');
-/**
- * Vendor Dashboard - Part 2: Authentication & Vendor Management
- */
-
 // ═══════════════════════════════════════════════════════════════════════════
 // Authentication & Session Management
 // ═══════════════════════════════════════════════════════════════════════════
@@ -466,7 +457,6 @@ const distanceCache = new CacheService('tuma_distance');
 const authService = {
     async checkSession() {
         try {
-            // Check for stored session
             const session = localStorage.getItem('tuma_vendor_session');
             if (!session) return null;
             
@@ -477,7 +467,6 @@ const authService = {
                 return null;
             }
             
-            // Verify vendor still exists and is active
             const vendors = await supabaseAPI.query('vendors', {
                 filter: `id=eq.${vendorId}`,
                 limit: 1
@@ -497,7 +486,6 @@ const authService = {
     
     async authenticateVendor(phone, name = null) {
         try {
-            // Check if vendor exists
             const vendors = await supabaseAPI.query('vendors', {
                 filter: `phone=eq.${phone}`,
                 limit: 1
@@ -508,12 +496,10 @@ const authService = {
             if (vendors.length > 0) {
                 vendor = vendors[0];
                 
-                // Update last active
                 await supabaseAPI.update('vendors', vendor.id, {
                     last_active: new Date().toISOString()
                 });
             } else if (name) {
-                // Create new vendor
                 const newVendorData = {
                     vendor_name: name,
                     phone: phone,
@@ -530,9 +516,7 @@ const authService = {
                 return null;
             }
             
-            // Create session
             this.createSession(vendor);
-            
             return vendor;
         } catch (error) {
             console.error('Authentication error:', error);
@@ -545,7 +529,7 @@ const authService = {
             vendorId: vendor.id,
             phone: vendor.phone,
             name: vendor.vendor_name || vendor.name,
-            expiresAt: Date.now() + (24 * 60 * 60 * 1000) // 24 hours
+            expiresAt: Date.now() + (24 * 60 * 60 * 1000)
         };
         
         localStorage.setItem('tuma_vendor_session', JSON.stringify(session));
@@ -590,28 +574,14 @@ const vendorDashboard = {
         console.log('🚀 Initializing vendor dashboard...');
         
         try {
-            // Check authentication
             const vendor = await authService.checkSession();
             if (vendor) {
                 console.log('✅ Vendor authenticated:', vendor.vendor_name || vendor.name);
                 this.displayVendorInfo(vendor);
                 await this.loadDashboardData();
             } else {
-                // Check URL parameters for WhatsApp login
                 await this.handleURLParameters();
             }
-            
-            // Setup event listeners
-            this.setupEventListeners();
-            
-            // Initialize UI components
-            this.initializeUI();
-            
-            // Load initial data
-            await this.loadInitialData();
-            
-            // Setup real-time updates
-            this.setupRealtimeUpdates();
             
             console.log('✅ Dashboard initialized');
         } catch (error) {
@@ -626,7 +596,6 @@ const vendorDashboard = {
         if (waPhone) {
             console.log('📱 WhatsApp parameter detected:', waPhone);
             
-            // Clean phone number
             let cleanedPhone = utils.formatPhone(waPhone);
             if (cleanedPhone.startsWith('254')) {
                 cleanedPhone = '0' + cleanedPhone.substring(3);
@@ -646,7 +615,6 @@ const vendorDashboard = {
     },
     
     displayVendorInfo(vendor) {
-        // Update header info
         const vendorAvatar = document.getElementById('vendorAvatar');
         const vendorDisplayName = document.getElementById('vendorDisplayName');
         const vendorDisplayPhone = document.getElementById('vendorDisplayPhone');
@@ -669,7 +637,6 @@ const vendorDashboard = {
             vendorDisplayPhone.textContent = vendor.phone || '-';
         }
         
-        // Update form fields if not authenticated
         if (!dashboardState.get('isAuthenticated')) {
             const vendorNameInput = document.getElementById('vendorName');
             const phoneInput = document.getElementById('phoneNumber');
@@ -684,21 +651,11 @@ const vendorDashboard = {
         if (!vendorId) return;
         
         try {
-            // Load active deliveries
             await this.loadActiveDeliveries();
-            
-            // Load delivery history
             await this.loadDeliveryHistory();
-            
-            // Load saved recipients
             await this.loadSavedRecipients();
-            
-            // Load saved locations
             await this.loadSavedLocations();
-            
-            // Update statistics
             await this.updateStatistics();
-            
         } catch (error) {
             console.error('Dashboard data load error:', error);
         }
@@ -721,7 +678,6 @@ const vendorDashboard = {
             dashboardState.set('activeDeliveries', deliveries);
             this.displayActiveDeliveries(deliveries);
             
-            // Update badge
             const activeBadge = document.getElementById('activeBadge');
             if (activeBadge) {
                 if (deliveries.length > 0) {
@@ -731,7 +687,6 @@ const vendorDashboard = {
                     activeBadge.style.display = 'none';
                 }
             }
-            
         } catch (error) {
             console.error('Load active deliveries error:', error);
         }
@@ -753,7 +708,6 @@ const vendorDashboard = {
             
             dashboardState.set('deliveryHistory', history);
             this.displayDeliveryHistory(history);
-            
         } catch (error) {
             console.error('Load delivery history error:', error);
         }
@@ -771,7 +725,6 @@ const vendorDashboard = {
             });
             
             dashboardState.set('savedRecipients', recipients);
-            
         } catch (error) {
             console.error('Load saved recipients error:', error);
         }
@@ -790,7 +743,6 @@ const vendorDashboard = {
             
             dashboardState.set('savedLocations', locations);
             this.displaySavedPickupLocations(locations);
-            
         } catch (error) {
             console.error('Load saved locations error:', error);
         }
@@ -848,7 +800,6 @@ const vendorDashboard = {
                 display_name: location.address
             });
             
-            // Update used count
             await supabaseAPI.update('saved_pickup_locations', location.id, {
                 used_count: (location.used_count || 0) + 1,
                 last_used: new Date().toISOString()
@@ -856,7 +807,6 @@ const vendorDashboard = {
             
             utils.showNotification('Pickup location set!', 'success');
             
-            // Calculate distance if delivery exists
             if (dashboardState.get('deliveryCoords')) {
                 await locationService.calculateDistance();
             }
@@ -868,7 +818,6 @@ const vendorDashboard = {
         if (!vendorId) return;
         
         try {
-            // Get today's deliveries
             const today = new Date();
             today.setHours(0, 0, 0, 0);
             
@@ -878,7 +827,6 @@ const vendorDashboard = {
                 select: 'id'
             });
             
-            // Get this month's deliveries
             const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
             const monthFilter = `vendor_id=eq.${vendorId}&created_at=gte.${firstOfMonth.toISOString()}`;
             const monthDeliveries = await supabaseAPI.query('parcels', {
@@ -886,10 +834,8 @@ const vendorDashboard = {
                 select: 'id,total_price,status'
             });
             
-            // Calculate totals
             const totalSpent = monthDeliveries.reduce((sum, d) => sum + (parseFloat(d.total_price) || 0), 0);
             
-            // Update UI
             const elements = {
                 activeCount: document.getElementById('activeCount'),
                 todayCount: document.getElementById('todayCount'),
@@ -911,16 +857,23 @@ const vendorDashboard = {
             }
             if (elements.monthlyDeliveries) elements.monthlyDeliveries.textContent = monthDeliveries.length;
             if (elements.totalSpent) elements.totalSpent.textContent = utils.formatCurrency(totalSpent);
-            
         } catch (error) {
             console.error('Update statistics error:', error);
         }
+    },
+    
+    displayActiveDeliveries: function(deliveries) {
+        if (typeof uiDisplay !== 'undefined') {
+            uiDisplay.displayActiveDeliveries(deliveries);
+        }
+    },
+    
+    displayDeliveryHistory: function(deliveries) {
+        if (typeof uiDisplay !== 'undefined') {
+            uiDisplay.displayDeliveryHistory(deliveries);
+        }
     }
 };
-/**
- * Vendor Dashboard - Part 3: UI Display & Tab Management
- */
-
 // ═══════════════════════════════════════════════════════════════════════════
 // UI Display Functions
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1015,7 +968,6 @@ const uiDisplay = {
             return;
         }
         
-        // Group by date
         const grouped = this.groupByDate(history);
         
         container.innerHTML = Object.entries(grouped).map(([date, deliveries]) => `
@@ -1057,14 +1009,12 @@ const uiDisplay = {
     },
     
     showDeliveryDetails(deliveryId) {
-        // Find delivery in active or history
         const activeDeliveries = dashboardState.get('activeDeliveries') || [];
         const historyDeliveries = dashboardState.get('deliveryHistory') || [];
         const delivery = [...activeDeliveries, ...historyDeliveries].find(d => d.id === deliveryId);
         
         if (!delivery) return;
         
-        // Create and show modal with delivery details
         const modal = document.createElement('div');
         modal.className = 'delivery-details-modal';
         modal.style.cssText = `
@@ -1094,7 +1044,6 @@ const uiDisplay = {
                 </div>
                 
                 <div style="padding: 20px;">
-                    <!-- Codes Section -->
                     <div style="background: var(--surface-high); border-radius: 12px; padding: 16px; margin-bottom: 20px;">
                         <div style="display: grid; gap: 12px;">
                             <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -1112,13 +1061,11 @@ const uiDisplay = {
                         </div>
                     </div>
                     
-                    <!-- Status -->
                     <div style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px; background: var(--${status.color}); color: ${status.color === 'warning' ? 'black' : 'white'}; border-radius: 12px; margin-bottom: 20px;">
                         <span style="font-size: 20px;">${status.icon}</span>
                         <span style="font-size: 16px; font-weight: 600;">${status.label}</span>
                     </div>
                     
-                    <!-- Details -->
                     <div style="display: grid; gap: 16px;">
                         <div>
                             <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">Pickup Location</div>
@@ -1163,7 +1110,6 @@ const uiDisplay = {
                         ` : ''}
                     </div>
                     
-                    <!-- Actions -->
                     <div style="display: flex; gap: 12px; margin-top: 24px;">
                         ${delivery.status === 'in_transit' || delivery.status === 'assigned' ? `
                             <button onclick="trackingService.trackParcel('${delivery.parcel_code}'); this.closest('.delivery-details-modal').remove()" style="flex: 1; padding: 14px; background: var(--primary); color: white; border: none; border-radius: 12px; font-size: 16px; font-weight: 600; cursor: pointer;">
@@ -1229,12 +1175,6 @@ const uiDisplay = {
     }
 };
 
-// Extend vendorDashboard with display methods
-Object.assign(vendorDashboard, {
-    displayActiveDeliveries: uiDisplay.displayActiveDeliveries.bind(uiDisplay),
-    displayDeliveryHistory: uiDisplay.displayDeliveryHistory.bind(uiDisplay)
-});
-
 // ═══════════════════════════════════════════════════════════════════════════
 // Tab Management
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1249,17 +1189,14 @@ window.switchTab = function(tabName) {
         panel.classList.remove('active');
     });
     
-    // Activate selected tab
-    const selectedTab = document.querySelector(`.tab-item:has(.tab-label:contains('${tabName}'))`);
-    const selectedPanel = document.getElementById(`${tabName}-panel`);
-    
-    // Find tab by checking its onclick attribute or text content
+    // Find and activate the selected tab
     document.querySelectorAll('.tab-item').forEach(tab => {
         if (tab.getAttribute('onclick')?.includes(tabName)) {
             tab.classList.add('active');
         }
     });
     
+    const selectedPanel = document.getElementById(`${tabName}-panel`);
     if (selectedPanel) {
         selectedPanel.classList.add('active');
     }
@@ -1277,65 +1214,11 @@ window.switchTab = function(tabName) {
         case 'track':
             trackingService.loadRecentTracks();
             break;
+        case 'new-booking':
+            // No specific action needed
+            break;
     }
 };
-
-// ═══════════════════════════════════════════════════════════════════════════
-// History Search & Filters
-// ═══════════════════════════════════════════════════════════════════════════
-
-window.filterHistory = function(filter) {
-    // Update filter pills
-    document.querySelectorAll('.filter-pill').forEach(pill => {
-        pill.classList.remove('active');
-        pill.style.background = 'var(--surface-high)';
-        pill.style.color = 'var(--text-secondary)';
-        pill.style.borderColor = 'var(--border)';
-    });
-    
-    event.target.classList.add('active');
-    event.target.style.background = 'var(--primary)';
-    event.target.style.color = 'white';
-    event.target.style.borderColor = 'var(--primary)';
-    
-    // Filter history
-    const allHistory = dashboardState.get('deliveryHistory') || [];
-    let filtered;
-    
-    if (filter === 'all') {
-        filtered = allHistory;
-    } else {
-        filtered = allHistory.filter(d => d.status === filter);
-    }
-    
-    uiDisplay.displayDeliveryHistory(filtered);
-};
-
-// History search with debounce
-const historySearchInput = document.getElementById('historySearch');
-if (historySearchInput) {
-    historySearchInput.addEventListener('input', utils.debounce(function(e) {
-        const searchTerm = e.target.value.toLowerCase();
-        const allHistory = dashboardState.get('deliveryHistory') || [];
-        
-        if (!searchTerm) {
-            uiDisplay.displayDeliveryHistory(allHistory);
-            return;
-        }
-        
-        const filtered = allHistory.filter(delivery => {
-            return delivery.parcel_code?.toLowerCase().includes(searchTerm) ||
-                   delivery.recipient_name?.toLowerCase().includes(searchTerm) ||
-                   delivery.pickup_location?.address?.toLowerCase().includes(searchTerm) ||
-                   delivery.delivery_location?.address?.toLowerCase().includes(searchTerm);
-        });
-        
-        uiDisplay.displayDeliveryHistory(filtered);
-    }, 300));
-}
-/**
- * Vendor Dashboard - Part 4: Booking Form & Location Services
- */
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Booking Form Management
@@ -1346,27 +1229,23 @@ const bookingService = {
         try {
             dashboardState.set('isLoading', true);
             
-            // Generate codes
             const codes = {
                 parcel_code: utils.generateCode('TM'),
                 pickup_code: utils.generateCode('PK'),
                 delivery_code: utils.generateCode('DL')
             };
             
-            // Calculate price
             const distance = dashboardState.get('distance');
             const service = dashboardState.get('selectedService');
             const basePrice = BUSINESS_CONFIG.pricing.rates.base + (distance * BUSINESS_CONFIG.pricing.rates.perKm);
             const serviceMultiplier = BUSINESS_CONFIG.pricing.multipliers.service[service];
             let totalPrice = basePrice * serviceMultiplier;
             
-            // Apply affiliate discount if applicable
             const affiliateData = dashboardState.get('affiliateData');
             if (affiliateData) {
-                totalPrice = totalPrice * 0.95; // 5% discount for affiliate referrals
+                totalPrice = totalPrice * 0.95;
             }
             
-            // Get or create vendor
             let vendor = dashboardState.get('currentVendor');
             let vendorId = dashboardState.get('vendorId');
             
@@ -1378,7 +1257,6 @@ const bookingService = {
                 vendorId = vendor?.id;
             }
             
-            // Prepare parcel data
             const parcelData = {
                 ...codes,
                 vendor_id: vendorId,
@@ -1386,14 +1264,12 @@ const bookingService = {
                 vendor_phone: formData.vendorPhone || vendor?.phone,
                 vendor_type: vendor?.vendor_type || 'casual',
                 
-                // Agent/Affiliate info
                 agent_id: affiliateData?.id || null,
                 agent_code: affiliateData?.agent_code || null,
                 agent_name: affiliateData?.agent_name || null,
                 referral_code: formData.affiliateCode || null,
                 agent_commission: affiliateData ? Math.round(totalPrice * 0.05) : 0,
                 
-                // Locations
                 pickup_location: dashboardState.get('pickupCoords'),
                 delivery_location: dashboardState.get('deliveryCoords'),
                 pickup_lat: dashboardState.get('pickupCoords').lat,
@@ -1403,11 +1279,9 @@ const bookingService = {
                 pickup_coordinates: `${dashboardState.get('pickupCoords').lat},${dashboardState.get('pickupCoords').lng}`,
                 delivery_coordinates: `${dashboardState.get('deliveryCoords').lat},${dashboardState.get('deliveryCoords').lng}`,
                 
-                // Recipient
                 recipient_name: formData.recipientName,
                 recipient_phone: formData.recipientPhone,
                 
-                // Package details
                 package_description: formData.packageDescription,
                 package_category: formData.packageCategory,
                 package_type: formData.packageCategory,
@@ -1416,14 +1290,12 @@ const bookingService = {
                 number_of_items: dashboardState.get('itemCount'),
                 special_instructions: formData.specialInstructions || null,
                 
-                // Service details
                 service_type: service,
                 customer_choice: service,
                 distance_km: distance,
                 duration_minutes: dashboardState.get('duration'),
                 estimated_duration_minutes: dashboardState.get('duration'),
                 
-                // Pricing
                 base_price: basePrice,
                 service_multiplier: serviceMultiplier,
                 price: totalPrice,
@@ -1433,16 +1305,13 @@ const bookingService = {
                 rider_payout: Math.round(totalPrice * 0.70),
                 vendor_payout: 0,
                 
-                // Payment
                 payment_method: 'cash',
                 payment_status: 'pending',
                 
-                // Status
                 status: 'submitted',
                 created_at: new Date().toISOString()
             };
             
-            // Handle special package types
             const specialCategories = ['food-fresh', 'food-frozen', 'pharmaceuticals', 'medical-equipment'];
             if (specialCategories.includes(formData.packageCategory)) {
                 parcelData.priority_level = 'high';
@@ -1450,11 +1319,9 @@ const bookingService = {
                 parcelData.requires_signature = formData.packageCategory.includes('medical');
             }
             
-            // Save to database
             const result = await supabaseAPI.insert('parcels', parcelData);
             console.log('✅ Booking created:', result);
             
-            // Save recipient if new
             if (vendorId && formData.saveRecipient) {
                 await this.saveRecipient({
                     vendor_id: vendorId,
@@ -1466,7 +1333,6 @@ const bookingService = {
                 });
             }
             
-            // Save pickup location if frequently used
             if (vendorId) {
                 await this.savePickupLocation({
                     vendor_id: vendorId,
@@ -1476,13 +1342,8 @@ const bookingService = {
                 });
             }
             
-            // Show success
             this.showBookingSuccess(codes, totalPrice);
-            
-            // Reset form
             this.resetBookingForm();
-            
-            // Reload active deliveries
             await vendorDashboard.loadActiveDeliveries();
             
             return result[0];
@@ -1498,20 +1359,17 @@ const bookingService = {
     
     async saveRecipient(recipientData) {
         try {
-            // Check if already exists
             const existing = await supabaseAPI.query('saved_recipients', {
                 filter: `vendor_id=eq.${recipientData.vendor_id}&phone=eq.${recipientData.phone}`,
                 limit: 1
             });
             
             if (existing.length > 0) {
-                // Update used count
                 await supabaseAPI.update('saved_recipients', existing[0].id, {
                     used_count: (existing[0].used_count || 0) + 1,
                     last_used: new Date().toISOString()
                 });
             } else {
-                // Create new
                 await supabaseAPI.insert('saved_recipients', {
                     ...recipientData,
                     used_count: 1,
@@ -1526,20 +1384,17 @@ const bookingService = {
     
     async savePickupLocation(locationData) {
         try {
-            // Check if already exists (by coordinates)
             const existing = await supabaseAPI.query('saved_pickup_locations', {
                 filter: `vendor_id=eq.${locationData.vendor_id}&lat=eq.${locationData.lat}&lng=eq.${locationData.lng}`,
                 limit: 1
             });
             
             if (existing.length > 0) {
-                // Update used count
                 await supabaseAPI.update('saved_pickup_locations', existing[0].id, {
                     used_count: (existing[0].used_count || 0) + 1,
                     last_used: new Date().toISOString()
                 });
             } else {
-                // Only save if used multiple times (track in session for now)
                 const sessionKey = `pickup_${locationData.lat}_${locationData.lng}`;
                 const sessionCount = parseInt(sessionStorage.getItem(sessionKey) || '0') + 1;
                 sessionStorage.setItem(sessionKey, sessionCount.toString());
@@ -1561,15 +1416,12 @@ const bookingService = {
     showBookingSuccess(codes, price) {
         const overlay = document.getElementById('successOverlay');
         
-        // Update codes
         document.getElementById('displayParcelCode').textContent = codes.parcel_code;
         document.getElementById('displayPickupCode').textContent = codes.pickup_code;
         document.getElementById('displayDeliveryCode').textContent = codes.delivery_code;
         document.getElementById('displayTotalPrice').textContent = utils.formatCurrency(price);
         
-        // Show overlay
         overlay.style.display = 'flex';
-        
         utils.showNotification('Booking created successfully! 🎉', 'success');
     },
     
@@ -1588,19 +1440,16 @@ const bookingService = {
             affiliateData: null
         });
         
-        // Reset UI elements
         document.getElementById('itemCount').textContent = '1';
         document.getElementById('distanceInfo').style.display = 'none';
         document.getElementById('affiliateToggle').classList.remove('active');
         document.getElementById('affiliateInputGroup').classList.remove('active');
         
-        // Reset service selection
         document.querySelectorAll('.service-card').forEach(card => {
             card.classList.remove('selected');
         });
         document.querySelector('[data-service="smart"]').classList.add('selected');
         
-        // Reset size selection
         document.querySelectorAll('.size-option').forEach(option => {
             option.classList.remove('selected');
         });
@@ -1609,7 +1458,6 @@ const bookingService = {
     
     async repeatOrder(deliveryId) {
         try {
-            // Find the delivery
             const allDeliveries = [
                 ...(dashboardState.get('activeDeliveries') || []),
                 ...(dashboardState.get('deliveryHistory') || [])
@@ -1621,10 +1469,8 @@ const bookingService = {
                 return;
             }
             
-            // Switch to new booking tab
             switchTab('new-booking');
             
-            // Fill form with delivery details
             if (delivery.pickup_location) {
                 const pickupInput = document.getElementById('pickupLocation');
                 pickupInput.value = delivery.pickup_location.address;
@@ -1638,18 +1484,14 @@ const bookingService = {
                 deliveryInput.value = delivery.delivery_location.address;
                 deliveryInput.dataset.lat = delivery.delivery_lat;
                 deliveryInput.dataset.lng = delivery.delivery_lng;
-                dashboardState.set('deliveryCoords', delivery.delivery_location);
+                dashboardState.set('deliveryCoords', delivery.delivery_location);   
             }
             
-            // Fill recipient details
             document.getElementById('recipientName').value = delivery.recipient_name || '';
             document.getElementById('recipientPhone').value = delivery.recipient_phone || '';
-            
-            // Fill package details
             document.getElementById('packageDescription').value = delivery.package_type || '';
             document.getElementById('specialInstructions').value = delivery.special_instructions || '';
             
-            // Set package size and count
             if (delivery.package_size) {
                 window.selectSize(delivery.package_size);
             }
@@ -1658,227 +1500,10 @@ const bookingService = {
                 document.getElementById('itemCount').textContent = delivery.item_count;
             }
             
-            // Set service type
             if (delivery.service_type) {
                 window.selectService(delivery.service_type);
             }
             
-            // Calculate distance if both locations are set
-            if (dashboardState.get('pickupCoords') && dashboardState.get('deliveryCoords')) {
-                await locationService.calculateDistance();
-            }
-            
-            utils.showNotification('Order details loaded. Review and submit when ready.', 'success');
-            
-        } catch (error) {
-            console.error('Repeat order error:', error);
-            utils.showNotification('Failed to load order details', 'error');
-        }
-    }
-};
-/**
- * Vendor Dashboard - Part 5: Location Services & Tracking
- */
-
-// Continue bookingService
-            // Save pickup location if frequently used
-            if (vendorId) {
-                await this.savePickupLocation({
-                    vendor_id: vendorId,
-                    address: dashboardState.get('pickupCoords').display_name,
-                    lat: dashboardState.get('pickupCoords').lat,
-                    lng: dashboardState.get('pickupCoords').lng
-                });
-            }
-            
-            // Show success
-            this.showBookingSuccess(codes, totalPrice);
-            
-            // Reset form
-            this.resetBookingForm();
-            
-            // Reload active deliveries
-            await vendorDashboard.loadActiveDeliveries();
-            
-            return result[0];
-            
-        } catch (error) {
-            console.error('Booking submission error:', error);
-            utils.showNotification('Failed to create booking. Please try again.', 'error');
-            throw error;
-        } finally {
-            dashboardState.set('isLoading', false);
-        }
-    },
-    
-    async saveRecipient(recipientData) {
-        try {
-            // Check if already exists
-            const existing = await supabaseAPI.query('saved_recipients', {
-                filter: `vendor_id=eq.${recipientData.vendor_id}&phone=eq.${recipientData.phone}`,
-                limit: 1
-            });
-            
-            if (existing.length > 0) {
-                // Update used count
-                await supabaseAPI.update('saved_recipients', existing[0].id, {
-                    used_count: (existing[0].used_count || 0) + 1,
-                    last_used: new Date().toISOString()
-                });
-            } else {
-                // Create new
-                await supabaseAPI.insert('saved_recipients', {
-                    ...recipientData,
-                    used_count: 1,
-                    created_at: new Date().toISOString(),
-                    last_used: new Date().toISOString()
-                });
-            }
-        } catch (error) {
-            console.error('Save recipient error:', error);
-        }
-    },
-    
-    async savePickupLocation(locationData) {
-        try {
-            // Check if already exists (by coordinates)
-            const existing = await supabaseAPI.query('saved_pickup_locations', {
-                filter: `vendor_id=eq.${locationData.vendor_id}&lat=eq.${locationData.lat}&lng=eq.${locationData.lng}`,
-                limit: 1
-            });
-            
-            if (existing.length > 0) {
-                // Update used count
-                await supabaseAPI.update('saved_pickup_locations', existing[0].id, {
-                    used_count: (existing[0].used_count || 0) + 1,
-                    last_used: new Date().toISOString()
-                });
-            } else {
-                // Only save if used multiple times (track in session for now)
-                const sessionKey = `pickup_${locationData.lat}_${locationData.lng}`;
-                const sessionCount = parseInt(sessionStorage.getItem(sessionKey) || '0') + 1;
-                sessionStorage.setItem(sessionKey, sessionCount.toString());
-                
-                if (sessionCount >= 2) {
-                    await supabaseAPI.insert('saved_pickup_locations', {
-                        ...locationData,
-                        used_count: sessionCount,
-                        created_at: new Date().toISOString(),
-                        last_used: new Date().toISOString()
-                    });
-                }
-            }
-        } catch (error) {
-            console.error('Save pickup location error:', error);
-        }
-    },
-    
-    showBookingSuccess(codes, price) {
-        const overlay = document.getElementById('successOverlay');
-        
-        // Update codes
-        document.getElementById('displayParcelCode').textContent = codes.parcel_code;
-        document.getElementById('displayPickupCode').textContent = codes.pickup_code;
-        document.getElementById('displayDeliveryCode').textContent = codes.delivery_code;
-        document.getElementById('displayTotalPrice').textContent = utils.formatCurrency(price);
-        
-        // Show overlay
-        overlay.style.display = 'flex';
-        
-        utils.showNotification('Booking created successfully! 🎉', 'success');
-    },
-    
-    resetBookingForm() {
-        document.getElementById('dashboardDeliveryForm').reset();
-        
-        dashboardState.set({
-            pickupCoords: null,
-            deliveryCoords: null,
-            distance: 0,
-            duration: 0,
-            selectedService: 'smart',
-            selectedSize: 'small',
-            itemCount: 1,
-            affiliateCode: null,
-            affiliateData: null
-        });
-        
-        // Reset UI elements
-        document.getElementById('itemCount').textContent = '1';
-        document.getElementById('distanceInfo').style.display = 'none';
-        document.getElementById('affiliateToggle').classList.remove('active');
-        document.getElementById('affiliateInputGroup').classList.remove('active');
-        
-        // Reset service selection
-        document.querySelectorAll('.service-card').forEach(card => {
-            card.classList.remove('selected');
-        });
-        document.querySelector('[data-service="smart"]').classList.add('selected');
-        
-        // Reset size selection
-        document.querySelectorAll('.size-option').forEach(option => {
-            option.classList.remove('selected');
-        });
-        document.querySelector('[data-size="small"]').classList.add('selected');
-    },
-    
-    async repeatOrder(deliveryId) {
-        try {
-            // Find the delivery
-            const allDeliveries = [
-                ...(dashboardState.get('activeDeliveries') || []),
-                ...(dashboardState.get('deliveryHistory') || [])
-            ];
-            const delivery = allDeliveries.find(d => d.id === deliveryId);
-            
-            if (!delivery) {
-                utils.showNotification('Could not find order details', 'error');
-                return;
-            }
-            
-            // Switch to new booking tab
-            switchTab('new-booking');
-            
-            // Fill form with delivery details
-            if (delivery.pickup_location) {
-                const pickupInput = document.getElementById('pickupLocation');
-                pickupInput.value = delivery.pickup_location.address;
-                pickupInput.dataset.lat = delivery.pickup_lat;
-                pickupInput.dataset.lng = delivery.pickup_lng;
-                dashboardState.set('pickupCoords', delivery.pickup_location);
-            }
-            
-            if (delivery.delivery_location) {
-                const deliveryInput = document.getElementById('deliveryLocation');
-                deliveryInput.value = delivery.delivery_location.address;
-                deliveryInput.dataset.lat = delivery.delivery_lat;
-                deliveryInput.dataset.lng = delivery.delivery_lng;
-                dashboardState.set('deliveryCoords', delivery.delivery_location);
-            }
-            
-            // Fill recipient details
-            document.getElementById('recipientName').value = delivery.recipient_name || '';
-            document.getElementById('recipientPhone').value = delivery.recipient_phone || '';
-            
-            // Fill package details
-            document.getElementById('packageDescription').value = delivery.package_type || '';
-            document.getElementById('specialInstructions').value = delivery.special_instructions || '';
-            
-            // Set package size and count
-            if (delivery.package_size) {
-                window.selectSize(delivery.package_size);
-            }
-            if (delivery.item_count) {
-                dashboardState.set('itemCount', delivery.item_count);
-                document.getElementById('itemCount').textContent = delivery.item_count;
-            }
-            
-            // Set service type
-            if (delivery.service_type) {
-                window.selectService(delivery.service_type);
-            }
-            
-            // Calculate distance if both locations are set
             if (dashboardState.get('pickupCoords') && dashboardState.get('deliveryCoords')) {
                 await locationService.calculateDistance();
             }
@@ -1898,20 +1523,17 @@ const bookingService = {
 
 const locationService = {
     async geocodeAddress(address) {
-        // Check cache first
         const cached = geocodeCache.get(address);
         if (cached) {
             console.log('📦 Using cached geocode');
             return cached;
         }
         
-        // Add Kenya context if not present
         if (!address.toLowerCase().includes('kenya') && !address.toLowerCase().includes('nairobi')) {
             address = `${address}, Nairobi, Kenya`;
         }
         
         try {
-            // Try Google Maps first if available
             if (window.google && window.google.maps) {
                 const geocoder = new google.maps.Geocoder();
                 const result = await new Promise((resolve, reject) => {
@@ -1935,7 +1557,6 @@ const locationService = {
                 return result;
             }
             
-            // Fallback to Nominatim
             const response = await fetch(
                 `https://nominatim.openstreetmap.org/search?` +
                 `format=json&q=${encodeURIComponent(address)}&limit=1&countrycodes=ke`
@@ -1990,7 +1611,6 @@ const locationService = {
                 return result;
             }
             
-            // Fallback to Nominatim
             const response = await fetch(
                 `https://nominatim.openstreetmap.org/reverse?` +
                 `format=json&lat=${lat}&lon=${lng}`
@@ -2017,7 +1637,6 @@ const locationService = {
         
         if (!pickup || !delivery) return;
         
-        // Check cache
         const cacheKey = `${pickup.lat},${pickup.lng}-${delivery.lat},${delivery.lng}`;
         const cached = distanceCache.get(cacheKey);
         if (cached) {
@@ -2030,7 +1649,6 @@ const locationService = {
             let result;
             
             if (window.google && window.google.maps) {
-                // Use Google Distance Matrix
                 const service = new google.maps.DistanceMatrixService();
                 const response = await new Promise((resolve, reject) => {
                     service.getDistanceMatrix({
@@ -2059,11 +1677,10 @@ const locationService = {
             }
             
             if (!result) {
-                // Fallback to straight-line calculation
                 const distance = utils.calculateDistance(pickup, delivery);
                 result = {
-                    distance: distance * 1.4, // Add 40% for road distance
-                    duration: Math.ceil(distance * 3), // Estimate 3 min per km
+                    distance: distance * 1.4,
+                    duration: Math.ceil(distance * 3),
                     distance_text: `~${(distance * 1.4).toFixed(1)} km`,
                     duration_text: `~${Math.ceil(distance * 3)} min`
                 };
@@ -2082,7 +1699,6 @@ const locationService = {
         } catch (error) {
             console.error('Distance calculation error:', error);
             
-            // Final fallback
             const distance = utils.calculateDistance(pickup, delivery);
             const result = {
                 distance: distance * 1.4,
@@ -2110,10 +1726,7 @@ const locationService = {
         if (calculatedDistance) calculatedDistance.textContent = `${distanceData.distance.toFixed(1)} km`;
         if (estimatedDuration) estimatedDuration.textContent = `~${distanceData.duration} min`;
         
-        // Update pricing
         this.updatePricing(distanceData.distance);
-        
-        // Enable submit button
         this.checkFormValidity();
     },
     
@@ -2124,21 +1737,23 @@ const locationService = {
         
         const basePrice = rates.base + (distance * rates.perKm);
         
-        // Update service prices
-        document.getElementById('expressPrice').textContent = 
-            utils.formatCurrency(basePrice * multipliers.service.express);
-        document.getElementById('smartPrice').textContent = 
-            utils.formatCurrency(basePrice * multipliers.service.smart);
-        document.getElementById('ecoPrice').textContent = 
-            utils.formatCurrency(basePrice * multipliers.service.eco);
+        const expressEl = document.getElementById('expressPrice');
+        const smartEl = document.getElementById('smartPrice');
+        const ecoEl = document.getElementById('ecoPrice');
         
-        // Hide hint
-        document.getElementById('servicePriceHint').style.display = 'none';
+        if (expressEl) expressEl.textContent = utils.formatCurrency(basePrice * multipliers.service.express);
+        if (smartEl) smartEl.textContent = utils.formatCurrency(basePrice * multipliers.service.smart);
+        if (ecoEl) ecoEl.textContent = utils.formatCurrency(basePrice * multipliers.service.eco);
+        
+        const priceHint = document.getElementById('servicePriceHint');
+        if (priceHint) priceHint.style.display = 'none';
     },
     
     checkFormValidity() {
         const submitBtn = document.getElementById('submitBtn');
         const buttonText = document.getElementById('buttonText');
+        
+        if (!submitBtn || !buttonText) return;
         
         const hasPickup = dashboardState.get('pickupCoords');
         const hasDelivery = dashboardState.get('deliveryCoords');
@@ -2172,7 +1787,7 @@ const locationService = {
 
 const trackingService = {
     async trackParcel(parcelCode = null) {
-        const code = parcelCode || document.getElementById('trackInput').value;
+        const code = parcelCode || document.getElementById('trackInput')?.value;
         
         if (!code) {
             utils.showNotification('Please enter a parcel code', 'warning');
@@ -2180,7 +1795,6 @@ const trackingService = {
         }
         
         try {
-            // Query parcel
             const parcels = await supabaseAPI.query('parcels', {
                 filter: `parcel_code=eq.${code}`,
                 limit: 1
@@ -2193,7 +1807,6 @@ const trackingService = {
             
             const parcel = parcels[0];
             
-            // Check for live tracking if in transit
             if (parcel.status === 'in_transit' && parcel.rider_id) {
                 const tracking = await supabaseAPI.query('live_delivery_tracking', {
                     filter: `parcel_id=eq.${parcel.id}`,
@@ -2206,10 +1819,7 @@ const trackingService = {
                 }
             }
             
-            // Display tracking result
             this.displayTrackingResult(parcel);
-            
-            // Save to recent tracks
             this.saveRecentTrack(parcel);
             
         } catch (error) {
@@ -2262,93 +1872,23 @@ const trackingService = {
                             </div>
                         </div>
                     ` : ''}
-                    
-                    <div>
-                        <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;">Timeline</div>
-                        ${this.generateTimeline(parcel)}
-                    </div>
                 </div>
             </div>
         `;
     },
     
-    generateTimeline(parcel) {
-        const events = [
-            {
-                status: 'submitted',
-                time: parcel.created_at,
-                label: 'Order Placed'
-            }
-        ];
-        
-        if (parcel.assigned_at) {
-            events.push({
-                status: 'assigned',
-                time: parcel.assigned_at,
-                label: 'Rider Assigned'
-            });
-        }
-        
-        if (parcel.pickup_timestamp) {
-            events.push({
-                status: 'in_transit',
-                time: parcel.pickup_timestamp,
-                label: 'Picked Up'
-            });
-        }
-        
-        if (parcel.delivery_timestamp) {
-            events.push({
-                status: 'delivered',
-                time: parcel.delivery_timestamp,
-                label: 'Delivered'
-            });
-        }
-        
-        return events.map((event, index) => {
-            const isCompleted = new Date(event.time) <= new Date();
-            const status = BUSINESS_CONFIG.statuses[event.status] || {};
-            
-            return `
-                <div style="display: flex; gap: 12px; margin-bottom: 16px;">
-                    <div style="display: flex; flex-direction: column; align-items: center;">
-                        <div style="width: 32px; height: 32px; border-radius: 50%; background: ${isCompleted ? `var(--${status.color})` : 'var(--surface-high)'}; display: flex; align-items: center; justify-content: center; color: ${status.color === 'warning' ? 'black' : 'white'};">
-                            ${isCompleted ? status.icon : '⏳'}
-                        </div>
-                        ${index < events.length - 1 ? `
-                            <div style="width: 2px; height: 40px; background: ${isCompleted ? 'var(--success)' : 'var(--border)'}; margin-top: 4px;"></div>
-                        ` : ''}
-                    </div>
-                    <div style="flex: 1;">
-                        <div style="font-size: 14px; font-weight: 600; margin-bottom: 2px;">${event.label}</div>
-                        <div style="font-size: 12px; color: var(--text-secondary);">
-                            ${isCompleted ? utils.formatDate(event.time) : 'Pending'}
-                        </div>
-                    </div>
-                </div>
-            `;
-        }).join('');
-    },
-    
     async saveRecentTrack(parcel) {
         let recentTracks = dashboardState.get('recentTracks') || [];
         
-        // Remove if already exists
         recentTracks = recentTracks.filter(t => t.parcel_code !== parcel.parcel_code);
-        
-        // Add to beginning
         recentTracks.unshift({
             parcel_code: parcel.parcel_code,
             status: parcel.status,
             tracked_at: new Date().toISOString()
         });
         
-        // Keep only last 5
         recentTracks = recentTracks.slice(0, 5);
-        
         dashboardState.set('recentTracks', recentTracks);
-        
-        // Save to localStorage
         localStorage.setItem('tuma_recent_tracks', JSON.stringify(recentTracks));
         
         this.displayRecentTracks();
@@ -2399,12 +1939,9 @@ const trackingService = {
         }).join('');
     }
 };
-/**
- * Vendor Dashboard - Part 6: Event Handlers & Initialization
- */
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Affiliate/Agent Management
+// Event Handler Functions
 // ═══════════════════════════════════════════════════════════════════════════
 
 window.toggleAffiliateCode = function() {
@@ -2417,7 +1954,6 @@ window.toggleAffiliateCode = function() {
     if (toggle.classList.contains('active')) {
         document.getElementById('affiliateCode').focus();
     } else {
-        // Clear affiliate code
         document.getElementById('affiliateCode').value = '';
         document.getElementById('affiliateStatus').style.display = 'none';
         dashboardState.set({
@@ -2442,7 +1978,6 @@ window.validateAffiliateCode = async function() {
     }
     
     try {
-        // Query agents table
         const agents = await supabaseAPI.query('agents', {
             filter: `agent_code=eq.${code}&status=eq.active`,
             limit: 1
@@ -2486,7 +2021,6 @@ window.repeatLastOrder = async function() {
     try {
         const vendorId = dashboardState.get('vendorId');
         
-        // Get last order
         const filter = vendorId 
             ? `vendor_id=eq.${vendorId}` 
             : `vendor_phone=eq.${document.getElementById('phoneNumber')?.value}`;
@@ -2515,7 +2049,6 @@ window.showSavedRecipients = async function() {
     const recipients = dashboardState.get('savedRecipients') || [];
     
     if (recipients.length === 0) {
-        // Try loading saved recipients
         const vendorId = dashboardState.get('vendorId');
         if (vendorId) {
             await vendorDashboard.loadSavedRecipients();
@@ -2530,7 +2063,6 @@ window.showSavedRecipients = async function() {
         }
     }
     
-    // Toggle dropdown
     dropdown.classList.toggle('active');
     
     if (dropdown.classList.contains('active')) {
@@ -2551,11 +2083,9 @@ window.useSavedRecipient = function(index) {
     
     if (!recipient) return;
     
-    // Fill recipient fields
     document.getElementById('recipientName').value = recipient.name;
     document.getElementById('recipientPhone').value = recipient.phone;
     
-    // Fill delivery location if available
     if (recipient.address && recipient.lat && recipient.lng) {
         const deliveryInput = document.getElementById('deliveryLocation');
         deliveryInput.value = recipient.address;
@@ -2568,15 +2098,12 @@ window.useSavedRecipient = function(index) {
             display_name: recipient.address
         });
         
-        // Calculate distance if pickup exists
         if (dashboardState.get('pickupCoords')) {
             locationService.calculateDistance();
         }
     }
     
-    // Hide dropdown
     document.getElementById('savedRecipientsDropdown').classList.remove('active');
-    
     utils.showNotification('Recipient details loaded', 'success');
 };
 
@@ -2616,119 +2143,12 @@ window.selectService = function(service) {
         selected.classList.add('selected');
         dashboardState.set('selectedService', service);
         
-        // Update pricing if distance is known
         const distance = dashboardState.get('distance');
         if (distance > 0) {
             locationService.updatePricing(distance);
         }
     }
 };
-
-window.toggleDeliveryType = function(type) {
-    const singleBtn = document.getElementById('singleBtn');
-    const bulkBtn = document.getElementById('bulkBtn');
-    const singleSection = document.getElementById('singleDeliverySection');
-    const singleLocation = document.getElementById('singleDeliveryLocation');
-    const bulkSection = document.getElementById('bulkDeliverySection');
-    
-    if (type === 'single') {
-        singleBtn.classList.add('active');
-        bulkBtn.classList.remove('active');
-        singleSection.style.display = 'block';
-        singleLocation.style.display = 'block';
-        bulkSection.style.display = 'none';
-        dashboardState.set('deliveryType', 'single');
-    } else {
-        singleBtn.classList.remove('active');
-        bulkBtn.classList.add('active');
-        singleSection.style.display = 'none';
-        singleLocation.style.display = 'none';
-        bulkSection.style.display = 'block';
-        dashboardState.set('deliveryType', 'bulk');
-        utils.showNotification('Bulk delivery saves you more! Add multiple drop-off points.', 'info');
-    }
-};
-
-window.addBulkDelivery = function() {
-    const bulkDeliveries = dashboardState.get('bulkDeliveries') || [];
-    const newIndex = bulkDeliveries.length;
-    
-    const container = document.getElementById('bulkDeliveries');
-    const deliveryItem = document.createElement('div');
-    deliveryItem.className = 'bulk-delivery-item';
-    deliveryItem.style.cssText = 'margin-bottom: 16px; padding: 16px; background: var(--surface-elevated); border-radius: 12px; border: 1px solid var(--border);';
-    
-    deliveryItem.innerHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-            <h4 style="font-size: 14px; font-weight: 600;">Delivery ${newIndex + 1}</h4>
-            <button type="button" onclick="removeBulkDelivery(${newIndex})" style="width: 28px; height: 28px; border-radius: 50%; background: var(--danger); border: none; color: white; cursor: pointer;">×</button>
-        </div>
-        <div style="display: grid; gap: 12px;">
-            <input type="text" class="input-field" placeholder="Recipient name" id="bulkRecipient${newIndex}">
-            <input type="tel" class="input-field" placeholder="Recipient phone" id="bulkPhone${newIndex}">
-            <div class="input-container">
-                <input type="text" class="input-field" placeholder="Delivery address" id="bulkAddress${newIndex}">
-                <button type="button" class="input-action" onclick="getLocation('bulk${newIndex}')">
-                    <svg viewBox="0 0 24 24">
-                        <path d="M12 2C8.13 2 5 5.13 5 9C5 14.25 12 22 12 22S19 14.25 19 9C19 5.13 15.87 2 12 2ZM12 11.5C10.62 11.5 9.5 10.38 9.5 9S10.62 6.5 12 6.5 14.5 7.62 14.5 9 13.38 11.5 12 11.5Z"/>
-                    </svg>
-                </button>
-            </div>
-        </div>
-    `;
-    
-    container.appendChild(deliveryItem);
-    bulkDeliveries.push({ index: newIndex });
-    dashboardState.set('bulkDeliveries', bulkDeliveries);
-};
-
-window.removeBulkDelivery = function(index) {
-    const bulkDeliveries = dashboardState.get('bulkDeliveries') || [];
-    bulkDeliveries.splice(index, 1);
-    dashboardState.set('bulkDeliveries', bulkDeliveries);
-    
-    // Rebuild UI
-    const container = document.getElementById('bulkDeliveries');
-    container.innerHTML = '';
-    bulkDeliveries.forEach((_, i) => addBulkDelivery());
-};
-
-function updateCapacityDisplay() {
-    const itemCount = dashboardState.get('itemCount');
-    const selectedSize = dashboardState.get('selectedSize');
-    const sizeConfig = BUSINESS_CONFIG.packageSizes[selectedSize];
-    
-    const totalUnits = itemCount * sizeConfig.units;
-    const vehiclesNeeded = Math.ceil(totalUnits / BUSINESS_CONFIG.vehicleCapacity.motorcycle);
-    
-    const capacityText = document.getElementById('capacityText');
-    const capacityFill = document.getElementById('capacityFill');
-    const capacityIcon = document.getElementById('capacityIcon');
-    
-    if (vehiclesNeeded === 1) {
-        capacityText.textContent = `${itemCount} ${sizeConfig.label.toLowerCase()} item${itemCount > 1 ? 's' : ''} • Fits on one motorcycle`;
-        capacityIcon.textContent = '✓';
-        capacityIcon.className = 'capacity-icon';
-        capacityFill.className = 'capacity-fill';
-    } else if (vehiclesNeeded === 2) {
-        capacityText.textContent = `${itemCount} ${sizeConfig.label.toLowerCase()} items • Needs 2 motorcycles`;
-        capacityIcon.textContent = '!';
-        capacityIcon.className = 'capacity-icon warning';
-        capacityFill.className = 'capacity-fill warning';
-    } else {
-        capacityText.textContent = `${itemCount} ${sizeConfig.label.toLowerCase()} items • Too large (${vehiclesNeeded} motorcycles)`;
-        capacityIcon.textContent = '✕';
-        capacityIcon.className = 'capacity-icon danger';
-        capacityFill.className = 'capacity-fill danger';
-    }
-    
-    const percentage = Math.min((totalUnits / BUSINESS_CONFIG.vehicleCapacity.motorcycle) * 100, 100);
-    capacityFill.style.width = `${percentage}%`;
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Copy & Share Functions
-// ═══════════════════════════════════════════════════════════════════════════
 
 window.copyCode = async function(type) {
     let code = '';
@@ -2796,10 +2216,6 @@ window.bookAnother = function() {
     window.scrollTo(0, 0);
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Location Functions
-// ═══════════════════════════════════════════════════════════════════════════
-
 window.getLocation = async function(type) {
     try {
         if (!navigator.geolocation) {
@@ -2821,7 +2237,6 @@ window.getLocation = async function(type) {
             lng: position.coords.longitude
         };
         
-        // Validate service area
         const serviceCheck = locationService.validateServiceArea(coords);
         if (!serviceCheck.isValid) {
             utils.showNotification(
@@ -2831,10 +2246,8 @@ window.getLocation = async function(type) {
             return;
         }
         
-        // Reverse geocode
         const address = await locationService.reverseGeocode(coords.lat, coords.lng);
         
-        // Update appropriate input
         let input;
         if (type === 'pickup') {
             input = document.getElementById('pickupLocation');
@@ -2842,11 +2255,6 @@ window.getLocation = async function(type) {
         } else if (type === 'delivery') {
             input = document.getElementById('deliveryLocation');
             dashboardState.set('deliveryCoords', { ...coords, display_name: address.display_name });
-        } else if (type === 'bulkPickup') {
-            input = document.getElementById('bulkPickupLocation');
-        } else if (type.startsWith('bulk')) {
-            const index = type.replace('bulk', '');
-            input = document.getElementById(`bulkAddress${index}`);
         }
         
         if (input) {
@@ -2855,7 +2263,6 @@ window.getLocation = async function(type) {
             input.dataset.lng = coords.lng;
         }
         
-        // Calculate distance if both locations set
         if (dashboardState.get('pickupCoords') && dashboardState.get('deliveryCoords')) {
             await locationService.calculateDistance();
         }
@@ -2868,130 +2275,8 @@ window.getLocation = async function(type) {
     }
 };
 
+// Alias for backward compatibility
 window.useGPS = window.getLocation;
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Map Modal (if using Leaflet)
-// ═══════════════════════════════════════════════════════════════════════════
-
-let simpleMap = null;
-let currentMapInput = null;
-let selectedLocation = null;
-
-window.openSimpleLocationModal = function(inputId) {
-    currentMapInput = inputId;
-    document.getElementById('simpleLocationModal').style.display = 'block';
-    
-    if (!simpleMap) {
-        // Initialize Leaflet map
-        simpleMap = L.map('simpleMap').setView([-1.2921, 36.8219], 13);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap'
-        }).addTo(simpleMap);
-        
-        // Add center marker
-        const centerIcon = L.divIcon({
-            html: '<div style="background: var(--primary); width: 20px; height: 20px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3);"></div>',
-            iconSize: [20, 20],
-            className: 'center-marker'
-        });
-        
-        L.marker(simpleMap.getCenter(), { 
-            icon: centerIcon,
-            interactive: false 
-        }).addTo(simpleMap);
-        
-        // Update location on map move
-        simpleMap.on('moveend', async () => {
-            const center = simpleMap.getCenter();
-            selectedLocation = {
-                lat: center.lat,
-                lng: center.lng
-            };
-            
-            // Reverse geocode
-            try {
-                const address = await locationService.reverseGeocode(center.lat, center.lng);
-                document.getElementById('selectedLocationName').textContent = 
-                    address.display_name.split(',')[0];
-                document.getElementById('selectedLocationAddress').textContent = 
-                    address.display_name;
-                selectedLocation.display_name = address.display_name;
-            } catch (error) {
-                console.error('Reverse geocode error:', error);
-            }
-        });
-        
-        // Setup search
-        const searchBtn = document.getElementById('simpleSearchBtn');
-        const searchInput = document.getElementById('simpleSearch');
-        
-        searchBtn.addEventListener('click', async () => {
-            const query = searchInput.value.trim();
-            if (!query) return;
-            
-            try {
-                const result = await locationService.geocodeAddress(query);
-                simpleMap.setView([result.lat, result.lng], 16);
-            } catch (error) {
-                utils.showNotification('Could not find location', 'error');
-            }
-        });
-        
-        searchInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                searchBtn.click();
-            }
-        });
-    }
-    
-    setTimeout(() => simpleMap.invalidateSize(), 100);
-};
-
-window.confirmSimpleLocation = function() {
-    if (!selectedLocation || !currentMapInput) return;
-    
-    // Validate service area
-    const serviceCheck = locationService.validateServiceArea(selectedLocation);
-    if (!serviceCheck.isValid) {
-        utils.showNotification(
-            `Location is outside service area (${serviceCheck.distance.toFixed(1)}km away)`,
-            'error'
-        );
-        return;
-    }
-    
-    const input = document.getElementById(currentMapInput);
-    input.value = selectedLocation.display_name;
-    input.dataset.lat = selectedLocation.lat;
-    input.dataset.lng = selectedLocation.lng;
-    
-    // Update state
-    if (currentMapInput === 'pickupLocation') {
-        dashboardState.set('pickupCoords', selectedLocation);
-    } else if (currentMapInput === 'deliveryLocation') {
-        dashboardState.set('deliveryCoords', selectedLocation);
-    }
-    
-    // Calculate distance if both set
-    if (dashboardState.get('pickupCoords') && dashboardState.get('deliveryCoords')) {
-        locationService.calculateDistance();
-    }
-    
-    closeLocationModal();
-    utils.showNotification('Location selected!', 'success');
-};
-
-window.closeLocationModal = function() {
-    document.getElementById('simpleLocationModal').style.display = 'none';
-    currentMapInput = null;
-    selectedLocation = null;
-};
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Logout Function
-// ═══════════════════════════════════════════════════════════════════════════
 
 window.logout = function() {
     if (confirm('Are you sure you want to logout?')) {
@@ -3000,8 +2285,45 @@ window.logout = function() {
     }
 };
 
+function updateCapacityDisplay() {
+    const itemCount = dashboardState.get('itemCount');
+    const selectedSize = dashboardState.get('selectedSize');
+    const sizeConfig = BUSINESS_CONFIG.packageSizes[selectedSize];
+    
+    if (!sizeConfig) return;
+    
+    const totalUnits = itemCount * sizeConfig.units;
+    const vehiclesNeeded = Math.ceil(totalUnits / BUSINESS_CONFIG.vehicleCapacity.motorcycle);
+    
+    const capacityText = document.getElementById('capacityText');
+    const capacityFill = document.getElementById('capacityFill');
+    const capacityIcon = document.getElementById('capacityIcon');
+    
+    if (!capacityText || !capacityFill || !capacityIcon) return;
+    
+    if (vehiclesNeeded === 1) {
+        capacityText.textContent = `${itemCount} ${sizeConfig.label.toLowerCase()} item${itemCount > 1 ? 's' : ''} • Fits on one motorcycle`;
+        capacityIcon.textContent = '✓';
+        capacityIcon.className = 'capacity-icon';
+        capacityFill.className = 'capacity-fill';
+    } else if (vehiclesNeeded === 2) {
+        capacityText.textContent = `${itemCount} ${sizeConfig.label.toLowerCase()} items • Needs 2 motorcycles`;
+        capacityIcon.textContent = '!';
+        capacityIcon.className = 'capacity-icon warning';
+        capacityFill.className = 'capacity-fill warning';
+    } else {
+        capacityText.textContent = `${itemCount} ${sizeConfig.label.toLowerCase()} items • Too large (${vehiclesNeeded} motorcycles)`;
+        capacityIcon.textContent = '✕';
+        capacityIcon.className = 'capacity-icon danger';
+        capacityFill.className = 'capacity-fill danger';
+    }
+    
+    const percentage = Math.min((totalUnits / BUSINESS_CONFIG.vehicleCapacity.motorcycle) * 100, 100);
+    capacityFill.style.width = `${percentage}%`;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
-// Form Submission
+// Form Submission Handler
 // ═══════════════════════════════════════════════════════════════════════════
 
 async function handleFormSubmit(e) {
@@ -3009,22 +2331,19 @@ async function handleFormSubmit(e) {
     
     if (dashboardState.get('isLoading')) return;
     
-    // Gather form data
+    const packageDescriptionSelect = document.getElementById('packageDescription');
     const formData = {
         vendorName: document.getElementById('vendorName')?.value,
         vendorPhone: document.getElementById('phoneNumber')?.value,
         recipientName: document.getElementById('recipientName').value,
         recipientPhone: document.getElementById('recipientPhone').value,
-        packageDescription: document.getElementById('packageDescription').options[
-            document.getElementById('packageDescription').selectedIndex
-        ].text,
-        packageCategory: document.getElementById('packageDescription').value,
+        packageDescription: packageDescriptionSelect.options[packageDescriptionSelect.selectedIndex].text,
+        packageCategory: packageDescriptionSelect.value,
         specialInstructions: document.getElementById('specialInstructions').value,
         affiliateCode: document.getElementById('affiliateCode').value,
-        saveRecipient: true // Could add a checkbox for this
+        saveRecipient: true
     };
     
-    // Validate required fields
     if (!dashboardState.get('isAuthenticated')) {
         if (!formData.vendorName || !formData.vendorPhone) {
             utils.showNotification('Please enter your name and phone number', 'error');
@@ -3063,7 +2382,6 @@ async function handleFormSubmit(e) {
         return;
     }
     
-    // Update button state
     const submitBtn = document.getElementById('submitBtn');
     const buttonText = document.getElementById('buttonText');
     submitBtn.disabled = true;
@@ -3079,130 +2397,197 @@ async function handleFormSubmit(e) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Event Listeners Setup
+// History Search & Filters
 // ═══════════════════════════════════════════════════════════════════════════
 
-function setupEventListeners() {
-    // Form submission
-    const form = document.getElementById('dashboardDeliveryForm');
-    if (form) {
-        form.addEventListener('submit', handleFormSubmit);
-    }
+window.filterHistory = function(filter, event) {
+    // Handle both inline onclick and programmatic calls
+    const evt = event || window.event;
     
-    // Character counter for special instructions
-    const specialInstructions = document.getElementById('specialInstructions');
-    if (specialInstructions) {
-        specialInstructions.addEventListener('input', (e) => {
-            document.getElementById('charCount').textContent = e.target.value.length;
-        });
-    }
-    
-    // Location inputs
-    const pickupInput = document.getElementById('pickupLocation');
-    const deliveryInput = document.getElementById('deliveryLocation');
-    
-    if (pickupInput) {
-        pickupInput.addEventListener('change', async () => {
-            if (pickupInput.value && !pickupInput.dataset.lat) {
-                try {
-                    const coords = await locationService.geocodeAddress(pickupInput.value);
-                    pickupInput.dataset.lat = coords.lat;
-                    pickupInput.dataset.lng = coords.lng;
-                    dashboardState.set('pickupCoords', coords);
-                    
-                    if (dashboardState.get('deliveryCoords')) {
-                        await locationService.calculateDistance();
-                    }
-                } catch (error) {
-                    utils.showNotification('Could not find pickup address', 'error');
-                }
-            }
-        });
-    }
-    
-    if (deliveryInput) {
-        deliveryInput.addEventListener('change', async () => {
-            if (deliveryInput.value && !deliveryInput.dataset.lat) {
-                try {
-                    const coords = await locationService.geocodeAddress(deliveryInput.value);
-                    deliveryInput.dataset.lat = coords.lat;
-                    deliveryInput.dataset.lng = coords.lng;
-                    dashboardState.set('deliveryCoords', coords);
-                    
-                    if (dashboardState.get('pickupCoords')) {
-                        await locationService.calculateDistance();
-                    }
-                } catch (error) {
-                    utils.showNotification('Could not find delivery address', 'error');
-                }
-            }
-        });
-    }
-    
-    // Track input enter key
-    const trackInput = document.getElementById('trackInput');
-    if (trackInput) {
-        trackInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                trackingService.trackParcel();
-            }
-        });
-    }
-    
-    // Offline/Online handling
-    window.addEventListener('online', () => {
-        document.getElementById('offlineBanner').style.transform = 'translateY(-100%)';
-        utils.showNotification('You\'re back online!', 'success');
+    document.querySelectorAll('.filter-pill').forEach(pill => {
+        pill.classList.remove('active');
+        pill.style.background = 'var(--surface-high)';
+        pill.style.color = 'var(--text-secondary)';
+        pill.style.borderColor = 'var(--border)';
     });
     
-    window.addEventListener('offline', () => {
-        document.getElementById('offlineBanner').style.transform = 'translateY(0)';
-    });
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Initialize UI Components
-// ═══════════════════════════════════════════════════════════════════════════
-
-function initializeUI() {
-    // Set initial values
-    document.getElementById('itemCount').textContent = '1';
-    
-    // Initialize capacity display
-    updateCapacityDisplay();
-    
-    // Initialize service selection
-    document.querySelector('[data-service="smart"]')?.classList.add('selected');
-    
-    // Initialize size selection
-    document.querySelector('[data-size="small"]')?.classList.add('selected');
-    
-    // Check online status
-    if (!navigator.onLine) {
-        document.getElementById('offlineBanner').style.transform = 'translateY(0)';
+    // If we have an event, use its target, otherwise find the pill by filter value
+    if (evt && evt.target) {
+        evt.target.classList.add('active');
+        evt.target.style.background = 'var(--primary)';
+        evt.target.style.color = 'white';
+        evt.target.style.borderColor = 'var(--primary)';
     }
-}
+    
+    const allHistory = dashboardState.get('deliveryHistory') || [];
+    let filtered;
+    
+    if (filter === 'all') {
+        filtered = allHistory;
+    } else {
+        filtered = allHistory.filter(d => d.status === filter);
+    }
+    
+    uiDisplay.displayDeliveryHistory(filtered);
+};
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Real-time Updates Setup
+// Main Initialization
 // ═══════════════════════════════════════════════════════════════════════════
 
-function setupRealtimeUpdates() {
-    // Poll for updates every 30 seconds when on active tab
-    setInterval(() => {
-        if (dashboardState.get('activeTab') === 'active') {
-            vendorDashboard.loadActiveDeliveries();
+async function initializeDashboard() {
+    console.log('🚀 Starting Vendor Dashboard initialization...');
+    
+    try {
+        await vendorDashboard.initialize();
+        
+        // Setup form submission
+        const form = document.getElementById('dashboardDeliveryForm');
+        if (form) {
+            form.addEventListener('submit', handleFormSubmit);
         }
-    }, 30000);
-    
-    // Update relative times every minute
-    setInterval(() => {
-        document.querySelectorAll('[data-timestamp]').forEach(el => {
-            const timestamp = el.dataset.timestamp;
-            el.textContent = uiDisplay.getTimeAgo(timestamp);
+        
+        // Setup special instructions character counter
+        const specialInstructions = document.getElementById('specialInstructions');
+        if (specialInstructions) {
+            specialInstructions.addEventListener('input', (e) => {
+                const charCount = document.getElementById('charCount');
+                if (charCount) {
+                    charCount.textContent = e.target.value.length;
+                }
+            });
+        }
+        
+        // Setup location inputs
+        const pickupInput = document.getElementById('pickupLocation');
+        const deliveryInput = document.getElementById('deliveryLocation');
+        
+        if (pickupInput) {
+            pickupInput.addEventListener('change', async () => {
+                if (pickupInput.value && !pickupInput.dataset.lat) {
+                    try {
+                        const coords = await locationService.geocodeAddress(pickupInput.value);
+                        pickupInput.dataset.lat = coords.lat;
+                        pickupInput.dataset.lng = coords.lng;
+                        dashboardState.set('pickupCoords', coords);
+                        
+                        if (dashboardState.get('deliveryCoords')) {
+                            await locationService.calculateDistance();
+                        }
+                    } catch (error) {
+                        utils.showNotification('Could not find pickup address', 'error');
+                    }
+                }
+            });
+        }
+        
+        if (deliveryInput) {
+            deliveryInput.addEventListener('change', async () => {
+                if (deliveryInput.value && !deliveryInput.dataset.lat) {
+                    try {
+                        const coords = await locationService.geocodeAddress(deliveryInput.value);
+                        deliveryInput.dataset.lat = coords.lat;
+                        deliveryInput.dataset.lng = coords.lng;
+                        dashboardState.set('deliveryCoords', coords);
+                        
+                        if (dashboardState.get('pickupCoords')) {
+                            await locationService.calculateDistance();
+                        }
+                    } catch (error) {
+                        utils.showNotification('Could not find delivery address', 'error');
+                    }
+                }
+            });
+        }
+        
+        // Setup track input enter key
+        const trackInput = document.getElementById('trackInput');
+        if (trackInput) {
+            trackInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    trackingService.trackParcel();
+                }
+            });
+        }
+        
+        // Setup history search
+        const historySearchInput = document.getElementById('historySearch');
+        if (historySearchInput) {
+            historySearchInput.addEventListener('input', utils.debounce(function(e) {
+                const searchTerm = e.target.value.toLowerCase();
+                const allHistory = dashboardState.get('deliveryHistory') || [];
+                
+                if (!searchTerm) {
+                    uiDisplay.displayDeliveryHistory(allHistory);
+                    return;
+                }
+                
+                const filtered = allHistory.filter(delivery => {
+                    return delivery.parcel_code?.toLowerCase().includes(searchTerm) ||
+                           delivery.recipient_name?.toLowerCase().includes(searchTerm) ||
+                           delivery.pickup_location?.address?.toLowerCase().includes(searchTerm) ||
+                           delivery.delivery_location?.address?.toLowerCase().includes(searchTerm);
+                });
+                
+                uiDisplay.displayDeliveryHistory(filtered);
+            }, 300));
+        }
+        
+        // Setup affiliate code input
+        const affiliateCodeInput = document.getElementById('affiliateCode');
+        if (affiliateCodeInput) {
+            affiliateCodeInput.addEventListener('input', utils.debounce(window.validateAffiliateCode, 500));
+        }
+        
+        // Load recent tracks
+        trackingService.loadRecentTracks();
+        
+        // Initialize UI
+        updateCapacityDisplay();
+        
+        // Setup real-time updates
+        setInterval(() => {
+            if (dashboardState.get('activeTab') === 'active') {
+                vendorDashboard.loadActiveDeliveries();
+            }
+        }, 30000);
+        
+        // Setup offline/online handling
+        window.addEventListener('online', () => {
+            const offlineBanner = document.getElementById('offlineBanner');
+            if (offlineBanner) {
+                offlineBanner.style.transform = 'translateY(-100%)';
+            }
+            utils.showNotification('You\'re back online!', 'success');
         });
-    }, 60000);
+        
+        window.addEventListener('offline', () => {
+            const offlineBanner = document.getElementById('offlineBanner');
+            if (offlineBanner) {
+                offlineBanner.style.transform = 'translateY(0)';
+            }
+        });
+        
+        // Check initial online status
+        if (!navigator.onLine) {
+            const offlineBanner = document.getElementById('offlineBanner');
+            if (offlineBanner) {
+                offlineBanner.style.transform = 'translateY(0)';
+            }
+        }
+        
+        // Initialize Google Places if available
+        if (window.google && window.google.maps && window.google.maps.places) {
+            initializeGooglePlaces();
+        }
+        
+        console.log('✅ Vendor Dashboard fully initialized');
+        
+    } catch (error) {
+        console.error('❌ Dashboard initialization error:', error);
+        utils.showNotification('Failed to initialize dashboard. Please refresh.', 'error');
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -3269,63 +2654,75 @@ function initializeGooglePlaces() {
     }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Initial Data Loading
-// ═══════════════════════════════════════════════════════════════════════════
-
-async function loadInitialData() {
-    try {
-        // Load recent tracks
-        trackingService.loadRecentTracks();
-        
-        // If authenticated, load vendor data
-        if (dashboardState.get('isAuthenticated')) {
-            await vendorDashboard.loadDashboardData();
-        }
-        
-    } catch (error) {
-        console.error('Initial data load error:', error);
-    }
-}
+// Make initMap globally available for Google Maps callback
+window.initMap = function() {
+    console.log('Google Maps loaded via callback');
+    initializeGooglePlaces();
+};
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Main Initialization Function
+// DOM Content Loaded Event
 // ═══════════════════════════════════════════════════════════════════════════
 
-async function initializeDashboard() {
-    console.log('🚀 Starting Vendor Dashboard initialization...');
+document.addEventListener('DOMContentLoaded', async () => {
+    console.log('DOM Content Loaded - Starting initialization...');
+    await initializeDashboard();
+    console.log('🎉 Vendor Dashboard ready!');
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Export for external use
+// ═══════════════════════════════════════════════════════════════════════════
+
+window.TumaVendorDashboard = {
+    version: '1.0.0',
+    state: dashboardState,
+    services: {
+        auth: authService,
+        booking: bookingService,
+        location: locationService,
+        tracking: trackingService
+    },
+    utils: utils,
+    initialize: initializeDashboard,
+    switchTab: window.switchTab,
+    trackParcel: (code) => trackingService.trackParcel(code),
+    logout: window.logout
+};
+
+console.log('✅ Vendor Dashboard v1.0.0 loaded successfully');
+// This continues directly from where Part 4 left off at the initializeGooglePlaces function
+// This should be around line 2300+ in your complete file
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Error Handling
+// ═══════════════════════════════════════════════════════════════════════════
+
+window.addEventListener('error', (event) => {
+    console.error('Global error:', event.error);
     
-    try {
-        // Initialize vendor dashboard
-        await vendorDashboard.initialize();
-        
-        // Setup event listeners
-        setupEventListeners();
-        
-        // Initialize UI
-        initializeUI();
-        
-        // Load initial data
-        await loadInitialData();
-        
-        // Setup real-time updates
-        setupRealtimeUpdates();
-        
-        // Initialize Google Places if available
-        if (window.google && window.google.maps) {
-            initializeGooglePlaces();
-        }
-        
-        console.log('✅ Vendor Dashboard fully initialized');
-        
-    } catch (error) {
-        console.error('❌ Dashboard initialization error:', error);
-        utils.showNotification('Failed to initialize dashboard. Please refresh.', 'error');
+    // Don't show errors for external scripts
+    if (event.filename && !event.filename.includes(window.location.hostname)) {
+        return;
     }
-}
+    
+    // Show user-friendly error for critical errors
+    if (event.error && event.error.stack && event.error.stack.includes('vendor')) {
+        utils.showNotification('Something went wrong. Please refresh the page.', 'error');
+    }
+});
+
+window.addEventListener('unhandledrejection', (event) => {
+    console.error('Unhandled promise rejection:', event.reason);
+    
+    // Show notification for API errors
+    if (event.reason && event.reason.message && event.reason.message.includes('API')) {
+        utils.showNotification('Connection error. Please check your internet.', 'error');
+    }
+});
 
 // ═══════════════════════════════════════════════════════════════════════════
-// CSS Animations & Styles
+// CSS Injection for Dynamic Styles
 // ═══════════════════════════════════════════════════════════════════════════
 
 function injectStyles() {
@@ -3356,27 +2753,8 @@ function injectStyles() {
             }
         }
         
-        @keyframes modalBounce {
-            0% {
-                transform: scale(0.8);
-                opacity: 0;
-            }
-            50% {
-                transform: scale(1.05);
-            }
-            100% {
-                transform: scale(1);
-                opacity: 1;
-            }
-        }
-        
-        @keyframes successBounce {
-            0%, 100% {
-                transform: scale(1);
-            }
-            50% {
-                transform: scale(1.1);
-            }
+        .notification {
+            animation: slideInRight 0.3s ease-out;
         }
         
         .saved-location-chip:hover {
@@ -3413,116 +2791,6 @@ function injectStyles() {
             transform: scale(1.05);
             border-color: var(--primary);
         }
-        
-        .input-field:focus {
-            animation: inputFocus 0.3s ease-out;
-        }
-        
-        @keyframes inputFocus {
-            0% {
-                transform: scale(1);
-            }
-            50% {
-                transform: scale(1.01);
-            }
-            100% {
-                transform: scale(1);
-            }
-        }
-        
-        .counter-button:active:not(:disabled) {
-            animation: buttonPress 0.2s ease-out;
-        }
-        
-        @keyframes buttonPress {
-            0%, 100% {
-                transform: scale(1);
-            }
-            50% {
-                transform: scale(0.9);
-            }
-        }
-        
-        .notification {
-            animation: slideInRight 0.3s ease-out;
-        }
-        
-        .center-marker {
-            z-index: 1000 !important;
-            position: absolute !important;
-            left: 50% !important;
-            top: 50% !important;
-            transform: translate(-50%, -50%) !important;
-            pointer-events: none !important;
-        }
-        
-        /* Smooth transitions for tab switching */
-        .tab-panel {
-            animation: fadeIn 0.3s ease-out;
-        }
-        
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: translateY(10px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-        
-        /* Loading state for submit button */
-        .submit-button.loading {
-            position: relative;
-            color: transparent !important;
-        }
-        
-        .submit-button.loading::after {
-            content: '';
-            position: absolute;
-            width: 20px;
-            height: 20px;
-            top: 50%;
-            left: 50%;
-            margin-left: -10px;
-            margin-top: -10px;
-            border: 2px solid white;
-            border-radius: 50%;
-            border-top-color: transparent;
-            animation: spinner 0.6s linear infinite;
-        }
-        
-        @keyframes spinner {
-            to {
-                transform: rotate(360deg);
-            }
-        }
-        
-        /* Capacity bar animation */
-        .capacity-fill {
-            transition: width 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-        }
-        
-        /* Affiliate toggle animation */
-        .affiliate-toggle-handle {
-            transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-        }
-        
-        .affiliate-input-group {
-            animation: slideDown 0.3s ease-out;
-        }
-        
-        @keyframes slideDown {
-            from {
-                opacity: 0;
-                max-height: 0;
-            }
-            to {
-                opacity: 1;
-                max-height: 200px;
-            }
-        }
     `;
     
     document.head.appendChild(styles);
@@ -3544,33 +2812,6 @@ async function registerServiceWorker() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Error Boundary
-// ═══════════════════════════════════════════════════════════════════════════
-
-window.addEventListener('error', (event) => {
-    console.error('Global error:', event.error);
-    
-    // Don't show errors for external scripts
-    if (event.filename && !event.filename.includes(window.location.hostname)) {
-        return;
-    }
-    
-    // Show user-friendly error for critical errors
-    if (event.error && event.error.stack && event.error.stack.includes('vendor-dashboard')) {
-        utils.showNotification('Something went wrong. Please refresh the page.', 'error');
-    }
-});
-
-window.addEventListener('unhandledrejection', (event) => {
-    console.error('Unhandled promise rejection:', event.reason);
-    
-    // Show notification for API errors
-    if (event.reason && event.reason.message && event.reason.message.includes('API')) {
-        utils.showNotification('Connection error. Please check your internet.', 'error');
-    }
-});
-
-// ═══════════════════════════════════════════════════════════════════════════
 // Performance Monitoring
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -3588,6 +2829,30 @@ function monitorPerformance() {
                 }
             }, 0);
         });
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Telegram WebApp Integration
+// ═══════════════════════════════════════════════════════════════════════════
+
+function initializeTelegramWebApp() {
+    if (window.Telegram && window.Telegram.WebApp) {
+        const tg = window.Telegram.WebApp;
+        tg.ready();
+        tg.expand();
+        
+        // Use Telegram user data if available
+        if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
+            const user = tg.initDataUnsafe.user;
+            console.log('Telegram user detected:', user.first_name);
+            
+            // Pre-fill vendor name if not set
+            const vendorNameInput = document.getElementById('vendorName');
+            if (vendorNameInput && !vendorNameInput.value) {
+                vendorNameInput.value = `${user.first_name} ${user.last_name || ''}`.trim();
+            }
+        }
     }
 }
 
@@ -3649,79 +2914,116 @@ if (window.location.hostname === 'localhost' || window.location.hostname === '12
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Main Entry Point
+// Additional Window Functions
 // ═══════════════════════════════════════════════════════════════════════════
 
-document.addEventListener('DOMContentLoaded', async () => {
-    console.log('DOM Content Loaded - Starting initialization...');
+// Toggle delivery type (single vs bulk)
+window.toggleDeliveryType = function(type) {
+    const singleBtn = document.getElementById('singleBtn');
+    const bulkBtn = document.getElementById('bulkBtn');
+    const singleSection = document.getElementById('singleDeliverySection');
+    const singleLocation = document.getElementById('singleDeliveryLocation');
+    const bulkSection = document.getElementById('bulkDeliverySection');
     
-    // Inject required styles
-    injectStyles();
-    
-    // Initialize dashboard
-    await initializeDashboard();
-    
-    // Register service worker for offline support
-    registerServiceWorker();
-    
-    // Monitor performance
-    monitorPerformance();
-    
-    // Google Maps callback
-    window.initMap = function() {
-        console.log('Google Maps loaded');
-        initializeGooglePlaces();
-    };
-    
-    // Telegram WebApp integration (if applicable)
-    if (window.Telegram && window.Telegram.WebApp) {
-        const tg = window.Telegram.WebApp;
-        tg.ready();
-        tg.expand();
-        
-        // Use Telegram user data if available
-        if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
-            const user = tg.initDataUnsafe.user;
-            console.log('Telegram user detected:', user.first_name);
-            
-            // Pre-fill vendor name if not set
-            const vendorNameInput = document.getElementById('vendorName');
-            if (vendorNameInput && !vendorNameInput.value) {
-                vendorNameInput.value = `${user.first_name} ${user.last_name || ''}`.trim();
-            }
-        }
+    if (type === 'single') {
+        singleBtn.classList.add('active');
+        bulkBtn.classList.remove('active');
+        singleSection.style.display = 'block';
+        singleLocation.style.display = 'block';
+        bulkSection.style.display = 'none';
+        dashboardState.set('deliveryType', 'single');
+    } else {
+        singleBtn.classList.remove('active');
+        bulkBtn.classList.add('active');
+        singleSection.style.display = 'none';
+        singleLocation.style.display = 'none';
+        bulkSection.style.display = 'block';
+        dashboardState.set('deliveryType', 'bulk');
+        utils.showNotification('Bulk delivery saves you more! Add multiple drop-off points.', 'info');
     }
+};
+
+// Add bulk delivery
+window.addBulkDelivery = function() {
+    const bulkDeliveries = dashboardState.get('bulkDeliveries') || [];
+    const newIndex = bulkDeliveries.length;
     
-    console.log('🎉 Vendor Dashboard ready!');
+    const container = document.getElementById('bulkDeliveries');
+    const deliveryItem = document.createElement('div');
+    deliveryItem.className = 'bulk-delivery-item';
+    deliveryItem.style.cssText = 'margin-bottom: 16px; padding: 16px; background: var(--surface-elevated); border-radius: 12px; border: 1px solid var(--border);';
+    
+    deliveryItem.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <h4 style="font-size: 14px; font-weight: 600;">Delivery ${newIndex + 1}</h4>
+            <button type="button" onclick="removeBulkDelivery(${newIndex})" style="width: 28px; height: 28px; border-radius: 50%; background: var(--danger); border: none; color: white; cursor: pointer;">×</button>
+        </div>
+        <div style="display: grid; gap: 12px;">
+            <input type="text" class="input-field" placeholder="Recipient name" id="bulkRecipient${newIndex}">
+            <input type="tel" class="input-field" placeholder="Recipient phone" id="bulkPhone${newIndex}">
+            <div class="input-container">
+                <input type="text" class="input-field" placeholder="Delivery address" id="bulkAddress${newIndex}">
+                <button type="button" class="input-action" onclick="getLocation('bulk${newIndex}')">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M12 2C8.13 2 5 5.13 5 9C5 14.25 12 22 12 22S19 14.25 19 9C19 5.13 15.87 2 12 2ZM12 11.5C10.62 11.5 9.5 10.38 9.5 9S10.62 6.5 12 6.5 14.5 7.62 14.5 9 13.38 11.5 12 11.5Z"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    `;
+    
+    container.appendChild(deliveryItem);
+    bulkDeliveries.push({ index: newIndex });
+    dashboardState.set('bulkDeliveries', bulkDeliveries);
+};
+
+// Remove bulk delivery
+window.removeBulkDelivery = function(index) {
+    const bulkDeliveries = dashboardState.get('bulkDeliveries') || [];
+    bulkDeliveries.splice(index, 1);
+    dashboardState.set('bulkDeliveries', bulkDeliveries);
+    
+    // Rebuild UI
+    const container = document.getElementById('bulkDeliveries');
+    container.innerHTML = '';
+    bulkDeliveries.forEach((_, i) => addBulkDelivery());
+};
+
+// Open simple location modal (if using Leaflet map)
+window.openSimpleLocationModal = function(inputId) {
+    console.log('Opening location modal for:', inputId);
+    // Implementation would go here if using Leaflet
+    utils.showNotification('Map selection coming soon!', 'info');
+};
+
+// Confirm location from modal
+window.confirmSimpleLocation = function() {
+    console.log('Confirming location selection');
+    // Implementation would go here
+};
+
+// Close location modal
+window.closeLocationModal = function() {
+    const modal = document.getElementById('simpleLocationModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Final Initialization Call
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Inject styles on load
+document.addEventListener('DOMContentLoaded', () => {
+    injectStyles();
+    registerServiceWorker();
+    monitorPerformance();
+    initializeTelegramWebApp();
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Export for external use (if needed)
+// END OF vendor.js
 // ═══════════════════════════════════════════════════════════════════════════
 
-window.TumaVendorDashboard = {
-    version: '1.0.0',
-    state: dashboardState,
-    services: {
-        auth: authService,
-        booking: bookingService,
-        location: locationService,
-        tracking: trackingService
-    },
-    utils: utils,
-    
-    // Public API
-    initialize: initializeDashboard,
-    switchTab: window.switchTab,
-    trackParcel: (code) => trackingService.trackParcel(code),
-    logout: window.logout
-};
-
-console.log('✅ Vendor Dashboard v1.0.0 loaded successfully');
-// Add this to make initMap globally available
-window.initMap = function() {
-    console.log('Google Maps loaded via callback');
-    if (typeof initializeGooglePlaces === 'function') {
-        initializeGooglePlaces();
-    }
-};
+console.log('✅ vendor.js fully loaded - all systems ready!');
