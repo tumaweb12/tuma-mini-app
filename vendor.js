@@ -1,9 +1,14 @@
 /**
- * Vendor Page Entry Script - Complete Working Version
- * Handles vendor dashboard functionality with direct Supabase REST API calls
+ * Vendor Dashboard - Complete Implementation
+ * Part 1: Configuration, State Management, and Core Setup
  */
 
-// ─── Configuration ─────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+// Configuration & Constants
+// ═══════════════════════════════════════════════════════════════════════════
+
+const SUPABASE_URL = 'https://btxavqfoirdzwpfrvezp.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ0eGF2cWZvaXJkendwZnJ2ZXpwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE0ODcxMTcsImV4cCI6MjA2NzA2MzExN30.kQKpukFGx-cBl1zZRuXmex02ifkZ751WCUfQPogYutk';
 
 const BUSINESS_CONFIG = {
     packageSizes: {
@@ -17,8 +22,8 @@ const BUSINESS_CONFIG = {
     },
     pricing: {
         rates: {
-            base: 100, // KES base price
-            perKm: 20  // KES per km
+            base: 100,
+            perKm: 20
         },
         multipliers: {
             service: {
@@ -26,63 +31,66 @@ const BUSINESS_CONFIG = {
                 smart: 1.0,
                 eco: 0.8
             },
-            managedVendor: 0.9
+            managedVendor: 0.9,
+            affiliate: 0.05 // 5% commission for affiliates
         }
     },
     serviceArea: {
-        center: { lat: -1.2921, lng: 36.8219 }, // Nairobi CBD
-        radiusKm: 30, // Increased to 30km service radius
-        expandedRadiusKm: 40 // Future expansion radius
+        center: { lat: -1.2921, lng: 36.8219 },
+        radiusKm: 30,
+        expandedRadiusKm: 40
     },
-    packageCompatibility: {
-        incompatibleGroups: [
-            ['food-dry', 'food-fresh', 'food-frozen', 'beverages'],
-            ['pharmaceuticals', 'medical-equipment', 'supplements'],
-            ['cleaning', 'liquids-sealed', 'paint'],
-            ['perfumes', 'cosmetics'],
-        ],
-        specialHandling: {
-            'food-fresh': { maxDelay: 60, priority: 'high' },
-            'food-frozen': { maxDelay: 45, priority: 'urgent' },
-            'pharmaceuticals': { secure: true, priority: 'high' },
-            'medical-equipment': { secure: true, fragile: true },
-            'glassware': { fragile: true, padding: 'extra' },
-            'artwork': { fragile: true, padding: 'extra' },
-            'fragile-general': { fragile: true },
-            'electronics-fragile': { fragile: true, waterproof: true },
-            'laptop': { fragile: true, secure: true },
-            'phone': { secure: true }
-        }
+    statuses: {
+        submitted: { label: 'Submitted', color: 'primary', icon: '📝' },
+        assigned: { label: 'Assigned', color: 'info', icon: '👤' },
+        in_transit: { label: 'In Transit', color: 'warning', icon: '🚀' },
+        delivered: { label: 'Delivered', color: 'success', icon: '✅' },
+        failed: { label: 'Failed', color: 'danger', icon: '❌' },
+        cancelled: { label: 'Cancelled', color: 'secondary', icon: '🚫' }
     }
 };
 
-// Supabase Configuration
-const SUPABASE_URL = 'https://btxavqfoirdzwpfrvezp.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ0eGF2cWZvaXJkendwZnJ2ZXpwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE0ODcxMTcsImV4cCI6MjA2NzA2MzExN30.kQKpukFGx-cBl1zZRuXmex02ifkZ751WCUfQPogYutk';
+// ═══════════════════════════════════════════════════════════════════════════
+// State Management
+// ═══════════════════════════════════════════════════════════════════════════
 
-// ─── State Management ──────────────────────────────────────────────────────
-
-class FormState {
+class DashboardState {
     constructor() {
         this.state = {
-            vendorType: 'casual',
-            agentCode: null,
-            agentName: null,
+            // Authentication
+            isAuthenticated: false,
+            currentVendor: null,
+            vendorId: null,
+            
+            // Dashboard
+            activeTab: 'new-booking',
+            activeDeliveries: [],
+            deliveryHistory: [],
+            
+            // Form State
+            deliveryType: 'single',
+            affiliateCode: null,
+            affiliateData: null,
             pickupCoords: null,
             deliveryCoords: null,
+            bulkDeliveries: [],
             distance: 0,
+            duration: 0,
             selectedService: 'smart',
             selectedSize: 'small',
-            selectedPaymentMethod: 'cash',
             itemCount: 1,
             packageType: '',
+            
+            // UI State
             isLoading: false,
-            isAuthenticated: false,
-            authenticatedVendor: null
+            savedRecipients: [],
+            savedLocations: [],
+            recentTracks: []
         };
-        this.subscribers = {};
+        
+        this.subscribers = new Map();
     }
-
+    
     set(key, value) {
         if (typeof key === 'object') {
             Object.assign(this.state, key);
@@ -91,92 +99,166 @@ class FormState {
             this.state[key] = value;
             this.notify(key);
         }
-        
-        // Auto-trigger form validation on relevant changes
-        if (key === 'distance' || key === 'pickupCoords' || key === 'deliveryCoords') {
-            setTimeout(() => checkFormValidity(), 100);
-        }
     }
-
+    
     get(key) {
         return this.state[key];
     }
-
+    
     subscribe(keys, callback) {
         if (typeof keys === 'string') keys = [keys];
         keys.forEach(key => {
-            if (!this.subscribers[key]) this.subscribers[key] = [];
-            this.subscribers[key].push(callback);
+            if (!this.subscribers.has(key)) {
+                this.subscribers.set(key, []);
+            }
+            this.subscribers.get(key).push(callback);
         });
     }
-
+    
     notify(key) {
-        if (this.subscribers[key]) {
-            this.subscribers[key].forEach(callback => callback(this.state[key]));
+        if (this.subscribers.has(key)) {
+            this.subscribers.get(key).forEach(callback => {
+                try {
+                    callback(this.state[key]);
+                } catch (error) {
+                    console.error('State subscriber error:', error);
+                }
+            });
         }
     }
-
+    
     reset() {
-        const defaultState = {
-            vendorType: 'casual',
-            agentCode: null,
-            agentName: null,
-            pickupCoords: null,
-            deliveryCoords: null,
-            distance: 0,
-            selectedService: 'smart',
-            selectedSize: 'small',
-            selectedPaymentMethod: 'cash',
-            itemCount: 1,
-            packageType: '',
-            isLoading: false,
-            isAuthenticated: false,
-            authenticatedVendor: null
+        const preserveKeys = ['isAuthenticated', 'currentVendor', 'vendorId', 'activeTab'];
+        const preserved = {};
+        preserveKeys.forEach(key => {
+            preserved[key] = this.state[key];
+        });
+        
+        this.state = {
+            ...this.constructor().state,
+            ...preserved
         };
-        this.state = { ...defaultState };
-        Object.keys(defaultState).forEach(key => this.notify(key));
+        
+        Object.keys(this.state).forEach(key => this.notify(key));
     }
 }
 
-// Initialize form state
-const formState = new FormState();
+const dashboardState = new DashboardState();
 
-// ─── DOM Elements ──────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+// Supabase API Service
+// ═══════════════════════════════════════════════════════════════════════════
 
-const elements = {
-    vendorName: document.getElementById('vendorName'),
-    phoneNumber: document.getElementById('phoneNumber'),
-    pickupLocation: document.getElementById('pickupLocation'),
-    deliveryLocation: document.getElementById('deliveryLocation'),
-    recipientName: document.getElementById('recipientName'),
-    recipientPhone: document.getElementById('recipientPhone'),
-    packageDescription: document.getElementById('packageDescription'),
-    specialInstructions: document.getElementById('specialInstructions'),
-    submitBtn: document.getElementById('submitBtn'),
-    buttonText: document.getElementById('buttonText'),
-    itemCount: document.getElementById('itemCount'),
-    capacityText: document.getElementById('capacityText'),
-    capacityFill: document.getElementById('capacityFill'),
-    capacityIcon: document.getElementById('capacityIcon'),
-    calculatedDistance: document.getElementById('calculatedDistance'),
-    distanceInfo: document.getElementById('distanceInfo'),
-    vendorBadge: document.getElementById('vendorBadge'),
-    vendorBadgeContent: document.getElementById('vendorBadgeContent'),
-    expressPrice: document.getElementById('expressPrice'),
-    smartPrice: document.getElementById('smartPrice'),
-    ecoPrice: document.getElementById('ecoPrice'),
-    servicePriceHint: document.getElementById('servicePriceHint'),
-    successOverlay: document.getElementById('successOverlay'),
-    displayParcelCode: document.getElementById('displayParcelCode'),
-    displayPickupCode: document.getElementById('displayPickupCode'),
-    displayDeliveryCode: document.getElementById('displayDeliveryCode'),
-    displayTotalPrice: document.getElementById('displayTotalPrice')
+const supabaseAPI = {
+    async query(table, options = {}) {
+        const { select = '*', filter = '', limit, order } = options;
+        
+        let url = `${SUPABASE_URL}/rest/v1/${table}?select=${select}`;
+        if (filter) url += `&${filter}`;
+        if (limit) url += `&limit=${limit}`;
+        if (order) url += `&order=${order}`;
+        
+        try {
+            const response = await fetch(url, {
+                headers: {
+                    'apikey': SUPABASE_ANON_KEY,
+                    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error(`API Error: ${response.status} ${response.statusText}`);
+            }
+            
+            return await response.json();
+        } catch (error) {
+            console.error('Query error:', error);
+            throw error;
+        }
+    },
+    
+    async insert(table, data) {
+        try {
+            const response = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+                method: 'POST',
+                headers: {
+                    'apikey': SUPABASE_ANON_KEY,
+                    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                    'Content-Type': 'application/json',
+                    'Prefer': 'return=representation'
+                },
+                body: JSON.stringify(data)
+            });
+            
+            if (!response.ok) {
+                const error = await response.text();
+                throw new Error(`Insert Error: ${response.status} ${error}`);
+            }
+            
+            return await response.json();
+        } catch (error) {
+            console.error('Insert error:', error);
+            throw error;
+        }
+    },
+    
+    async update(table, id, data) {
+        try {
+            const response = await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${id}`, {
+                method: 'PATCH',
+                headers: {
+                    'apikey': SUPABASE_ANON_KEY,
+                    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                    'Content-Type': 'application/json',
+                    'Prefer': 'return=representation'
+                },
+                body: JSON.stringify(data)
+            });
+            
+            if (!response.ok) {
+                const error = await response.text();
+                throw new Error(`Update Error: ${response.status} ${error}`);
+            }
+            
+            return await response.json();
+        } catch (error) {
+            console.error('Update error:', error);
+            throw error;
+        }
+    },
+    
+    async delete(table, id) {
+        try {
+            const response = await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${id}`, {
+                method: 'DELETE',
+                headers: {
+                    'apikey': SUPABASE_ANON_KEY,
+                    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (!response.ok) {
+                const error = await response.text();
+                throw new Error(`Delete Error: ${response.status} ${error}`);
+            }
+            
+            return true;
+        } catch (error) {
+            console.error('Delete error:', error);
+            throw error;
+        }
+    }
 };
 
-// ─── Utility Functions ─────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+// Utility Functions
+// ═══════════════════════════════════════════════════════════════════════════
 
-const validation = {
+const utils = {
     formatPhone: (phone) => {
+        if (!phone) return '';
         return phone.replace(/\D/g, '').slice(0, 10);
     },
     
@@ -184,52 +266,1877 @@ const validation = {
         return /^0[0-9]{9}$/.test(phone);
     },
     
-    validateRequired: (fields) => {
-        const missing = Object.entries(fields).filter(([key, value]) => !value || value.trim() === '');
-        return {
-            isValid: missing.length === 0,
-            missing: missing.map(([key]) => key)
-        };
+    formatCurrency: (amount) => {
+        return `KES ${Math.round(amount).toLocaleString()}`;
     },
     
-    validateCapacity: (itemCount, selectedSize) => {
-        const sizeConfig = BUSINESS_CONFIG.packageSizes[selectedSize];
-        const totalUnits = itemCount * sizeConfig.units;
-        const vehiclesNeeded = Math.ceil(totalUnits / BUSINESS_CONFIG.vehicleCapacity.motorcycle);
-        
-        return {
-            isValid: vehiclesNeeded <= 2,
-            totalUnits,
-            vehiclesNeeded
-        };
+    formatDate: (date) => {
+        if (!date) return '';
+        const d = new Date(date);
+        return d.toLocaleDateString('en-KE', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
     },
     
-    validateServiceArea: (coords) => {
-        const lat = parseFloat(coords.lat);
-        const lng = parseFloat(coords.lng);
+    formatTime: (date) => {
+        if (!date) return '';
+        const d = new Date(date);
+        return d.toLocaleTimeString('en-KE', {
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    },
+    
+    generateCode: (prefix) => {
+        return prefix + Math.random().toString(36).substr(2, 6).toUpperCase();
+    },
+    
+    calculateDistance: (point1, point2) => {
+        if (!point1 || !point2) return 0;
         
-        if (isNaN(lat) || isNaN(lng)) {
-            console.error('Invalid coordinates for service area validation:', coords);
-            return {
-                isValid: false,
-                distance: 999,
-                maxRadius: BUSINESS_CONFIG.serviceArea.radiusKm
+        const R = 6371; // Earth's radius in km
+        const dLat = toRad(point2.lat - point1.lat);
+        const dLng = toRad(point2.lng - point1.lng);
+        const lat1 = toRad(point1.lat);
+        const lat2 = toRad(point2.lat);
+        
+        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                  Math.sin(dLng/2) * Math.sin(dLng/2) * Math.cos(lat1) * Math.cos(lat2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        
+        return R * c;
+        
+        function toRad(value) {
+            return value * Math.PI / 180;
+        }
+    },
+    
+    debounce: (func, wait) => {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func(...args);
             };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
+    },
+    
+    showNotification: (message, type = 'info') => {
+        const notification = document.createElement('div');
+        notification.className = `notification ${type}`;
+        notification.textContent = message;
+        notification.style.cssText = `
+            position: fixed;
+            top: calc(20px + var(--safe-area-top));
+            right: 20px;
+            background: ${type === 'error' ? '#ff3b30' : type === 'warning' ? '#FF9F0A' : '#34c759'};
+            color: ${type === 'warning' ? 'black' : 'white'};
+            padding: 12px 20px;
+            border-radius: 8px;
+            z-index: 9999;
+            font-weight: 600;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            max-width: 350px;
+            animation: slideInRight 0.3s ease-out;
+        `;
+        
+        document.body.appendChild(notification);
+        
+        setTimeout(() => {
+            notification.style.animation = 'slideOutRight 0.3s ease-out';
+            setTimeout(() => notification.remove(), 300);
+        }, type === 'error' ? 5000 : 3000);
+    },
+    
+    showToast: (message) => {
+        const toast = document.getElementById('copyToast');
+        if (toast) {
+            toast.textContent = message;
+            toast.style.display = 'block';
+            toast.style.transform = 'translateX(-50%) translateY(0)';
+            
+            setTimeout(() => {
+                toast.style.transform = 'translateX(-50%) translateY(100px)';
+                setTimeout(() => {
+                    toast.style.display = 'none';
+                }, 300);
+            }, 2000);
+        }
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Cache Services
+// ═══════════════════════════════════════════════════════════════════════════
+
+class CacheService {
+    constructor(prefix) {
+        this.prefix = prefix;
+        this.cache = new Map();
+        this.loadFromStorage();
+    }
+    
+    set(key, value, ttl = 3600000) { // Default 1 hour TTL
+        const item = {
+            value: value,
+            expires: Date.now() + ttl,
+            created: Date.now()
+        };
+        
+        this.cache.set(key, item);
+        this.saveToStorage();
+    }
+    
+    get(key) {
+        const item = this.cache.get(key);
+        if (!item) return null;
+        
+        if (Date.now() > item.expires) {
+            this.cache.delete(key);
+            this.saveToStorage();
+            return null;
         }
         
-        const validCoords = { lat: lat, lng: lng };
-        const center = BUSINESS_CONFIG.serviceArea.center;
-        const distance = calculateStraightDistance(center, validCoords);
-        const maxRadius = BUSINESS_CONFIG.serviceArea.radiusKm;
+        return item.value;
+    }
+    
+    clear() {
+        this.cache.clear();
+        this.saveToStorage();
+    }
+    
+    saveToStorage() {
+        try {
+            const data = Array.from(this.cache.entries());
+            localStorage.setItem(`${this.prefix}_cache`, JSON.stringify(data));
+        } catch (e) {
+            console.warn('Cache save failed:', e);
+        }
+    }
+    
+    loadFromStorage() {
+        try {
+            const stored = localStorage.getItem(`${this.prefix}_cache`);
+            if (stored) {
+                const data = JSON.parse(stored);
+                data.forEach(([key, value]) => {
+                    if (Date.now() < value.expires) {
+                        this.cache.set(key, value);
+                    }
+                });
+            }
+        } catch (e) {
+            console.warn('Cache load failed:', e);
+        }
+    }
+}
+
+const geocodeCache = new CacheService('tuma_geocode');
+const distanceCache = new CacheService('tuma_distance');
+/**
+ * Vendor Dashboard - Part 2: Authentication & Vendor Management
+ */
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Authentication & Session Management
+// ═══════════════════════════════════════════════════════════════════════════
+
+const authService = {
+    async checkSession() {
+        try {
+            // Check for stored session
+            const session = localStorage.getItem('tuma_vendor_session');
+            if (!session) return null;
+            
+            const { vendorId, phone, expiresAt } = JSON.parse(session);
+            
+            if (Date.now() > expiresAt) {
+                this.clearSession();
+                return null;
+            }
+            
+            // Verify vendor still exists and is active
+            const vendors = await supabaseAPI.query('vendors', {
+                filter: `id=eq.${vendorId}`,
+                limit: 1
+            });
+            
+            if (vendors.length === 0 || vendors[0].status !== 'active') {
+                this.clearSession();
+                return null;
+            }
+            
+            return vendors[0];
+        } catch (error) {
+            console.error('Session check error:', error);
+            return null;
+        }
+    },
+    
+    async authenticateVendor(phone, name = null) {
+        try {
+            // Check if vendor exists
+            const vendors = await supabaseAPI.query('vendors', {
+                filter: `phone=eq.${phone}`,
+                limit: 1
+            });
+            
+            let vendor;
+            
+            if (vendors.length > 0) {
+                vendor = vendors[0];
+                
+                // Update last active
+                await supabaseAPI.update('vendors', vendor.id, {
+                    last_active: new Date().toISOString()
+                });
+            } else if (name) {
+                // Create new vendor
+                const newVendorData = {
+                    vendor_name: name,
+                    phone: phone,
+                    vendor_type: 'casual',
+                    status: 'active',
+                    total_bookings: 0,
+                    successful_deliveries: 0,
+                    created_at: new Date().toISOString()
+                };
+                
+                const result = await supabaseAPI.insert('vendors', newVendorData);
+                vendor = result[0];
+            } else {
+                return null;
+            }
+            
+            // Create session
+            this.createSession(vendor);
+            
+            return vendor;
+        } catch (error) {
+            console.error('Authentication error:', error);
+            throw error;
+        }
+    },
+    
+    createSession(vendor) {
+        const session = {
+            vendorId: vendor.id,
+            phone: vendor.phone,
+            name: vendor.vendor_name || vendor.name,
+            expiresAt: Date.now() + (24 * 60 * 60 * 1000) // 24 hours
+        };
         
-        console.log('Service area validation:', {
-            location: validCoords,
-            locationAddress: coords.display_name || coords.formatted_address || 'Unknown',
-            center: center,
-            distance: distance.toFixed(2) + 'km',
-            maxRadius: maxRadius + 'km',
-            isValid: distance <= maxRadius
+        localStorage.setItem('tuma_vendor_session', JSON.stringify(session));
+        
+        dashboardState.set({
+            isAuthenticated: true,
+            currentVendor: vendor,
+            vendorId: vendor.id
         });
+    },
+    
+    clearSession() {
+        localStorage.removeItem('tuma_vendor_session');
+        dashboardState.set({
+            isAuthenticated: false,
+            currentVendor: null,
+            vendorId: null
+        });
+    },
+    
+    async updateVendorProfile(updates) {
+        const vendorId = dashboardState.get('vendorId');
+        if (!vendorId) return false;
+        
+        try {
+            const result = await supabaseAPI.update('vendors', vendorId, updates);
+            dashboardState.set('currentVendor', result[0]);
+            return true;
+        } catch (error) {
+            console.error('Profile update error:', error);
+            return false;
+        }
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Vendor Dashboard Functions
+// ═══════════════════════════════════════════════════════════════════════════
+
+const vendorDashboard = {
+    async initialize() {
+        console.log('🚀 Initializing vendor dashboard...');
+        
+        // Check authentication
+        const vendor = await authService.checkSession();
+        if (vendor) {
+            console.log('✅ Vendor authenticated:', vendor.vendor_name || vendor.name);
+            this.displayVendorInfo(vendor);
+            await this.loadDashboardData();
+        } else {
+            // Check URL parameters for WhatsApp login
+            await this.handleURLParameters();
+        }
+        
+        // Setup event listeners
+        this.setupEventListeners();
+        
+        // Initialize UI components
+        this.initializeUI();
+        
+        // Load initial data
+        await this.loadInitialData();
+        
+        // Setup real-time updates
+        this.setupRealtimeUpdates();
+        
+        console.log('✅ Dashboard initialized');
+    },
+    
+    async handleURLParameters() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const waPhone = urlParams.get('wa');
+        
+        if (waPhone) {
+            console.log('📱 WhatsApp parameter detected:', waPhone);
+            
+            // Clean phone number
+            let cleanedPhone = utils.formatPhone(waPhone);
+            if (cleanedPhone.startsWith('254')) {
+                cleanedPhone = '0' + cleanedPhone.substring(3);
+            } else if (!cleanedPhone.startsWith('0') && cleanedPhone.length === 9) {
+                cleanedPhone = '0' + cleanedPhone;
+            }
+            
+            if (utils.validatePhone(cleanedPhone)) {
+                const vendor = await authService.authenticateVendor(cleanedPhone);
+                if (vendor) {
+                    this.displayVendorInfo(vendor);
+                    await this.loadDashboardData();
+                    utils.showNotification(`Welcome back, ${vendor.vendor_name || vendor.name}!`, 'success');
+                }
+            }
+        }
+    },
+    
+    displayVendorInfo(vendor) {
+        // Update header info
+        const vendorAvatar = document.getElementById('vendorAvatar');
+        const vendorDisplayName = document.getElementById('vendorDisplayName');
+        const vendorDisplayPhone = document.getElementById('vendorDisplayPhone');
+        
+        if (vendorAvatar) {
+            const initials = (vendor.vendor_name || vendor.name || 'V')
+                .split(' ')
+                .map(n => n[0])
+                .join('')
+                .toUpperCase()
+                .slice(0, 2);
+            vendorAvatar.textContent = initials;
+        }
+        
+        if (vendorDisplayName) {
+            vendorDisplayName.textContent = vendor.vendor_name || vendor.name || 'Vendor';
+        }
+        
+        if (vendorDisplayPhone) {
+            vendorDisplayPhone.textContent = vendor.phone || '-';
+        }
+        
+        // Update form fields if not authenticated
+        if (!dashboardState.get('isAuthenticated')) {
+            const vendorNameInput = document.getElementById('vendorName');
+            const phoneInput = document.getElementById('phoneNumber');
+            
+            if (vendorNameInput) vendorNameInput.value = vendor.vendor_name || vendor.name || '';
+            if (phoneInput) phoneInput.value = vendor.phone || '';
+        }
+    },
+    
+    async loadDashboardData() {
+        const vendorId = dashboardState.get('vendorId');
+        if (!vendorId) return;
+        
+        try {
+            // Load active deliveries
+            await this.loadActiveDeliveries();
+            
+            // Load delivery history
+            await this.loadDeliveryHistory();
+            
+            // Load saved recipients
+            await this.loadSavedRecipients();
+            
+            // Load saved locations
+            await this.loadSavedLocations();
+            
+            // Update statistics
+            await this.updateStatistics();
+            
+        } catch (error) {
+            console.error('Dashboard data load error:', error);
+        }
+    },
+    
+    async loadActiveDeliveries() {
+        const vendorId = dashboardState.get('vendorId');
+        if (!vendorId) return;
+        
+        try {
+            const activeStatuses = ['submitted', 'assigned', 'in_transit'];
+            const filter = `vendor_id=eq.${vendorId}&status=in.(${activeStatuses.join(',')})`;
+            
+            const deliveries = await supabaseAPI.query('parcels', {
+                filter: filter,
+                order: 'created_at.desc',
+                limit: 50
+            });
+            
+            dashboardState.set('activeDeliveries', deliveries);
+            this.displayActiveDeliveries(deliveries);
+            
+            // Update badge
+            const activeBadge = document.getElementById('activeBadge');
+            if (activeBadge) {
+                if (deliveries.length > 0) {
+                    activeBadge.textContent = deliveries.length;
+                    activeBadge.style.display = 'inline-block';
+                } else {
+                    activeBadge.style.display = 'none';
+                }
+            }
+            
+        } catch (error) {
+            console.error('Load active deliveries error:', error);
+        }
+    },
+    
+    async loadDeliveryHistory() {
+        const vendorId = dashboardState.get('vendorId');
+        if (!vendorId) return;
+        
+        try {
+            const completedStatuses = ['delivered', 'failed', 'cancelled'];
+            const filter = `vendor_id=eq.${vendorId}&status=in.(${completedStatuses.join(',')})`;
+            
+            const history = await supabaseAPI.query('parcels', {
+                filter: filter,
+                order: 'created_at.desc',
+                limit: 100
+            });
+            
+            dashboardState.set('deliveryHistory', history);
+            this.displayDeliveryHistory(history);
+            
+        } catch (error) {
+            console.error('Load delivery history error:', error);
+        }
+    },
+    
+    async loadSavedRecipients() {
+        const vendorId = dashboardState.get('vendorId');
+        if (!vendorId) return;
+        
+        try {
+            const recipients = await supabaseAPI.query('saved_recipients', {
+                filter: `vendor_id=eq.${vendorId}`,
+                order: 'used_count.desc,created_at.desc',
+                limit: 10
+            });
+            
+            dashboardState.set('savedRecipients', recipients);
+            
+        } catch (error) {
+            console.error('Load saved recipients error:', error);
+        }
+    },
+    
+    async loadSavedLocations() {
+        const vendorId = dashboardState.get('vendorId');
+        if (!vendorId) return;
+        
+        try {
+            const locations = await supabaseAPI.query('saved_pickup_locations', {
+                filter: `vendor_id=eq.${vendorId}`,
+                order: 'used_count.desc,created_at.desc',
+                limit: 5
+            });
+            
+            dashboardState.set('savedLocations', locations);
+            this.displaySavedPickupLocations(locations);
+            
+        } catch (error) {
+            console.error('Load saved locations error:', error);
+        }
+    },
+    
+    displaySavedPickupLocations(locations) {
+        const container = document.getElementById('savedPickupLocations');
+        if (!container || locations.length === 0) return;
+        
+        container.innerHTML = `
+            <div style="margin-bottom: 8px; font-size: 12px; color: var(--text-secondary);">
+                Quick select saved locations:
+            </div>
+            <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                ${locations.map((loc, index) => `
+                    <button type="button" 
+                            class="saved-location-chip"
+                            onclick="vendorDashboard.useSavedLocation(${index})"
+                            style="
+                                background: var(--surface-elevated);
+                                border: 1px solid var(--border);
+                                border-radius: 20px;
+                                padding: 8px 14px;
+                                font-size: 13px;
+                                color: var(--text-secondary);
+                                cursor: pointer;
+                                transition: all 0.2s;
+                                display: flex;
+                                align-items: center;
+                                gap: 6px;
+                            ">
+                        <span>📍</span>
+                        <span>${loc.name || loc.address.split(',')[0]}</span>
+                        ${loc.used_count > 1 ? `<span style="opacity: 0.7;">(${loc.used_count}×)</span>` : ''}
+                    </button>
+                `).join('')}
+            </div>
+        `;
+    },
+    
+    async useSavedLocation(index) {
+        const locations = dashboardState.get('savedLocations');
+        const location = locations[index];
+        if (!location) return;
+        
+        const pickupInput = document.getElementById('pickupLocation');
+        if (pickupInput) {
+            pickupInput.value = location.address;
+            pickupInput.dataset.lat = location.lat;
+            pickupInput.dataset.lng = location.lng;
+            
+            dashboardState.set('pickupCoords', {
+                lat: parseFloat(location.lat),
+                lng: parseFloat(location.lng),
+                display_name: location.address
+            });
+            
+            // Update used count
+            await supabaseAPI.update('saved_pickup_locations', location.id, {
+                used_count: (location.used_count || 0) + 1,
+                last_used: new Date().toISOString()
+            });
+            
+            utils.showNotification('Pickup location set!', 'success');
+            
+            // Calculate distance if delivery exists
+            if (dashboardState.get('deliveryCoords')) {
+                await locationService.calculateDistance();
+            }
+        }
+    },
+    
+    async updateStatistics() {
+        const vendorId = dashboardState.get('vendorId');
+        if (!vendorId) return;
+        
+        try {
+            // Get today's deliveries
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            
+            const todayFilter = `vendor_id=eq.${vendorId}&created_at=gte.${today.toISOString()}`;
+            const todayDeliveries = await supabaseAPI.query('parcels', {
+                filter: todayFilter,
+                select: 'id'
+            });
+            
+            // Get this month's deliveries
+            const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+            const monthFilter = `vendor_id=eq.${vendorId}&created_at=gte.${firstOfMonth.toISOString()}`;
+            const monthDeliveries = await supabaseAPI.query('parcels', {
+                filter: monthFilter,
+                select: 'id,total_price,status'
+            });
+            
+            // Calculate totals
+            const totalSpent = monthDeliveries.reduce((sum, d) => sum + (parseFloat(d.total_price) || 0), 0);
+            
+            // Update UI
+            const elements = {
+                activeCount: document.getElementById('activeCount'),
+                todayCount: document.getElementById('todayCount'),
+                transitCount: document.getElementById('transitCount'),
+                totalDeliveries: document.getElementById('totalDeliveries'),
+                monthlyDeliveries: document.getElementById('monthlyDeliveries'),
+                totalSpent: document.getElementById('totalSpent')
+            };
+            
+            const activeDeliveries = dashboardState.get('activeDeliveries') || [];
+            const inTransit = activeDeliveries.filter(d => d.status === 'in_transit').length;
+            
+            if (elements.activeCount) elements.activeCount.textContent = activeDeliveries.length;
+            if (elements.todayCount) elements.todayCount.textContent = todayDeliveries.length;
+            if (elements.transitCount) elements.transitCount.textContent = inTransit;
+            if (elements.totalDeliveries) {
+                const vendor = dashboardState.get('currentVendor');
+                elements.totalDeliveries.textContent = vendor?.total_bookings || 0;
+            }
+            if (elements.monthlyDeliveries) elements.monthlyDeliveries.textContent = monthDeliveries.length;
+            if (elements.totalSpent) elements.totalSpent.textContent = utils.formatCurrency(totalSpent);
+            
+        } catch (error) {
+            console.error('Update statistics error:', error);
+        }
+    }
+};
+/**
+ * Vendor Dashboard - Part 3: UI Display & Tab Management
+ */
+
+// ═══════════════════════════════════════════════════════════════════════════
+// UI Display Functions
+// ═══════════════════════════════════════════════════════════════════════════
+
+const uiDisplay = {
+    displayActiveDeliveries(deliveries) {
+        const container = document.getElementById('activeDeliveriesList');
+        if (!container) return;
+        
+        if (deliveries.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 20px; text-align: center;">
+                    <div class="empty-icon" style="font-size: 64px; margin-bottom: 16px; opacity: 0.5;">📦</div>
+                    <div class="empty-title" style="font-size: 20px; font-weight: 600; margin-bottom: 8px;">No Active Deliveries</div>
+                    <div class="empty-message" style="font-size: 14px; color: var(--text-secondary);">Your active deliveries will appear here</div>
+                </div>
+            `;
+            return;
+        }
+        
+        container.innerHTML = deliveries.map(delivery => {
+            const status = BUSINESS_CONFIG.statuses[delivery.status] || {};
+            const timeAgo = this.getTimeAgo(delivery.created_at);
+            
+            return `
+                <div class="delivery-card" style="background: var(--surface-elevated); border-radius: 14px; padding: 16px; margin-bottom: 12px; border: 1px solid var(--border); cursor: pointer;" onclick="uiDisplay.showDeliveryDetails('${delivery.id}')">
+                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">
+                        <div>
+                            <div style="font-size: 16px; font-weight: 600; margin-bottom: 4px;">
+                                ${delivery.parcel_code}
+                            </div>
+                            <div style="font-size: 12px; color: var(--text-secondary);">
+                                ${timeAgo}
+                            </div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 6px; background: var(--${status.color}); color: ${status.color === 'warning' ? 'black' : 'white'}; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;">
+                            <span>${status.icon}</span>
+                            <span>${status.label}</span>
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; flex-direction: column; gap: 8px; font-size: 14px;">
+                        <div style="display: flex; align-items: start; gap: 8px;">
+                            <span style="opacity: 0.7;">📍</span>
+                            <span style="flex: 1; color: var(--text-secondary);">
+                                ${delivery.pickup_location?.address || 'Pickup location'}
+                            </span>
+                        </div>
+                        <div style="display: flex; align-items: start; gap: 8px;">
+                            <span style="opacity: 0.7;">📌</span>
+                            <span style="flex: 1; color: var(--text-secondary);">
+                                ${delivery.delivery_location?.address || 'Delivery location'}
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border);">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="font-size: 12px; color: var(--text-secondary);">Recipient:</span>
+                            <span style="font-size: 14px; font-weight: 500;">${delivery.recipient_name || '-'}</span>
+                        </div>
+                        <div style="font-size: 16px; font-weight: 600; color: var(--primary);">
+                            ${utils.formatCurrency(delivery.total_price || delivery.price)}
+                        </div>
+                    </div>
+                    
+                    ${delivery.rider_id ? `
+                        <div style="display: flex; align-items: center; gap: 8px; margin-top: 8px; padding: 8px; background: var(--surface-high); border-radius: 8px;">
+                            <span style="font-size: 12px; color: var(--text-secondary);">Rider assigned</span>
+                            <button onclick="event.stopPropagation(); trackingService.trackParcel('${delivery.parcel_code}')" style="margin-left: auto; padding: 4px 12px; background: var(--primary); color: white; border: none; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer;">
+                                Track
+                            </button>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }).join('');
+    },
+    
+    displayDeliveryHistory(history) {
+        const container = document.getElementById('historyList');
+        if (!container) return;
+        
+        if (history.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 20px; text-align: center;">
+                    <div class="empty-icon" style="font-size: 64px; margin-bottom: 16px; opacity: 0.5;">📜</div>
+                    <div class="empty-title" style="font-size: 20px; font-weight: 600; margin-bottom: 8px;">No Delivery History</div>
+                    <div class="empty-message" style="font-size: 14px; color: var(--text-secondary);">Your completed deliveries will appear here</div>
+                </div>
+            `;
+            return;
+        }
+        
+        // Group by date
+        const grouped = this.groupByDate(history);
+        
+        container.innerHTML = Object.entries(grouped).map(([date, deliveries]) => `
+            <div style="margin-bottom: 24px;">
+                <div style="font-size: 14px; font-weight: 600; color: var(--text-secondary); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px;">
+                    ${date}
+                </div>
+                ${deliveries.map(delivery => {
+                    const status = BUSINESS_CONFIG.statuses[delivery.status] || {};
+                    
+                    return `
+                        <div class="history-item" style="background: var(--surface-elevated); border-radius: 12px; padding: 14px; margin-bottom: 8px; border: 1px solid var(--border); cursor: pointer;" onclick="uiDisplay.showDeliveryDetails('${delivery.id}')">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <div style="flex: 1;">
+                                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                                        <span style="font-size: 14px; font-weight: 600;">${delivery.parcel_code}</span>
+                                        <span style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; background: var(--${status.color}); color: ${status.color === 'warning' ? 'black' : 'white'}; border-radius: 12px; font-size: 11px; font-weight: 600;">
+                                            ${status.icon} ${status.label}
+                                        </span>
+                                    </div>
+                                    <div style="font-size: 12px; color: var(--text-secondary);">
+                                        ${delivery.recipient_name} • ${utils.formatTime(delivery.created_at)}
+                                    </div>
+                                </div>
+                                <div style="text-align: right;">
+                                    <div style="font-size: 16px; font-weight: 600; color: var(--primary);">
+                                        ${utils.formatCurrency(delivery.total_price || delivery.price)}
+                                    </div>
+                                    <div style="font-size: 11px; color: var(--text-secondary);">
+                                        ${delivery.distance_km ? `${delivery.distance_km.toFixed(1)} km` : ''}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        `).join('');
+    },
+    
+    showDeliveryDetails(deliveryId) {
+        // Find delivery in active or history
+        const activeDeliveries = dashboardState.get('activeDeliveries') || [];
+        const historyDeliveries = dashboardState.get('deliveryHistory') || [];
+        const delivery = [...activeDeliveries, ...historyDeliveries].find(d => d.id === deliveryId);
+        
+        if (!delivery) return;
+        
+        // Create and show modal with delivery details
+        const modal = document.createElement('div');
+        modal.className = 'delivery-details-modal';
+        modal.style.cssText = `
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 5000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        `;
+        
+        const status = BUSINESS_CONFIG.statuses[delivery.status] || {};
+        
+        modal.innerHTML = `
+            <div style="background: var(--surface-elevated); border-radius: 20px; max-width: 400px; width: 100%; max-height: 80vh; overflow-y: auto;">
+                <div style="padding: 20px; border-bottom: 1px solid var(--border);">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <h3 style="font-size: 20px; font-weight: 600;">Delivery Details</h3>
+                        <button onclick="this.closest('.delivery-details-modal').remove()" style="width: 32px; height: 32px; border-radius: 50%; background: var(--surface-high); border: none; display: flex; align-items: center; justify-content: center; cursor: pointer;">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
+                                <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                
+                <div style="padding: 20px;">
+                    <!-- Codes Section -->
+                    <div style="background: var(--surface-high); border-radius: 12px; padding: 16px; margin-bottom: 20px;">
+                        <div style="display: grid; gap: 12px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <span style="font-size: 14px; color: var(--text-secondary);">Parcel Code</span>
+                                <span style="font-size: 16px; font-weight: 700; color: var(--primary); font-family: monospace;">
+                                    ${delivery.parcel_code}
+                                </span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <span style="font-size: 14px; color: var(--text-secondary);">Delivery Code</span>
+                                <span style="font-size: 16px; font-weight: 700; color: var(--primary); font-family: monospace;">
+                                    ${delivery.delivery_code}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Status -->
+                    <div style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px; background: var(--${status.color}); color: ${status.color === 'warning' ? 'black' : 'white'}; border-radius: 12px; margin-bottom: 20px;">
+                        <span style="font-size: 20px;">${status.icon}</span>
+                        <span style="font-size: 16px; font-weight: 600;">${status.label}</span>
+                    </div>
+                    
+                    <!-- Details -->
+                    <div style="display: grid; gap: 16px;">
+                        <div>
+                            <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">Pickup Location</div>
+                            <div style="font-size: 14px;">${delivery.pickup_location?.address || '-'}</div>
+                        </div>
+                        
+                        <div>
+                            <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">Delivery Location</div>
+                            <div style="font-size: 14px;">${delivery.delivery_location?.address || '-'}</div>
+                        </div>
+                        
+                        <div>
+                            <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">Recipient</div>
+                            <div style="font-size: 14px;">${delivery.recipient_name} • ${delivery.recipient_phone}</div>
+                        </div>
+                        
+                        <div>
+                            <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">Package</div>
+                            <div style="font-size: 14px;">${delivery.package_description || '-'}</div>
+                        </div>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                            <div>
+                                <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">Distance</div>
+                                <div style="font-size: 14px; font-weight: 600;">${delivery.distance_km ? `${delivery.distance_km.toFixed(1)} km` : '-'}</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">Price</div>
+                                <div style="font-size: 14px; font-weight: 600; color: var(--primary);">
+                                    ${utils.formatCurrency(delivery.total_price || delivery.price)}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        ${delivery.special_instructions ? `
+                            <div>
+                                <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">Special Instructions</div>
+                                <div style="font-size: 14px; padding: 8px; background: var(--surface-high); border-radius: 8px;">
+                                    ${delivery.special_instructions}
+                                </div>
+                            </div>
+                        ` : ''}
+                    </div>
+                    
+                    <!-- Actions -->
+                    <div style="display: flex; gap: 12px; margin-top: 24px;">
+                        ${delivery.status === 'in_transit' || delivery.status === 'assigned' ? `
+                            <button onclick="trackingService.trackParcel('${delivery.parcel_code}'); this.closest('.delivery-details-modal').remove()" style="flex: 1; padding: 14px; background: var(--primary); color: white; border: none; border-radius: 12px; font-size: 16px; font-weight: 600; cursor: pointer;">
+                                Track Delivery
+                            </button>
+                        ` : ''}
+                        
+                        <button onclick="bookingService.repeatOrder('${delivery.id}'); this.closest('.delivery-details-modal').remove()" style="flex: 1; padding: 14px; background: var(--surface-high); color: var(--text-primary); border: none; border-radius: 12px; font-size: 16px; font-weight: 600; cursor: pointer;">
+                            Repeat Order
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+    },
+    
+    getTimeAgo(date) {
+        if (!date) return '';
+        
+        const seconds = Math.floor((Date.now() - new Date(date)) / 1000);
+        
+        if (seconds < 60) return 'just now';
+        if (seconds < 3600) return `${Math.floor(seconds / 60)} min ago`;
+        if (seconds < 86400) return `${Math.floor(seconds / 3600)} hours ago`;
+        if (seconds < 604800) return `${Math.floor(seconds / 86400)} days ago`;
+        
+        return utils.formatDate(date);
+    },
+    
+    groupByDate(items) {
+        const grouped = {};
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+        
+        items.forEach(item => {
+            const itemDate = new Date(item.created_at);
+            itemDate.setHours(0, 0, 0, 0);
+            
+            let dateLabel;
+            if (itemDate.getTime() === today.getTime()) {
+                dateLabel = 'Today';
+            } else if (itemDate.getTime() === yesterday.getTime()) {
+                dateLabel = 'Yesterday';
+            } else {
+                dateLabel = itemDate.toLocaleDateString('en-KE', {
+                    weekday: 'long',
+                    day: 'numeric',
+                    month: 'short'
+                });
+            }
+            
+            if (!grouped[dateLabel]) {
+                grouped[dateLabel] = [];
+            }
+            grouped[dateLabel].push(item);
+        });
+        
+        return grouped;
+    }
+};
+
+// Extend vendorDashboard with display methods
+Object.assign(vendorDashboard, {
+    displayActiveDeliveries: uiDisplay.displayActiveDeliveries.bind(uiDisplay),
+    displayDeliveryHistory: uiDisplay.displayDeliveryHistory.bind(uiDisplay)
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Tab Management
+// ═══════════════════════════════════════════════════════════════════════════
+
+window.switchTab = function(tabName) {
+    // Update tab buttons
+    document.querySelectorAll('.tab-item').forEach(tab => {
+        tab.classList.remove('active');
+    });
+    
+    document.querySelectorAll('.tab-panel').forEach(panel => {
+        panel.classList.remove('active');
+    });
+    
+    // Activate selected tab
+    const selectedTab = document.querySelector(`.tab-item:has(.tab-label:contains('${tabName}'))`);
+    const selectedPanel = document.getElementById(`${tabName}-panel`);
+    
+    // Find tab by checking its onclick attribute or text content
+    document.querySelectorAll('.tab-item').forEach(tab => {
+        if (tab.getAttribute('onclick')?.includes(tabName)) {
+            tab.classList.add('active');
+        }
+    });
+    
+    if (selectedPanel) {
+        selectedPanel.classList.add('active');
+    }
+    
+    dashboardState.set('activeTab', tabName);
+    
+    // Load tab-specific data
+    switch(tabName) {
+        case 'active':
+            vendorDashboard.loadActiveDeliveries();
+            break;
+        case 'history':
+            vendorDashboard.loadDeliveryHistory();
+            break;
+        case 'track':
+            trackingService.loadRecentTracks();
+            break;
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// History Search & Filters
+// ═══════════════════════════════════════════════════════════════════════════
+
+window.filterHistory = function(filter) {
+    // Update filter pills
+    document.querySelectorAll('.filter-pill').forEach(pill => {
+        pill.classList.remove('active');
+        pill.style.background = 'var(--surface-high)';
+        pill.style.color = 'var(--text-secondary)';
+        pill.style.borderColor = 'var(--border)';
+    });
+    
+    event.target.classList.add('active');
+    event.target.style.background = 'var(--primary)';
+    event.target.style.color = 'white';
+    event.target.style.borderColor = 'var(--primary)';
+    
+    // Filter history
+    const allHistory = dashboardState.get('deliveryHistory') || [];
+    let filtered;
+    
+    if (filter === 'all') {
+        filtered = allHistory;
+    } else {
+        filtered = allHistory.filter(d => d.status === filter);
+    }
+    
+    uiDisplay.displayDeliveryHistory(filtered);
+};
+
+// History search with debounce
+const historySearchInput = document.getElementById('historySearch');
+if (historySearchInput) {
+    historySearchInput.addEventListener('input', utils.debounce(function(e) {
+        const searchTerm = e.target.value.toLowerCase();
+        const allHistory = dashboardState.get('deliveryHistory') || [];
+        
+        if (!searchTerm) {
+            uiDisplay.displayDeliveryHistory(allHistory);
+            return;
+        }
+        
+        const filtered = allHistory.filter(delivery => {
+            return delivery.parcel_code?.toLowerCase().includes(searchTerm) ||
+                   delivery.recipient_name?.toLowerCase().includes(searchTerm) ||
+                   delivery.pickup_location?.address?.toLowerCase().includes(searchTerm) ||
+                   delivery.delivery_location?.address?.toLowerCase().includes(searchTerm);
+        });
+        
+        uiDisplay.displayDeliveryHistory(filtered);
+    }, 300));
+}
+/**
+ * Vendor Dashboard - Part 4: Booking Form & Location Services
+ */
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Booking Form Management
+// ═══════════════════════════════════════════════════════════════════════════
+
+const bookingService = {
+    async submitBooking(formData) {
+        try {
+            dashboardState.set('isLoading', true);
+            
+            // Generate codes
+            const codes = {
+                parcel_code: utils.generateCode('TM'),
+                pickup_code: utils.generateCode('PK'),
+                delivery_code: utils.generateCode('DL')
+            };
+            
+            // Calculate price
+            const distance = dashboardState.get('distance');
+            const service = dashboardState.get('selectedService');
+            const basePrice = BUSINESS_CONFIG.pricing.rates.base + (distance * BUSINESS_CONFIG.pricing.rates.perKm);
+            const serviceMultiplier = BUSINESS_CONFIG.pricing.multipliers.service[service];
+            let totalPrice = basePrice * serviceMultiplier;
+            
+            // Apply affiliate discount if applicable
+            const affiliateData = dashboardState.get('affiliateData');
+            if (affiliateData) {
+                totalPrice = totalPrice * 0.95; // 5% discount for affiliate referrals
+            }
+            
+            // Get or create vendor
+            let vendor = dashboardState.get('currentVendor');
+            let vendorId = dashboardState.get('vendorId');
+            
+            if (!vendor && formData.vendorPhone) {
+                vendor = await authService.authenticateVendor(
+                    formData.vendorPhone,
+                    formData.vendorName
+                );
+                vendorId = vendor?.id;
+            }
+            
+            // Prepare parcel data
+            const parcelData = {
+                ...codes,
+                vendor_id: vendorId,
+                vendor_name: formData.vendorName || vendor?.vendor_name || vendor?.name,
+                vendor_phone: formData.vendorPhone || vendor?.phone,
+                vendor_type: vendor?.vendor_type || 'casual',
+                
+                // Agent/Affiliate info
+                agent_id: affiliateData?.id || null,
+                agent_code: affiliateData?.agent_code || null,
+                agent_name: affiliateData?.agent_name || null,
+                referral_code: formData.affiliateCode || null,
+                agent_commission: affiliateData ? Math.round(totalPrice * 0.05) : 0,
+                
+                // Locations
+                pickup_location: dashboardState.get('pickupCoords'),
+                delivery_location: dashboardState.get('deliveryCoords'),
+                pickup_lat: dashboardState.get('pickupCoords').lat,
+                pickup_lng: dashboardState.get('pickupCoords').lng,
+                delivery_lat: dashboardState.get('deliveryCoords').lat,
+                delivery_lng: dashboardState.get('deliveryCoords').lng,
+                pickup_coordinates: `${dashboardState.get('pickupCoords').lat},${dashboardState.get('pickupCoords').lng}`,
+                delivery_coordinates: `${dashboardState.get('deliveryCoords').lat},${dashboardState.get('deliveryCoords').lng}`,
+                
+                // Recipient
+                recipient_name: formData.recipientName,
+                recipient_phone: formData.recipientPhone,
+                
+                // Package details
+                package_description: formData.packageDescription,
+                package_category: formData.packageCategory,
+                package_type: formData.packageCategory,
+                package_size: dashboardState.get('selectedSize'),
+                item_count: dashboardState.get('itemCount'),
+                number_of_items: dashboardState.get('itemCount'),
+                special_instructions: formData.specialInstructions || null,
+                
+                // Service details
+                service_type: service,
+                customer_choice: service,
+                distance_km: distance,
+                duration_minutes: dashboardState.get('duration'),
+                estimated_duration_minutes: dashboardState.get('duration'),
+                
+                // Pricing
+                base_price: basePrice,
+                service_multiplier: serviceMultiplier,
+                price: totalPrice,
+                total_price: totalPrice,
+                platform_fee: Math.round(totalPrice * 0.30),
+                platform_revenue: Math.round(totalPrice * 0.30),
+                rider_payout: Math.round(totalPrice * 0.70),
+                vendor_payout: 0,
+                
+                // Payment
+                payment_method: 'cash',
+                payment_status: 'pending',
+                
+                // Status
+                status: 'submitted',
+                created_at: new Date().toISOString()
+            };
+            
+            // Handle special package types
+            const specialCategories = ['food-fresh', 'food-frozen', 'pharmaceuticals', 'medical-equipment'];
+            if (specialCategories.includes(formData.packageCategory)) {
+                parcelData.priority_level = 'high';
+                parcelData.is_perishable = formData.packageCategory.includes('food');
+                parcelData.requires_signature = formData.packageCategory.includes('medical');
+            }
+            
+            // Save to database
+            const result = await supabaseAPI.insert('parcels', parcelData);
+            console.log('✅ Booking created:', result);
+            
+            // Save recipient if new
+            if (vendorId && formData.saveRecipient) {
+                await this.saveRecipient({
+                    vendor_id: vendorId,
+                    name: formData.recipientName,
+                    phone: formData.recipientPhone,
+                    address: dashboardState.get('deliveryCoords').display_name,
+                    lat: dashboardState.get('deliveryCoords').lat,
+                    lng: dashboardState.get('deliveryCoords').lng
+                });
+            }
+            
+            // Save pickup location if frequently used
+            if (vendorId) {
+                await this.savePickupLocation({
+                    vendor_id: vendorId,
+                    address: dashboardState.get('pickupCoords').display_name,
+                    lat: dashboardState.get('pickupCoords').lat,
+                    lng: dashboardState.get('pickupCoords').lng
+                });
+            }
+            
+            // Show success
+            this.showBookingSuccess(codes, totalPrice);
+            
+            // Reset form
+            this.resetBookingForm();
+            
+            // Reload active deliveries
+            await vendorDashboard.loadActiveDeliveries();
+            
+            return result[0];
+            
+        } catch (error) {
+            console.error('Booking submission error:', error);
+            utils.showNotification('Failed to create booking. Please try again.', 'error');
+            throw error;
+        } finally {
+            dashboardState.set('isLoading', false);
+        }
+    },
+    
+    async saveRecipient(recipientData) {
+        try {
+            // Check if already exists
+            const existing = await supabaseAPI.query('saved_recipients', {
+                filter: `vendor_id=eq.${recipientData.vendor_id}&phone=eq.${recipientData.phone}`,
+                limit: 1
+            });
+            
+            if (existing.length > 0) {
+                // Update used count
+                await supabaseAPI.update('saved_recipients', existing[0].id, {
+                    used_count: (existing[0].used_count || 0) + 1,
+                    last_used: new Date().toISOString()
+                });
+            } else {
+                // Create new
+                await supabaseAPI.insert('saved_recipients', {
+                    ...recipientData,
+                    used_count: 1,
+                    created_at: new Date().toISOString(),
+                    last_used: new Date().toISOString()
+                });
+            }
+        } catch (error) {
+            console.error('Save recipient error:', error);
+        }
+    },
+    
+    async savePickupLocation(locationData) {
+        try {
+            // Check if already exists (by coordinates)
+            const existing = await supabaseAPI.query('saved_pickup_locations', {
+                filter: `vendor_id=eq.${locationData.vendor_id}&lat=eq.${locationData.lat}&lng=eq.${locationData.lng}`,
+                limit: 1
+            });
+            
+            if (existing.length > 0) {
+                // Update used count
+                await supabaseAPI.update('saved_pickup_locations', existing[0].id, {
+                    used_count: (existing[0].used_count || 0) + 1,
+                    last_used: new Date().toISOString()
+                });
+            } else {
+                // Only save if used multiple times (track in session for now)
+                const sessionKey = `pickup_${locationData.lat}_${locationData.lng}`;
+                const sessionCount = parseInt(sessionStorage.getItem(sessionKey) || '0') + 1;
+                sessionStorage.setItem(sessionKey, sessionCount.toString());
+                
+                if (sessionCount >= 2) {
+                    await supabaseAPI.insert('saved_pickup_locations', {
+                        ...locationData,
+                        used_count: sessionCount,
+                        created_at: new Date().toISOString(),
+                        last_used: new Date().toISOString()
+                    });
+                }
+            }
+        } catch (error) {
+            console.error('Save pickup location error:', error);
+        }
+    },
+    
+    showBookingSuccess(codes, price) {
+        const overlay = document.getElementById('successOverlay');
+        
+        // Update codes
+        document.getElementById('displayParcelCode').textContent = codes.parcel_code;
+        document.getElementById('displayPickupCode').textContent = codes.pickup_code;
+        document.getElementById('displayDeliveryCode').textContent = codes.delivery_code;
+        document.getElementById('displayTotalPrice').textContent = utils.formatCurrency(price);
+        
+        // Show overlay
+        overlay.style.display = 'flex';
+        
+        utils.showNotification('Booking created successfully! 🎉', 'success');
+    },
+    
+    resetBookingForm() {
+        document.getElementById('dashboardDeliveryForm').reset();
+        
+        dashboardState.set({
+            pickupCoords: null,
+            deliveryCoords: null,
+            distance: 0,
+            duration: 0,
+            selectedService: 'smart',
+            selectedSize: 'small',
+            itemCount: 1,
+            affiliateCode: null,
+            affiliateData: null
+        });
+        
+        // Reset UI elements
+        document.getElementById('itemCount').textContent = '1';
+        document.getElementById('distanceInfo').style.display = 'none';
+        document.getElementById('affiliateToggle').classList.remove('active');
+        document.getElementById('affiliateInputGroup').classList.remove('active');
+        
+        // Reset service selection
+        document.querySelectorAll('.service-card').forEach(card => {
+            card.classList.remove('selected');
+        });
+        document.querySelector('[data-service="smart"]').classList.add('selected');
+        
+        // Reset size selection
+        document.querySelectorAll('.size-option').forEach(option => {
+            option.classList.remove('selected');
+        });
+        document.querySelector('[data-size="small"]').classList.add('selected');
+    },
+    
+    async repeatOrder(deliveryId) {
+        try {
+            // Find the delivery
+            const allDeliveries = [
+                ...(dashboardState.get('activeDeliveries') || []),
+                ...(dashboardState.get('deliveryHistory') || [])
+            ];
+            const delivery = allDeliveries.find(d => d.id === deliveryId);
+            
+            if (!delivery) {
+                utils.showNotification('Could not find order details', 'error');
+                return;
+            }
+            
+            // Switch to new booking tab
+            switchTab('new-booking');
+            
+            // Fill form with delivery details
+            if (delivery.pickup_location) {
+                const pickupInput = document.getElementById('pickupLocation');
+                pickupInput.value = delivery.pickup_location.address;
+                pickupInput.dataset.lat = delivery.pickup_lat;
+                pickupInput.dataset.lng = delivery.pickup_lng;
+                dashboardState.set('pickupCoords', delivery.pickup_location);
+            }
+            
+            if (delivery.delivery_location) {
+                const deliveryInput = document.getElementById('deliveryLocation');
+                deliveryInput.value = delivery.delivery_location.address;
+                deliveryInput.dataset.lat = delivery.delivery_lat;
+                deliveryInput.dataset.lng = delivery.delivery_lng;
+                dashboardState.set('deliveryCoords', delivery.delivery_location);
+            }
+            
+            // Fill recipient details
+            document.getElementById('recipientName').value = delivery.recipient_name || '';
+            document.getElementById('recipientPhone').value = delivery.recipient_phone || '';
+            
+            // Fill package details
+            document.getElementById('packageDescription').value = delivery.package_type || '';
+            document.getElementById('specialInstructions').value = delivery.special_instructions || '';
+            
+            // Set package size and count
+            if (delivery.package_size) {
+                window.selectSize(delivery.package_size);
+            }
+            if (delivery.item_count) {
+                dashboardState.set('itemCount', delivery.item_count);
+                document.getElementById('itemCount').textContent = delivery.item_count;
+            }
+            
+            // Set service type
+            if (delivery.service_type) {
+                window.selectService(delivery.service_type);
+            }
+            
+            // Calculate distance if both locations are set
+            if (dashboardState.get('pickupCoords') && dashboardState.get('deliveryCoords')) {
+                await locationService.calculateDistance();
+            }
+            
+            utils.showNotification('Order details loaded. Review and submit when ready.', 'success');
+            
+        } catch (error) {
+            console.error('Repeat order error:', error);
+            utils.showNotification('Failed to load order details', 'error');
+        }
+    }
+};
+/**
+ * Vendor Dashboard - Part 5: Location Services & Tracking
+ */
+
+// Continue bookingService
+            // Save pickup location if frequently used
+            if (vendorId) {
+                await this.savePickupLocation({
+                    vendor_id: vendorId,
+                    address: dashboardState.get('pickupCoords').display_name,
+                    lat: dashboardState.get('pickupCoords').lat,
+                    lng: dashboardState.get('pickupCoords').lng
+                });
+            }
+            
+            // Show success
+            this.showBookingSuccess(codes, totalPrice);
+            
+            // Reset form
+            this.resetBookingForm();
+            
+            // Reload active deliveries
+            await vendorDashboard.loadActiveDeliveries();
+            
+            return result[0];
+            
+        } catch (error) {
+            console.error('Booking submission error:', error);
+            utils.showNotification('Failed to create booking. Please try again.', 'error');
+            throw error;
+        } finally {
+            dashboardState.set('isLoading', false);
+        }
+    },
+    
+    async saveRecipient(recipientData) {
+        try {
+            // Check if already exists
+            const existing = await supabaseAPI.query('saved_recipients', {
+                filter: `vendor_id=eq.${recipientData.vendor_id}&phone=eq.${recipientData.phone}`,
+                limit: 1
+            });
+            
+            if (existing.length > 0) {
+                // Update used count
+                await supabaseAPI.update('saved_recipients', existing[0].id, {
+                    used_count: (existing[0].used_count || 0) + 1,
+                    last_used: new Date().toISOString()
+                });
+            } else {
+                // Create new
+                await supabaseAPI.insert('saved_recipients', {
+                    ...recipientData,
+                    used_count: 1,
+                    created_at: new Date().toISOString(),
+                    last_used: new Date().toISOString()
+                });
+            }
+        } catch (error) {
+            console.error('Save recipient error:', error);
+        }
+    },
+    
+    async savePickupLocation(locationData) {
+        try {
+            // Check if already exists (by coordinates)
+            const existing = await supabaseAPI.query('saved_pickup_locations', {
+                filter: `vendor_id=eq.${locationData.vendor_id}&lat=eq.${locationData.lat}&lng=eq.${locationData.lng}`,
+                limit: 1
+            });
+            
+            if (existing.length > 0) {
+                // Update used count
+                await supabaseAPI.update('saved_pickup_locations', existing[0].id, {
+                    used_count: (existing[0].used_count || 0) + 1,
+                    last_used: new Date().toISOString()
+                });
+            } else {
+                // Only save if used multiple times (track in session for now)
+                const sessionKey = `pickup_${locationData.lat}_${locationData.lng}`;
+                const sessionCount = parseInt(sessionStorage.getItem(sessionKey) || '0') + 1;
+                sessionStorage.setItem(sessionKey, sessionCount.toString());
+                
+                if (sessionCount >= 2) {
+                    await supabaseAPI.insert('saved_pickup_locations', {
+                        ...locationData,
+                        used_count: sessionCount,
+                        created_at: new Date().toISOString(),
+                        last_used: new Date().toISOString()
+                    });
+                }
+            }
+        } catch (error) {
+            console.error('Save pickup location error:', error);
+        }
+    },
+    
+    showBookingSuccess(codes, price) {
+        const overlay = document.getElementById('successOverlay');
+        
+        // Update codes
+        document.getElementById('displayParcelCode').textContent = codes.parcel_code;
+        document.getElementById('displayPickupCode').textContent = codes.pickup_code;
+        document.getElementById('displayDeliveryCode').textContent = codes.delivery_code;
+        document.getElementById('displayTotalPrice').textContent = utils.formatCurrency(price);
+        
+        // Show overlay
+        overlay.style.display = 'flex';
+        
+        utils.showNotification('Booking created successfully! 🎉', 'success');
+    },
+    
+    resetBookingForm() {
+        document.getElementById('dashboardDeliveryForm').reset();
+        
+        dashboardState.set({
+            pickupCoords: null,
+            deliveryCoords: null,
+            distance: 0,
+            duration: 0,
+            selectedService: 'smart',
+            selectedSize: 'small',
+            itemCount: 1,
+            affiliateCode: null,
+            affiliateData: null
+        });
+        
+        // Reset UI elements
+        document.getElementById('itemCount').textContent = '1';
+        document.getElementById('distanceInfo').style.display = 'none';
+        document.getElementById('affiliateToggle').classList.remove('active');
+        document.getElementById('affiliateInputGroup').classList.remove('active');
+        
+        // Reset service selection
+        document.querySelectorAll('.service-card').forEach(card => {
+            card.classList.remove('selected');
+        });
+        document.querySelector('[data-service="smart"]').classList.add('selected');
+        
+        // Reset size selection
+        document.querySelectorAll('.size-option').forEach(option => {
+            option.classList.remove('selected');
+        });
+        document.querySelector('[data-size="small"]').classList.add('selected');
+    },
+    
+    async repeatOrder(deliveryId) {
+        try {
+            // Find the delivery
+            const allDeliveries = [
+                ...(dashboardState.get('activeDeliveries') || []),
+                ...(dashboardState.get('deliveryHistory') || [])
+            ];
+            const delivery = allDeliveries.find(d => d.id === deliveryId);
+            
+            if (!delivery) {
+                utils.showNotification('Could not find order details', 'error');
+                return;
+            }
+            
+            // Switch to new booking tab
+            switchTab('new-booking');
+            
+            // Fill form with delivery details
+            if (delivery.pickup_location) {
+                const pickupInput = document.getElementById('pickupLocation');
+                pickupInput.value = delivery.pickup_location.address;
+                pickupInput.dataset.lat = delivery.pickup_lat;
+                pickupInput.dataset.lng = delivery.pickup_lng;
+                dashboardState.set('pickupCoords', delivery.pickup_location);
+            }
+            
+            if (delivery.delivery_location) {
+                const deliveryInput = document.getElementById('deliveryLocation');
+                deliveryInput.value = delivery.delivery_location.address;
+                deliveryInput.dataset.lat = delivery.delivery_lat;
+                deliveryInput.dataset.lng = delivery.delivery_lng;
+                dashboardState.set('deliveryCoords', delivery.delivery_location);
+            }
+            
+            // Fill recipient details
+            document.getElementById('recipientName').value = delivery.recipient_name || '';
+            document.getElementById('recipientPhone').value = delivery.recipient_phone || '';
+            
+            // Fill package details
+            document.getElementById('packageDescription').value = delivery.package_type || '';
+            document.getElementById('specialInstructions').value = delivery.special_instructions || '';
+            
+            // Set package size and count
+            if (delivery.package_size) {
+                window.selectSize(delivery.package_size);
+            }
+            if (delivery.item_count) {
+                dashboardState.set('itemCount', delivery.item_count);
+                document.getElementById('itemCount').textContent = delivery.item_count;
+            }
+            
+            // Set service type
+            if (delivery.service_type) {
+                window.selectService(delivery.service_type);
+            }
+            
+            // Calculate distance if both locations are set
+            if (dashboardState.get('pickupCoords') && dashboardState.get('deliveryCoords')) {
+                await locationService.calculateDistance();
+            }
+            
+            utils.showNotification('Order details loaded. Review and submit when ready.', 'success');
+            
+        } catch (error) {
+            console.error('Repeat order error:', error);
+            utils.showNotification('Failed to load order details', 'error');
+        }
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Location Services
+// ═══════════════════════════════════════════════════════════════════════════
+
+const locationService = {
+    async geocodeAddress(address) {
+        // Check cache first
+        const cached = geocodeCache.get(address);
+        if (cached) {
+            console.log('📦 Using cached geocode');
+            return cached;
+        }
+        
+        // Add Kenya context if not present
+        if (!address.toLowerCase().includes('kenya') && !address.toLowerCase().includes('nairobi')) {
+            address = `${address}, Nairobi, Kenya`;
+        }
+        
+        try {
+            // Try Google Maps first if available
+            if (window.google && window.google.maps) {
+                const geocoder = new google.maps.Geocoder();
+                const result = await new Promise((resolve, reject) => {
+                    geocoder.geocode({ 
+                        address: address,
+                        componentRestrictions: { country: 'KE' }
+                    }, (results, status) => {
+                        if (status === 'OK' && results[0]) {
+                            resolve({
+                                lat: results[0].geometry.location.lat(),
+                                lng: results[0].geometry.location.lng(),
+                                display_name: results[0].formatted_address
+                            });
+                        } else {
+                            reject(new Error('Geocoding failed'));
+                        }
+                    });
+                });
+                
+                geocodeCache.set(address, result);
+                return result;
+            }
+            
+            // Fallback to Nominatim
+            const response = await fetch(
+                `https://nominatim.openstreetmap.org/search?` +
+                `format=json&q=${encodeURIComponent(address)}&limit=1&countrycodes=ke`
+            );
+            
+            const data = await response.json();
+            if (data.length === 0) {
+                throw new Error('Address not found');
+            }
+            
+            const result = {
+                lat: parseFloat(data[0].lat),
+                lng: parseFloat(data[0].lon),
+                display_name: data[0].display_name
+            };
+            
+            geocodeCache.set(address, result);
+            return result;
+            
+        } catch (error) {
+            console.error('Geocoding error:', error);
+            throw error;
+        }
+    },
+    
+    async reverseGeocode(lat, lng) {
+        const cacheKey = `${lat},${lng}`;
+        const cached = geocodeCache.get(cacheKey);
+        if (cached) {
+            return cached;
+        }
+        
+        try {
+            if (window.google && window.google.maps) {
+                const geocoder = new google.maps.Geocoder();
+                const result = await new Promise((resolve, reject) => {
+                    geocoder.geocode({ 
+                        location: { lat, lng }
+                    }, (results, status) => {
+                        if (status === 'OK' && results[0]) {
+                            resolve({
+                                display_name: results[0].formatted_address,
+                                address: results[0].formatted_address
+                            });
+                        } else {
+                            reject(new Error('Reverse geocoding failed'));
+                        }
+                    });
+                });
+                
+                geocodeCache.set(cacheKey, result);
+                return result;
+            }
+            
+            // Fallback to Nominatim
+            const response = await fetch(
+                `https://nominatim.openstreetmap.org/reverse?` +
+                `format=json&lat=${lat}&lon=${lng}`
+            );
+            
+            const data = await response.json();
+            const result = {
+                display_name: data.display_name,
+                address: data.display_name
+            };
+            
+            geocodeCache.set(cacheKey, result);
+            return result;
+            
+        } catch (error) {
+            console.error('Reverse geocoding error:', error);
+            throw error;
+        }
+    },
+    
+    async calculateDistance() {
+        const pickup = dashboardState.get('pickupCoords');
+        const delivery = dashboardState.get('deliveryCoords');
+        
+        if (!pickup || !delivery) return;
+        
+        // Check cache
+        const cacheKey = `${pickup.lat},${pickup.lng}-${delivery.lat},${delivery.lng}`;
+        const cached = distanceCache.get(cacheKey);
+        if (cached) {
+            console.log('📦 Using cached distance');
+            this.updateDistanceDisplay(cached);
+            return cached;
+        }
+        
+        try {
+            let result;
+            
+            if (window.google && window.google.maps) {
+                // Use Google Distance Matrix
+                const service = new google.maps.DistanceMatrixService();
+                const response = await new Promise((resolve, reject) => {
+                    service.getDistanceMatrix({
+                        origins: [new google.maps.LatLng(pickup.lat, pickup.lng)],
+                        destinations: [new google.maps.LatLng(delivery.lat, delivery.lng)],
+                        travelMode: google.maps.TravelMode.DRIVING,
+                        unitSystem: google.maps.UnitSystem.METRIC
+                    }, (response, status) => {
+                        if (status === 'OK') {
+                            resolve(response);
+                        } else {
+                            reject(new Error('Distance calculation failed'));
+                        }
+                    });
+                });
+                
+                if (response.rows[0].elements[0].status === 'OK') {
+                    const element = response.rows[0].elements[0];
+                    result = {
+                        distance: element.distance.value / 1000,
+                        duration: Math.ceil(element.duration.value / 60),
+                        distance_text: element.distance.text,
+                        duration_text: element.duration.text
+                    };
+                }
+            }
+            
+            if (!result) {
+                // Fallback to straight-line calculation
+                const distance = utils.calculateDistance(pickup, delivery);
+                result = {
+                    distance: distance * 1.4, // Add 40% for road distance
+                    duration: Math.ceil(distance * 3), // Estimate 3 min per km
+                    distance_text: `~${(distance * 1.4).toFixed(1)} km`,
+                    duration_text: `~${Math.ceil(distance * 3)} min`
+                };
+            }
+            
+            distanceCache.set(cacheKey, result);
+            this.updateDistanceDisplay(result);
+            
+            dashboardState.set({
+                distance: result.distance,
+                duration: result.duration
+            });
+            
+            return result;
+            
+        } catch (error) {
+            console.error('Distance calculation error:', error);
+            
+            // Final fallback
+            const distance = utils.calculateDistance(pickup, delivery);
+            const result = {
+                distance: distance * 1.4,
+                duration: Math.ceil(distance * 3),
+                distance_text: `~${(distance * 1.4).toFixed(1)} km`,
+                duration_text: `~${Math.ceil(distance * 3)} min`
+            };
+            
+            this.updateDistanceDisplay(result);
+            dashboardState.set({
+                distance: result.distance,
+                duration: result.duration
+            });
+            
+            return result;
+        }
+    },
+    
+    updateDistanceDisplay(distanceData) {
+        const distanceInfo = document.getElementById('distanceInfo');
+        const calculatedDistance = document.getElementById('calculatedDistance');
+        const estimatedDuration = document.getElementById('estimatedDuration');
+        
+        if (distanceInfo) distanceInfo.style.display = 'block';
+        if (calculatedDistance) calculatedDistance.textContent = `${distanceData.distance.toFixed(1)} km`;
+        if (estimatedDuration) estimatedDuration.textContent = `~${distanceData.duration} min`;
+        
+        // Update pricing
+        this.updatePricing(distanceData.distance);
+        
+        // Enable submit button
+        this.checkFormValidity();
+    },
+    
+    updatePricing(distance) {
+        const service = dashboardState.get('selectedService');
+        const rates = BUSINESS_CONFIG.pricing.rates;
+        const multipliers = BUSINESS_CONFIG.pricing.multipliers;
+        
+        const basePrice = rates.base + (distance * rates.perKm);
+        
+        // Update service prices
+        document.getElementById('expressPrice').textContent = 
+            utils.formatCurrency(basePrice * multipliers.service.express);
+        document.getElementById('smartPrice').textContent = 
+            utils.formatCurrency(basePrice * multipliers.service.smart);
+        document.getElementById('ecoPrice').textContent = 
+            utils.formatCurrency(basePrice * multipliers.service.eco);
+        
+        // Hide hint
+        document.getElementById('servicePriceHint').style.display = 'none';
+    },
+    
+    checkFormValidity() {
+        const submitBtn = document.getElementById('submitBtn');
+        const buttonText = document.getElementById('buttonText');
+        
+        const hasPickup = dashboardState.get('pickupCoords');
+        const hasDelivery = dashboardState.get('deliveryCoords');
+        const hasDistance = dashboardState.get('distance') > 0;
+        
+        if (hasPickup && hasDelivery && hasDistance) {
+            submitBtn.disabled = false;
+            buttonText.textContent = 'Book Delivery';
+        } else {
+            submitBtn.disabled = true;
+            buttonText.textContent = 'Enter locations to see price';
+        }
+    },
+    
+    validateServiceArea(coords) {
+        const center = BUSINESS_CONFIG.serviceArea.center;
+        const distance = utils.calculateDistance(center, coords);
+        const maxRadius = BUSINESS_CONFIG.serviceArea.radiusKm;
         
         return {
             isValid: distance <= maxRadius,
@@ -239,841 +2146,436 @@ const validation = {
     }
 };
 
-const pricing = {
-    calculate: (distance, serviceType, options = {}) => {
-        if (distance <= 0) return 0;
-        
-        const rates = BUSINESS_CONFIG.pricing.rates;
-        const multipliers = BUSINESS_CONFIG.pricing.multipliers;
-        
-        let basePrice = rates.base + (distance * rates.perKm);
-        
-        if (multipliers.service[serviceType]) {
-            basePrice *= multipliers.service[serviceType];
-        }
-        
-        if (options.isManaged) {
-            basePrice *= multipliers.managedVendor;
-        }
-        
-        return Math.round(basePrice);
-    },
-    
-    formatPrice: (price) => {
-        return `KES ${price.toLocaleString()}`;
-    },
-    
-    calculateBreakdown: (totalPrice, serviceType) => {
-        // Correct commission splits - vendor pays, doesn't receive
-        const platformRate = 0.30; // 30% platform fee
-        const riderRate = 0.70;    // 70% of total goes to rider
-        
-        const platformFee = Math.round(totalPrice * platformRate);
-        const riderPayout = Math.round(totalPrice * riderRate);
-        
-        // Ensure exact split
-        const calculated = platformFee + riderPayout;
-        const difference = totalPrice - calculated;
-        
-        // Add any rounding difference to platform fee
-        const adjustedPlatformFee = platformFee + difference;
-        
-        console.log('💰 Pricing breakdown:', {
-            total: totalPrice,
-            platform: adjustedPlatformFee,
-            rider: riderPayout,
-            sum: adjustedPlatformFee + riderPayout
-        });
-        
-        return {
-            platform_fee: adjustedPlatformFee,
-            platform_revenue: adjustedPlatformFee,
-            rider_payout: riderPayout,
-            vendor_payout: 0 // Vendors pay, they don't receive payout
-        };
-    }
-};
+// ═══════════════════════════════════════════════════════════════════════════
+// Tracking Service
+// ═══════════════════════════════════════════════════════════════════════════
 
-const codes = {
-    generateParcelCode: () => {
-        return 'TM' + Math.random().toString(36).substr(2, 6).toUpperCase();
-    },
-    
-    generatePickupCode: () => {
-        return 'PK' + Math.random().toString(36).substr(2, 6).toUpperCase();
-    },
-    
-    generateDeliveryCode: () => {
-        return 'DL' + Math.random().toString(36).substr(2, 6).toUpperCase();
-    }
-};
-
-// ─── Database Functions ────────────────────────────────────────────────────
-
-const supabaseAPI = {
-    async query(table, options = {}) {
-        const { select = '*', filter = '', limit } = options;
+const trackingService = {
+    async trackParcel(parcelCode = null) {
+        const code = parcelCode || document.getElementById('trackInput').value;
         
-        let url = `${SUPABASE_URL}/rest/v1/${table}?select=${select}`;
-        if (filter) url += `&${filter}`;
-        if (limit) url += `&limit=${limit}`;
-        
-        const response = await fetch(url, {
-            headers: {
-                'apikey': SUPABASE_ANON_KEY,
-                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-                'Content-Type': 'application/json'
-            }
-        });
-        
-        if (!response.ok) {
-            throw new Error(`API Error: ${response.status} ${response.statusText}`);
+        if (!code) {
+            utils.showNotification('Please enter a parcel code', 'warning');
+            return;
         }
-        
-        return await response.json();
-    },
-    
-    async insert(table, data) {
-        // Fix status before submission for parcels
-        if (table === 'parcels') {
-            console.log('📦 Processing parcel insert...');
-            data.status = 'submitted'; // Ensure correct status
-        }
-        
-        const response = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
-            method: 'POST',
-            headers: {
-                'apikey': SUPABASE_ANON_KEY,
-                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-                'Content-Type': 'application/json',
-                'Prefer': 'return=representation'
-            },
-            body: JSON.stringify(data)
-        });
-        
-        if (!response.ok) {
-            const error = await response.text();
-            throw new Error(`Insert Error: ${response.status} ${error}`);
-        }
-        
-        return await response.json();
-    },
-    
-    async update(table, id, data) {
-        const response = await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${id}`, {
-            method: 'PATCH',
-            headers: {
-                'apikey': SUPABASE_ANON_KEY,
-                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-                'Content-Type': 'application/json',
-                'Prefer': 'return=representation'
-            },
-            body: JSON.stringify(data)
-        });
-        
-        if (!response.ok) {
-            const error = await response.text();
-            throw new Error(`Update Error: ${response.status} ${error}`);
-        }
-        
-        return await response.json();
-    }
-};
-
-// ─── Geocoding Cache Service ───────────────────────────────────────────────
-
-const geocodingCache = {
-    async search(query, type = 'address') {
-        if (!query || query.length < 3) return null;
         
         try {
-            const normalizedQuery = query.toLowerCase().trim();
-            
-            // Check popular places cache first
-            const popularPlace = await supabaseAPI.query('popular_places_cache', {
-                filter: `place_name_normalized=eq.${encodeURIComponent(normalizedQuery)}`,
+            // Query parcel
+            const parcels = await supabaseAPI.query('parcels', {
+                filter: `parcel_code=eq.${code}`,
                 limit: 1
             });
             
-            if (popularPlace.length > 0) {
-                console.log('📍 Found in popular places:', popularPlace[0].place_name);
-                return {
-                    lat: parseFloat(popularPlace[0].lat),
-                    lng: parseFloat(popularPlace[0].lng),
-                    display_name: popularPlace[0].formatted_address,
-                    place_name: popularPlace[0].place_name,
-                    cached: true,
-                    cache_type: 'popular'
-                };
+            if (parcels.length === 0) {
+                utils.showNotification('Parcel not found', 'error');
+                return;
             }
             
-            // Then check general geocoding cache
-            const cached = await supabaseAPI.query('geocoding_cache', {
-                filter: `search_query_normalized=eq.${encodeURIComponent(normalizedQuery)}`,
-                limit: 1
-            });
+            const parcel = parcels[0];
             
-            if (cached.length > 0 && cached[0].expires_at > new Date().toISOString()) {
-                await supabaseAPI.update('geocoding_cache', cached[0].id, {
-                    usage_count: cached[0].usage_count + 1,
-                    last_used: new Date().toISOString()
+            // Check for live tracking if in transit
+            if (parcel.status === 'in_transit' && parcel.rider_id) {
+                const tracking = await supabaseAPI.query('live_delivery_tracking', {
+                    filter: `parcel_id=eq.${parcel.id}`,
+                    order: 'timestamp.desc',
+                    limit: 1
                 });
                 
-                console.log('📦 Geocoding from cache:', query);
-                return {
-                    lat: parseFloat(cached[0].lat),
-                    lng: parseFloat(cached[0].lng),
-                    display_name: cached[0].formatted_address,
-                    place_name: cached[0].place_name,
-                    cached: true,
-                    cache_type: 'geocoding'
-                };
+                if (tracking.length > 0) {
+                    parcel.liveTracking = tracking[0];
+                }
             }
+            
+            // Display tracking result
+            this.displayTrackingResult(parcel);
+            
+            // Save to recent tracks
+            this.saveRecentTrack(parcel);
+            
         } catch (error) {
-            console.error('Cache lookup error:', error);
+            console.error('Tracking error:', error);
+            utils.showNotification('Failed to track parcel', 'error');
         }
-        
-        return null;
     },
     
-    async searchReverse(lat, lng) {
-        try {
-            const latRounded = Math.round(lat * 10000) / 10000;
-            const lngRounded = Math.round(lng * 10000) / 10000;
-            
-            const cached = await supabaseAPI.query('reverse_geocoding_cache', {
-                filter: `lat_rounded=eq.${latRounded}&lng_rounded=eq.${lngRounded}`,
-                limit: 1
-            });
-            
-            if (cached.length > 0 && cached[0].expires_at > new Date().toISOString()) {
-                await supabaseAPI.update('reverse_geocoding_cache', cached[0].id, {
-                    usage_count: cached[0].usage_count + 1,
-                    last_used: new Date().toISOString()
-                });
+    displayTrackingResult(parcel) {
+        const container = document.getElementById('trackingResult');
+        if (!container) return;
+        
+        const status = BUSINESS_CONFIG.statuses[parcel.status] || {};
+        
+        container.innerHTML = `
+            <div style="background: var(--surface-elevated); border-radius: 14px; padding: 20px; margin-top: 20px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h3 style="font-size: 18px; font-weight: 600;">Tracking Details</h3>
+                    <div style="display: flex; align-items: center; gap: 6px; background: var(--${status.color}); color: ${status.color === 'warning' ? 'black' : 'white'}; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;">
+                        <span>${status.icon}</span>
+                        <span>${status.label}</span>
+                    </div>
+                </div>
                 
-                console.log('📦 Reverse geocoding from cache:', latRounded, lngRounded);
-                return {
-                    display_name: cached[0].formatted_address,
-                    place_name: cached[0].place_name,
-                    cached: true
-                };
+                <div style="display: grid; gap: 16px;">
+                    <div>
+                        <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">Parcel Code</div>
+                        <div style="font-size: 16px; font-weight: 600; font-family: monospace;">${parcel.parcel_code}</div>
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div>
+                            <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">From</div>
+                            <div style="font-size: 14px;">${parcel.pickup_location?.address || '-'}</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">To</div>
+                            <div style="font-size: 14px;">${parcel.delivery_location?.address || '-'}</div>
+                        </div>
+                    </div>
+                    
+                    ${parcel.liveTracking ? `
+                        <div style="padding: 12px; background: var(--success); color: white; border-radius: 8px;">
+                            <div style="font-size: 12px; margin-bottom: 4px;">Live Location</div>
+                            <div style="font-size: 14px; font-weight: 600;">
+                                Rider is ${parcel.liveTracking.distance_to_delivery || '0'} km away
+                            </div>
+                            <div style="font-size: 11px; margin-top: 4px; opacity: 0.9;">
+                                Last updated: ${utils.formatTime(parcel.liveTracking.timestamp)}
+                            </div>
+                        </div>
+                    ` : ''}
+                    
+                    <div>
+                        <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;">Timeline</div>
+                        ${this.generateTimeline(parcel)}
+                    </div>
+                </div>
+            </div>
+        `;
+    },
+    
+    generateTimeline(parcel) {
+        const events = [
+            {
+                status: 'submitted',
+                time: parcel.created_at,
+                label: 'Order Placed'
             }
-        } catch (error) {
-            console.error('Reverse cache lookup error:', error);
+        ];
+        
+        if (parcel.assigned_at) {
+            events.push({
+                status: 'assigned',
+                time: parcel.assigned_at,
+                label: 'Rider Assigned'
+            });
         }
         
-        return null;
+        if (parcel.pickup_timestamp) {
+            events.push({
+                status: 'in_transit',
+                time: parcel.pickup_timestamp,
+                label: 'Picked Up'
+            });
+        }
+        
+        if (parcel.delivery_timestamp) {
+            events.push({
+                status: 'delivered',
+                time: parcel.delivery_timestamp,
+                label: 'Delivered'
+            });
+        }
+        
+        return events.map((event, index) => {
+            const isCompleted = new Date(event.time) <= new Date();
+            const status = BUSINESS_CONFIG.statuses[event.status] || {};
+            
+            return `
+                <div style="display: flex; gap: 12px; margin-bottom: 16px;">
+                    <div style="display: flex; flex-direction: column; align-items: center;">
+                        <div style="width: 32px; height: 32px; border-radius: 50%; background: ${isCompleted ? `var(--${status.color})` : 'var(--surface-high)'}; display: flex; align-items: center; justify-content: center; color: ${status.color === 'warning' ? 'black' : 'white'};">
+                            ${isCompleted ? status.icon : '⏳'}
+                        </div>
+                        ${index < events.length - 1 ? `
+                            <div style="width: 2px; height: 40px; background: ${isCompleted ? 'var(--success)' : 'var(--border)'}; margin-top: 4px;"></div>
+                        ` : ''}
+                    </div>
+                    <div style="flex: 1;">
+                        <div style="font-size: 14px; font-weight: 600; margin-bottom: 2px;">${event.label}</div>
+                        <div style="font-size: 12px; color: var(--text-secondary);">
+                            ${isCompleted ? utils.formatDate(event.time) : 'Pending'}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
     },
     
-    async store(query, result, provider = 'google') {
-        try {
-            const cacheData = {
-                search_query: query,
-                search_query_normalized: query.toLowerCase().trim(),
-                search_type: 'address',
-                formatted_address: result.display_name || result.formatted_address,
-                place_name: result.place_name || null,
-                lat: result.lat,
-                lng: result.lng,
-                geocoding_provider: provider,
-                provider_confidence: result.confidence || 0.9,
-                raw_response: result.raw || {}
-            };
-            
-            if (result.address_components) {
-                result.address_components.forEach(component => {
-                    const types = component.types;
-                    if (types.includes('street_number')) {
-                        cacheData.street_number = component.long_name;
-                    }
-                    if (types.includes('route')) {
-                        cacheData.route = component.long_name;
-                    }
-                    if (types.includes('neighborhood')) {
-                        cacheData.neighborhood = component.long_name;
-                    }
-                    if (types.includes('sublocality')) {
-                        cacheData.sublocality = component.long_name;
-                    }
-                    if (types.includes('locality')) {
-                        cacheData.locality = component.long_name;
-                    }
-                    if (types.includes('administrative_area_level_1')) {
-                        cacheData.administrative_area_level_1 = component.long_name;
-                    }
-                    if (types.includes('postal_code')) {
-                        cacheData.postal_code = component.long_name;
-                    }
-                });
-            }
-            
-            if (result.place_id) {
-                cacheData.place_id = result.place_id;
-            }
-            
-            await supabaseAPI.insert('geocoding_cache', cacheData);
-            console.log('💾 Geocoding cached:', query);
-        } catch (error) {
-            console.error('Cache store error:', error);
+    async saveRecentTrack(parcel) {
+        let recentTracks = dashboardState.get('recentTracks') || [];
+        
+        // Remove if already exists
+        recentTracks = recentTracks.filter(t => t.parcel_code !== parcel.parcel_code);
+        
+        // Add to beginning
+        recentTracks.unshift({
+            parcel_code: parcel.parcel_code,
+            status: parcel.status,
+            tracked_at: new Date().toISOString()
+        });
+        
+        // Keep only last 5
+        recentTracks = recentTracks.slice(0, 5);
+        
+        dashboardState.set('recentTracks', recentTracks);
+        
+        // Save to localStorage
+        localStorage.setItem('tuma_recent_tracks', JSON.stringify(recentTracks));
+        
+        this.displayRecentTracks();
+    },
+    
+    loadRecentTracks() {
+        const stored = localStorage.getItem('tuma_recent_tracks');
+        if (stored) {
+            const tracks = JSON.parse(stored);
+            dashboardState.set('recentTracks', tracks);
+            this.displayRecentTracks();
         }
     },
     
-    async storeReverse(lat, lng, result, provider = 'google') {
-        try {
-            const cacheData = {
-                lat_rounded: Math.round(lat * 10000) / 10000,
-                lng_rounded: Math.round(lng * 10000) / 10000,
-                lat: lat,
-                lng: lng,
-                formatted_address: result.display_name || result.formatted_address,
-                place_name: result.place_name || null,
-                geocoding_provider: provider,
-                provider_confidence: result.confidence || 0.9,
-                raw_response: result.raw || {}
-            };
-            
-            await supabaseAPI.insert('reverse_geocoding_cache', cacheData);
-            console.log('💾 Reverse geocoding cached');
-        } catch (error) {
-            console.error('Reverse cache store error:', error);
+    displayRecentTracks() {
+        const container = document.getElementById('recentTracksList');
+        const tracks = dashboardState.get('recentTracks') || [];
+        
+        if (!container) return;
+        
+        if (tracks.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px; text-align: center;">
+                    <div class="empty-icon" style="font-size: 48px; margin-bottom: 12px; opacity: 0.5;">📍</div>
+                    <div class="empty-title" style="font-size: 16px; font-weight: 600; margin-bottom: 6px;">No Recent Tracks</div>
+                    <div class="empty-message" style="font-size: 12px; color: var(--text-secondary);">Your tracked parcels will appear here</div>
+                </div>
+            `;
+            return;
         }
+        
+        container.innerHTML = tracks.map(track => {
+            const status = BUSINESS_CONFIG.statuses[track.status] || {};
+            
+            return `
+                <div onclick="trackingService.trackParcel('${track.parcel_code}')" style="padding: 12px; background: var(--surface-elevated); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 8px; cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <div style="font-size: 14px; font-weight: 600; margin-bottom: 2px;">${track.parcel_code}</div>
+                        <div style="font-size: 11px; color: var(--text-secondary);">
+                            ${utils.formatDate(track.tracked_at)}
+                        </div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 4px; padding: 4px 8px; background: var(--${status.color}); color: ${status.color === 'warning' ? 'black' : 'white'}; border-radius: 12px; font-size: 11px; font-weight: 600;">
+                        ${status.icon} ${status.label}
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+};
+/**
+ * Vendor Dashboard - Part 6: Event Handlers & Initialization
+ */
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Affiliate/Agent Management
+// ═══════════════════════════════════════════════════════════════════════════
+
+window.toggleAffiliateCode = function() {
+    const toggle = document.getElementById('affiliateToggle');
+    const inputGroup = document.getElementById('affiliateInputGroup');
+    
+    toggle.classList.toggle('active');
+    inputGroup.classList.toggle('active');
+    
+    if (toggle.classList.contains('active')) {
+        document.getElementById('affiliateCode').focus();
+    } else {
+        // Clear affiliate code
+        document.getElementById('affiliateCode').value = '';
+        document.getElementById('affiliateStatus').style.display = 'none';
+        dashboardState.set({
+            affiliateCode: null,
+            affiliateData: null
+        });
     }
 };
 
-// ─── Distance Cache Service ────────────────────────────────────────────────
-
-const distanceCache = {
-    cache: new Map(),
+window.validateAffiliateCode = async function() {
+    const codeInput = document.getElementById('affiliateCode');
+    const statusDiv = document.getElementById('affiliateStatus');
+    const code = codeInput.value.trim().toUpperCase();
     
-    async searchDB(pickup, delivery, travelMode = 'driving') {
-        try {
-            const originLat = Math.round(pickup.lat * 100000) / 100000;
-            const originLng = Math.round(pickup.lng * 100000) / 100000;
-            const destLat = Math.round(delivery.lat * 100000) / 100000;
-            const destLng = Math.round(delivery.lng * 100000) / 100000;
-            
-            const cached = await supabaseAPI.query('distance_matrix_cache', {
-                filter: `origin_lat=eq.${originLat}&origin_lng=eq.${originLng}&destination_lat=eq.${destLat}&destination_lng=eq.${destLng}&travel_mode=eq.${travelMode}`,
-                limit: 1
-            });
-            
-            if (cached.length > 0 && cached[0].expires_at > new Date().toISOString()) {
-                await supabaseAPI.update('distance_matrix_cache', cached[0].id, {
-                    usage_count: cached[0].usage_count + 1,
-                    last_used: new Date().toISOString()
-                });
-                
-                console.log('📦 Distance from DB cache');
-                return {
-                    distance: cached[0].distance_meters / 1000,
-                    duration: Math.ceil(cached[0].duration_seconds / 60),
-                    distance_text: cached[0].distance_text,
-                    duration_text: cached[0].duration_text,
-                    cached: true,
-                    cache_type: 'database'
-                };
-            }
-        } catch (error) {
-            console.error('Distance cache lookup error:', error);
-        }
-        
-        return null;
-    },
-    
-    async storeDB(pickup, delivery, result, travelMode = 'driving', provider = 'google') {
-        try {
-            const cacheData = {
-                origin_lat: Math.round(pickup.lat * 100000) / 100000,
-                origin_lng: Math.round(pickup.lng * 100000) / 100000,
-                destination_lat: Math.round(delivery.lat * 100000) / 100000,
-                destination_lng: Math.round(delivery.lng * 100000) / 100000,
-                distance_meters: Math.round(result.distance * 1000),
-                distance_text: result.distance_text || `${result.distance.toFixed(1)} km`,
-                duration_seconds: result.duration * 60,
-                duration_text: result.duration_text || `${result.duration} min`,
-                travel_mode: travelMode,
-                provider: provider,
-                route_polyline: result.polyline || null,
-                raw_response: result.raw || {},
-                expires_at: new Date(Date.now() + (isRushHour() ? 30 * 60000 : 120 * 60000)).toISOString()
-            };
-            
-            await supabaseAPI.insert('distance_matrix_cache', cacheData);
-            console.log('💾 Distance cached to DB');
-        } catch (error) {
-            console.error('Distance cache store error:', error);
-        }
-    },
-    
-    get: async function(pickup, delivery) {
-        const key = this.getKey(pickup, delivery);
-        const memCached = this.cache.get(key);
-        
-        if (memCached) {
-            console.log('📦 Distance from memory cache:', key);
-            memCached.lastUsed = Date.now();
-            return memCached.data;
-        }
-        
-        const dbCached = await this.searchDB(pickup, delivery);
-        if (dbCached) {
-            this.cache.set(key, {
-                data: dbCached,
-                created: Date.now(),
-                lastUsed: Date.now()
-            });
-            return dbCached;
-        }
-        
-        return null;
-    },
-    
-    set: async function(pickup, delivery, data) {
-        const key = this.getKey(pickup, delivery);
-        
-        this.cache.set(key, {
-            data: data,
-            created: Date.now(),
-            lastUsed: Date.now()
+    if (!code) {
+        statusDiv.style.display = 'none';
+        dashboardState.set({
+            affiliateCode: null,
+            affiliateData: null
         });
-        
-        const reverseKey = this.getKey(delivery, pickup);
-        this.cache.set(reverseKey, {
-            data: { ...data, distance: data.distance },
-            created: Date.now(),
-            lastUsed: Date.now()
-        });
-        
-        await this.storeDB(pickup, delivery, data);
-        
-        this.persist();
-    },
-    
-    getKey: (pickup, delivery) => {
-        const p = `${pickup.lat.toFixed(3)},${pickup.lng.toFixed(3)}`;
-        const d = `${delivery.lat.toFixed(3)},${delivery.lng.toFixed(3)}`;
-        return `${p}→${d}`;
-    },
-    
-    persist: function() {
-        try {
-            const cacheData = Array.from(this.cache.entries()).slice(-1000);
-            localStorage.setItem('tuma_distance_cache', JSON.stringify(cacheData));
-        } catch (e) {
-            console.warn('Failed to persist cache:', e);
-        }
-    },
-    
-    load: function() {
-        try {
-            const stored = localStorage.getItem('tuma_distance_cache');
-            if (stored) {
-                const cacheData = JSON.parse(stored);
-                cacheData.forEach(([key, value]) => {
-                    this.cache.set(key, value);
-                });
-                console.log(`📦 Loaded ${cacheData.length} cached routes`);
-            }
-        } catch (e) {
-            console.warn('Failed to load cache:', e);
-        }
-    },
-    
-    getStats: function() {
-        let totalHits = 0;
-        let totalSize = this.cache.size;
-        
-        this.cache.forEach(entry => {
-            totalHits += entry.hitCount || 0;
-        });
-        
-        return {
-            size: totalSize,
-            hits: totalHits,
-            hitRate: totalSize > 0 ? (totalHits / (totalHits + totalSize)) * 100 : 0
-        };
-    }
-};
-
-// ─── Helper Functions ──────────────────────────────────────────────────────
-
-function isRushHour() {
-    const now = new Date();
-    const hour = now.getHours();
-    const day = now.getDay();
-    
-    if (day >= 1 && day <= 5) {
-        return (hour >= 6 && hour < 10) || (hour >= 16 && hour < 20);
-    }
-    
-    return false;
-}
-
-async function geocodeAddress(address) {
-    const cached = await geocodingCache.search(address);
-    if (cached) {
-        return cached;
-    }
-    
-    let searchAddress = address;
-    if (!address.toLowerCase().includes('nairobi') && !address.toLowerCase().includes('kenya')) {
-        searchAddress = `${address}, Nairobi, Kenya`;
+        return;
     }
     
     try {
-        const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchAddress)}&limit=5&countrycodes=ke`;
-        const response = await fetch(url);
-        const data = await response.json();
-        
-        if (data.length === 0) {
-            throw new Error('Address not found');
-        }
-        
-        const nairobiResult = data.find(result => 
-            result.display_name.toLowerCase().includes('nairobi')
-        ) || data[0];
-        
-        const result = {
-            lat: parseFloat(nairobiResult.lat),
-            lng: parseFloat(nairobiResult.lon),
-            display_name: nairobiResult.display_name
-        };
-        
-        await geocodingCache.store(address, result, 'nominatim');
-        
-        return result;
-    } catch (error) {
-        console.error('Geocoding error:', error);
-        throw new Error('Could not find address. Please be more specific.');
-    }
-}
-
-function calculateStraightDistance(point1, point2) {
-    if (!point1 || !point2 || typeof point1.lat !== 'number' || typeof point1.lng !== 'number' || 
-        typeof point2.lat !== 'number' || typeof point2.lng !== 'number') {
-        console.error('Invalid coordinates for distance calculation:', point1, point2);
-        return 0;
-    }
-    
-    const R = 6371; // Earth's radius in km
-    const dLat = toRad(point2.lat - point1.lat);
-    const dLng = toRad(point2.lng - point1.lng);
-    const lat1 = toRad(point1.lat);
-    const lat2 = toRad(point2.lat);
-    
-    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-              Math.sin(dLng/2) * Math.sin(dLng/2) * Math.cos(lat1) * Math.cos(lat2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    const distance = R * c;
-    
-    console.log('Distance calculation:', {
-        from: point1,
-        to: point2,
-        distance: distance.toFixed(2) + 'km'
-    });
-    
-    return distance;
-}
-
-function toRad(value) {
-    return value * Math.PI / 180;
-}
-
-function showNotification(message, type = 'info') {
-    const notification = document.createElement('div');
-    notification.className = `notification ${type}`;
-    notification.textContent = message;
-    notification.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        background: ${type === 'error' ? '#ff3b30' : type === 'warning' ? '#FF9F0A' : '#34c759'};
-        color: ${type === 'warning' ? 'black' : 'white'};
-        padding: 12px 20px;
-        border-radius: 8px;
-        z-index: 3000;
-        font-weight: 600;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-        max-width: 350px;
-    `;
-    
-    document.body.appendChild(notification);
-    
-    setTimeout(() => {
-        notification.remove();
-    }, type === 'error' ? 5000 : 3000);
-}
-
-// Export showNotification globally
-window.showNotification = showNotification;
-
-// ─── URL Parameter Handling ────────────────────────────────────────────────
-
-async function handleURLParameters() {
-    const urlParams = new URLSearchParams(window.location.search);
-    const waPhone = urlParams.get('wa');
-    
-    if (waPhone) {
-        console.log('📱 WhatsApp parameter detected:', waPhone);
-        
-        // Clean the phone number
-        let cleanedPhone = waPhone.replace(/\D/g, '');
-        if (cleanedPhone.startsWith('254')) {
-            cleanedPhone = '0' + cleanedPhone.substring(3);
-        } else if (!cleanedPhone.startsWith('0') && cleanedPhone.length === 9) {
-            cleanedPhone = '0' + cleanedPhone;
-        }
-        
-        // Validate and set phone
-        if (validation.validatePhone(cleanedPhone)) {
-            if (elements.phoneNumber) {
-                elements.phoneNumber.value = cleanedPhone;
-                
-                // Check if vendor exists and load their data
-                await loadVendorData(cleanedPhone);
-            }
-        }
-    }
-}
-
-// ─── Load Vendor Data ──────────────────────────────────────────────────────
-
-async function loadVendorData(phone) {
-    try {
-        // Check if vendor exists
-        const vendors = await supabaseAPI.query('vendors', {
-            filter: `phone=eq.${phone}`,
+        // Query agents table
+        const agents = await supabaseAPI.query('agents', {
+            filter: `agent_code=eq.${code}&status=eq.active`,
             limit: 1
         });
         
-        if (vendors.length > 0) {
-            const vendor = vendors[0];
-            console.log('✅ Vendor found:', vendor.name);
+        if (agents.length > 0) {
+            const agent = agents[0];
+            statusDiv.className = 'affiliate-status valid';
+            statusDiv.textContent = `✅ Valid code - ${agent.agent_name || 'Agent'}`;
+            statusDiv.style.display = 'block';
             
-            // Fill vendor name
-            if (elements.vendorName && vendor.name) {
-                elements.vendorName.value = vendor.name;
-            }
+            dashboardState.set({
+                affiliateCode: code,
+                affiliateData: agent
+            });
             
-            // Set vendor type
-            if (vendor.is_managed) {
-                formState.set({
-                    vendorType: 'managed',
-                    agentCode: vendor.agent_code,
-                    agentName: vendor.agent_name
-                });
-                
-                displayVendorBadge({
-                    isManaged: true,
-                    agentName: vendor.agent_name
-                });
-            }
+            utils.showNotification('Affiliate code applied! You get 5% discount.', 'success');
+        } else {
+            statusDiv.className = 'affiliate-status invalid';
+            statusDiv.textContent = '❌ Invalid or inactive code';
+            statusDiv.style.display = 'block';
             
-            // Load saved locations
-            await loadRecentPickupLocations(vendor.id, phone);
-            
-            // Show welcome back message
-            if (vendor.total_bookings > 0) {
-                showNotification(
-                    `Welcome back${vendor.name ? ', ' + vendor.name : ''}! ${vendor.total_bookings} deliveries completed`,
-                    'success'
-                );
-            } else {
-                showNotification(`Welcome back${vendor.name ? ', ' + vendor.name : ''}!`, 'success');
-            }
+            dashboardState.set({
+                affiliateCode: null,
+                affiliateData: null
+            });
         }
     } catch (error) {
-        console.error('Error loading vendor data:', error);
-    }
-}
-
-// ─── Load Recent Pickup Locations ──────────────────────────────────────────
-
-async function loadRecentPickupLocations(vendorId, vendorPhone) {
-    try {
-        // Query recent successful bookings
-        let recentBookings;
-        
-        if (vendorId) {
-            // If we have vendor_id, use it
-            recentBookings = await supabaseAPI.query('parcels', {
-                filter: `vendor_id=eq.${vendorId}`,
-                select: 'pickup_location,created_at',
-                limit: 10
-            });
-        } else {
-            // Fallback to phone number
-            recentBookings = await supabaseAPI.query('parcels', {
-                filter: `vendor_phone=eq.${vendorPhone}`,
-                select: 'pickup_location,created_at',
-                limit: 10
-            });
-        }
-        
-        if (recentBookings.length > 0) {
-            // Get unique pickup locations
-            const locationMap = new Map();
-            
-            recentBookings.forEach(booking => {
-                if (booking.pickup_location) {
-                    const loc = booking.pickup_location;
-                    const key = `${loc.lat},${loc.lng}`;
-                    
-                    if (!locationMap.has(key)) {
-                        locationMap.set(key, {
-                            address: loc.address,
-                            lat: loc.lat,
-                            lng: loc.lng,
-                            count: 1,
-                            lastUsed: booking.created_at
-                        });
-                    } else {
-                        const existing = locationMap.get(key);
-                        existing.count++;
-                        if (booking.created_at > existing.lastUsed) {
-                            existing.lastUsed = booking.created_at;
-                        }
-                    }
-                }
-            });
-            
-            // Sort by frequency and recency
-            const sortedLocations = Array.from(locationMap.values())
-                .sort((a, b) => {
-                    // First by count, then by recency
-                    if (b.count !== a.count) return b.count - a.count;
-                    return new Date(b.lastUsed) - new Date(a.lastUsed);
-                })
-                .slice(0, 3); // Show top 3
-            
-            if (sortedLocations.length > 0) {
-                displaySavedLocations(sortedLocations);
-            }
-        }
-    } catch (error) {
-        console.error('Error loading saved locations:', error);
-    }
-}
-
-// ─── Display Saved Locations ───────────────────────────────────────────────
-
-function displaySavedLocations(locations) {
-    // Remove existing saved locations if any
-    const existing = document.getElementById('savedLocationsContainer');
-    if (existing) existing.remove();
-    
-    // Find pickup section
-    const pickupSection = elements.pickupLocation?.closest('.form-section');
-    if (!pickupSection) return;
-    
-    // Create saved locations UI
-    const container = document.createElement('div');
-    container.id = 'savedLocationsContainer';
-    container.style.cssText = 'margin-top: 12px; animation: fadeIn 0.3s ease-out;';
-    
-    container.innerHTML = `
-        <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;">
-            Quick select recent locations:
-        </p>
-        <div style="display: flex; flex-wrap: wrap; gap: 8px;">
-            ${locations.map((loc, index) => {
-                const shortAddress = loc.address.split(',')[0];
-                const timesUsed = loc.count > 1 ? ` (${loc.count}×)` : '';
-                return `
-                    <button type="button" 
-                            class="saved-location-btn" 
-                            onclick="useSavedLocation(${index})"
-                            style="
-                                background: var(--surface-elevated);
-                                border: 1px solid var(--border);
-                                border-radius: 20px;
-                                padding: 8px 16px;
-                                font-size: 13px;
-                                color: var(--text-secondary);
-                                cursor: pointer;
-                                transition: all 0.2s;
-                                display: flex;
-                                align-items: center;
-                                gap: 6px;
-                            ">
-                        <span style="font-size: 16px;">📍</span>
-                        ${shortAddress}${timesUsed}
-                    </button>
-                `;
-            }).join('')}
-        </div>
-    `;
-    
-    // Add after location options
-    const locationOptions = pickupSection.querySelector('.location-options');
-    if (locationOptions) {
-        locationOptions.insertAdjacentElement('afterend', container);
-    }
-    
-    // Store locations for use
-    window.savedPickupLocations = locations;
-}
-
-// ─── Use Saved Location ────────────────────────────────────────────────────
-
-window.useSavedLocation = function(index) {
-    const location = window.savedPickupLocations?.[index];
-    if (!location) return;
-    
-    // Fill pickup field
-    elements.pickupLocation.value = location.address;
-    elements.pickupLocation.dataset.lat = location.lat;
-    elements.pickupLocation.dataset.lng = location.lng;
-    
-    // Update form state
-    formState.set('pickupCoords', {
-        lat: parseFloat(location.lat),
-        lng: parseFloat(location.lng),
-        display_name: location.address
-    });
-    
-    // Visual feedback
-    updateLocationStatus(elements.pickupLocation, true);
-    
-    // Calculate distance if delivery exists
-    if (formState.get('deliveryCoords')) {
-        calculateDistance();
-    }
-    
-    // Highlight selected button
-    document.querySelectorAll('.saved-location-btn').forEach((btn, i) => {
-        if (i === index) {
-            btn.style.background = 'var(--primary)';
-            btn.style.color = 'white';
-            btn.style.borderColor = 'var(--primary)';
-        } else {
-            btn.style.background = 'var(--surface-elevated)';
-            btn.style.color = 'var(--text-secondary)';
-            btn.style.borderColor = 'var(--border)';
-        }
-    });
-    
-    showNotification('Pickup location set!', 'success');
-    
-    // Auto-focus next field
-    if (elements.deliveryLocation && !elements.deliveryLocation.value) {
-        elements.deliveryLocation.focus();
+        console.error('Affiliate validation error:', error);
+        statusDiv.className = 'affiliate-status invalid';
+        statusDiv.textContent = '❌ Could not validate code';
+        statusDiv.style.display = 'block';
     }
 };
 
-// ─── Global Functions ──────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+// Quick Actions
+// ═══════════════════════════════════════════════════════════════════════════
+
+window.repeatLastOrder = async function() {
+    try {
+        const vendorId = dashboardState.get('vendorId');
+        
+        // Get last order
+        const filter = vendorId 
+            ? `vendor_id=eq.${vendorId}` 
+            : `vendor_phone=eq.${document.getElementById('phoneNumber')?.value}`;
+            
+        const lastOrders = await supabaseAPI.query('parcels', {
+            filter: filter,
+            order: 'created_at.desc',
+            limit: 1
+        });
+        
+        if (lastOrders.length === 0) {
+            utils.showNotification('No previous orders found', 'warning');
+            return;
+        }
+        
+        await bookingService.repeatOrder(lastOrders[0].id);
+        
+    } catch (error) {
+        console.error('Repeat last order error:', error);
+        utils.showNotification('Failed to load last order', 'error');
+    }
+};
+
+window.showSavedRecipients = async function() {
+    const dropdown = document.getElementById('savedRecipientsDropdown');
+    const recipients = dashboardState.get('savedRecipients') || [];
+    
+    if (recipients.length === 0) {
+        // Try loading saved recipients
+        const vendorId = dashboardState.get('vendorId');
+        if (vendorId) {
+            await vendorDashboard.loadSavedRecipients();
+            const loaded = dashboardState.get('savedRecipients') || [];
+            if (loaded.length === 0) {
+                utils.showNotification('No saved recipients yet', 'info');
+                return;
+            }
+        } else {
+            utils.showNotification('Login to see saved recipients', 'info');
+            return;
+        }
+    }
+    
+    // Toggle dropdown
+    dropdown.classList.toggle('active');
+    
+    if (dropdown.classList.contains('active')) {
+        dropdown.innerHTML = recipients.map((recipient, index) => `
+            <div class="saved-recipient-item" onclick="useSavedRecipient(${index})">
+                <div class="recipient-name">${recipient.name}</div>
+                <div class="recipient-details">
+                    ${recipient.phone} • ${recipient.address ? recipient.address.split(',')[0] : 'No address'}
+                </div>
+            </div>
+        `).join('');
+    }
+};
+
+window.useSavedRecipient = function(index) {
+    const recipients = dashboardState.get('savedRecipients') || [];
+    const recipient = recipients[index];
+    
+    if (!recipient) return;
+    
+    // Fill recipient fields
+    document.getElementById('recipientName').value = recipient.name;
+    document.getElementById('recipientPhone').value = recipient.phone;
+    
+    // Fill delivery location if available
+    if (recipient.address && recipient.lat && recipient.lng) {
+        const deliveryInput = document.getElementById('deliveryLocation');
+        deliveryInput.value = recipient.address;
+        deliveryInput.dataset.lat = recipient.lat;
+        deliveryInput.dataset.lng = recipient.lng;
+        
+        dashboardState.set('deliveryCoords', {
+            lat: parseFloat(recipient.lat),
+            lng: parseFloat(recipient.lng),
+            display_name: recipient.address
+        });
+        
+        // Calculate distance if pickup exists
+        if (dashboardState.get('pickupCoords')) {
+            locationService.calculateDistance();
+        }
+    }
+    
+    // Hide dropdown
+    document.getElementById('savedRecipientsDropdown').classList.remove('active');
+    
+    utils.showNotification('Recipient details loaded', 'success');
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Form Control Functions
+// ═══════════════════════════════════════════════════════════════════════════
 
 window.updateItemCount = function(change) {
-    const currentCount = formState.get('itemCount');
+    const currentCount = dashboardState.get('itemCount');
     const newCount = currentCount + change;
     
     if (newCount >= 1 && newCount <= 20) {
-        formState.set('itemCount', newCount);
-        elements.itemCount.textContent = newCount;
+        dashboardState.set('itemCount', newCount);
+        document.getElementById('itemCount').textContent = newCount;
         
         document.getElementById('decreaseBtn').disabled = newCount === 1;
         document.getElementById('increaseBtn').disabled = newCount === 20;
+        
+        updateCapacityDisplay();
     }
 };
 
@@ -1082,7 +2584,8 @@ window.selectSize = function(size) {
     const selected = document.querySelector(`[data-size="${size}"]`);
     if (selected) {
         selected.classList.add('selected');
-        formState.set('selectedSize', size);
+        dashboardState.set('selectedSize', size);
+        updateCapacityDisplay();
     }
 };
 
@@ -1091,29 +2594,191 @@ window.selectService = function(service) {
     const selected = document.querySelector(`[data-service="${service}"]`);
     if (selected) {
         selected.classList.add('selected');
-        formState.set('selectedService', service);
-        updateProgress(3);
+        dashboardState.set('selectedService', service);
+        
+        // Update pricing if distance is known
+        const distance = dashboardState.get('distance');
+        if (distance > 0) {
+            locationService.updatePricing(distance);
+        }
     }
 };
 
-window.selectPaymentMethod = function(method) {
-    document.querySelectorAll('.payment-button').forEach(btn => {
-        btn.classList.remove('selected');
-    });
+window.toggleDeliveryType = function(type) {
+    const singleBtn = document.getElementById('singleBtn');
+    const bulkBtn = document.getElementById('bulkBtn');
+    const singleSection = document.getElementById('singleDeliverySection');
+    const singleLocation = document.getElementById('singleDeliveryLocation');
+    const bulkSection = document.getElementById('bulkDeliverySection');
     
-    if (method === 'online') {
-        document.querySelector('.payment-button.pay-now').classList.add('selected');
+    if (type === 'single') {
+        singleBtn.classList.add('active');
+        bulkBtn.classList.remove('active');
+        singleSection.style.display = 'block';
+        singleLocation.style.display = 'block';
+        bulkSection.style.display = 'none';
+        dashboardState.set('deliveryType', 'single');
     } else {
-        document.querySelector('.payment-button.cash-delivery').classList.add('selected');
+        singleBtn.classList.remove('active');
+        bulkBtn.classList.add('active');
+        singleSection.style.display = 'none';
+        singleLocation.style.display = 'none';
+        bulkSection.style.display = 'block';
+        dashboardState.set('deliveryType', 'bulk');
+        utils.showNotification('Bulk delivery saves you more! Add multiple drop-off points.', 'info');
+    }
+};
+
+window.addBulkDelivery = function() {
+    const bulkDeliveries = dashboardState.get('bulkDeliveries') || [];
+    const newIndex = bulkDeliveries.length;
+    
+    const container = document.getElementById('bulkDeliveries');
+    const deliveryItem = document.createElement('div');
+    deliveryItem.className = 'bulk-delivery-item';
+    deliveryItem.style.cssText = 'margin-bottom: 16px; padding: 16px; background: var(--surface-elevated); border-radius: 12px; border: 1px solid var(--border);';
+    
+    deliveryItem.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <h4 style="font-size: 14px; font-weight: 600;">Delivery ${newIndex + 1}</h4>
+            <button type="button" onclick="removeBulkDelivery(${newIndex})" style="width: 28px; height: 28px; border-radius: 50%; background: var(--danger); border: none; color: white; cursor: pointer;">×</button>
+        </div>
+        <div style="display: grid; gap: 12px;">
+            <input type="text" class="input-field" placeholder="Recipient name" id="bulkRecipient${newIndex}">
+            <input type="tel" class="input-field" placeholder="Recipient phone" id="bulkPhone${newIndex}">
+            <div class="input-container">
+                <input type="text" class="input-field" placeholder="Delivery address" id="bulkAddress${newIndex}">
+                <button type="button" class="input-action" onclick="getLocation('bulk${newIndex}')">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M12 2C8.13 2 5 5.13 5 9C5 14.25 12 22 12 22S19 14.25 19 9C19 5.13 15.87 2 12 2ZM12 11.5C10.62 11.5 9.5 10.38 9.5 9S10.62 6.5 12 6.5 14.5 7.62 14.5 9 13.38 11.5 12 11.5Z"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    `;
+    
+    container.appendChild(deliveryItem);
+    bulkDeliveries.push({ index: newIndex });
+    dashboardState.set('bulkDeliveries', bulkDeliveries);
+};
+
+window.removeBulkDelivery = function(index) {
+    const bulkDeliveries = dashboardState.get('bulkDeliveries') || [];
+    bulkDeliveries.splice(index, 1);
+    dashboardState.set('bulkDeliveries', bulkDeliveries);
+    
+    // Rebuild UI
+    const container = document.getElementById('bulkDeliveries');
+    container.innerHTML = '';
+    bulkDeliveries.forEach((_, i) => addBulkDelivery());
+};
+
+function updateCapacityDisplay() {
+    const itemCount = dashboardState.get('itemCount');
+    const selectedSize = dashboardState.get('selectedSize');
+    const sizeConfig = BUSINESS_CONFIG.packageSizes[selectedSize];
+    
+    const totalUnits = itemCount * sizeConfig.units;
+    const vehiclesNeeded = Math.ceil(totalUnits / BUSINESS_CONFIG.vehicleCapacity.motorcycle);
+    
+    const capacityText = document.getElementById('capacityText');
+    const capacityFill = document.getElementById('capacityFill');
+    const capacityIcon = document.getElementById('capacityIcon');
+    
+    if (vehiclesNeeded === 1) {
+        capacityText.textContent = `${itemCount} ${sizeConfig.label.toLowerCase()} item${itemCount > 1 ? 's' : ''} • Fits on one motorcycle`;
+        capacityIcon.textContent = '✓';
+        capacityIcon.className = 'capacity-icon';
+        capacityFill.className = 'capacity-fill';
+    } else if (vehiclesNeeded === 2) {
+        capacityText.textContent = `${itemCount} ${sizeConfig.label.toLowerCase()} items • Needs 2 motorcycles`;
+        capacityIcon.textContent = '!';
+        capacityIcon.className = 'capacity-icon warning';
+        capacityFill.className = 'capacity-fill warning';
+    } else {
+        capacityText.textContent = `${itemCount} ${sizeConfig.label.toLowerCase()} items • Too large (${vehiclesNeeded} motorcycles)`;
+        capacityIcon.textContent = '✕';
+        capacityIcon.className = 'capacity-icon danger';
+        capacityFill.className = 'capacity-fill danger';
     }
     
-    formState.set('selectedPaymentMethod', method);
+    const percentage = Math.min((totalUnits / BUSINESS_CONFIG.vehicleCapacity.motorcycle) * 100, 100);
+    capacityFill.style.width = `${percentage}%`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Copy & Share Functions
+// ═══════════════════════════════════════════════════════════════════════════
+
+window.copyCode = async function(type) {
+    let code = '';
+    let label = '';
+    
+    switch(type) {
+        case 'parcel':
+            code = document.getElementById('displayParcelCode').textContent;
+            label = 'Parcel code';
+            break;
+        case 'pickup':
+            code = document.getElementById('displayPickupCode').textContent;
+            label = 'Pickup code';
+            break;
+        case 'delivery':
+            code = document.getElementById('displayDeliveryCode').textContent;
+            label = 'Delivery code';
+            break;
+    }
+    
+    try {
+        await navigator.clipboard.writeText(code);
+        utils.showToast(`${label} copied!`);
+    } catch (error) {
+        utils.showNotification('Failed to copy code', 'error');
+    }
+};
+
+window.shareDeliveryDetails = async function() {
+    const parcelCode = document.getElementById('displayParcelCode').textContent;
+    const deliveryCode = document.getElementById('displayDeliveryCode').textContent;
+    const recipientName = document.getElementById('recipientName').value;
+    
+    const message = `Hi ${recipientName}, your Tuma delivery ${parcelCode} is confirmed! 
+Your delivery code is: ${deliveryCode}
+Track at: ${window.location.origin}/track?code=${parcelCode}`;
+    
+    if (navigator.share) {
+        try {
+            await navigator.share({
+                title: 'Tuma Delivery Details',
+                text: message
+            });
+        } catch (error) {
+            await navigator.clipboard.writeText(message);
+            utils.showToast('Details copied to clipboard!');
+        }
+    } else {
+        await navigator.clipboard.writeText(message);
+        utils.showToast('Details copied to clipboard!');
+    }
 };
 
 window.trackDelivery = function() {
-    const parcelCode = elements.displayParcelCode.textContent;
-    window.location.href = `tracking.html?parcel=${parcelCode}`;
+    const parcelCode = document.getElementById('displayParcelCode').textContent;
+    switchTab('track');
+    document.getElementById('trackInput').value = parcelCode;
+    trackingService.trackParcel(parcelCode);
+    document.getElementById('successOverlay').style.display = 'none';
 };
+
+window.bookAnother = function() {
+    document.getElementById('successOverlay').style.display = 'none';
+    bookingService.resetBookingForm();
+    window.scrollTo(0, 0);
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Location Functions
+// ═══════════════════════════════════════════════════════════════════════════
 
 window.getLocation = async function(type) {
     try {
@@ -1121,7 +2786,7 @@ window.getLocation = async function(type) {
             throw new Error('Geolocation not supported');
         }
         
-        showNotification('Getting your location...', 'info');
+        utils.showNotification('Getting your location...', 'info');
         
         const position = await new Promise((resolve, reject) => {
             navigator.geolocation.getCurrentPosition(resolve, reject, {
@@ -1136,1605 +2801,900 @@ window.getLocation = async function(type) {
             lng: position.coords.longitude
         };
         
-        const serviceAreaCheck = validation.validateServiceArea(coords);
-        if (!serviceAreaCheck.isValid) {
-            showNotification(
-                `Your location is outside our current service area (${serviceAreaCheck.distance.toFixed(1)}km from CBD). We serve areas within ${serviceAreaCheck.maxRadius}km of Nairobi CBD.`,
+        // Validate service area
+        const serviceCheck = locationService.validateServiceArea(coords);
+        if (!serviceCheck.isValid) {
+            utils.showNotification(
+                `Location is ${serviceCheck.distance.toFixed(1)}km from service area (max ${serviceCheck.maxRadius}km)`,
                 'error'
             );
             return;
         }
         
-        const cached = await geocodingCache.searchReverse(coords.lat, coords.lng);
+        // Reverse geocode
+        const address = await locationService.reverseGeocode(coords.lat, coords.lng);
         
-        if (cached) {
-            const input = type === 'pickup' ? elements.pickupLocation : elements.deliveryLocation;
-            input.value = cached.display_name;
-            input.dataset.lat = coords.lat;
-            input.dataset.lng = coords.lng;
-            
-            formState.set(`${type}Coords`, coords);
-            
-            if (formState.get('pickupCoords') && formState.get('deliveryCoords')) {
-                await calculateDistance();
-            }
-            
-            showNotification('Location updated!', 'success');
-        } else {
-            const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${coords.lat}&lon=${coords.lng}`);
-            const data = await response.json();
-            
-            const input = type === 'pickup' ? elements.pickupLocation : elements.deliveryLocation;
-            input.value = data.display_name || `${coords.lat}, ${coords.lng}`;
-            
-            input.dataset.lat = coords.lat;
-            input.dataset.lng = coords.lng;
-            
-            formState.set(`${type}Coords`, coords);
-            
-            await geocodingCache.storeReverse(coords.lat, coords.lng, data, 'nominatim');
-            
-            if (formState.get('pickupCoords') && formState.get('deliveryCoords')) {
-                await calculateDistance();
-            }
-            
-            showNotification('Location updated!', 'success');
+        // Update appropriate input
+        let input;
+        if (type === 'pickup') {
+            input = document.getElementById('pickupLocation');
+            dashboardState.set('pickupCoords', { ...coords, display_name: address.display_name });
+        } else if (type === 'delivery') {
+            input = document.getElementById('deliveryLocation');
+            dashboardState.set('deliveryCoords', { ...coords, display_name: address.display_name });
+        } else if (type === 'bulkPickup') {
+            input = document.getElementById('bulkPickupLocation');
+        } else if (type.startsWith('bulk')) {
+            const index = type.replace('bulk', '');
+            input = document.getElementById(`bulkAddress${index}`);
         }
+        
+        if (input) {
+            input.value = address.display_name;
+            input.dataset.lat = coords.lat;
+            input.dataset.lng = coords.lng;
+        }
+        
+        // Calculate distance if both locations set
+        if (dashboardState.get('pickupCoords') && dashboardState.get('deliveryCoords')) {
+            await locationService.calculateDistance();
+        }
+        
+        utils.showNotification('Location updated!', 'success');
+        
     } catch (error) {
         console.error('Location error:', error);
-        showNotification('Could not get your location. Please type the address manually.', 'error');
+        utils.showNotification('Could not get location. Please type the address.', 'error');
     }
 };
 
 window.useGPS = window.getLocation;
 
-window.typeAddress = function(type) {
-    const input = type === 'pickup' ? elements.pickupLocation : elements.deliveryLocation;
-    input.focus();
-    showNotification('Type your address in the field above', 'info');
-};
-
-window.toggleDeliveryType = function(type) {
-    console.log('Delivery type:', type);
-};
-
-window.addBulkDelivery = function() {
-    showNotification('Bulk delivery feature coming soon!', 'info');
-};
-
-window.shareDeliveryDetails = async function() {
-    const parcelCode = elements.displayParcelCode.textContent;
-    const deliveryCode = elements.displayDeliveryCode.textContent;
-    
-    const shareData = {
-        title: 'Tuma Delivery Details',
-        text: `Your parcel ${parcelCode} is on the way! Delivery code: ${deliveryCode}`,
-        url: window.location.origin
-    };
-    
-    if (navigator.share) {
-        try {
-            await navigator.share(shareData);
-        } catch (error) {
-            await navigator.clipboard.writeText(shareData.text);
-            showNotification('Details copied to clipboard!', 'success');
-        }
-    } else {
-        await navigator.clipboard.writeText(shareData.text);
-        showNotification('Details copied to clipboard!', 'success');
-    }
-};
-
-window.bookAnother = function() {
-    elements.successOverlay.style.display = 'none';
-    document.getElementById('deliveryForm').reset();
-    formState.reset();
-    updateCapacityDisplay();
-    updateProgress(1);
-    elements.distanceInfo.style.display = 'none';
-    elements.vendorBadge.style.display = 'none';
-    document.getElementById('mainContent').scrollTop = 0;
-    
-    elements.itemCount.textContent = '1';
-    document.querySelectorAll('.size-option').forEach(el => el.classList.remove('selected'));
-    document.querySelector('[data-size="small"]')?.classList.add('selected');
-    document.querySelectorAll('.service-card').forEach(el => el.classList.remove('selected'));
-    document.querySelector('[data-service="smart"]')?.classList.add('selected');
-    
-    if (elements.pickupLocation) {
-        delete elements.pickupLocation.dataset.lat;
-        delete elements.pickupLocation.dataset.lng;
-    }
-    if (elements.deliveryLocation) {
-        delete elements.deliveryLocation.dataset.lat;
-        delete elements.deliveryLocation.dataset.lng;
-    }
-};
-
-// ─── Map Modal Functions ───────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+// Map Modal (if using Leaflet)
+// ═══════════════════════════════════════════════════════════════════════════
 
 let simpleMap = null;
-let currentInputField = null;
-let selectedSimpleLocation = null;
+let currentMapInput = null;
+let selectedLocation = null;
 
 window.openSimpleLocationModal = function(inputId) {
-    currentInputField = inputId;
+    currentMapInput = inputId;
     document.getElementById('simpleLocationModal').style.display = 'block';
-
+    
     if (!simpleMap) {
+        // Initialize Leaflet map
         simpleMap = L.map('simpleMap').setView([-1.2921, 36.8219], 13);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap'
         }).addTo(simpleMap);
-
-        simpleMap.on('moveend', updateSelectedLocation);
-
+        
+        // Add center marker
+        const centerIcon = L.divIcon({
+            html: '<div style="background: var(--primary); width: 20px; height: 20px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3);"></div>',
+            iconSize: [20, 20],
+            className: 'center-marker'
+        });
+        
+        L.marker(simpleMap.getCenter(), { 
+            icon: centerIcon,
+            interactive: false 
+        }).addTo(simpleMap);
+        
+        // Update location on map move
+        simpleMap.on('moveend', async () => {
+            const center = simpleMap.getCenter();
+            selectedLocation = {
+                lat: center.lat,
+                lng: center.lng
+            };
+            
+            // Reverse geocode
+            try {
+                const address = await locationService.reverseGeocode(center.lat, center.lng);
+                document.getElementById('selectedLocationName').textContent = 
+                    address.display_name.split(',')[0];
+                document.getElementById('selectedLocationAddress').textContent = 
+                    address.display_name;
+                selectedLocation.display_name = address.display_name;
+            } catch (error) {
+                console.error('Reverse geocode error:', error);
+            }
+        });
+        
+        // Setup search
         const searchBtn = document.getElementById('simpleSearchBtn');
         const searchInput = document.getElementById('simpleSearch');
-        if (searchBtn && searchInput) {
-            searchBtn.addEventListener('click', async () => {
-                const q = searchInput.value.trim();
-                if (!q) return;
-                try {
-                    const result = await geocodeAddress(q);
-                    simpleMap.setView([result.lat, result.lng], 16);
-                    selectedSimpleLocation = {
-                        lat: result.lat,
-                        lng: result.lng,
-                        address: result.display_name
-                    };
-                    updateLocationDisplay();
-                } catch {
-                    alert('Could not find that address.');
-                }
-            });
-            searchInput.addEventListener('keypress', e => {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    searchBtn.click();
-                }
-            });
-        }
+        
+        searchBtn.addEventListener('click', async () => {
+            const query = searchInput.value.trim();
+            if (!query) return;
+            
+            try {
+                const result = await locationService.geocodeAddress(query);
+                simpleMap.setView([result.lat, result.lng], 16);
+            } catch (error) {
+                utils.showNotification('Could not find location', 'error');
+            }
+        });
+        
+        searchInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                searchBtn.click();
+            }
+        });
     }
-
+    
     setTimeout(() => simpleMap.invalidateSize(), 100);
 };
 
-async function updateSelectedLocation() {
-    const c = simpleMap.getCenter();
-    try {
-        const resp = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${c.lat}&lon=${c.lng}`
-        );
-        const data = await resp.json();
-        selectedSimpleLocation = {
-            lat: c.lat,
-            lng: c.lng,
-            address: data.display_name
-        };
-        updateLocationDisplay();
-    } catch (err) {
-        console.error('Reverse-geocode failed', err);
-    }
-}
-
-function updateLocationDisplay() {
-    if (!selectedSimpleLocation) return;
-    const name = selectedSimpleLocation.address.split(',')[0] || 'Selected Location';
-    document.getElementById('selectedLocationName').textContent = name;
-    document.getElementById('selectedLocationAddress').textContent = selectedSimpleLocation.address;
-}
-
 window.confirmSimpleLocation = function() {
-    if (!selectedSimpleLocation || !currentInputField) return;
+    if (!selectedLocation || !currentMapInput) return;
     
-    const serviceAreaCheck = validation.validateServiceArea(selectedSimpleLocation);
-    if (!serviceAreaCheck.isValid) {
-        showNotification(
-            `This location is ${serviceAreaCheck.distance.toFixed(1)}km from our service center. We currently serve areas within ${serviceAreaCheck.maxRadius}km of Nairobi CBD.`,
+    // Validate service area
+    const serviceCheck = locationService.validateServiceArea(selectedLocation);
+    if (!serviceCheck.isValid) {
+        utils.showNotification(
+            `Location is outside service area (${serviceCheck.distance.toFixed(1)}km away)`,
             'error'
         );
         return;
     }
     
-    const inp = document.getElementById(currentInputField);
-    inp.value = selectedSimpleLocation.address;
-    inp.dataset.lat = selectedSimpleLocation.lat;
-    inp.dataset.lng = selectedSimpleLocation.lng;
-    inp.dispatchEvent(new Event('change', { bubbles: true }));
+    const input = document.getElementById(currentMapInput);
+    input.value = selectedLocation.display_name;
+    input.dataset.lat = selectedLocation.lat;
+    input.dataset.lng = selectedLocation.lng;
     
-    const type = currentInputField.includes('pickup') ? 'pickup' : 'delivery';
-    handleLocationChange(type);
+    // Update state
+    if (currentMapInput === 'pickupLocation') {
+        dashboardState.set('pickupCoords', selectedLocation);
+    } else if (currentMapInput === 'deliveryLocation') {
+        dashboardState.set('deliveryCoords', selectedLocation);
+    }
+    
+    // Calculate distance if both set
+    if (dashboardState.get('pickupCoords') && dashboardState.get('deliveryCoords')) {
+        locationService.calculateDistance();
+    }
     
     closeLocationModal();
+    utils.showNotification('Location selected!', 'success');
 };
 
 window.closeLocationModal = function() {
     document.getElementById('simpleLocationModal').style.display = 'none';
-    currentInputField = null;
-    selectedSimpleLocation = null;
+    currentMapInput = null;
+    selectedLocation = null;
 };
 
-// ─── Core Functions ────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+// Logout Function
+// ═══════════════════════════════════════════════════════════════════════════
 
-async function checkAuthAndLoadVendor() {
-    return null; // Future implementation will check for authenticated user
-}
-
-async function initialize() {
-    console.log('Initializing vendor dashboard...');
-    
-    const authenticatedVendor = await checkAuthAndLoadVendor();
-    
-    if (authenticatedVendor) {
-        const vendorInfoSection = document.querySelector('.form-section:has(#vendorName)');
-        if (vendorInfoSection) {
-            vendorInfoSection.style.display = 'none';
-        }
-        
-        formState.set('authenticatedVendor', authenticatedVendor);
-        formState.set('vendorType', authenticatedVendor.vendor_type);
-        formState.set('isAuthenticated', true);
-        
-        displayVendorBadge({
-            isManaged: authenticatedVendor.is_managed,
-            agentName: authenticatedVendor.agent_name
-        });
-    } else {
-        formState.set('isAuthenticated', false);
+window.logout = function() {
+    if (confirm('Are you sure you want to logout?')) {
+        authService.clearSession();
+        window.location.href = '/';
     }
-    
-    // Handle URL parameters
-    await handleURLParameters();
-    
-    setupEventListeners();
-    setupStateSubscriptions();
-    updateCapacityDisplay();
-    
-    formState.set('selectedService', 'smart');
-    formState.set('selectedSize', 'small');
-    
-    initializeGooglePlacesAutocomplete();
-    testSupabaseConnection();
-    distanceCache.load();
-    
-    // Setup form validation monitoring
-    setupFormValidationMonitoring();
-    
-    console.log('Vendor dashboard initialized successfully');
-}
-
-async function testSupabaseConnection() {
-    try {
-        const response = await fetch(`${SUPABASE_URL}/rest/v1/vendors?select=*&limit=1`, {
-            headers: {
-                'apikey': SUPABASE_ANON_KEY,
-                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-                'Content-Type': 'application/json'
-            }
-        });
-        
-        if (response.ok) {
-            console.log('✅ Supabase connection successful');
-        } else {
-            console.error('❌ Supabase connection failed:', response.status, response.statusText);
-        }
-    } catch (error) {
-        console.error('❌ Supabase connection error:', error);
-    }
-}
-
-function initializeGooglePlacesAutocomplete() {
-    if (window.google && window.google.maps && window.google.maps.places) {
-        console.log('✅ Google Maps API loaded, setting up autocomplete');
-        setupAutocomplete();
-    } else {
-        console.log('⏳ Waiting for Google Maps API...');
-        setTimeout(initializeGooglePlacesAutocomplete, 500);
-    }
-}
-
-window.initMap = function() {
-    console.log('✅ Google Maps initialized via callback');
-    initializeGooglePlacesAutocomplete();
 };
 
-function setupAutocomplete() {
-    const setupField = (inputElement, type) => {
-        if (!inputElement) return;
-        
-        const autocomplete = new google.maps.places.Autocomplete(inputElement, {
-            componentRestrictions: { country: 'KE' },
-            fields: ['formatted_address', 'geometry', 'name', 'place_id', 'types', 'address_components'],
-            bounds: new google.maps.LatLngBounds(
-                new google.maps.LatLng(-1.5, 36.6),
-                new google.maps.LatLng(-1.0, 37.1)
-            ),
-            strictBounds: false
-        });
-        
-        autocomplete.addListener('place_changed', async () => {
-            const place = autocomplete.getPlace();
-            
-            if (place.geometry && place.geometry.location) {
-                const coords = {
-                    lat: place.geometry.location.lat(),
-                    lng: place.geometry.location.lng(),
-                    display_name: place.formatted_address,
-                    formatted_address: place.formatted_address,
-                    place_name: place.name,
-                    place_id: place.place_id,
-                    address_components: place.address_components,
-                    raw: place
-                };
-                
-                console.log(`Google Places selected for ${type}:`, {
-                    name: place.name,
-                    address: place.formatted_address,
-                    lat: coords.lat,
-                    lng: coords.lng
-                });
-                
-                inputElement.dataset.lat = coords.lat;
-                inputElement.dataset.lng = coords.lng;
-                
-                await geocodingCache.store(inputElement.value, coords, 'google');
-                
-                formState.set(`${type}Coords`, coords);
-                
-                updateLocationStatus(inputElement, true);
-                showNotification('✅ Location selected', 'success');
-                
-                if (formState.get('pickupCoords') && formState.get('deliveryCoords')) {
-                    await calculateDistance();
-                }
-            } else if (place.name || place.formatted_address) {
-                console.log('Place selected without geometry, using Google Geocoder');
-                const geocoder = new google.maps.Geocoder();
-                const addressToGeocode = place.formatted_address || place.name;
-                
-                geocoder.geocode({ 
-                    address: addressToGeocode,
-                    componentRestrictions: { country: 'KE' }
-                }, async (results, status) => {
-                    if (status === 'OK' && results[0]) {
-                        const location = results[0].geometry.location;
-                        const coords = {
-                            lat: location.lat(),
-                            lng: location.lng(),
-                            display_name: results[0].formatted_address,
-                            formatted_address: results[0].formatted_address,
-                            place_id: results[0].place_id,
-                            address_components: results[0].address_components,
-                            raw: results[0]
-                        };
-                        
-                        inputElement.dataset.lat = coords.lat;
-                        inputElement.dataset.lng = coords.lng;
-                        inputElement.value = results[0].formatted_address;
-                        
-                        await geocodingCache.store(addressToGeocode, coords, 'google');
-                        
-                        handleLocationChange(type);
-                    } else {
-                        console.error('Google Geocoding failed:', status);
-                        showNotification('Could not find exact location. Please try a different address.', 'error');
-                    }
-                });
-            } else {
-                showNotification('Please select a valid address from the dropdown', 'warning');
-            }
-        });
-        
-        inputElement.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-            }
-        });
-    };
-    
-    setupField(elements.pickupLocation, 'pickup');
-    setupField(elements.deliveryLocation, 'delivery');
-}
-
-function setupEventListeners() {
-    elements.phoneNumber?.addEventListener('input', handlePhoneInput);
-    elements.recipientPhone?.addEventListener('input', handleRecipientPhoneInput);
-    
-    elements.packageDescription?.addEventListener('change', (e) => {
-        handlePackageTypeChange(e.target.value);
-    });
-    
-    elements.specialInstructions?.addEventListener('input', (e) => {
-        const charCountEl = document.getElementById('charCount');
-        if (charCountEl) {
-            charCountEl.textContent = e.target.value.length;
-        }
-    });
-    
-    document.getElementById('deliveryForm')?.addEventListener('submit', handleFormSubmit);
-}
-
-function setupStateSubscriptions() {
-    formState.subscribe(['pickupCoords', 'deliveryCoords'], () => {
-        checkFormValidity();
-    });
-    
-    formState.subscribe(['itemCount', 'selectedSize'], () => {
-        updateCapacityDisplay();
-    });
-    
-    formState.subscribe('distance', (distance) => {
-        if (distance > 0) {
-            updatePricing();
-        }
-    });
-}
-
-async function handlePhoneInput(e) {
-    let value = validation.formatPhone(e.target.value);
-    e.target.value = value;
-    
-    if (value.length === 10 && validation.validatePhone(value)) {
-        try {
-            const vendors = await supabaseAPI.query('vendors', {
-                filter: `phone=eq.${value}`,
-                limit: 1
-            });
-            
-            if (vendors.length > 0) {
-                const vendor = vendors[0];
-                
-                // Auto-fill vendor name
-                if (elements.vendorName && vendor.name) {
-                    elements.vendorName.value = vendor.name;
-                }
-                
-                // Check if managed vendor
-                if (vendor.is_managed && vendor.agent_name) {
-                    formState.set({
-                        vendorType: 'managed',
-                        agentCode: vendor.agent_code,
-                        agentName: vendor.agent_name
-                    });
-                    
-                    displayVendorBadge({
-                        isManaged: true,
-                        agentName: vendor.agent_name
-                    });
-                }
-                
-                // Load saved locations
-                await loadRecentPickupLocations(vendor.id, value);
-                
-                // Show welcome back message
-                if (vendor.total_bookings > 0) {
-                    showNotification(
-                        `Welcome back${vendor.name ? ', ' + vendor.name : ''}! ${vendor.total_bookings} deliveries completed`,
-                        'success'
-                    );
-                } else {
-                    showNotification(`Welcome back${vendor.name ? ', ' + vendor.name : ''}!`, 'success');
-                }
-            } else {
-                // New vendor
-                formState.set({
-                    vendorType: 'casual',
-                    agentCode: null,
-                    agentName: null
-                });
-                elements.vendorBadge.style.display = 'none';
-                
-                // Clear saved locations
-                const savedLocContainer = document.getElementById('savedLocationsContainer');
-                if (savedLocContainer) {
-                    savedLocContainer.remove();
-                }
-            }
-        } catch (error) {
-            console.error('Error checking vendor status:', error);
-            formState.set({
-                vendorType: 'casual',
-                agentCode: null,
-                agentName: null
-            });
-        }
-    } else {
-        // Clear saved locations if phone is invalid
-        const savedLocContainer = document.getElementById('savedLocationsContainer');
-        if (savedLocContainer) {
-            savedLocContainer.remove();
-        }
-    }
-}
-
-function handleRecipientPhoneInput(e) {
-    e.target.value = validation.formatPhone(e.target.value);
-}
-
-function displayVendorBadge(vendorInfo) {
-    if (vendorInfo.isManaged && vendorInfo.agentName) {
-        elements.vendorBadge.style.display = 'block';
-        elements.vendorBadgeContent.className = 'vendor-badge managed';
-        elements.vendorBadgeContent.innerHTML = `
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/>
-            </svg>
-            <span>Managed by ${vendorInfo.agentName}</span>
-        `;
-    } else {
-        elements.vendorBadge.style.display = 'none';
-    }
-}
-
-function handlePackageTypeChange(packageType) {
-    if (!packageType) return;
-    
-    const specialHandling = BUSINESS_CONFIG.packageCompatibility.specialHandling[packageType];
-    
-    if (specialHandling) {
-        if (specialHandling.priority === 'urgent' || specialHandling.maxDelay <= 60) {
-            showNotification('⚡ Express delivery recommended for this item type', 'info');
-            
-            if (specialHandling.priority === 'urgent') {
-                selectService('express');
-            }
-        }
-        
-        if (specialHandling.fragile) {
-            showNotification('📦 This item will be handled with extra care', 'info');
-        }
-        
-        if (specialHandling.secure) {
-            showNotification('🔒 This item will be transported securely', 'info');
-        }
-    }
-    
-    formState.set('packageType', packageType);
-}
-
-async function handleLocationChange(type) {
-    const input = type === 'pickup' ? elements.pickupLocation : elements.deliveryLocation;
-    const address = input.value.trim();
-    const dsLat = input.dataset.lat;
-    const dsLng = input.dataset.lng;
-    
-    console.log(`handleLocationChange called for ${type}:`, {
-        address: address,
-        datasetLat: dsLat,
-        datasetLng: dsLng
-    });
-    
-    if (dsLat && dsLng) {
-        const coords = {
-            lat: parseFloat(dsLat),
-            lng: parseFloat(dsLng),
-            display_name: address
-        };
-        
-        console.log('Using dataset coordinates:', coords);
-        
-        const serviceAreaCheck = validation.validateServiceArea(coords);
-        if (!serviceAreaCheck.isValid) {
-            const locationName = address.toLowerCase();
-            const addressLower = coords.display_name ? coords.display_name.toLowerCase() : '';
-            const knownNairobiLocations = [
-                'junction mall', 'westgate', 'sarit centre', 'village market', 'two rivers',
-                'garden city', 'thika road mall', 'capital centre', 'yaya centre', 'prestige plaza',
-                'westlands', 'karen', 'lavington', 'kilimani', 'kileleshwa', 'parklands',
-                'kasarani', 'embakasi', 'langata', 'dagoretti', 'kibera', 'kawangware',
-                'stonebridge', 'osieli', 'argwings', 'kodhek', 'hurlingham', 'upperhill',
-                'cbd', 'downtown', 'river road', 'moi avenue', 'kenyatta avenue'
-            ];
-            
-            const isKnownLocation = knownNairobiLocations.some(loc => 
-                locationName.includes(loc) || addressLower.includes(loc)
-            );
-            
-            const isNairobiAddress = locationName.includes('nairobi') || addressLower.includes('nairobi');
-            
-            if (isKnownLocation || isNairobiAddress) {
-                console.warn('Known Nairobi location detected, overriding distance check:', {
-                    address: address,
-                    coords: coords,
-                    calculatedDistance: serviceAreaCheck.distance.toFixed(2) + 'km',
-                    decision: 'ALLOWING'
-                });
-                
-                if (Math.abs(coords.lat) > 5 || coords.lng < 35 || coords.lng > 38) {
-                    console.error('CRITICAL: Coordinates are definitely wrong for Nairobi:', coords);
-                    showNotification('Location coordinates appear incorrect. Please try selecting from the dropdown or use GPS.', 'error');
-                    input.value = '';
-                    delete input.dataset.lat;
-                    delete input.dataset.lng;
-                    updateLocationStatus(input, false);
-                    return;
-                }
-            } else {
-                showNotification(
-                    `Sorry, this location is ${serviceAreaCheck.distance.toFixed(1)}km from our service center. We currently serve areas within ${serviceAreaCheck.maxRadius}km of Nairobi CBD.`,
-                    'error'
-                );
-                input.value = '';
-                delete input.dataset.lat;
-                delete input.dataset.lng;
-                updateLocationStatus(input, false);
-                return;
-            }
-        }
-        
-        formState.set(`${type}Coords`, coords);
-        updateLocationStatus(input, true);
-        
-        if (formState.get('pickupCoords') && formState.get('deliveryCoords')) {
-            await calculateDistance();
-        }
-        return;
-    }
-    
-    if (!address || address.length < 3) {
-        updateLocationStatus(input, false);
-        return;
-    }
-    
-    const cached = await geocodingCache.search(address);
-    if (cached) {
-        const coords = {
-            lat: cached.lat,
-            lng: cached.lng,
-            display_name: cached.display_name
-        };
-        
-        const serviceAreaCheck = validation.validateServiceArea(coords);
-        if (!serviceAreaCheck.isValid) {
-            showNotification(
-                `Sorry, this location is ${serviceAreaCheck.distance.toFixed(1)}km from our service center. We currently serve areas within ${serviceAreaCheck.maxRadius}km of Nairobi CBD.`,
-                'error'
-            );
-            input.value = '';
-            updateLocationStatus(input, false);
-            return;
-        }
-        
-        input.dataset.lat = coords.lat;
-        input.dataset.lng = coords.lng;
-        
-        formState.set(`${type}Coords`, coords);
-        updateLocationStatus(input, true);
-        
-        if (formState.get('pickupCoords') && formState.get('deliveryCoords')) {
-            await calculateDistance();
-        }
-        
-        showNotification(`📦 Location loaded from cache`, 'success');
-        return;
-    }
-    
-    if (window.google && window.google.maps && window.google.maps.Geocoder) {
-        console.log(`Using Google Geocoder for manually typed address: ${address}`);
-        const geocoder = new google.maps.Geocoder();
-        
-        geocoder.geocode({ 
-            address: address,
-            componentRestrictions: { country: 'KE' }
-        }, async (results, status) => {
-            if (status === 'OK' && results[0]) {
-                const location = results[0].geometry.location;
-                const coords = {
-                    lat: location.lat(),
-                    lng: location.lng(),
-                    display_name: results[0].formatted_address,
-                    formatted_address: results[0].formatted_address,
-                    place_id: results[0].place_id,
-                    address_components: results[0].address_components,
-                    raw: results[0]
-                };
-                
-                input.dataset.lat = coords.lat;
-                input.dataset.lng = coords.lng;
-                input.value = results[0].formatted_address;
-                
-                const serviceAreaCheck = validation.validateServiceArea(coords);
-                if (!serviceAreaCheck.isValid) {
-                    showNotification(
-                        `Sorry, this location is ${serviceAreaCheck.distance.toFixed(1)}km from our service center. We currently serve areas within ${serviceAreaCheck.maxRadius}km of Nairobi CBD.`,
-                        'error'
-                    );
-                    input.value = '';
-                    delete input.dataset.lat;
-                    delete input.dataset.lng;
-                    updateLocationStatus(input, false);
-                    return;
-                }
-                
-                await geocodingCache.store(address, coords, 'google');
-                
-                formState.set(`${type}Coords`, coords);
-                updateLocationStatus(input, true);
-                
-                if (formState.get('pickupCoords') && formState.get('deliveryCoords')) {
-                    await calculateDistance();
-                }
-            } else {
-                console.log('Google Geocoder failed, trying Nominatim');
-                await geocodeWithNominatim(address, type);
-            }
-        });
-    } else {
-        await geocodeWithNominatim(address, type);
-    }
-}
-
-function updateLocationStatus(input, isValid) {
-    const container = input.parentElement;
-    const actionButton = container.querySelector('.input-action');
-    
-    if (isValid) {
-        input.classList.add('location-confirmed');
-        input.classList.remove('error');
-        
-        if (actionButton) {
-            actionButton.innerHTML = `
-                <svg viewBox="0 0 24 24" style="fill: #34C759;">
-                    <path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"/>
-                </svg>
-            `;
-            actionButton.style.background = 'rgba(52, 199, 89, 0.1)';
-        }
-        
-        input.style.animation = 'locationSuccess 0.3s ease-out';
-    } else {
-        input.classList.remove('location-confirmed');
-        
-        if (actionButton) {
-            actionButton.innerHTML = `
-                <svg viewBox="0 0 24 24">
-                    <path d="M12 2C8.13 2 5 5.13 5 9C5 14.25 12 22 12 22S19 14.25 19 9C19 5.13 15.87 2 12 2ZM12 11.5C10.62 11.5 9.5 10.38 9.5 9S10.62 6.5 12 6.5 14.5 7.62 14.5 9 13.38 11.5 12 11.5Z"/>
-                </svg>
-            `;
-            actionButton.style.background = '';
-        }
-    }
-}
-
-async function geocodeWithNominatim(address, type) {
-    const input = type === 'pickup' ? elements.pickupLocation : elements.deliveryLocation;
-    
-    try {
-        console.log(`Geocoding ${type} via Nominatim:`, address);
-        const coords = await geocodeAddress(address);
-        
-        const serviceAreaCheck = validation.validateServiceArea(coords);
-        if (!serviceAreaCheck.isValid) {
-            showNotification(
-                `Sorry, this location is ${serviceAreaCheck.distance.toFixed(1)}km from our service center. We currently serve areas within ${serviceAreaCheck.maxRadius}km of Nairobi CBD.`,
-                'error'
-            );
-            input.value = '';
-            delete input.dataset.lat;
-            delete input.dataset.lng;
-            return;
-        }
-        
-        input.dataset.lat = coords.lat;
-        input.dataset.lng = coords.lng;
-        
-        formState.set(`${type}Coords`, coords);
-        
-        if (formState.get('pickupCoords') && formState.get('deliveryCoords')) {
-            await calculateDistance();
-        }
-    } catch (err) {
-        console.error('Geocoding error:', err);
-        showNotification(
-            'Could not find that address. Please select from the dropdown suggestions or try a more specific address.',
-            'error'
-        );
-    }
-}
-
-async function calculateDistance() {
-    const pickup = formState.get('pickupCoords');
-    const delivery = formState.get('deliveryCoords');
-    
-    if (!pickup || !delivery) return;
-    
-    console.log('📏 Calculating distance...');
-    
-    const cached = await distanceCache.get(pickup, delivery);
-    if (cached) {
-        console.log('✅ Using cached distance:', cached.distance, 'km');
-        formState.set('distance', cached.distance);
-        formState.set('duration', cached.duration);
-        elements.calculatedDistance.textContent = `${cached.distance.toFixed(2)} km`;
-        elements.distanceInfo.style.display = 'block';
-        
-        const durationEl = document.getElementById('estimatedDuration');
-        if (durationEl) {
-            durationEl.textContent = `~${cached.duration} min`;
-        }
-        
-        updateProgress(2);
-        
-        const stats = distanceCache.getStats();
-        if (stats.hits % 10 === 0 && stats.hits > 0) {
-            showNotification(`💰 Saved ${stats.hits} API calls using smart caching!`, 'success');
-        }
-        
-        // Force form validation after distance calculation
-        setTimeout(() => {
-            checkFormValidity();
-            
-            // Double-check and force enable if conditions are met
-            const pickupCheck = formState.get('pickupCoords');
-            const deliveryCheck = formState.get('deliveryCoords');
-            const distanceCheck = formState.get('distance');
-            
-            if (pickupCheck && deliveryCheck && distanceCheck > 0) {
-                const submitBtn = document.getElementById('submitBtn');
-                const buttonText = document.getElementById('buttonText');
-                
-                if (submitBtn && submitBtn.disabled) {
-                    console.log('🚨 Force-enabling button after distance calculation');
-                    submitBtn.disabled = false;
-                    buttonText.textContent = 'Book Delivery';
-                }
-            }
-        }, 200);
-        
-        return;
-    }
-    
-    if (window.google && window.google.maps) {
-        try {
-            const service = new google.maps.DistanceMatrixService();
-            
-            const response = await new Promise((resolve, reject) => {
-                service.getDistanceMatrix({
-                    origins: [new google.maps.LatLng(pickup.lat, pickup.lng)],
-                    destinations: [new google.maps.LatLng(delivery.lat, delivery.lng)],
-                    travelMode: google.maps.TravelMode.DRIVING,
-                    unitSystem: google.maps.UnitSystem.METRIC,
-                    avoidHighways: false,
-                    avoidTolls: false,
-                    drivingOptions: {
-                        departureTime: new Date(),
-                        trafficModel: 'bestguess'
-                    }
-                }, (response, status) => {
-                    if (status === 'OK') {
-                        resolve(response);
-                    } else {
-                        reject(new Error(`Distance Matrix API error: ${status}`));
-                    }
-                });
-            });
-            
-            if (response.rows[0].elements[0].status === 'OK') {
-                const element = response.rows[0].elements[0];
-                const distance = element.distance.value / 1000;
-                const duration = Math.ceil(element.duration.value / 60);
-                
-                console.log('📍 Google Distance Matrix:', distance, 'km,', duration, 'minutes');
-                
-                const cacheData = {
-                    distance: distance,
-                    duration: duration,
-                    distance_text: element.distance.text,
-                    duration_text: element.duration.text,
-                    timestamp: Date.now(),
-                    raw: response
-                };
-                
-                await distanceCache.set(pickup, delivery, cacheData);
-                
-                formState.set('distance', distance);
-                formState.set('duration', duration);
-                
-                elements.calculatedDistance.textContent = `${distance.toFixed(2)} km`;
-                elements.distanceInfo.style.display = 'block';
-                
-                const durationEl = document.getElementById('estimatedDuration');
-                if (durationEl) {
-                    durationEl.textContent = `~${duration} min`;
-                }
-                
-                updateProgress(2);
-                
-                // Force validation here too
-                setTimeout(() => {
-                    checkFormValidity();
-                }, 200);
-                
-                return;
-            }
-        } catch (error) {
-            console.error('Distance Matrix API failed:', error);
-        }
-    }
-    
-    console.log('⚠️ Using estimation fallback');
-    const straightDistance = calculateStraightDistance(pickup, delivery);
-    const estimatedDistance = straightDistance * 1.5;
-    const estimatedDuration = Math.ceil(estimatedDistance * 3);
-    
-    const estimationData = {
-        distance: estimatedDistance,
-        duration: estimatedDuration,
-        distance_text: `~${estimatedDistance.toFixed(1)} km`,
-        duration_text: `~${estimatedDuration} min`,
-        estimated: true,
-        timestamp: Date.now()
-    };
-    
-    await distanceCache.set(pickup, delivery, estimationData);
-    
-    formState.set('distance', estimatedDistance);
-    formState.set('duration', estimatedDuration);
-    
-    elements.calculatedDistance.textContent = `~${estimatedDistance.toFixed(2)} km`;
-    elements.distanceInfo.style.display = 'block';
-    
-    const durationEl = document.getElementById('estimatedDuration');
-    if (durationEl) {
-        durationEl.textContent = `~${estimatedDuration} min`;
-    }
-    
-    showNotification('📏 Using estimated distance. Actual distance may vary.', 'warning');
-    updateProgress(2);
-    
-    // Force validation here too
-    setTimeout(() => {
-        checkFormValidity();
-    }, 200);
-}
-
-function updatePricing() {
-    const distance = formState.get('distance');
-    if (distance <= 0) return;
-    
-    console.log('Updating pricing for distance:', distance);
-    
-    const options = {
-        isManaged: formState.get('vendorType') === 'managed'
-    };
-    
-    elements.expressPrice.textContent = pricing.formatPrice(
-        pricing.calculate(distance, 'express', options)
-    );
-    elements.smartPrice.textContent = pricing.formatPrice(
-        pricing.calculate(distance, 'smart', options)
-    );
-    elements.ecoPrice.textContent = pricing.formatPrice(
-        pricing.calculate(distance, 'eco', options)
-    );
-    
-    elements.servicePriceHint.style.display = 'none';
-}
-
-function updateCapacityDisplay() {
-    const itemCount = formState.get('itemCount');
-    const selectedSize = formState.get('selectedSize');
-    
-    const result = validation.validateCapacity(itemCount, selectedSize);
-    const sizeConfig = BUSINESS_CONFIG.packageSizes[selectedSize];
-    
-    if (result.isValid) {
-        const itemText = itemCount === 1 ? 'item' : 'items';
-        elements.capacityText.textContent = `${itemCount} ${sizeConfig.label.toLowerCase()} ${itemText} • Fits on one motorcycle`;
-        elements.capacityIcon.textContent = '✓';
-        elements.capacityIcon.className = 'capacity-icon';
-    } else {
-        elements.capacityText.textContent = `${itemCount} ${sizeConfig.label.toLowerCase()} items • Needs ${result.vehiclesNeeded} motorcycles`;
-        elements.capacityIcon.textContent = result.vehiclesNeeded > 2 ? '✕' : '!';
-        elements.capacityIcon.className = `capacity-icon ${result.vehiclesNeeded > 2 ? 'danger' : 'warning'}`;
-    }
-    
-    const capacityPercentage = Math.min((result.totalUnits / BUSINESS_CONFIG.vehicleCapacity.motorcycle) * 100, 100);
-    elements.capacityFill.style.width = `${capacityPercentage}%`;
-    elements.capacityFill.className = `capacity-fill ${result.vehiclesNeeded > 2 ? 'danger' : result.vehiclesNeeded > 1 ? 'warning' : ''}`;
-}
-
-function checkFormValidity() {
-    const pickup = formState.get('pickupCoords');
-    const delivery = formState.get('deliveryCoords');
-    const distance = formState.get('distance');
-    
-    console.log('🔍 Form validity check:', {
-        hasPickup: !!pickup,
-        pickupCoords: pickup,
-        hasDelivery: !!delivery,
-        deliveryCoords: delivery,
-        hasDistance: !!distance,
-        distance: distance
-    });
-    
-    const submitBtn = document.getElementById('submitBtn');
-    const buttonText = document.getElementById('buttonText');
-    
-    if (!submitBtn || !buttonText) {
-        console.error('❌ Submit button elements not found!');
-        return;
-    }
-    
-    if (pickup && delivery && distance > 0) {
-        submitBtn.disabled = false;
-        buttonText.textContent = 'Book Delivery';
-        console.log('✅ Form is valid - button enabled');
-    } else {
-        submitBtn.disabled = true;
-        buttonText.textContent = 'Enter locations to see price';
-        console.log('❌ Form is invalid - button disabled');
-    }
-}
+// ═══════════════════════════════════════════════════════════════════════════
+// Form Submission
+// ═══════════════════════════════════════════════════════════════════════════
 
 async function handleFormSubmit(e) {
     e.preventDefault();
     
-    if (formState.get('isLoading')) return;
+    if (dashboardState.get('isLoading')) return;
     
-    const requiredFields = {
-        pickupLocation: elements.pickupLocation.value,
-        deliveryLocation: elements.deliveryLocation.value,
-        recipientName: elements.recipientName.value,
-        recipientPhone: elements.recipientPhone.value,
-        packageDescription: elements.packageDescription.value
+    // Gather form data
+    const formData = {
+        vendorName: document.getElementById('vendorName')?.value,
+        vendorPhone: document.getElementById('phoneNumber')?.value,
+        recipientName: document.getElementById('recipientName').value,
+        recipientPhone: document.getElementById('recipientPhone').value,
+        packageDescription: document.getElementById('packageDescription').options[
+            document.getElementById('packageDescription').selectedIndex
+        ].text,
+        packageCategory: document.getElementById('packageDescription').value,
+        specialInstructions: document.getElementById('specialInstructions').value,
+        affiliateCode: document.getElementById('affiliateCode').value,
+        saveRecipient: true // Could add a checkbox for this
     };
     
-    if (!formState.get('isAuthenticated')) {
-        requiredFields.vendorName = elements.vendorName?.value;
-        requiredFields.phoneNumber = elements.phoneNumber?.value;
+    // Validate required fields
+    if (!dashboardState.get('isAuthenticated')) {
+        if (!formData.vendorName || !formData.vendorPhone) {
+            utils.showNotification('Please enter your name and phone number', 'error');
+            return;
+        }
+        
+        if (!utils.validatePhone(formData.vendorPhone)) {
+            utils.showNotification('Please enter a valid phone number', 'error');
+            return;
+        }
     }
     
-    const validationResult = validation.validateRequired(requiredFields);
-    
-    if (!validationResult.isValid) {
-        showNotification('Please fill in all required fields: ' + validationResult.missing.join(', '), 'error');
-        console.error('Missing fields:', validationResult.missing);
+    if (!formData.recipientName || !formData.recipientPhone) {
+        utils.showNotification('Please enter recipient details', 'error');
         return;
     }
     
-    console.log('Form values:', {
-        vendorName: elements.vendorName?.value || 'Authenticated',
-        phoneNumber: elements.phoneNumber?.value || 'Authenticated',
-        distance: formState.get('distance'),
-        service: formState.get('selectedService')
-    });
-    
-    if (!formState.get('isAuthenticated') && !validation.validatePhone(elements.phoneNumber.value)) {
-        showNotification('Please enter a valid vendor phone number', 'error');
+    if (!utils.validatePhone(formData.recipientPhone)) {
+        utils.showNotification('Please enter a valid recipient phone number', 'error');
         return;
     }
     
-    if (!validation.validatePhone(elements.recipientPhone.value)) {
-        showNotification('Please enter a valid recipient phone number', 'error');
+    if (!formData.packageCategory) {
+        utils.showNotification('Please select what you are sending', 'error');
         return;
     }
     
-    formState.set('isLoading', true);
-    elements.submitBtn.classList.add('loading');
-    elements.buttonText.textContent = 'Processing...';
-    
-    try {
-        const deliveryCodes = {
-            parcel_code: codes.generateParcelCode(),
-            pickup_code: codes.generatePickupCode(),
-            delivery_code: codes.generateDeliveryCode()
-        };
-        
-        const finalPrice = pricing.calculate(
-            formState.get('distance'),
-            formState.get('selectedService'),
-            {
-                isManaged: formState.get('vendorType') === 'managed'
-            }
-        );
-        
-        console.log('Creating booking with price:', finalPrice);
-        
-        let vendorData;
-        let vendorId = null;
-        
-        if (formState.get('isAuthenticated')) {
-            vendorData = formState.get('authenticatedVendor');
-            vendorId = vendorData.id;
-            console.log('Using authenticated vendor:', vendorData);
-        } else {
-            const vendorNameValue = elements.vendorName?.value?.trim();
-            const phoneValue = elements.phoneNumber?.value;
-            
-            if (!vendorNameValue || !phoneValue) {
-                showNotification('Please fill in your name and phone number', 'error');
-                console.error('Vendor info missing:', { name: vendorNameValue, phone: phoneValue });
-                return;
-            }
-            
-            // Check if vendor exists
-            const existingVendors = await supabaseAPI.query('vendors', {
-                filter: `phone=eq.${phoneValue}`,
-                limit: 1
-            });
-            
-            if (existingVendors.length === 0) {
-                // Create new vendor
-                const newVendorData = {
-                    vendor_name: vendorNameValue,  // Changed from 'name' to 'vendor_name'
-                    phone: phoneValue,
-                    vendor_type: formState.get('vendorType') || 'casual',
-                    is_managed: formState.get('vendorType') === 'managed',
-                    agent_code: formState.get('agentCode') || null,
-                    agent_name: formState.get('agentName') || null,
-                    status: 'active',
-                    total_bookings: 0,
-                    successful_deliveries: 0,
-                    created_at: new Date().toISOString()
-                };
-                
-                const newVendor = await supabaseAPI.insert('vendors', newVendorData);
-                console.log('✅ New vendor created:', newVendor);
-                vendorId = newVendor[0]?.id;
-                
-                vendorData = {
-                    ...newVendorData,
-                    id: vendorId,
-                    vendor_name: vendorNameValue,
-                    phone_number: phoneValue
-                };
-            } else {
-                // Update existing vendor
-                vendorId = existingVendors[0].id;
-                await supabaseAPI.update('vendors', vendorId, {
-                    last_active: new Date().toISOString(),
-                    total_bookings: (existingVendors[0].total_bookings || 0) + 1
-                });
-                
-                vendorData = {
-                    ...existingVendors[0],
-                    vendor_name: vendorNameValue,
-                    phone_number: phoneValue
-                };
-            }
-        }
-        
-        console.log('Vendor data:', vendorData);
-        
-        // Calculate pricing breakdown
-        const pricingBreakdown = pricing.calculateBreakdown(finalPrice, formState.get('selectedService'));
-        
-        const parcelData = {
-            vendor_id: vendorId,
-            vendor_name: vendorData.vendor_name || vendorData.name,
-            vendor_phone: vendorData.phone || vendorData.phone_number,
-            vendor_type: vendorData.vendor_type,
-            
-            pickup_location: {
-                address: elements.pickupLocation.value,
-                lat: formState.get('pickupCoords').lat,
-                lng: formState.get('pickupCoords').lng
-            },
-            pickup_lat: formState.get('pickupCoords').lat,
-            pickup_lng: formState.get('pickupCoords').lng,
-            pickup_coordinates: `${formState.get('pickupCoords').lat},${formState.get('pickupCoords').lng}`,
-            
-            delivery_location: {
-                address: elements.deliveryLocation.value,
-                lat: formState.get('deliveryCoords').lat,
-                lng: formState.get('deliveryCoords').lng
-            },
-            delivery_lat: formState.get('deliveryCoords').lat,
-            delivery_lng: formState.get('deliveryCoords').lng,
-            delivery_coordinates: `${formState.get('deliveryCoords').lat},${formState.get('deliveryCoords').lng}`,
-            
-            recipient_name: elements.recipientName.value,
-            recipient_phone: elements.recipientPhone.value,
-            
-            package_category: elements.packageDescription.value,
-            package_description: elements.packageDescription.options[elements.packageDescription.selectedIndex].text,
-            package_type: elements.packageDescription.value,
-            package_size: formState.get('selectedSize'),
-            item_count: formState.get('itemCount'),
-            number_of_items: formState.get('itemCount'),
-            special_instructions: elements.specialInstructions.value || null,
-            
-            is_fragile: ['phone', 'laptop', 'electronics-fragile', 'glassware', 'artwork', 'fragile-general'].includes(elements.packageDescription.value),
-            is_perishable: ['food-fresh', 'food-frozen'].includes(elements.packageDescription.value),
-            requires_signature: ['certificates', 'pharmaceuticals', 'medical-equipment'].includes(elements.packageDescription.value),
-            priority_level: ['food-frozen', 'pharmaceuticals'].includes(elements.packageDescription.value) ? 'urgent' : 
-                           ['food-fresh', 'medical-equipment'].includes(elements.packageDescription.value) ? 'high' : 'normal',
-            
-            service_type: formState.get('selectedService'),
-            customer_choice: formState.get('selectedService'),
-            distance_km: formState.get('distance'),
-            estimated_duration_minutes: formState.get('duration') || null,
-            duration_minutes: formState.get('duration') || null,
-            
-            base_price: BUSINESS_CONFIG.pricing.rates.base + (formState.get('distance') * BUSINESS_CONFIG.pricing.rates.perKm),
-            service_multiplier: BUSINESS_CONFIG.pricing.multipliers.service[formState.get('selectedService')],
-            price: finalPrice,
-            total_price: finalPrice,
-            platform_fee: pricingBreakdown.platform_fee,
-            platform_revenue: pricingBreakdown.platform_revenue,
-            vendor_payout: pricingBreakdown.vendor_payout,
-            rider_payout: pricingBreakdown.rider_payout,
-            
-            agent_commission: (vendorData.agent_code && vendorData.is_managed) 
-                ? Math.round(pricingBreakdown.platform_fee * 0.15) // 15% of platform's 30% fee
-                : 0,
-            
-            payment_method: formState.get('selectedPaymentMethod'),
-            payment_status: formState.get('selectedPaymentMethod') === 'cash' ? 'pending' : 'awaiting_payment',
-            
-            parcel_code: deliveryCodes.parcel_code,
-            pickup_code: deliveryCodes.pickup_code,
-            delivery_code: deliveryCodes.delivery_code,
-            
-            status: 'submitted',
-            created_at: new Date().toISOString()
-        };
-        
-        console.log('Saving booking to database...');
-        console.log('Parcel data:', parcelData);
-        console.log('Price field value:', parcelData.price);
-        
-        const savedParcel = await supabaseAPI.insert('parcels', parcelData);
-        console.log('✅ Parcel saved successfully:', savedParcel);
-        
-        showSuccess(deliveryCodes, finalPrice);
-        
-        updateProgress(4);
-        showNotification('Booking created successfully!', 'success');
-        
-    } catch (error) {
-        console.error('Booking error:', error);
-        showNotification('Failed to create booking. Please try again.', 'error');
-    } finally {
-        formState.set('isLoading', false);
-        elements.submitBtn.classList.remove('loading');
-        elements.buttonText.textContent = 'Book Delivery';
-    }
-}
-
-function showSuccess(codes, price) {
-    console.log('📋 Showing success with codes:', codes, 'price:', price);
-    
-    // Get elements by ID
-    const displayParcelCode = document.getElementById('displayParcelCode');
-    const displayPickupCode = document.getElementById('displayPickupCode');
-    const displayDeliveryCode = document.getElementById('displayDeliveryCode');
-    const displayTotalPrice = document.getElementById('displayTotalPrice');
-    const successOverlay = document.getElementById('successOverlay');
-    
-    // Also try alternative element IDs that might be used
-    const parcelCodeEl = displayParcelCode || document.querySelector('[data-parcel-code]') || document.querySelector('.parcel-code');
-    const pickupCodeEl = displayPickupCode || document.querySelector('[data-pickup-code]') || document.querySelector('.pickup-code');
-    const deliveryCodeEl = displayDeliveryCode || document.querySelector('[data-delivery-code]') || document.querySelector('.delivery-code');
-    const priceEl = displayTotalPrice || document.querySelector('[data-total-price]') || document.querySelector('.total-price');
-    
-    if (!parcelCodeEl || !pickupCodeEl || !deliveryCodeEl) {
-        console.error('❌ Success modal code elements not found! Looking for:', {
-            parcelCode: !!parcelCodeEl,
-            pickupCode: !!pickupCodeEl,
-            deliveryCode: !!deliveryCodeEl
-        });
-        
-        // Try to find any element that might display codes
-        const modalContent = document.querySelector('.success-content, .modal-content, #successOverlay');
-        if (modalContent) {
-            console.log('Modal content HTML:', modalContent.innerHTML);
-        }
+    if (!dashboardState.get('pickupCoords') || !dashboardState.get('deliveryCoords')) {
+        utils.showNotification('Please enter pickup and delivery locations', 'error');
+        return;
     }
     
-    // Set the codes
-    if (parcelCodeEl) {
-        parcelCodeEl.textContent = codes.parcel_code || codes.parcelCode || 'N/A';
-        console.log('✅ Set parcel code:', parcelCodeEl.textContent);
+    if (dashboardState.get('distance') <= 0) {
+        utils.showNotification('Please wait for distance calculation', 'warning');
+        await locationService.calculateDistance();
+        return;
     }
     
-    if (pickupCodeEl) {
-        pickupCodeEl.textContent = codes.pickup_code || codes.pickupCode || 'N/A';
-        console.log('✅ Set pickup code:', pickupCodeEl.textContent);
-    }
-    
-    if (deliveryCodeEl) {
-        deliveryCodeEl.textContent = codes.delivery_code || codes.deliveryCode || 'N/A';
-        console.log('✅ Set delivery code:', deliveryCodeEl.textContent);
-    }
-    
-    // Display the price
-    if (priceEl) {
-        priceEl.textContent = `KES ${Math.round(price)}`;
-        console.log('✅ Set price:', priceEl.textContent);
-    }
-    
-    // Show the overlay
-    if (successOverlay) {
-        successOverlay.style.display = 'flex';
-        console.log('✅ Success overlay displayed');
-        
-        // Force a reflow to ensure display updates
-        successOverlay.offsetHeight;
-        
-        // Also try to make it visible through other means
-        successOverlay.style.visibility = 'visible';
-        successOverlay.style.opacity = '1';
-        successOverlay.classList.add('show', 'active');
-    } else {
-        console.error('❌ Success overlay element not found!');
-    }
-    
-    // As a fallback, also try updating any elements with the specific text content
-    const allElements = document.querySelectorAll('*');
-    allElements.forEach(el => {
-        if (el.textContent === 'Parcel Code' || el.textContent === 'TMXXXXXX') {
-            const nextEl = el.nextElementSibling || el.parentElement.querySelector('span, div, p');
-            if (nextEl) {
-                nextEl.textContent = codes.parcel_code || codes.parcelCode || 'N/A';
-                console.log('✅ Updated parcel code via text search');
-            }
-        }
-        if (el.textContent === 'Pickup Code' || el.textContent === 'PKXXXXXX') {
-            const nextEl = el.nextElementSibling || el.parentElement.querySelector('span, div, p');
-            if (nextEl) {
-                nextEl.textContent = codes.pickup_code || codes.pickupCode || 'N/A';
-                console.log('✅ Updated pickup code via text search');
-            }
-        }
-        if (el.textContent === 'Delivery Code' || el.textContent === 'DLXXXXXX') {
-            const nextEl = el.nextElementSibling || el.parentElement.querySelector('span, div, p');
-            if (nextEl) {
-                nextEl.textContent = codes.delivery_code || codes.deliveryCode || 'N/A';
-                console.log('✅ Updated delivery code via text search');
-            }
-        }
-    });
-}
-
-// Override showSuccess globally
-window.showSuccess = showSuccess;
-
-function updateProgress(step) {
-    const steps = document.querySelectorAll('.step');
-    const progressFill = document.getElementById('progressFill');
-    
-    steps.forEach((s, index) => {
-        s.classList.remove('active', 'completed');
-        if (index < step - 1) {
-            s.classList.add('completed');
-        } else if (index === step - 1) {
-            s.classList.add('active');
-        }
-    });
-    
-    progressFill.style.width = `${(step / 4) * 100}%`;
-}
-
-// ─── Form Validation Monitoring ────────────────────────────────────────────
-
-function setupFormValidationMonitoring() {
-    // Watch for button state changes
-    const submitBtn = document.getElementById('submitBtn');
-    if (submitBtn) {
-        const observer = new MutationObserver((mutations) => {
-            mutations.forEach((mutation) => {
-                if (mutation.type === 'attributes' && mutation.attributeName === 'disabled') {
-                    const pickup = formState.get('pickupCoords');
-                    const delivery = formState.get('deliveryCoords');
-                    const distance = formState.get('distance');
-                    
-                    if (pickup && delivery && distance > 0 && submitBtn.disabled) {
-                        console.log('🚨 Button was incorrectly disabled, re-enabling...');
-                        submitBtn.disabled = false;
-                    }
-                }
-            });
-        });
-        
-        observer.observe(submitBtn, { attributes: true });
-    }
-    
-    // Periodically check form validity (failsafe)
-    setInterval(() => {
-        const pickup = formState.get('pickupCoords');
-        const delivery = formState.get('deliveryCoords');
-        const distance = formState.get('distance');
-        
-        if (pickup && delivery && distance > 0) {
-            const submitBtn = document.getElementById('submitBtn');
-            if (submitBtn && submitBtn.disabled) {
-                console.log('⏰ Periodic check: enabling button');
-                checkFormValidity();
-            }
-        }
-    }, 1000);
-}
-
-// ─── Helper Functions ──────────────────────────────────────────────────────
-
-window.forceEnableBooking = function() {
-    const pickup = formState.get('pickupCoords');
-    const delivery = formState.get('deliveryCoords');
-    const distance = formState.get('distance');
-    
-    console.log('🔨 Force enable booking:', {
-        pickup: pickup,
-        delivery: delivery,
-        distance: distance
-    });
-    
+    // Update button state
     const submitBtn = document.getElementById('submitBtn');
     const buttonText = document.getElementById('buttonText');
-    
-    if (submitBtn && buttonText) {
-        if (pickup && delivery && distance > 0) {
-            submitBtn.disabled = false;
-            buttonText.textContent = 'Book Delivery';
-            return '✅ Button enabled!';
-        } else {
-            return '❌ Missing data - cannot enable. Check pickup, delivery, and distance.';
-        }
-    } else {
-        return '❌ Button elements not found!';
-    }
-};
-
-window.testBooking = async function() {
-    console.log('🧪 Testing booking creation...');
-    
-    const testData = {
-        vendor_name: document.getElementById('vendorName')?.value || 'Test Vendor',
-        vendor_phone: document.getElementById('phoneNumber')?.value || '0700000000',
-        pickup_location: {
-            address: 'Test Pickup',
-            lat: -1.2921,
-            lng: 36.8219
-        },
-        delivery_location: {
-            address: 'Test Delivery', 
-            lat: -1.2821,
-            lng: 36.8319
-        },
-        recipient_name: 'Test Recipient',
-        recipient_phone: '0700000001',
-        package_category: 'documents',
-        package_description: 'Test Package',
-        package_size: 'small',
-        item_count: 1,
-        service_type: 'smart',
-        distance_km: 5,
-        price: 150,
-        total_price: 150,
-        payment_method: 'cash',
-        payment_status: 'pending',
-        parcel_code: 'TEST123',
-        pickup_code: 'PK123',
-        delivery_code: 'DL123',
-        status: 'submitted',
-        created_at: new Date().toISOString()
-    };
+    submitBtn.disabled = true;
+    buttonText.textContent = 'Processing...';
     
     try {
-        const result = await supabaseAPI.insert('parcels', testData);
-        console.log('✅ Test booking created:', result);
-        return result;
+        await bookingService.submitBooking(formData);
     } catch (error) {
-        console.error('❌ Test booking failed:', error);
-        return error;
+        console.error('Form submission error:', error);
+        submitBtn.disabled = false;
+        buttonText.textContent = 'Book Delivery';
     }
-};
+}
 
-window.debugSuccessModal = function() {
-    console.log('🔍 Debugging success modal...');
-    
-    // Check for overlay
-    const overlay = document.getElementById('successOverlay');
-    console.log('Success overlay found:', !!overlay);
-    if (overlay) {
-        console.log('Overlay display:', overlay.style.display);
-        console.log('Overlay visibility:', overlay.style.visibility);
-        console.log('Overlay classes:', overlay.className);
+// ═══════════════════════════════════════════════════════════════════════════
+// Event Listeners Setup
+// ═══════════════════════════════════════════════════════════════════════════
+
+function setupEventListeners() {
+    // Form submission
+    const form = document.getElementById('dashboardDeliveryForm');
+    if (form) {
+        form.addEventListener('submit', handleFormSubmit);
     }
     
-    // Check for code elements
-    const elements = {
-        parcelCode: document.getElementById('displayParcelCode'),
-        pickupCode: document.getElementById('displayPickupCode'),
-        deliveryCode: document.getElementById('displayDeliveryCode'),
-        totalPrice: document.getElementById('displayTotalPrice')
+    // Character counter for special instructions
+    const specialInstructions = document.getElementById('specialInstructions');
+    if (specialInstructions) {
+        specialInstructions.addEventListener('input', (e) => {
+            document.getElementById('charCount').textContent = e.target.value.length;
+        });
+    }
+    
+    // Location inputs
+    const pickupInput = document.getElementById('pickupLocation');
+    const deliveryInput = document.getElementById('deliveryLocation');
+    
+    if (pickupInput) {
+        pickupInput.addEventListener('change', async () => {
+            if (pickupInput.value && !pickupInput.dataset.lat) {
+                try {
+                    const coords = await locationService.geocodeAddress(pickupInput.value);
+                    pickupInput.dataset.lat = coords.lat;
+                    pickupInput.dataset.lng = coords.lng;
+                    dashboardState.set('pickupCoords', coords);
+                    
+                    if (dashboardState.get('deliveryCoords')) {
+                        await locationService.calculateDistance();
+                    }
+                } catch (error) {
+                    utils.showNotification('Could not find pickup address', 'error');
+                }
+            }
+        });
+    }
+    
+    if (deliveryInput) {
+        deliveryInput.addEventListener('change', async () => {
+            if (deliveryInput.value && !deliveryInput.dataset.lat) {
+                try {
+                    const coords = await locationService.geocodeAddress(deliveryInput.value);
+                    deliveryInput.dataset.lat = coords.lat;
+                    deliveryInput.dataset.lng = coords.lng;
+                    dashboardState.set('deliveryCoords', coords);
+                    
+                    if (dashboardState.get('pickupCoords')) {
+                        await locationService.calculateDistance();
+                    }
+                } catch (error) {
+                    utils.showNotification('Could not find delivery address', 'error');
+                }
+            }
+        });
+    }
+    
+    // Track input enter key
+    const trackInput = document.getElementById('trackInput');
+    if (trackInput) {
+        trackInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                trackingService.trackParcel();
+            }
+        });
+    }
+    
+    // Offline/Online handling
+    window.addEventListener('online', () => {
+        document.getElementById('offlineBanner').style.transform = 'translateY(-100%)';
+        utils.showNotification('You\'re back online!', 'success');
+    });
+    
+    window.addEventListener('offline', () => {
+        document.getElementById('offlineBanner').style.transform = 'translateY(0)';
+    });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Initialize UI Components
+// ═══════════════════════════════════════════════════════════════════════════
+
+function initializeUI() {
+    // Set initial values
+    document.getElementById('itemCount').textContent = '1';
+    
+    // Initialize capacity display
+    updateCapacityDisplay();
+    
+    // Initialize service selection
+    document.querySelector('[data-service="smart"]')?.classList.add('selected');
+    
+    // Initialize size selection
+    document.querySelector('[data-size="small"]')?.classList.add('selected');
+    
+    // Check online status
+    if (!navigator.onLine) {
+        document.getElementById('offlineBanner').style.transform = 'translateY(0)';
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Real-time Updates Setup
+// ═══════════════════════════════════════════════════════════════════════════
+
+function setupRealtimeUpdates() {
+    // Poll for updates every 30 seconds when on active tab
+    setInterval(() => {
+        if (dashboardState.get('activeTab') === 'active') {
+            vendorDashboard.loadActiveDeliveries();
+        }
+    }, 30000);
+    
+    // Update relative times every minute
+    setInterval(() => {
+        document.querySelectorAll('[data-timestamp]').forEach(el => {
+            const timestamp = el.dataset.timestamp;
+            el.textContent = uiDisplay.getTimeAgo(timestamp);
+        });
+    }, 60000);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Google Maps Integration
+// ═══════════════════════════════════════════════════════════════════════════
+
+function initializeGooglePlaces() {
+    if (!window.google || !window.google.maps || !window.google.maps.places) {
+        setTimeout(initializeGooglePlaces, 500);
+        return;
+    }
+    
+    const pickupInput = document.getElementById('pickupLocation');
+    const deliveryInput = document.getElementById('deliveryLocation');
+    
+    const options = {
+        componentRestrictions: { country: 'KE' },
+        fields: ['formatted_address', 'geometry', 'name'],
+        bounds: new google.maps.LatLngBounds(
+            new google.maps.LatLng(-1.5, 36.6),
+            new google.maps.LatLng(-1.0, 37.1)
+        )
     };
     
-    Object.entries(elements).forEach(([key, el]) => {
-        console.log(`${key} element:`, !!el, el?.textContent || 'N/A');
-    });
+    if (pickupInput) {
+        const pickupAutocomplete = new google.maps.places.Autocomplete(pickupInput, options);
+        pickupAutocomplete.addListener('place_changed', () => {
+            const place = pickupAutocomplete.getPlace();
+            if (place.geometry) {
+                pickupInput.dataset.lat = place.geometry.location.lat();
+                pickupInput.dataset.lng = place.geometry.location.lng();
+                dashboardState.set('pickupCoords', {
+                    lat: place.geometry.location.lat(),
+                    lng: place.geometry.location.lng(),
+                    display_name: place.formatted_address
+                });
+                
+                if (dashboardState.get('deliveryCoords')) {
+                    locationService.calculateDistance();
+                }
+            }
+        });
+    }
     
-    // Look for any elements that might contain codes
-    const possibleCodeElements = document.querySelectorAll('[id*="Code"], [class*="code"], [data-code]');
-    console.log('Possible code elements found:', possibleCodeElements.length);
-    possibleCodeElements.forEach(el => {
-        console.log('Element:', el.tagName, el.id || el.className, '=', el.textContent);
-    });
-    
-    // Check form state
-    console.log('Current form state:', {
-        distance: formState.get('distance'),
-        selectedService: formState.get('selectedService'),
-        isLoading: formState.get('isLoading')
-    });
-    
-    return elements;
-};
+    if (deliveryInput) {
+        const deliveryAutocomplete = new google.maps.places.Autocomplete(deliveryInput, options);
+        deliveryAutocomplete.addListener('place_changed', () => {
+            const place = deliveryAutocomplete.getPlace();
+            if (place.geometry) {
+                deliveryInput.dataset.lat = place.geometry.location.lat();
+                deliveryInput.dataset.lng = place.geometry.location.lng();
+                
+                dashboardState.set('deliveryCoords', {
+                    lat: place.geometry.location.lat(),
+                    lng: place.geometry.location.lng(),
+                    display_name: place.formatted_address
+                });
+                
+                if (dashboardState.get('pickupCoords')) {
+                    locationService.calculateDistance();
+                }
+            }
+        });
+    }
+}
 
-// Manual success display function
-window.showSuccessManual = function(parcelCode = 'TM123456', pickupCode = 'PK123456', deliveryCode = 'DL123456', price = 200) {
-    const codes = {
-        parcel_code: parcelCode,
-        pickup_code: pickupCode,
-        delivery_code: deliveryCode
-    };
-    
-    showSuccess(codes, price);
-    
-    // Force display update
-    setTimeout(() => {
-        const overlay = document.getElementById('successOverlay');
-        if (overlay) {
-            overlay.style.cssText = 'display: flex !important; visibility: visible !important; opacity: 1 !important;';
-        }
-    }, 100);
-};
+// ═══════════════════════════════════════════════════════════════════════════
+// Initial Data Loading
+// ═══════════════════════════════════════════════════════════════════════════
 
-// ─── CSS Styles ────────────────────────────────────────────────────────────
+async function loadInitialData() {
+    try {
+        // Load recent tracks
+        trackingService.loadRecentTracks();
+        
+        // If authenticated, load vendor data
+        if (dashboardState.get('isAuthenticated')) {
+            await vendorDashboard.loadDashboardData();
+        }
+        
+    } catch (error) {
+        console.error('Initial data load error:', error);
+    }
+}
 
-// Add fade-in animation for saved locations
-if (!document.getElementById('saved-locations-animations')) {
-    const style = document.createElement('style');
-    style.id = 'saved-locations-animations';
-    style.textContent = `
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(-10px); }
-            to { opacity: 1; transform: translateY(0); }
+// ═══════════════════════════════════════════════════════════════════════════
+// Main Initialization Function
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function initializeDashboard() {
+    console.log('🚀 Starting Vendor Dashboard initialization...');
+    
+    try {
+        // Initialize vendor dashboard
+        await vendorDashboard.initialize();
+        
+        // Setup event listeners
+        setupEventListeners();
+        
+        // Initialize UI
+        initializeUI();
+        
+        // Load initial data
+        await loadInitialData();
+        
+        // Setup real-time updates
+        setupRealtimeUpdates();
+        
+        // Initialize Google Places if available
+        if (window.google && window.google.maps) {
+            initializeGooglePlaces();
         }
         
-        @keyframes locationSuccess {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.02); }
-            100% { transform: scale(1); }
+        console.log('✅ Vendor Dashboard fully initialized');
+        
+    } catch (error) {
+        console.error('❌ Dashboard initialization error:', error);
+        utils.showNotification('Failed to initialize dashboard. Please refresh.', 'error');
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CSS Animations & Styles
+// ═══════════════════════════════════════════════════════════════════════════
+
+function injectStyles() {
+    if (document.getElementById('vendor-dashboard-styles')) return;
+    
+    const styles = document.createElement('style');
+    styles.id = 'vendor-dashboard-styles';
+    styles.textContent = `
+        @keyframes slideInRight {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
         }
         
-        .input-field.location-confirmed {
-            border-color: #34C759 !important;
-            background: rgba(52, 199, 89, 0.05) !important;
+        @keyframes slideOutRight {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(100%);
+                opacity: 0;
+            }
         }
         
-        .input-action {
-            transition: all 0.3s ease;
+        @keyframes modalBounce {
+            0% {
+                transform: scale(0.8);
+                opacity: 0;
+            }
+            50% {
+                transform: scale(1.05);
+            }
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
         }
         
-        .saved-location-btn:hover {
+        @keyframes successBounce {
+            0%, 100% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.1);
+            }
+        }
+        
+        .saved-location-chip:hover {
+            background: var(--primary) !important;
+            color: white !important;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 102, 255, 0.2);
+        }
+        
+        .delivery-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+        }
+        
+        .history-item:hover {
             background: var(--surface-high) !important;
-            border-color: var(--primary) !important;
-            color: var(--text-primary) !important;
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(0, 102, 255, 0.15);
+            transform: translateX(4px);
         }
         
-        .saved-location-btn:active {
-            transform: scale(0.98);
+        .service-card {
+            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+        
+        .service-card:hover:not(.selected) {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+        }
+        
+        .size-option {
+            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+        
+        .size-option:hover:not(.selected) {
+            transform: scale(1.05);
+            border-color: var(--primary);
+        }
+        
+        .input-field:focus {
+            animation: inputFocus 0.3s ease-out;
+        }
+        
+        @keyframes inputFocus {
+            0% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.01);
+            }
+            100% {
+                transform: scale(1);
+            }
+        }
+        
+        .counter-button:active:not(:disabled) {
+            animation: buttonPress 0.2s ease-out;
+        }
+        
+        @keyframes buttonPress {
+            0%, 100% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(0.9);
+            }
+        }
+        
+        .notification {
+            animation: slideInRight 0.3s ease-out;
+        }
+        
+        .center-marker {
+            z-index: 1000 !important;
+            position: absolute !important;
+            left: 50% !important;
+            top: 50% !important;
+            transform: translate(-50%, -50%) !important;
+            pointer-events: none !important;
+        }
+        
+        /* Smooth transitions for tab switching */
+        .tab-panel {
+            animation: fadeIn 0.3s ease-out;
+        }
+        
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        /* Loading state for submit button */
+        .submit-button.loading {
+            position: relative;
+            color: transparent !important;
+        }
+        
+        .submit-button.loading::after {
+            content: '';
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            top: 50%;
+            left: 50%;
+            margin-left: -10px;
+            margin-top: -10px;
+            border: 2px solid white;
+            border-radius: 50%;
+            border-top-color: transparent;
+            animation: spinner 0.6s linear infinite;
+        }
+        
+        @keyframes spinner {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+        
+        /* Capacity bar animation */
+        .capacity-fill {
+            transition: width 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+        
+        /* Affiliate toggle animation */
+        .affiliate-toggle-handle {
+            transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+        
+        .affiliate-input-group {
+            animation: slideDown 0.3s ease-out;
+        }
+        
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                max-height: 0;
+            }
+            to {
+                opacity: 1;
+                max-height: 200px;
+            }
         }
     `;
-    document.head.appendChild(style);
+    
+    document.head.appendChild(styles);
 }
 
-// ─── Initialize on Load ────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+// Service Worker Registration (for offline support)
+// ═══════════════════════════════════════════════════════════════════════════
 
-if (document.readyState === 'loading') {
-    window.addEventListener('DOMContentLoaded', initialize);
-} else {
-    initialize();
+async function registerServiceWorker() {
+    if ('serviceWorker' in navigator) {
+        try {
+            const registration = await navigator.serviceWorker.register('/sw.js');
+            console.log('Service Worker registered:', registration);
+        } catch (error) {
+            console.log('Service Worker registration failed:', error);
+        }
+    }
 }
 
-console.log('✅ Vendor dashboard script loaded with all integrations');
-console.log('💡 Debug commands available:');
-console.log('   - forceEnableBooking() : Force enable the booking button');
-console.log('   - testBooking() : Create a test booking');
-console.log('   - debugSuccessModal() : Debug why codes might not be showing');
-console.log('   - showSuccessManual() : Manually show success modal with test data');
+// ═══════════════════════════════════════════════════════════════════════════
+// Error Boundary
+// ═══════════════════════════════════════════════════════════════════════════
+
+window.addEventListener('error', (event) => {
+    console.error('Global error:', event.error);
+    
+    // Don't show errors for external scripts
+    if (event.filename && !event.filename.includes(window.location.hostname)) {
+        return;
+    }
+    
+    // Show user-friendly error for critical errors
+    if (event.error && event.error.stack && event.error.stack.includes('vendor-dashboard')) {
+        utils.showNotification('Something went wrong. Please refresh the page.', 'error');
+    }
+});
+
+window.addEventListener('unhandledrejection', (event) => {
+    console.error('Unhandled promise rejection:', event.reason);
+    
+    // Show notification for API errors
+    if (event.reason && event.reason.message && event.reason.message.includes('API')) {
+        utils.showNotification('Connection error. Please check your internet.', 'error');
+    }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Performance Monitoring
+// ═══════════════════════════════════════════════════════════════════════════
+
+function monitorPerformance() {
+    if (window.performance && window.performance.timing) {
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                const timing = window.performance.timing;
+                const loadTime = timing.loadEventEnd - timing.navigationStart;
+                console.log(`Page load time: ${loadTime}ms`);
+                
+                // Report slow loads
+                if (loadTime > 5000) {
+                    console.warn('Slow page load detected:', loadTime);
+                }
+            }, 0);
+        });
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Debug Utilities (Development Only)
+// ═══════════════════════════════════════════════════════════════════════════
+
+if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    window.debug = {
+        state: dashboardState,
+        services: {
+            auth: authService,
+            booking: bookingService,
+            location: locationService,
+            tracking: trackingService,
+            vendor: vendorDashboard
+        },
+        utils: utils,
+        
+        // Debug functions
+        simulateBooking: async function() {
+            dashboardState.set({
+                pickupCoords: { lat: -1.2921, lng: 36.8219, display_name: 'Nairobi CBD' },
+                deliveryCoords: { lat: -1.2821, lng: 36.8319, display_name: 'Westlands' },
+                distance: 5,
+                duration: 15,
+                selectedService: 'smart',
+                selectedSize: 'small',
+                itemCount: 1
+            });
+            
+            const formData = {
+                vendorName: 'Test Vendor',
+                vendorPhone: '0700000000',
+                recipientName: 'Test Recipient',
+                recipientPhone: '0700000001',
+                packageDescription: 'Test Package',
+                packageCategory: 'documents',
+                specialInstructions: 'Test delivery'
+            };
+            
+            return await bookingService.submitBooking(formData);
+        },
+        
+        clearCache: function() {
+            geocodeCache.clear();
+            distanceCache.clear();
+            localStorage.clear();
+            sessionStorage.clear();
+            console.log('All caches cleared');
+        },
+        
+        showState: function() {
+            console.table(dashboardState.state);
+        }
+    };
+    
+    console.log('🛠️ Debug mode enabled. Access debug utilities via window.debug');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Main Entry Point
+// ═══════════════════════════════════════════════════════════════════════════
+
+document.addEventListener('DOMContentLoaded', async () => {
+    console.log('DOM Content Loaded - Starting initialization...');
+    
+    // Inject required styles
+    injectStyles();
+    
+    // Initialize dashboard
+    await initializeDashboard();
+    
+    // Register service worker for offline support
+    registerServiceWorker();
+    
+    // Monitor performance
+    monitorPerformance();
+    
+    // Google Maps callback
+    window.initMap = function() {
+        console.log('Google Maps loaded');
+        initializeGooglePlaces();
+    };
+    
+    // Telegram WebApp integration (if applicable)
+    if (window.Telegram && window.Telegram.WebApp) {
+        const tg = window.Telegram.WebApp;
+        tg.ready();
+        tg.expand();
+        
+        // Use Telegram user data if available
+        if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
+            const user = tg.initDataUnsafe.user;
+            console.log('Telegram user detected:', user.first_name);
+            
+            // Pre-fill vendor name if not set
+            const vendorNameInput = document.getElementById('vendorName');
+            if (vendorNameInput && !vendorNameInput.value) {
+                vendorNameInput.value = `${user.first_name} ${user.last_name || ''}`.trim();
+            }
+        }
+    }
+    
+    console.log('🎉 Vendor Dashboard ready!');
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Export for external use (if needed)
+// ═══════════════════════════════════════════════════════════════════════════
+
+window.TumaVendorDashboard = {
+    version: '1.0.0',
+    state: dashboardState,
+    services: {
+        auth: authService,
+        booking: bookingService,
+        location: locationService,
+        tracking: trackingService
+    },
+    utils: utils,
+    
+    // Public API
+    initialize: initializeDashboard,
+    switchTab: window.switchTab,
+    trackParcel: (code) => trackingService.trackParcel(code),
+    logout: window.logout
+};
+
+console.log('✅ Vendor Dashboard v1.0.0 loaded successfully');
