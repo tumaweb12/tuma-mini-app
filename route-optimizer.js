@@ -11,7 +11,7 @@
  * 5. Follow natural traffic flow patterns
  */
 
-export class RouteOptimizer {
+class RouteOptimizer {
     constructor(config = {}) {
         this.config = {
             // Distance thresholds
@@ -1423,4 +1423,3 @@ export default RouteOptimizer;
 if (typeof window !== 'undefined') {
     window.RouteOptimizer = RouteOptimizer;
 }
-var RouteOptimizer = RouteOptimizer || window.RouteOptimizer;
