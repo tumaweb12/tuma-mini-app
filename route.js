@@ -1,36 +1,109 @@
 /**
- * Enhanced Route Navigation Module - Part 1/4
- * Setup, Configuration, and Core API Functions
- * Version: 4.0.0 - Uses External Route Optimizer Module
+ * Enhanced Route Navigation Module - Part 1/6
+ * Setup, Configuration, Core API Functions, and Enhanced Verification Features
+ * Version: 5.0.0 - Includes Photo Capture, Digital Signatures, M-Pesa Integration
  */
 
-// Import the route optimizer module (adjust path as needed)
-// For ES6 modules, ensure your HTML includes type="module" in script tag
-// <script type="module" src="route.js"></script>
-import RouteOptimizer from './route-optimizer.js';
+// Fix: Make route optimizer optional - fallback to inline optimization if module not found
+let routeOptimizer;
+try {
+    // Try to import as ES6 module
+    if (typeof module !== 'undefined' && module.exports) {
+        routeOptimizer = require('./route-optimizer.js');
+    } else {
+        // For browser ES6 modules, this will be handled by import statement in HTML
+        console.log('Route optimizer will be loaded via ES6 import');
+    }
+} catch (e) {
+    console.log('External route optimizer not found, using fallback optimization');
+}
 
-// Initialize the route optimizer with comprehensive settings
-const routeOptimizer = new RouteOptimizer({
-    // Distance thresholds
-    immediateDeliveryRadius: 1.5,      // km - deliver immediately if this close
-    clusterRadius: 2.0,                // km - stops within this are considered clustered
-    zoneRadius: 3.0,                   // km - for zone creation
+// Fallback route optimizer if external module not available
+class FallbackRouteOptimizer {
+    constructor(config) {
+        this.config = config;
+    }
     
-    // Scoring weights
-    distanceWeight: 1.0,               // Base weight for distance
-    backtrackPenalty: 5.0,             // Penalty multiplier for going backwards
-    directionChangesPenalty: 2.0,      // Penalty for changing direction frequently
-    clusterBonus: 0.7,                 // Bonus multiplier for staying in cluster
+    optimizeRoute(stops) {
+        if (!stops || stops.length === 0) return stops;
+        
+        // Simple nearest neighbor optimization
+        const optimized = [];
+        const remaining = [...stops];
+        let current = remaining.shift(); // Start with first stop
+        optimized.push(current);
+        
+        while (remaining.length > 0) {
+            let nearest = null;
+            let nearestDistance = Infinity;
+            let nearestIndex = -1;
+            
+            remaining.forEach((stop, index) => {
+                const dist = this.calculateDistance(current.location, stop.location);
+                if (dist < nearestDistance) {
+                    nearestDistance = dist;
+                    nearest = stop;
+                    nearestIndex = index;
+                }
+            });
+            
+            if (nearest) {
+                optimized.push(nearest);
+                current = nearest;
+                remaining.splice(nearestIndex, 1);
+            }
+        }
+        
+        return optimized;
+    }
     
-    // Algorithm settings
-    enableZoning: true,                // Group stops into zones
-    enableSmartPairing: true,          // Pair pickups with nearby deliveries
-    maxLookahead: 3,                   // How many stops to look ahead for optimization
+    calculateDistance(point1, point2) {
+        const R = 6371;
+        const dLat = (point2.lat - point1.lat) * Math.PI / 180;
+        const dLon = (point2.lng - point1.lng) * Math.PI / 180;
+        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(point1.lat * Math.PI / 180) * Math.cos(point2.lat * Math.PI / 180) *
+                Math.sin(dLon/2) * Math.sin(dLon/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        return R * c;
+    }
     
-    // Performance settings
-    maxIterations: 1000,               // Max iterations for optimization algorithms
-    convergenceThreshold: 0.01         // Stop optimizing when improvement < this
-});
+    getStatistics() {
+        return {
+            originalDistance: 0,
+            optimizedDistance: 0,
+            savedDistance: 0,
+            savedPercentage: 0,
+            executionTime: 0
+        };
+    }
+    
+    getConfig() {
+        return this.config;
+    }
+    
+    updateConfig(newConfig) {
+        this.config = { ...this.config, ...newConfig };
+    }
+}
+
+// Initialize route optimizer with fallback
+if (!routeOptimizer) {
+    routeOptimizer = new FallbackRouteOptimizer({
+        immediateDeliveryRadius: 1.5,
+        clusterRadius: 2.0,
+        zoneRadius: 3.0,
+        distanceWeight: 1.0,
+        backtrackPenalty: 5.0,
+        directionChangesPenalty: 2.0,
+        clusterBonus: 0.7,
+        enableZoning: true,
+        enableSmartPairing: true,
+        maxLookahead: 3,
+        maxIterations: 1000,
+        convergenceThreshold: 0.01
+    });
+}
 
 // Development Configuration
 const DEV_CONFIG = {
@@ -43,23 +116,12 @@ const DEV_CONFIG = {
         phone: '0725046880'
     },
     verboseLogging: true,
-    ignoreRiderNotFound: true
+    ignoreRiderNotFound: true,
+    skipPhotoCapture: false, // Set to true to skip photo requirements in dev
+    skipSignature: false     // Set to true to skip signature requirements in dev
 };
 
-// Configuration for navigation behavior
-const config = {
-    headingUp: false,
-    smoothMovement: true,
-    autoZoom: true,
-    mapRotatable: true,
-    optimization: {
-        enableDynamicRouting: true,
-        autoReoptimize: false,
-        reoptimizeThreshold: 2.0 // km savings to trigger re-optimization
-    }
-};
-
-// State management
+// Enhanced State Management with new verification features
 const state = {
     activeRoute: null,
     currentLocation: null,
@@ -88,7 +150,6 @@ const state = {
     lastMapRotation: 0,
     smoothLocationInterval: null,
     mapBearing: 0,
-    config: config,
     locationWatchId: null,
     accuracyCircle: null,
     radiusCircle: null,
@@ -106,7 +167,48 @@ const state = {
         savedPercentage: 0
     },
     stopOrderMap: {},
-    showNumberedMarkers: true
+    showNumberedMarkers: true,
+    
+    // New: Enhanced verification data storage
+    verificationData: {
+        photos: {},        // stopId -> {pickup: imageData, delivery: imageData}
+        signatures: {},    // stopId -> signatureData
+        timestamps: {},    // stopId -> {pickup: timestamp, delivery: timestamp}
+        locations: {},     // stopId -> {pickup: location, delivery: location}
+        mpesaCodes: {}     // stopId -> mpesaTransactionCode
+    },
+    
+    // New: Current verification session
+    currentVerification: {
+        stopId: null,
+        type: null,       // 'pickup' or 'delivery'
+        photoData: null,
+        signatureData: null,
+        locationData: null,
+        startTime: null
+    }
+};
+
+// Configuration
+const config = {
+    headingUp: false,
+    smoothMovement: true,
+    autoZoom: true,
+    mapRotatable: true,
+    optimization: {
+        enableDynamicRouting: true,
+        autoReoptimize: false,
+        reoptimizeThreshold: 2.0
+    },
+    verification: {
+        requirePhoto: true,
+        requireSignature: true,
+        requireLocation: true,
+        photoQuality: 0.8,
+        maxPhotoSize: 2048,
+        signatureMinPoints: 20,
+        mpesaPromptDelay: 500
+    }
 };
 
 // API Configuration
@@ -125,7 +227,7 @@ const BUSINESS_CONFIG = {
 };
 
 // ============================================================================
-// CORE API FUNCTIONS
+// ENHANCED SUPABASE API FUNCTIONS
 // ============================================================================
 
 async function supabaseQuery(table, options = {}) {
@@ -174,12 +276,414 @@ async function supabaseUpdate(table, filter, data) {
     return await response.json();
 }
 
+async function supabaseInsert(table, data) {
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+        method: 'POST',
+        headers: {
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=representation'
+        },
+        body: JSON.stringify(data)
+    });
+    
+    if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`Insert Error: ${response.status} ${errorText}`);
+        throw new Error(`Insert Error: ${response.status}`);
+    }
+    
+    return await response.json();
+}
+
+// New: Store verification data in Supabase
+async function storeVerificationData(stopId, verificationType, data) {
+    try {
+        const stop = state.activeRoute.stops.find(s => s.id === stopId);
+        if (!stop) return;
+        
+        const verificationRecord = {
+            parcel_id: stop.parcelId,
+            stop_id: stopId,
+            verification_type: verificationType, // 'pickup' or 'delivery'
+            verification_code: data.code,
+            photo_url: data.photoUrl || null,
+            signature_data: data.signatureData || null,
+            location_lat: data.location?.lat || null,  // Separate latitude column
+            location_lng: data.location?.lng || null,  // Separate longitude column
+            location_accuracy: data.location?.accuracy || null,
+            mpesa_code: data.mpesaCode || null,
+            timestamp: new Date().toISOString(),
+            rider_id: DEV_CONFIG.testRider.id
+        };
+        
+        await supabaseInsert('delivery_verifications', verificationRecord);
+        console.log('Verification data stored successfully');
+        
+        // Update parcel status
+        if (verificationType === 'delivery') {
+            await supabaseUpdate('parcels', 
+                `id=eq.${stop.parcelId}`,
+                {
+                    status: 'delivered',
+                    delivery_timestamp: new Date().toISOString(),
+                    delivery_verified: true,
+                    has_signature: data.signatureData ? true : false,
+                    has_photo: data.photoUrl ? true : false,
+                    payment_status: data.mpesaCode ? 'paid' : (data.cashCollected ? 'collected' : 'pending')
+                }
+            );
+        } else if (verificationType === 'pickup') {
+            await supabaseUpdate('parcels',
+                `id=eq.${stop.parcelId}`,
+                {
+                    status: 'in_transit',
+                    pickup_timestamp: new Date().toISOString(),
+                    pickup_verified: true,
+                    has_pickup_photo: data.photoUrl ? true : false
+                }
+            );
+        }
+    } catch (error) {
+        console.error('Error storing verification data:', error);
+        // Continue even if storage fails - don't block delivery
+    }
+}
+
 // ============================================================================
-// ROUTE OPTIMIZATION FUNCTIONS (Using External Module)
+// PHOTO CAPTURE FUNCTIONS WITH DIRECT SUPABASE UPLOAD
+// ============================================================================
+
+// Initialize Supabase client for storage
+const supabase = {
+    storage: {
+        from: (bucket) => ({
+            upload: async (path, file, options) => {
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                const response = await fetch(`${SUPABASE_URL}/storage/v1/object/${bucket}/${path}`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                        'x-upsert': options.upsert ? 'true' : 'false'
+                    },
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    const error = await response.text();
+                    return { data: null, error };
+                }
+                
+                return { data: await response.json(), error: null };
+            },
+            getPublicUrl: (path) => ({
+                data: {
+                    publicUrl: `${SUPABASE_URL}/storage/v1/object/public/${bucket}/${path}`
+                }
+            })
+        })
+    }
+};
+
+function initializeCamera() {
+    return new Promise((resolve, reject) => {
+        const constraints = {
+            video: {
+                facingMode: 'environment',
+                width: { ideal: 1920 },
+                height: { ideal: 1080 }
+            },
+            audio: false
+        };
+        
+        navigator.mediaDevices.getUserMedia(constraints)
+            .then(stream => {
+                resolve(stream);
+            })
+            .catch(err => {
+                console.error('Camera initialization failed:', err);
+                // Fallback to any available camera
+                navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+                    .then(stream => resolve(stream))
+                    .catch(err => reject(err));
+            });
+    });
+}
+
+async function captureAndUploadPhoto(videoElement, stopId, verificationType) {
+    const canvas = document.createElement('canvas');
+    canvas.width = videoElement.videoWidth;
+    canvas.height = videoElement.videoHeight;
+    
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(videoElement, 0, 0);
+    
+    // Resize if needed
+    if (canvas.width > config.verification.maxPhotoSize) {
+        const scale = config.verification.maxPhotoSize / canvas.width;
+        const newCanvas = document.createElement('canvas');
+        newCanvas.width = config.verification.maxPhotoSize;
+        newCanvas.height = canvas.height * scale;
+        
+        const newCtx = newCanvas.getContext('2d');
+        newCtx.drawImage(canvas, 0, 0, newCanvas.width, newCanvas.height);
+        canvas = newCanvas;
+    }
+    
+    // Convert canvas to blob and upload directly to Supabase
+    return new Promise((resolve) => {
+        canvas.toBlob(async (blob) => {
+            try {
+                const fileName = `${stopId}_${verificationType}_${Date.now()}.jpg`;
+                const filePath = `delivery-photos/${new Date().toISOString().split('T')[0]}/${fileName}`;
+                
+                // Upload to Supabase Storage
+                const { data, error } = await supabase.storage
+                    .from('delivery-verifications')
+                    .upload(filePath, blob, {
+                        contentType: 'image/jpeg',
+                        upsert: false
+                    });
+                
+                if (error) {
+                    console.error('Upload failed, using base64 fallback:', error);
+                    // Fallback to base64 for offline capability
+                    resolve(canvas.toDataURL('image/jpeg', config.verification.photoQuality));
+                } else {
+                    // Return public URL
+                    const { data: { publicUrl } } = supabase.storage
+                        .from('delivery-verifications')
+                        .getPublicUrl(filePath);
+                    
+                    console.log('Photo uploaded successfully:', publicUrl);
+                    resolve(publicUrl);
+                }
+            } catch (err) {
+                console.error('Photo upload error:', err);
+                // Fallback to base64
+                resolve(canvas.toDataURL('image/jpeg', config.verification.photoQuality));
+            }
+        }, 'image/jpeg', config.verification.photoQuality);
+    });
+}
+
+// Backward compatible function for simple capture
+function capturePhoto(videoElement) {
+    const canvas = document.createElement('canvas');
+    canvas.width = videoElement.videoWidth;
+    canvas.height = videoElement.videoHeight;
+    
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(videoElement, 0, 0);
+    
+    // Resize if needed
+    if (canvas.width > config.verification.maxPhotoSize) {
+        const scale = config.verification.maxPhotoSize / canvas.width;
+        const newCanvas = document.createElement('canvas');
+        newCanvas.width = config.verification.maxPhotoSize;
+        newCanvas.height = canvas.height * scale;
+        
+        const newCtx = newCanvas.getContext('2d');
+        newCtx.drawImage(canvas, 0, 0, newCanvas.width, newCanvas.height);
+        
+        return newCanvas.toDataURL('image/jpeg', config.verification.photoQuality);
+    }
+    
+    return canvas.toDataURL('image/jpeg', config.verification.photoQuality);
+}
+
+// ============================================================================
+// DIGITAL SIGNATURE FUNCTIONS WITH DIRECT SUPABASE UPLOAD
+// ============================================================================
+
+async function uploadSignatureToSupabase(signatureData, stopId) {
+    try {
+        // Convert base64 to blob
+        const base64Response = await fetch(signatureData);
+        const blob = await base64Response.blob();
+        
+        const fileName = `${stopId}_signature_${Date.now()}.png`;
+        const filePath = `delivery-signatures/${new Date().toISOString().split('T')[0]}/${fileName}`;
+        
+        // Upload to Supabase Storage
+        const { data, error } = await supabase.storage
+            .from('delivery-verifications')
+            .upload(filePath, blob, {
+                contentType: 'image/png',
+                upsert: false
+            });
+        
+        if (error) {
+            console.error('Signature upload failed:', error);
+            return signatureData; // Fallback to base64
+        }
+        
+        // Return public URL
+        const { data: { publicUrl } } = supabase.storage
+            .from('delivery-verifications')
+            .getPublicUrl(filePath);
+        
+        console.log('Signature uploaded successfully:', publicUrl);
+        return publicUrl;
+    } catch (error) {
+        console.error('Signature upload error:', error);
+        return signatureData; // Fallback to base64
+    }
+}
+
+function initializeSignaturePad(canvas) {
+    const ctx = canvas.getContext('2d');
+    let isDrawing = false;
+    let points = [];
+    
+    // Set canvas size
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width;
+    canvas.height = rect.height;
+    
+    // Style setup
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    
+    const startDrawing = (e) => {
+        isDrawing = true;
+        const point = getPoint(e, canvas);
+        points.push(point);
+        ctx.beginPath();
+        ctx.moveTo(point.x, point.y);
+    };
+    
+    const draw = (e) => {
+        if (!isDrawing) return;
+        
+        const point = getPoint(e, canvas);
+        points.push(point);
+        ctx.lineTo(point.x, point.y);
+        ctx.stroke();
+    };
+    
+    const stopDrawing = () => {
+        isDrawing = false;
+    };
+    
+    const getPoint = (e, canvas) => {
+        const rect = canvas.getBoundingClientRect();
+        const x = (e.clientX || e.touches[0].clientX) - rect.left;
+        const y = (e.clientY || e.touches[0].clientY) - rect.top;
+        return { x, y };
+    };
+    
+    // Mouse events
+    canvas.addEventListener('mousedown', startDrawing);
+    canvas.addEventListener('mousemove', draw);
+    canvas.addEventListener('mouseup', stopDrawing);
+    canvas.addEventListener('mouseout', stopDrawing);
+    
+    // Touch events
+    canvas.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        startDrawing(e);
+    });
+    canvas.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        draw(e);
+    });
+    canvas.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        stopDrawing();
+    });
+    
+    return {
+        clear: () => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            points = [];
+        },
+        getSignatureData: async () => {
+            if (points.length < config.verification.signatureMinPoints) {
+                return null;
+            }
+            // Return the raw canvas data for upload
+            return canvas.toDataURL('image/png');
+        },
+        getPointCount: () => points.length
+    };
+}
+
+// ============================================================================
+// M-PESA INTEGRATION FUNCTIONS
+// ============================================================================
+
+function promptMpesaPayment(amount, phoneNumber) {
+    return new Promise((resolve, reject) => {
+        // Create M-Pesa prompt UI
+        const mpesaModal = document.createElement('div');
+        mpesaModal.className = 'mpesa-prompt-modal';
+        mpesaModal.innerHTML = `
+            <div class="mpesa-content">
+                <h3>M-Pesa Payment</h3>
+                <p>Request sent to ${phoneNumber}</p>
+                <p class="amount">KES ${amount.toLocaleString()}</p>
+                <div class="mpesa-instructions">
+                    <ol>
+                        <li>Check your phone for M-Pesa prompt</li>
+                        <li>Enter your M-Pesa PIN</li>
+                        <li>Wait for confirmation</li>
+                    </ol>
+                </div>
+                <div class="mpesa-input">
+                    <label>Or enter M-Pesa code manually:</label>
+                    <input type="text" id="mpesaCode" placeholder="e.g. QDA3R8K2XY" maxlength="10">
+                </div>
+                <div class="mpesa-actions">
+                    <button onclick="confirmMpesaPayment()">Confirm Payment</button>
+                    <button onclick="skipMpesaPayment()">Pay Cash Instead</button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(mpesaModal);
+        
+        window.confirmMpesaPayment = () => {
+            const code = document.getElementById('mpesaCode').value;
+            if (code && code.length >= 6) {
+                mpesaModal.remove();
+                resolve({ success: true, code: code });
+            } else {
+                showNotification('Please enter a valid M-Pesa code', 'warning');
+            }
+        };
+        
+        window.skipMpesaPayment = () => {
+            mpesaModal.remove();
+            resolve({ success: false, method: 'cash' });
+        };
+        
+        // Simulate M-Pesa timeout after 2 minutes
+        setTimeout(() => {
+            if (document.body.contains(mpesaModal)) {
+                mpesaModal.remove();
+                resolve({ success: false, timeout: true });
+            }
+        }, 120000);
+    });
+}
+/**
+ * Enhanced Route Navigation Module - Part 2/6
+ * Route Optimization Functions and Utility Functions
+ * Version: 5.0.0
+ */
+
+// ============================================================================
+// ROUTE OPTIMIZATION FUNCTIONS (Fixed to work with or without external module)
 // ============================================================================
 
 /**
- * Main route optimization function - calls external optimizer
+ * Main route optimization function - works with both external and fallback optimizer
  */
 function optimizeRouteStops() {
     if (!state.activeRoute || !state.activeRoute.stops) {
@@ -204,52 +708,57 @@ function optimizeRouteStops() {
         showOptimizingAnimation();
         
         setTimeout(() => {
-            // Call external RouteOptimizer module - NO currentLocation parameter
-            const optimizedStops = routeOptimizer.optimizeRoute(state.originalRouteOrder);
-            
-            // Get statistics from the optimizer
-            const stats = routeOptimizer.getStatistics();
-            
-            // Update state with optimizer's calculated stats
-            state.activeRoute.stops = optimizedStops;
-            state.activeRoute.isOptimized = true;
-            state.optimizationStats = {
-                originalDistance: stats.originalDistance || originalDistance,
-                optimizedDistance: stats.optimizedDistance,
-                savedDistance: stats.savedDistance,
-                savedPercentage: stats.savedPercentage
-            };
-            
-            // Update UI
-            updateStopOrderMap();
-            localStorage.setItem('tuma_active_route', JSON.stringify(state.activeRoute));
-            
-            console.log('Optimization complete:');
-            console.log(`Original distance: ${state.optimizationStats.originalDistance.toFixed(1)}km`);
-            console.log(`Optimized distance: ${state.optimizationStats.optimizedDistance.toFixed(1)}km`);
-            console.log(`Saved: ${state.optimizationStats.savedDistance.toFixed(1)}km (${state.optimizationStats.savedPercentage.toFixed(1)}%)`);
-            console.log(`Backtracking eliminated: ${stats.backtrackingEliminated} instances`);
-            console.log(`Zones created: ${stats.zonesCreated}`);
-            console.log(`Execution time: ${stats.executionTime?.toFixed(2)}ms`);
-            
-            console.log('\nOptimized route order:');
-            optimizedStops.forEach((stop, index) => {
-                console.log(`${index + 1}. ${stop.type.toUpperCase()} - ${stop.address} (${stop.parcelCode})`);
-            });
-            
-            displayRouteInfo();
-            plotRoute();
-            drawOptimizedRoute();
-            
-            hideOptimizingAnimation();
-            
-            if (state.optimizationStats.savedDistance > 0.1) {
-                showOptimizationResults(state.optimizationStats.savedDistance, state.optimizationStats.savedPercentage);
-            } else {
-                showNotification('Route optimized for efficient delivery sequence', 'success');
+            try {
+                // Use the route optimizer (either external or fallback)
+                const optimizedStops = routeOptimizer.optimizeRoute(state.originalRouteOrder);
+                
+                // Calculate statistics
+                const optimizedDistance = calculateTotalRouteDistance(optimizedStops);
+                const savedDistance = originalDistance - optimizedDistance;
+                const savedPercentage = Math.round((savedDistance / originalDistance) * 100);
+                
+                // Update state
+                state.activeRoute.stops = optimizedStops;
+                state.activeRoute.isOptimized = true;
+                state.optimizationStats = {
+                    originalDistance: originalDistance,
+                    optimizedDistance: optimizedDistance,
+                    savedDistance: savedDistance,
+                    savedPercentage: savedPercentage
+                };
+                
+                // Update UI
+                updateStopOrderMap();
+                localStorage.setItem('tuma_active_route', JSON.stringify(state.activeRoute));
+                
+                console.log('Optimization complete:');
+                console.log(`Original distance: ${state.optimizationStats.originalDistance.toFixed(1)}km`);
+                console.log(`Optimized distance: ${state.optimizationStats.optimizedDistance.toFixed(1)}km`);
+                console.log(`Saved: ${state.optimizationStats.savedDistance.toFixed(1)}km (${state.optimizationStats.savedPercentage}%)`);
+                
+                console.log('\nOptimized route order:');
+                optimizedStops.forEach((stop, index) => {
+                    console.log(`${index + 1}. ${stop.type.toUpperCase()} - ${stop.address} (${stop.parcelCode})`);
+                });
+                
+                displayRouteInfo();
+                plotRoute();
+                drawOptimizedRoute();
+                
+                hideOptimizingAnimation();
+                
+                if (state.optimizationStats.savedDistance > 0.1) {
+                    showOptimizationResults(state.optimizationStats.savedDistance, state.optimizationStats.savedPercentage);
+                } else {
+                    showNotification('Route optimized for efficient delivery sequence', 'success');
+                }
+                
+                updateOptimizeButton(true);
+            } catch (error) {
+                console.error('Optimization error:', error);
+                hideOptimizingAnimation();
+                showNotification('Optimization failed - using original route', 'error');
             }
-            
-            updateOptimizeButton(true);
         }, 1500);
     }
 }
@@ -267,24 +776,31 @@ function reoptimizeRemainingStops() {
     
     console.log('📍 Re-optimizing remaining stops...');
     
-    // Re-optimize remaining stops using external optimizer
-    const reoptimized = routeOptimizer.optimizeRoute(remainingStops);
-    
-    // Get updated statistics
-    const stats = routeOptimizer.getStatistics();
-    console.log(`Re-optimization saved: ${stats.savedDistance.toFixed(1)}km`);
-    
-    // Update the route with completed + reoptimized stops
-    const completedStops = state.activeRoute.stops.filter(s => s.completed);
-    state.activeRoute.stops = [...completedStops, ...reoptimized];
-    
-    // Update UI
-    updateStopOrderMap();
-    displayRouteInfo();
-    plotRoute();
-    drawOptimizedRoute();
-    
-    console.log('Route re-optimized in real-time');
+    try {
+        // Re-optimize remaining stops
+        const reoptimized = routeOptimizer.optimizeRoute(remainingStops);
+        
+        // Calculate savings
+        const originalDistance = calculateTotalRouteDistance(remainingStops);
+        const optimizedDistance = calculateTotalRouteDistance(reoptimized);
+        const savedDistance = originalDistance - optimizedDistance;
+        
+        console.log(`Re-optimization saved: ${savedDistance.toFixed(1)}km`);
+        
+        // Update the route with completed + reoptimized stops
+        const completedStops = state.activeRoute.stops.filter(s => s.completed);
+        state.activeRoute.stops = [...completedStops, ...reoptimized];
+        
+        // Update UI
+        updateStopOrderMap();
+        displayRouteInfo();
+        plotRoute();
+        drawOptimizedRoute();
+        
+        console.log('Route re-optimized in real-time');
+    } catch (error) {
+        console.error('Re-optimization failed:', error);
+    }
 }
 
 /**
@@ -296,22 +812,25 @@ function checkForBetterRoute() {
     const remainingStops = state.activeRoute.stops.filter(s => !s.completed);
     if (remainingStops.length <= 2) return; // Too few stops to matter
     
-    // Test if re-optimization would save significant distance
-    const currentOrderDistance = calculateTotalRouteDistance(remainingStops);
-    const testOptimized = routeOptimizer.optimizeRoute(remainingStops);
-    const testStats = routeOptimizer.getStatistics();
-    
-    const savings = testStats.savedDistance;
-    
-    // If we can save more than threshold km, suggest re-optimization
-    if (savings > config.optimization.reoptimizeThreshold) {
-        showNotification(
-            `Route optimization available - Save ${savings.toFixed(1)}km! Tap to optimize.`,
-            'info'
-        );
+    try {
+        // Test if re-optimization would save significant distance
+        const currentOrderDistance = calculateTotalRouteDistance(remainingStops);
+        const testOptimized = routeOptimizer.optimizeRoute(remainingStops);
+        const optimizedDistance = calculateTotalRouteDistance(testOptimized);
+        const savings = currentOrderDistance - optimizedDistance;
         
-        // Show a button to re-optimize
-        showReoptimizeButton();
+        // If we can save more than threshold km, suggest re-optimization
+        if (savings > config.optimization.reoptimizeThreshold) {
+            showNotification(
+                `Route optimization available - Save ${savings.toFixed(1)}km! Tap to optimize.`,
+                'info'
+            );
+            
+            // Show a button to re-optimize
+            showReoptimizeButton();
+        }
+    } catch (error) {
+        console.error('Route check failed:', error);
     }
 }
 
@@ -350,12 +869,14 @@ function undoOptimization() {
  * Update optimizer configuration
  */
 window.updateOptimizerSetting = function(setting, value) {
-    routeOptimizer.updateConfig({ [setting]: parseFloat(value) });
-    console.log(`Optimizer setting updated: ${setting} = ${value}`);
-    
-    // Optionally re-optimize current route with new settings
-    if (state.activeRoute && !state.activeRoute.stops.some(s => s.completed)) {
-        optimizeRouteStops();
+    if (routeOptimizer && routeOptimizer.updateConfig) {
+        routeOptimizer.updateConfig({ [setting]: parseFloat(value) });
+        console.log(`Optimizer setting updated: ${setting} = ${value}`);
+        
+        // Optionally re-optimize current route with new settings
+        if (state.activeRoute && !state.activeRoute.stops.some(s => s.completed)) {
+            optimizeRouteStops();
+        }
     }
 };
 
@@ -548,7 +1069,12 @@ async function syncRouteData() {
     if (!state.activeRoute) return;
     
     try {
-        localStorage.setItem('tuma_active_route', JSON.stringify(state.activeRoute));
+        // Save verification data to local storage
+        const routeData = {
+            ...state.activeRoute,
+            verificationData: state.verificationData
+        };
+        localStorage.setItem('tuma_active_route', JSON.stringify(routeData));
         
         if (state.activeRoute.stops && state.activeRoute.stops.every(s => s.completed)) {
             await handleRouteCompletion();
@@ -574,7 +1100,8 @@ async function handleRouteCompletion() {
         routeId: state.activeRoute.id,
         parcels: state.activeRoute.parcels || [],
         optimizationMode: state.routeOptimizationMode,
-        distanceSaved: state.optimizationStats.savedDistance
+        distanceSaved: state.optimizationStats.savedDistance,
+        verificationData: state.verificationData // Include verification data
     };
     
     console.log('Storing completion data:', completionData);
@@ -584,15 +1111,33 @@ async function handleRouteCompletion() {
     
     if (!state.activeRoute.id?.startsWith('demo-')) {
         try {
+            // Update all parcels as delivered
             for (const parcel of (state.activeRoute.parcels || [])) {
+                const stop = state.activeRoute.stops.find(s => 
+                    s.parcelId === parcel.id || s.parcelCode === parcel.parcel_code
+                );
+                
+                const verificationData = state.verificationData[stop?.id];
+                
                 await supabaseUpdate('parcels',
                     `id=eq.${parcel.id}`,
                     {
                         status: 'delivered',
                         delivery_timestamp: new Date().toISOString(),
-                        payment_status: parcel.payment_method === 'cash' ? 'collected' : parcel.payment_status
+                        payment_status: parcel.payment_method === 'cash' ? 'collected' : parcel.payment_status,
+                        delivery_verified: true,
+                        has_signature: verificationData?.signatures ? true : false,
+                        has_photo: verificationData?.photos?.delivery ? true : false
                     }
                 );
+            }
+            
+            // Store verification records
+            for (const stopId in state.verificationData) {
+                const data = state.verificationData[stopId];
+                if (data.photos || data.signatures) {
+                    await storeVerificationData(stopId, 'delivery', data);
+                }
             }
         } catch (error) {
             console.error('Error updating parcel status:', error);
@@ -609,14 +1154,64 @@ window.toggleNumberedMarkers = function() {
         'info'
     );
 };
+
+// Helper function to compress image data for storage
+function compressImageData(dataUrl, maxWidth = 800) {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = function() {
+            const canvas = document.createElement('canvas');
+            let width = img.width;
+            let height = img.height;
+            
+            if (width > maxWidth) {
+                height = (maxWidth / width) * height;
+                width = maxWidth;
+            }
+            
+            canvas.width = width;
+            canvas.height = height;
+            
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+            
+            resolve(canvas.toDataURL('image/jpeg', 0.7));
+        };
+        img.src = dataUrl;
+    });
+}
+
+// Early definition of showNotification to avoid reference errors
+function showNotification(message, type = 'info') {
+    // Simple console fallback if called before full UI is loaded
+    console.log(`[${type.toUpperCase()}] ${message}`);
+    
+    // Try to show actual notification if DOM is ready
+    if (document.body) {
+        const notification = document.createElement('div');
+        notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 16px 20px;
+            border-radius: 14px;
+            z-index: 4000;
+            background: ${type === 'success' ? '#34C759' : type === 'error' ? '#FF3B30' : '#FF9F0A'};
+            color: white;
+        `;
+        notification.textContent = message;
+        document.body.appendChild(notification);
+        setTimeout(() => notification.remove(), 3000);
+    }
+}
 /**
- * Enhanced Route Navigation Module - Part 2/4
- * UI Functions, Styles, and Display Components
- * Version: 4.0.0
+ * Enhanced Route Navigation Module - Part 3/6
+ * UI Functions, Styles, Display Components, and Enhanced Verification UI
+ * Version: 5.0.0
  */
 
 // ============================================================================
-// UI STYLING & INITIALIZATION
+// UI STYLING & INITIALIZATION (Enhanced with new verification styles)
 // ============================================================================
 
 function injectNavigationStyles() {
@@ -646,6 +1241,375 @@ function injectNavigationStyles() {
             width: 100% !important;
             height: 100% !important;
             z-index: 1 !important;
+        }
+        
+        /* Enhanced Verification Modal Styles */
+        .verification-modal-enhanced {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 3000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            animation: fadeIn 0.3s ease;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        .verification-steps {
+            display: flex;
+            justify-content: space-between;
+            margin: 20px 0;
+            padding: 0 10px;
+        }
+        
+        .verification-step {
+            flex: 1;
+            text-align: center;
+            position: relative;
+        }
+        
+        .verification-step::after {
+            content: '';
+            position: absolute;
+            top: 20px;
+            right: -50%;
+            width: 100%;
+            height: 2px;
+            background: rgba(255, 255, 255, 0.1);
+        }
+        
+        .verification-step:last-child::after {
+            display: none;
+        }
+        
+        .step-circle {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 8px;
+            font-size: 18px;
+            transition: all 0.3s ease;
+        }
+        
+        .verification-step.active .step-circle {
+            background: linear-gradient(135deg, #9333EA, #7928CA);
+            border-color: #9333EA;
+            color: white;
+        }
+        
+        .verification-step.completed .step-circle {
+            background: linear-gradient(135deg, #34C759, #30D158);
+            border-color: #34C759;
+            color: white;
+        }
+        
+        .step-label {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.6);
+            font-weight: 600;
+        }
+        
+        .verification-step.active .step-label {
+            color: white;
+        }
+        
+        /* Camera View Styles */
+        .camera-container {
+            position: relative;
+            width: 100%;
+            height: 300px;
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            margin: 20px 0;
+        }
+        
+        .camera-video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .camera-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+        }
+        
+        .camera-frame {
+            width: 80%;
+            height: 80%;
+            border: 3px solid rgba(255, 255, 255, 0.5);
+            border-radius: 12px;
+            position: relative;
+        }
+        
+        .camera-frame::before,
+        .camera-frame::after {
+            content: '';
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            border: 3px solid #9333EA;
+        }
+        
+        .camera-frame::before {
+            top: -3px;
+            left: -3px;
+            border-right: none;
+            border-bottom: none;
+        }
+        
+        .camera-frame::after {
+            bottom: -3px;
+            right: -3px;
+            border-left: none;
+            border-top: none;
+        }
+        
+        .camera-controls {
+            position: absolute;
+            bottom: 20px;
+            left: 0;
+            right: 0;
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+        }
+        
+        .camera-button {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: white;
+            border: 4px solid #9333EA;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+        
+        .camera-button:hover {
+            transform: scale(1.1);
+        }
+        
+        .camera-button:active {
+            transform: scale(0.95);
+        }
+        
+        .photo-preview {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+            border-radius: 12px;
+            margin: 10px 0;
+        }
+        
+        /* Signature Pad Styles */
+        .signature-container {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .signature-canvas {
+            width: 100%;
+            height: 200px;
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            cursor: crosshair;
+            touch-action: none;
+        }
+        
+        .signature-label {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 10px;
+            display: block;
+        }
+        
+        .signature-controls {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 10px;
+        }
+        
+        .signature-clear {
+            padding: 8px 16px;
+            background: #f0f0f0;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        
+        /* M-Pesa Prompt Styles */
+        .mpesa-prompt-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.9);
+            backdrop-filter: blur(10px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 4000;
+            animation: slideUp 0.3s ease;
+        }
+        
+        @keyframes slideUp {
+            from {
+                transform: translateY(100%);
+            }
+            to {
+                transform: translateY(0);
+            }
+        }
+        
+        .mpesa-content {
+            background: linear-gradient(135deg, #1C1C1F, #2C2C2E);
+            border-radius: 24px;
+            padding: 30px;
+            max-width: 400px;
+            width: 90%;
+            box-shadow: 0 25px 80px rgba(0, 0, 0, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .mpesa-content h3 {
+            color: white;
+            font-size: 24px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .mpesa-content h3::before {
+            content: '';
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #34C759, #30D158);
+            border-radius: 50%;
+            display: inline-block;
+        }
+        
+        .mpesa-amount {
+            font-size: 36px;
+            font-weight: 800;
+            color: #34C759;
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        .mpesa-instructions {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .mpesa-instructions ol {
+            margin: 0;
+            padding-left: 20px;
+            color: rgba(255, 255, 255, 0.8);
+        }
+        
+        .mpesa-instructions li {
+            margin: 10px 0;
+        }
+        
+        .mpesa-input {
+            margin: 20px 0;
+        }
+        
+        .mpesa-input label {
+            display: block;
+            color: rgba(255, 255, 255, 0.6);
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+        
+        .mpesa-input input {
+            width: 100%;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            color: white;
+            font-size: 18px;
+            font-weight: 600;
+            text-align: center;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+        
+        .mpesa-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        .mpesa-actions button {
+            flex: 1;
+            padding: 16px;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+        
+        .mpesa-actions button:first-child {
+            background: linear-gradient(135deg, #34C759, #30D158);
+            color: white;
+        }
+        
+        .mpesa-actions button:last-child {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+        }
+        
+        .mpesa-actions button:hover {
+            transform: translateY(-2px);
+        }
+        
+        /* Cash Collection Widget */
+        .cash-collection-widget {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            background: linear-gradient(135deg, #0A0A0B 0%, #1C1C1F 100%);
+            backdrop-filter: blur(20px);
+            border-radius: 20px;
+            padding: 20px;
+            min-width: 240px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5), 0 2px 10px rgba(0, 0, 0, 0.3);
+            z-index: 100;
+            transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            font-weight: 500;
         }
         
         /* Premium Leaflet popup styles */
@@ -705,21 +1669,57 @@ function injectNavigationStyles() {
             transform: rotate(90deg) !important;
         }
         
-        /* Cash Collection Widget */
-        .cash-collection-widget {
-            position: fixed;
-            top: 80px;
-            right: 20px;
-            background: linear-gradient(135deg, #0A0A0B 0%, #1C1C1F 100%);
-            backdrop-filter: blur(20px);
-            border-radius: 20px;
-            padding: 20px;
-            min-width: 240px;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5), 0 2px 10px rgba(0, 0, 0, 0.3);
-            z-index: 100;
-            transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            font-weight: 500;
+        /* Verification Progress Bar */
+        .verification-progress {
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+            overflow: hidden;
+            margin: 20px 0;
+        }
+        
+        .verification-progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #9333EA, #7928CA);
+            border-radius: 2px;
+            transition: width 0.3s ease;
+        }
+        
+        /* Photo Grid for Multiple Photos */
+        .photo-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin: 20px 0;
+        }
+        
+        .photo-grid-item {
+            position: relative;
+            padding-bottom: 100%;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        
+        .photo-grid-item img {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .photo-grid-item .photo-label {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(to top, rgba(0, 0, 0, 0.8), transparent);
+            color: white;
+            padding: 10px;
+            font-size: 12px;
+            font-weight: 600;
         }
         
         /* Optimization Button Styles */
@@ -816,153 +1816,15 @@ function injectNavigationStyles() {
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
-        
-        .optimizing-steps {
-            margin-top: 20px;
-        }
-        
-        .optimizing-steps .step {
-            padding: 8px;
-            margin: 5px 0;
-            border-radius: 8px;
-            opacity: 0.5;
-            transition: all 0.3s ease;
-        }
-        
-        .optimizing-steps .step.active {
-            opacity: 1;
-            background: rgba(147, 51, 234, 0.2);
-        }
-        
-        /* Optimization Results */
-        .optimization-results {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: linear-gradient(135deg, #1C1C1F, #2C2C2E);
-            border-radius: 24px;
-            padding: 40px;
-            text-align: center;
-            z-index: 5000;
-            box-shadow: 0 25px 80px rgba(0, 0, 0, 0.6);
-            max-width: 450px;
-            animation: slideIn 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-        }
-        
-        @keyframes slideIn {
-            from {
-                transform: translate(-50%, -50%) scale(0.9);
-                opacity: 0;
-            }
-            to {
-                transform: translate(-50%, -50%) scale(1);
-                opacity: 1;
-            }
-        }
-        
-        .optimization-results.fade-out {
-            animation: fadeOut 0.3s ease-out forwards;
-        }
-        
-        @keyframes fadeOut {
-            to {
-                opacity: 0;
-                transform: translate(-50%, -50%) scale(0.9);
-            }
-        }
-        
-        .results-icon {
-            font-size: 60px;
-            margin-bottom: 20px;
-        }
-        
-        .results-stats {
-            display: flex;
-            justify-content: space-around;
-            margin: 30px 0;
-        }
-        
-        .results-stats .stat {
-            text-align: center;
-        }
-        
-        .stat-value {
-            display: block;
-            font-size: 28px;
-            font-weight: 700;
-            color: #9333EA;
-            margin-bottom: 5px;
-        }
-        
-        .stat-label {
-            font-size: 12px;
-            color: rgba(255, 255, 255, 0.6);
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-        
-        .results-comparison {
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 12px;
-            padding: 15px;
-            margin: 20px 0;
-        }
-        
-        .comparison-item {
-            display: flex;
-            justify-content: space-between;
-            padding: 8px 0;
-            color: rgba(255, 255, 255, 0.8);
-        }
-        
-        .comparison-value.success {
-            color: #34C759;
-            font-weight: 600;
-        }
-        
-        .efficiency-high { color: #34C759; }
-        .efficiency-medium { color: #FF9F0A; }
-        .efficiency-low { color: #FF3B30; }
-        
-        .results-close {
-            background: linear-gradient(135deg, #9333EA, #7928CA);
-            color: white;
-            border: none;
-            border-radius: 12px;
-            padding: 12px 30px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            margin-top: 20px;
-        }
-        
-        /* Reoptimize button */
-        .reoptimize-float-btn {
-            position: fixed;
-            bottom: 100px;
-            right: 20px;
-            background: linear-gradient(135deg, #FF9F0A, #FF6B00);
-            color: white;
-            border: none;
-            border-radius: 50px;
-            padding: 15px 25px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            box-shadow: 0 6px 20px rgba(255, 159, 10, 0.4);
-            z-index: 1000;
-            animation: pulse 2s infinite;
-        }
-        
-        @keyframes pulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.05); }
-        }
     `;
     
     document.head.appendChild(style);
 }
+/**
+ * Enhanced Route Navigation Module - Part 4/6
+ * UI Display Functions and Components
+ * Version: 5.0.0
+ */
 
 // ============================================================================
 // UI DISPLAY FUNCTIONS
@@ -1107,7 +1969,6 @@ function showOptimizationResults(savedDistance, savedPercentage) {
     
     document.body.appendChild(results);
     
-    // Auto-close after 7 seconds
     setTimeout(() => {
         if (results.parentElement) {
             results.classList.add('fade-out');
@@ -1117,7 +1978,6 @@ function showOptimizationResults(savedDistance, savedPercentage) {
 }
 
 function showReoptimizeButton() {
-    // Remove existing button if any
     const existing = document.querySelector('.reoptimize-float-btn');
     if (existing) existing.remove();
     
@@ -1130,8 +1990,6 @@ function showReoptimizeButton() {
     };
     
     document.body.appendChild(btn);
-    
-    // Auto-remove after 10 seconds
     setTimeout(() => btn.remove(), 10000);
 }
 
@@ -1217,10 +2075,594 @@ function showNotification(message, type = 'info') {
         setTimeout(() => notification.remove(), 300);
     }, 3000);
 }
+
+// ============================================================================
+// ENHANCED VERIFICATION UI FUNCTIONS
+// ============================================================================
+
+function showVerificationProgress(currentStep, totalSteps) {
+    const progressBar = document.querySelector('.verification-progress-bar');
+    if (progressBar) {
+        const percentage = (currentStep / totalSteps) * 100;
+        progressBar.style.width = `${percentage}%`;
+    }
+}
+
+function updateVerificationStep(stepNumber, status = 'active') {
+    const steps = document.querySelectorAll('.verification-step');
+    steps.forEach((step, index) => {
+        if (index < stepNumber) {
+            step.classList.remove('active');
+            step.classList.add('completed');
+        } else if (index === stepNumber) {
+            step.classList.add(status);
+        } else {
+            step.classList.remove('active', 'completed');
+        }
+    });
+}
+
+function createPhotoPreview(photoData, label) {
+    const preview = document.createElement('div');
+    preview.className = 'photo-grid-item';
+    preview.innerHTML = `
+        <img src="${photoData}" alt="${label}">
+        <div class="photo-label">${label}</div>
+    `;
+    return preview;
+}
+
+function showCameraUI(onCapture) {
+    const cameraModal = document.createElement('div');
+    cameraModal.className = 'camera-modal';
+    cameraModal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.95);
+        z-index: 3500;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+    `;
+    
+    cameraModal.innerHTML = `
+        <div class="camera-container">
+            <video id="cameraVideo" class="camera-video" autoplay></video>
+            <div class="camera-overlay">
+                <div class="camera-frame"></div>
+            </div>
+            <div class="camera-controls">
+                <button class="camera-button" id="captureBtn"></button>
+                <button style="
+                    background: rgba(255, 255, 255, 0.2);
+                    border: none;
+                    border-radius: 50%;
+                    width: 50px;
+                    height: 50px;
+                    color: white;
+                    font-size: 20px;
+                    cursor: pointer;
+                " onclick="this.parentElement.parentElement.parentElement.remove()">✕</button>
+            </div>
+        </div>
+        <p style="color: white; margin-top: 20px; font-size: 14px;">
+            Position the package within the frame
+        </p>
+    `;
+    
+    document.body.appendChild(cameraModal);
+    
+    // Initialize camera
+    const video = document.getElementById('cameraVideo');
+    initializeCamera().then(stream => {
+        video.srcObject = stream;
+        
+        document.getElementById('captureBtn').onclick = async () => {
+            // Show loading state
+            const captureBtn = document.getElementById('captureBtn');
+            captureBtn.disabled = true;
+            captureBtn.style.opacity = '0.5';
+            
+            try {
+                // Capture and upload directly to Supabase
+                const photoUrl = await captureAndUploadPhoto(
+                    video, 
+                    state.currentVerification.stopId,
+                    state.currentVerification.type
+                );
+                
+                stream.getTracks().forEach(track => track.stop());
+                cameraModal.remove();
+                onCapture(photoUrl);
+            } catch (err) {
+                console.error('Photo capture/upload failed:', err);
+                // Fallback to base64
+                const photoData = capturePhoto(video);
+                stream.getTracks().forEach(track => track.stop());
+                cameraModal.remove();
+                onCapture(photoData);
+            }
+        };
+    }).catch(err => {
+        console.error('Camera error:', err);
+        showNotification('Camera not available', 'error');
+        cameraModal.remove();
+    });
+}
+
+function showSignaturePad(onSign) {
+    const signatureModal = document.createElement('div');
+    signatureModal.className = 'signature-modal';
+    signatureModal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.95);
+        z-index: 3500;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+    `;
+    
+    signatureModal.innerHTML = `
+        <div class="signature-container" style="max-width: 500px; width: 100%;">
+            <h3 style="margin: 0 0 20px 0; color: #333;">Customer Signature</h3>
+            <label class="signature-label">Please ask the customer to sign below:</label>
+            <canvas id="signatureCanvas" class="signature-canvas"></canvas>
+            <div class="signature-controls">
+                <button class="signature-clear" id="clearSignature">Clear</button>
+                <div style="display: flex; gap: 10px;">
+                    <button style="
+                        padding: 10px 20px;
+                        background: #ccc;
+                        border: none;
+                        border-radius: 8px;
+                        cursor: pointer;
+                        font-weight: 600;
+                    " onclick="this.parentElement.parentElement.parentElement.parentElement.remove()">Cancel</button>
+                    <button id="confirmSignature" style="
+                        padding: 10px 20px;
+                        background: linear-gradient(135deg, #34C759, #30D158);
+                        border: none;
+                        border-radius: 8px;
+                        color: white;
+                        cursor: pointer;
+                        font-weight: 600;
+                    ">Confirm Signature</button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(signatureModal);
+    
+    const canvas = document.getElementById('signatureCanvas');
+    const signaturePad = initializeSignaturePad(canvas);
+    
+    document.getElementById('clearSignature').onclick = () => {
+        signaturePad.clear();
+    };
+    
+    document.getElementById('confirmSignature').onclick = async () => {
+        const signatureData = await signaturePad.getSignatureData();
+        if (signatureData) {
+            // Show loading state
+            const confirmBtn = document.getElementById('confirmSignature');
+            confirmBtn.disabled = true;
+            confirmBtn.textContent = 'Uploading...';
+            
+            try {
+                // Upload signature to Supabase
+                const signatureUrl = await uploadSignatureToSupabase(
+                    signatureData,
+                    state.currentVerification.stopId
+                );
+                signatureModal.remove();
+                onSign(signatureUrl);
+            } catch (err) {
+                console.error('Signature upload failed:', err);
+                // Fallback to base64
+                signatureModal.remove();
+                onSign(signatureData);
+            }
+        } else {
+            showNotification('Please provide a signature', 'warning');
+        }
+    };
+}ized) {
+            optimizeBtn.innerHTML = `
+                <span class="optimize-icon">✅</span>
+                <span class="optimize-text">Route Optimized</span>
+            `;
+            optimizeBtn.disabled = true;
+            optimizeBtn.classList.add('optimized');
+        } else {
+            optimizeBtn.innerHTML = `
+                <span class="optimize-icon">✨</span>
+                <span class="optimize-text">Optimize Route</span>
+            `;
+            optimizeBtn.disabled = false;
+            optimizeBtn.classList.remove('optimized');
+        }
+    }
+    
+    if (undoBtn) {
+        undoBtn.style.display = isOptimized ? 'flex' : 'none';
+    }
+}
+
+function showOptimizingAnimation() {
+    const animation = document.createElement('div');
+    animation.id = 'optimizingAnimation';
+    animation.className = 'optimizing-animation';
+    
+    const steps = [
+        '📍 Analyzing stop locations',
+        '🗺️ Detecting route direction',
+        '⚡ Optimizing delivery sequence',
+        '✅ Validating route integrity'
+    ];
+    
+    animation.innerHTML = `
+        <div class="optimizing-content">
+            <div class="optimizing-spinner"></div>
+            <h3 style="color: white; margin-bottom: 10px;">Optimizing Route...</h3>
+            <p style="color: rgba(255, 255, 255, 0.6); margin-bottom: 20px;">
+                Using intelligent geographical flow analysis
+            </p>
+            <div class="optimizing-steps">
+                ${steps.map((step, i) => `
+                    <div class="step ${i === 0 ? 'active' : ''}" data-step="${i}">
+                        ${step}
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(animation);
+    
+    // Animate steps
+    steps.forEach((_, index) => {
+        if (index > 0) {
+            setTimeout(() => {
+                const step = animation.querySelector(`.step[data-step="${index}"]`);
+                if (step) step.classList.add('active');
+            }, 300 * (index + 1));
+        }
+    });
+}
+
+function hideOptimizingAnimation() {
+    const animation = document.getElementById('optimizingAnimation');
+    if (animation) {
+        animation.classList.add('fade-out');
+        setTimeout(() => animation.remove(), 300);
+    }
+}
+
+function showOptimizationResults(savedDistance, savedPercentage) {
+    const results = document.createElement('div');
+    results.className = 'optimization-results';
+    
+    results.innerHTML = `
+        <div class="results-content">
+            <div class="results-icon">🎉</div>
+            <h2 style="color: white; margin-bottom: 10px;">Route Optimized!</h2>
+            <div class="results-stats">
+                <div class="stat">
+                    <span class="stat-value">${savedDistance.toFixed(1)} km</span>
+                    <span class="stat-label">Distance Saved</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-value">${savedPercentage}%</span>
+                    <span class="stat-label">More Efficient</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-value">${Math.round(savedDistance * 2.5)} min</span>
+                    <span class="stat-label">Time Saved</span>
+                </div>
+            </div>
+            <div class="results-comparison">
+                <div class="comparison-item">
+                    <span class="comparison-label">Original:</span>
+                    <span class="comparison-value">${state.optimizationStats.originalDistance.toFixed(1)} km</span>
+                </div>
+                <div class="comparison-item">
+                    <span class="comparison-label">Optimized:</span>
+                    <span class="comparison-value success">${state.optimizationStats.optimizedDistance.toFixed(1)} km</span>
+                </div>
+            </div>
+            <button class="results-close" onclick="this.parentElement.parentElement.remove()">
+                Got it!
+            </button>
+        </div>
+    `;
+    
+    document.body.appendChild(results);
+    
+    setTimeout(() => {
+        if (results.parentElement) {
+            results.classList.add('fade-out');
+            setTimeout(() => results.remove(), 300);
+        }
+    }, 7000);
+}
+
+function showReoptimizeButton() {
+    const existing = document.querySelector('.reoptimize-float-btn');
+    if (existing) existing.remove();
+    
+    const btn = document.createElement('button');
+    btn.className = 'reoptimize-float-btn';
+    btn.innerHTML = '🔄 Re-optimize Route';
+    btn.onclick = () => {
+        reoptimizeRemainingStops();
+        btn.remove();
+    };
+    
+    document.body.appendChild(btn);
+    setTimeout(() => btn.remove(), 10000);
+}
+
+function showCashCollectionWidget() {
+    const existingWidget = document.querySelector('.cash-collection-widget');
+    if (existingWidget) existingWidget.remove();
+    
+    const pendingAmount = state.totalCashToCollect - state.totalCashCollected;
+    const hasPending = pendingAmount > 0;
+    
+    const widget = document.createElement('div');
+    widget.className = `cash-collection-widget ${hasPending ? 'has-pending' : ''}`;
+    widget.innerHTML = `
+        <div class="cash-widget-title" style="font-size: 14px; font-weight: 600; margin-bottom: 10px; color: white;">
+            ${hasPending ? '⚡' : '✓'} Cash Collection
+        </div>
+        <div class="cash-widget-amount" style="font-size: 24px; font-weight: 700; color: #FF9F0A; margin-bottom: 15px;">
+            KES ${pendingAmount.toLocaleString()}
+        </div>
+        <div class="cash-widget-breakdown" style="font-size: 13px; color: rgba(255,255,255,0.7);">
+            <div class="cash-breakdown-item" style="display: flex; justify-content: space-between; padding: 5px 0;">
+                <span>Total Expected</span>
+                <span style="font-weight: 600;">KES ${state.totalCashToCollect.toLocaleString()}</span>
+            </div>
+            <div class="cash-breakdown-item" style="display: flex; justify-content: space-between; padding: 5px 0;">
+                <span>✓ Collected</span>
+                <span style="font-weight: 600; color: #34C759;">KES ${state.totalCashCollected.toLocaleString()}</span>
+            </div>
+            <div class="cash-breakdown-item" style="display: flex; justify-content: space-between; padding: 5px 0; border-top: 1px solid rgba(255,255,255,0.1); margin-top: 5px; padding-top: 10px;">
+                <span>⏳ Pending</span>
+                <span style="font-weight: 600; color: #FF9F0A;">KES ${pendingAmount.toLocaleString()}</span>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(widget);
+}
+
+function updateCashCollectionWidget() {
+    calculateCashCollection();
+    const widget = document.querySelector('.cash-collection-widget');
+    if (widget) {
+        showCashCollectionWidget();
+    }
+}
+
+function showNotification(message, type = 'info') {
+    const notification = document.createElement('div');
+    notification.className = `notification ${type}`;
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: ${type === 'success' ? 'linear-gradient(135deg, #34C759, #30D158)' : 
+                      type === 'error' ? 'linear-gradient(135deg, #FF3B30, #FF2D55)' : 
+                      type === 'warning' ? 'linear-gradient(135deg, #FF9F0A, #FF6B00)' : 
+                      'linear-gradient(135deg, #1C1C1F, #2C2C2E)'};
+        color: ${type === 'warning' ? '#0A0A0B' : 'white'};
+        padding: 16px 20px;
+        border-radius: 14px;
+        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        z-index: 4000;
+        animation: slideIn 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        max-width: 380px;
+        font-weight: 600;
+        font-size: 15px;
+        letter-spacing: 0.3px;
+    `;
+    notification.innerHTML = `
+        <span class="notification-icon" style="font-size: 20px;">
+            ${type === 'success' ? '✓' : type === 'error' ? '✗' : type === 'warning' ? '⚠' : 'ℹ'}
+        </span>
+        <span>${message}</span>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        notification.style.animation = 'slideOut 0.3s ease-out';
+        setTimeout(() => notification.remove(), 300);
+    }, 3000);
+}
+
+// ============================================================================
+// ENHANCED VERIFICATION UI FUNCTIONS
+// ============================================================================
+
+function showVerificationProgress(currentStep, totalSteps) {
+    const progressBar = document.querySelector('.verification-progress-bar');
+    if (progressBar) {
+        const percentage = (currentStep / totalSteps) * 100;
+        progressBar.style.width = `${percentage}%`;
+    }
+}
+
+function updateVerificationStep(stepNumber, status = 'active') {
+    const steps = document.querySelectorAll('.verification-step');
+    steps.forEach((step, index) => {
+        if (index < stepNumber) {
+            step.classList.remove('active');
+            step.classList.add('completed');
+        } else if (index === stepNumber) {
+            step.classList.add(status);
+        } else {
+            step.classList.remove('active', 'completed');
+        }
+    });
+}
+
+function createPhotoPreview(photoData, label) {
+    const preview = document.createElement('div');
+    preview.className = 'photo-grid-item';
+    preview.innerHTML = `
+        <img src="${photoData}" alt="${label}">
+        <div class="photo-label">${label}</div>
+    `;
+    return preview;
+}
+
+function showCameraUI(onCapture) {
+    const cameraModal = document.createElement('div');
+    cameraModal.className = 'camera-modal';
+    cameraModal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.95);
+        z-index: 3500;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+    `;
+    
+    cameraModal.innerHTML = `
+        <div class="camera-container">
+            <video id="cameraVideo" class="camera-video" autoplay></video>
+            <div class="camera-overlay">
+                <div class="camera-frame"></div>
+            </div>
+            <div class="camera-controls">
+                <button class="camera-button" id="captureBtn"></button>
+                <button style="
+                    background: rgba(255, 255, 255, 0.2);
+                    border: none;
+                    border-radius: 50%;
+                    width: 50px;
+                    height: 50px;
+                    color: white;
+                    font-size: 20px;
+                    cursor: pointer;
+                " onclick="this.parentElement.parentElement.parentElement.remove()">✕</button>
+            </div>
+        </div>
+        <p style="color: white; margin-top: 20px; font-size: 14px;">
+            Position the package within the frame
+        </p>
+    `;
+    
+    document.body.appendChild(cameraModal);
+    
+    // Initialize camera
+    const video = document.getElementById('cameraVideo');
+    initializeCamera().then(stream => {
+        video.srcObject = stream;
+        
+        document.getElementById('captureBtn').onclick = () => {
+            const photoData = capturePhoto(video);
+            stream.getTracks().forEach(track => track.stop());
+            cameraModal.remove();
+            onCapture(photoData);
+        };
+    }).catch(err => {
+        console.error('Camera error:', err);
+        showNotification('Camera not available', 'error');
+        cameraModal.remove();
+    });
+}
+
+function showSignaturePad(onSign) {
+    const signatureModal = document.createElement('div');
+    signatureModal.className = 'signature-modal';
+    signatureModal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.95);
+        z-index: 3500;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+    `;
+    
+    signatureModal.innerHTML = `
+        <div class="signature-container" style="max-width: 500px; width: 100%;">
+            <h3 style="margin: 0 0 20px 0; color: #333;">Customer Signature</h3>
+            <label class="signature-label">Please ask the customer to sign below:</label>
+            <canvas id="signatureCanvas" class="signature-canvas"></canvas>
+            <div class="signature-controls">
+                <button class="signature-clear" id="clearSignature">Clear</button>
+                <div style="display: flex; gap: 10px;">
+                    <button style="
+                        padding: 10px 20px;
+                        background: #ccc;
+                        border: none;
+                        border-radius: 8px;
+                        cursor: pointer;
+                        font-weight: 600;
+                    " onclick="this.parentElement.parentElement.parentElement.parentElement.remove()">Cancel</button>
+                    <button id="confirmSignature" style="
+                        padding: 10px 20px;
+                        background: linear-gradient(135deg, #34C759, #30D158);
+                        border: none;
+                        border-radius: 8px;
+                        color: white;
+                        cursor: pointer;
+                        font-weight: 600;
+                    ">Confirm Signature</button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(signatureModal);
+    
+    const canvas = document.getElementById('signatureCanvas');
+    const signaturePad = initializeSignaturePad(canvas);
+    
+    document.getElementById('clearSignature').onclick = () => {
+        signaturePad.clear();
+    };
+    
+    document.getElementById('confirmSignature').onclick = () => {
+        const signatureData = signaturePad.getSignatureData();
+        if (signatureData) {
+            signatureModal.remove();
+            onSign(signatureData);
+        } else {
+            showNotification('Please provide a signature', 'warning');
+        }
+    };
+}
 /**
- * Enhanced Route Navigation Module - Part 3/4
- * Map, Navigation, and Location Tracking Functions
- * Version: 4.0.0
+ * Enhanced Route Navigation Module - Part 5/6
+ * Map, Navigation, Location Tracking Functions
+ * Version: 5.0.0
  */
 
 // ============================================================================
@@ -1313,6 +2755,14 @@ function startLocationTracking() {
             updateCurrentLocation(position);
             state.isTracking = true;
             
+            // Store location for verification
+            state.currentVerification.locationData = {
+                lat: position.coords.latitude,
+                lng: position.coords.longitude,
+                accuracy: position.coords.accuracy,
+                timestamp: new Date().toISOString()
+            };
+            
             // Center map on location
             if (state.map && state.currentLocation) {
                 state.map.setView([state.currentLocation.lat, state.currentLocation.lng], 17, {
@@ -1362,6 +2812,16 @@ function startLocationTracking() {
     state.locationWatchId = navigator.geolocation.watchPosition(
         position => {
             updateCurrentLocation(position);
+            
+            // Update verification location data
+            if (state.currentVerification.stopId) {
+                state.currentVerification.locationData = {
+                    lat: position.coords.latitude,
+                    lng: position.coords.longitude,
+                    accuracy: position.coords.accuracy,
+                    timestamp: new Date().toISOString()
+                };
+            }
             
             // Periodic optimization check
             if (state.navigationActive && config.optimization.autoReoptimize) {
@@ -1875,146 +3335,7 @@ function createLeafletIcon(stop) {
     });
 }
 
-function createStopPopup(stop) {
-    const type = stop.type;
-    const paymentInfo = getPaymentInfoForStop(stop);
-    const orderNumber = state.stopOrderMap[stop.id] || '';
-    const showOrderNumber = state.activeRoute?.isOptimized && orderNumber;
-    
-    // Different fields for pickup vs delivery
-    let customerName, customerPhone;
-    if (type === 'pickup') {
-        customerName = stop.vendor_name || stop.vendorName || stop.sender_name || stop.customerName || 'Vendor';
-        customerPhone = stop.vendor_phone || stop.vendorPhone || stop.sender_phone || stop.customerPhone || '';
-    } else {
-        customerName = stop.recipient_name || stop.recipientName || stop.customer_name || stop.customerName || 'Recipient';
-        customerPhone = stop.recipient_phone || stop.recipientPhone || stop.customer_phone || stop.customerPhone || '';
-    }
-    
-    const address = stop.address || stop.location_address || 'Address not available';
-    const parcelCode = stop.parcelCode || stop.parcel_code || stop.code || 'N/A';
-    const instructions = stop.specialInstructions || stop.special_instructions || stop.instructions || '';
-    
-    return `
-        <div class="stop-popup">
-            <div class="popup-header ${type}" style="
-                padding: 18px 22px;
-                margin: 0;
-                font-weight: 700;
-                font-size: 14px;
-                letter-spacing: 1px;
-                text-transform: uppercase;
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                background: ${type === 'pickup' ? 'linear-gradient(135deg, #FF9F0A 0%, #FF6000 100%)' : 'linear-gradient(135deg, #007AFF 0%, #0051D5 100%)'};
-                color: ${type === 'pickup' ? '#000000' : 'white'};
-            ">
-                ${showOrderNumber ? `
-                    <div style="
-                        position: absolute;
-                        left: 20px;
-                        top: 50%;
-                        transform: translateY(-50%);
-                        width: 36px;
-                        height: 36px;
-                        background: rgba(0, 0, 0, 0.25);
-                        border-radius: 50%;
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                        font-size: 18px;
-                        font-weight: 800;
-                        border: 2px solid rgba(255, 255, 255, 0.3);
-                    ">${orderNumber}</div>
-                    <span style="margin-left: 50px;">${type.toUpperCase()}</span>
-                ` : `<span>${type.toUpperCase()}</span>`}
-                <span style="
-                    background: rgba(0, 0, 0, 0.2);
-                    padding: 5px 12px;
-                    border-radius: 20px;
-                    font-size: 12px;
-                    font-weight: 700;
-                    letter-spacing: 0.5px;
-                ">${parcelCode}</span>
-            </div>
-            <div class="popup-body" style="padding: 22px; background: transparent;">
-                <h3 style="margin: 0 0 18px 0; font-size: 18px; font-weight: 600; color: white;">${address}</h3>
-                <div class="popup-info" style="display: flex; flex-direction: column; gap: 14px;">
-                    <div class="info-row" style="display: flex; align-items: flex-start; gap: 12px; padding: 10px; background: rgba(255, 255, 255, 0.03); border-radius: 10px;">
-                        <span class="info-icon" style="width: 24px; font-size: 18px;">👤</span>
-                        <span style="color: rgba(255, 255, 255, 0.9);">${customerName}</span>
-                    </div>
-                    ${customerPhone ? `
-                        <div class="info-row" style="display: flex; align-items: flex-start; gap: 12px; padding: 10px; background: rgba(255, 255, 255, 0.03); border-radius: 10px;">
-                            <span class="info-icon" style="width: 24px; font-size: 18px;">📞</span>
-                            <a href="tel:${customerPhone}" style="color: #007AFF; text-decoration: none; font-weight: 600;">${customerPhone}</a>
-                        </div>
-                    ` : ''}
-                    ${instructions ? `
-                        <div class="info-row instructions" style="display: flex; align-items: flex-start; gap: 12px; padding: 10px; background: rgba(147, 51, 234, 0.1); border: 1px solid rgba(147, 51, 234, 0.2); border-radius: 10px;">
-                            <span class="info-icon" style="width: 24px; font-size: 18px;">💬</span>
-                            <span style="color: rgba(255, 255, 255, 0.9);">${instructions}</span>
-                        </div>
-                    ` : ''}
-                    ${paymentInfo.needsCollection ? `
-                        <div class="info-row payment" style="display: flex; align-items: flex-start; gap: 12px; padding: 14px; background: linear-gradient(135deg, rgba(255, 159, 10, 0.15), rgba(255, 107, 0, 0.1)); border: 1px solid rgba(255, 159, 10, 0.3); border-radius: 10px; margin-top: 12px;">
-                            <span class="info-icon" style="width: 24px; font-size: 18px;">💰</span>
-                            <span style="font-weight: 700; color: #FF9F0A;">
-                                Collect: KES ${paymentInfo.amount.toLocaleString()}
-                            </span>
-                        </div>
-                    ` : paymentInfo.method === 'online' ? `
-                        <div class="info-row payment" style="display: flex; align-items: flex-start; gap: 12px; padding: 14px; background: rgba(52, 199, 89, 0.1); border: 1px solid rgba(52, 199, 89, 0.3); border-radius: 10px;">
-                            <span class="info-icon" style="width: 24px; font-size: 18px;">✅</span>
-                            <span style="color: #34C759; font-weight: 600;">Already Paid Online</span>
-                        </div>
-                    ` : ''}
-                </div>
-                ${!stop.completed && canCompleteStop(stop) ? `
-                    <div class="popup-actions" style="display: flex; gap: 10px; margin-top: 22px; padding-top: 22px; border-top: 1px solid rgba(255, 255, 255, 0.08);">
-                        <button onclick="openVerificationModal('${stop.id}')" style="
-                            flex: 1;
-                            padding: 14px 18px;
-                            border: none;
-                            border-radius: 14px;
-                            font-size: 14px;
-                            font-weight: 600;
-                            cursor: pointer;
-                            background: linear-gradient(135deg, #34C759, #30D158);
-                            color: white;
-                            box-shadow: 0 4px 12px rgba(52, 199, 89, 0.3);
-                        ">
-                            <span>✓ Verify ${stop.type}</span>
-                        </button>
-                        <button onclick="navigateToStop('${stop.id}')" style="
-                            padding: 14px 18px;
-                            border: none;
-                            border-radius: 14px;
-                            font-size: 14px;
-                            font-weight: 600;
-                            cursor: pointer;
-                            background: rgba(255, 255, 255, 0.08);
-                            color: white;
-                            border: 1px solid rgba(255, 255, 255, 0.15);
-                        ">
-                            <span>🧭 Navigate</span>
-                        </button>
-                    </div>
-                ` : stop.completed ? `
-                    <div style="margin-top: 18px; padding: 14px; background: linear-gradient(135deg, rgba(52, 199, 89, 0.15), rgba(48, 209, 88, 0.1)); border: 1px solid rgba(52, 199, 89, 0.3); border-radius: 14px; text-align: center; color: #34C759; font-weight: 600; font-size: 14px;">
-                        <span>✓ Completed ${formatTimeAgo(stop.timestamp)}</span>
-                    </div>
-                ` : ''}
-            </div>
-        </div>
-    `;
-}
-
-// ============================================================================
-// HELPER FUNCTIONS
-// ============================================================================
-
+// Helper functions
 function calculateBounds(stops) {
     let north = -90, south = 90, east = -180, west = 180;
     
@@ -2053,10 +3374,7 @@ function waitForLeaflet() {
     });
 }
 
-// ============================================================================
-// NAVIGATION CONTROL FUNCTIONS
-// ============================================================================
-
+// Navigation control functions
 window.centerOnLocation = function() {
     if (state.currentLocation && state.map) {
         state.map.setView([state.currentLocation.lat, state.currentLocation.lng], 17, {
@@ -2145,9 +3463,9 @@ window.navigateToStop = function(stopId) {
     }
 };
 /**
- * Enhanced Route Navigation Module - Part 4/4
- * Display, Verification, and Completion Functions
- * Version: 4.0.0
+ * Enhanced Route Navigation Module - Part 6/6
+ * Display, Enhanced Verification with Photos/Signatures, and Completion Functions
+ * Version: 5.0.0
  */
 
 // ============================================================================
@@ -2303,6 +3621,7 @@ function createStopCard(stop, number, type) {
     const isActive = isNextStop(stop);
     const canInteract = !stop.completed && canCompleteStop(stop);
     const paymentInfo = getPaymentInfoForStop(stop);
+    const hasVerificationData = state.verificationData.photos[stop.id] || state.verificationData.signatures[stop.id];
     
     // Different fields for pickup vs delivery
     let customerName, customerPhone;
@@ -2396,6 +3715,11 @@ function createStopCard(stop, number, type) {
                     ${stop.completed ? `
                         <div style="margin-top: 10px; color: #34C759; font-size: 13px; font-weight: 600;">
                             ✓ Completed ${formatTimeAgo(stop.timestamp)}
+                            ${hasVerificationData ? `
+                                <span style="margin-left: 10px; color: #9333EA;">
+                                    📷 ✍️ Verified
+                                </span>
+                            ` : ''}
                         </div>
                     ` : isActive ? `
                         <div style="margin-top: 10px; color: #9333EA; font-size: 13px; font-weight: 600;">
@@ -2435,38 +3759,172 @@ function createStopCard(stop, number, type) {
     `;
 }
 
+function createStopPopup(stop) {
+    const type = stop.type;
+    const paymentInfo = getPaymentInfoForStop(stop);
+    const orderNumber = state.stopOrderMap[stop.id] || '';
+    const showOrderNumber = state.activeRoute?.isOptimized && orderNumber;
+    
+    // Different fields for pickup vs delivery
+    let customerName, customerPhone;
+    if (type === 'pickup') {
+        customerName = stop.vendor_name || stop.vendorName || stop.sender_name || stop.customerName || 'Vendor';
+        customerPhone = stop.vendor_phone || stop.vendorPhone || stop.sender_phone || stop.customerPhone || '';
+    } else {
+        customerName = stop.recipient_name || stop.recipientName || stop.customer_name || stop.customerName || 'Recipient';
+        customerPhone = stop.recipient_phone || stop.recipientPhone || stop.customer_phone || stop.customerPhone || '';
+    }
+    
+    const address = stop.address || stop.location_address || 'Address not available';
+    const parcelCode = stop.parcelCode || stop.parcel_code || stop.code || 'N/A';
+    const instructions = stop.specialInstructions || stop.special_instructions || stop.instructions || '';
+    
+    return `
+        <div class="stop-popup">
+            <div class="popup-header ${type}" style="
+                padding: 18px 22px;
+                margin: 0;
+                font-weight: 700;
+                font-size: 14px;
+                letter-spacing: 1px;
+                text-transform: uppercase;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                background: ${type === 'pickup' ? 'linear-gradient(135deg, #FF9F0A 0%, #FF6000 100%)' : 'linear-gradient(135deg, #007AFF 0%, #0051D5 100%)'};
+                color: ${type === 'pickup' ? '#000000' : 'white'};
+            ">
+                ${showOrderNumber ? `
+                    <div style="
+                        position: absolute;
+                        left: 20px;
+                        top: 50%;
+                        transform: translateY(-50%);
+                        width: 36px;
+                        height: 36px;
+                        background: rgba(0, 0, 0, 0.25);
+                        border-radius: 50%;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        font-size: 18px;
+                        font-weight: 800;
+                        border: 2px solid rgba(255, 255, 255, 0.3);
+                    ">${orderNumber}</div>
+                    <span style="margin-left: 50px;">${type.toUpperCase()}</span>
+                ` : `<span>${type.toUpperCase()}</span>`}
+                <span style="
+                    background: rgba(0, 0, 0, 0.2);
+                    padding: 5px 12px;
+                    border-radius: 20px;
+                    font-size: 12px;
+                    font-weight: 700;
+                    letter-spacing: 0.5px;
+                ">${parcelCode}</span>
+            </div>
+            <div class="popup-body" style="padding: 22px; background: transparent;">
+                <h3 style="margin: 0 0 18px 0; font-size: 18px; font-weight: 600; color: white;">${address}</h3>
+                <div class="popup-info" style="display: flex; flex-direction: column; gap: 14px;">
+                    <div class="info-row" style="display: flex; align-items: flex-start; gap: 12px; padding: 10px; background: rgba(255, 255, 255, 0.03); border-radius: 10px;">
+                        <span class="info-icon" style="width: 24px; font-size: 18px;">👤</span>
+                        <span style="color: rgba(255, 255, 255, 0.9);">${customerName}</span>
+                    </div>
+                    ${customerPhone ? `
+                        <div class="info-row" style="display: flex; align-items: flex-start; gap: 12px; padding: 10px; background: rgba(255, 255, 255, 0.03); border-radius: 10px;">
+                            <span class="info-icon" style="width: 24px; font-size: 18px;">📞</span>
+                            <a href="tel:${customerPhone}" style="color: #007AFF; text-decoration: none; font-weight: 600;">${customerPhone}</a>
+                        </div>
+                    ` : ''}
+                    ${instructions ? `
+                        <div class="info-row instructions" style="display: flex; align-items: flex-start; gap: 12px; padding: 10px; background: rgba(147, 51, 234, 0.1); border: 1px solid rgba(147, 51, 234, 0.2); border-radius: 10px;">
+                            <span class="info-icon" style="width: 24px; font-size: 18px;">💬</span>
+                            <span style="color: rgba(255, 255, 255, 0.9);">${instructions}</span>
+                        </div>
+                    ` : ''}
+                    ${paymentInfo.needsCollection ? `
+                        <div class="info-row payment" style="display: flex; align-items: flex-start; gap: 12px; padding: 14px; background: linear-gradient(135deg, rgba(255, 159, 10, 0.15), rgba(255, 107, 0, 0.1)); border: 1px solid rgba(255, 159, 10, 0.3); border-radius: 10px; margin-top: 12px;">
+                            <span class="info-icon" style="width: 24px; font-size: 18px;">💰</span>
+                            <span style="font-weight: 700; color: #FF9F0A;">
+                                Collect: KES ${paymentInfo.amount.toLocaleString()}
+                            </span>
+                        </div>
+                    ` : paymentInfo.method === 'online' ? `
+                        <div class="info-row payment" style="display: flex; align-items: flex-start; gap: 12px; padding: 14px; background: rgba(52, 199, 89, 0.1); border: 1px solid rgba(52, 199, 89, 0.3); border-radius: 10px;">
+                            <span class="info-icon" style="width: 24px; font-size: 18px;">✅</span>
+                            <span style="color: #34C759; font-weight: 600;">Already Paid Online</span>
+                        </div>
+                    ` : ''}
+                </div>
+                ${!stop.completed && canCompleteStop(stop) ? `
+                    <div class="popup-actions" style="display: flex; gap: 10px; margin-top: 22px; padding-top: 22px; border-top: 1px solid rgba(255, 255, 255, 0.08);">
+                        <button onclick="openEnhancedVerificationModal('${stop.id}')" style="
+                            flex: 1;
+                            padding: 14px 18px;
+                            border: none;
+                            border-radius: 14px;
+                            font-size: 14px;
+                            font-weight: 600;
+                            cursor: pointer;
+                            background: linear-gradient(135deg, #34C759, #30D158);
+                            color: white;
+                            box-shadow: 0 4px 12px rgba(52, 199, 89, 0.3);
+                        ">
+                            <span>✓ Verify ${stop.type}</span>
+                        </button>
+                        <button onclick="navigateToStop('${stop.id}')" style="
+                            padding: 14px 18px;
+                            border: none;
+                            border-radius: 14px;
+                            font-size: 14px;
+                            font-weight: 600;
+                            cursor: pointer;
+                            background: rgba(255, 255, 255, 0.08);
+                            color: white;
+                            border: 1px solid rgba(255, 255, 255, 0.15);
+                        ">
+                            <span>🧭 Navigate</span>
+                        </button>
+                    </div>
+                ` : stop.completed ? `
+                    <div style="margin-top: 18px; padding: 14px; background: linear-gradient(135deg, rgba(52, 199, 89, 0.15), rgba(48, 209, 88, 0.1)); border: 1px solid rgba(52, 199, 89, 0.3); border-radius: 14px; text-align: center; color: #34C759; font-weight: 600; font-size: 14px;">
+                        <span>✓ Completed ${formatTimeAgo(stop.timestamp)}</span>
+                    </div>
+                ` : ''}
+            </div>
+        </div>
+    `;
+}
+
 // ============================================================================
-// VERIFICATION & COMPLETION FUNCTIONS
+// ENHANCED VERIFICATION & COMPLETION FUNCTIONS
 // ============================================================================
 
 window.openQuickVerification = function() {
     const nextStop = getNextStop();
     if (nextStop) {
-        openVerificationModal(nextStop.id);
+        openEnhancedVerificationModal(nextStop.id);
     }
 };
 
-window.openVerificationModal = function(stopId) {
+window.openEnhancedVerificationModal = function(stopId) {
     const stop = state.activeRoute.stops.find(s => s.id === stopId);
     if (!stop || stop.completed) return;
     
     const paymentInfo = getPaymentInfoForStop(stop);
     
+    // Initialize verification session
+    state.currentVerification = {
+        stopId: stopId,
+        type: stop.type,
+        photoData: null,
+        signatureData: null,
+        locationData: state.currentLocation,
+        startTime: new Date()
+    };
+    
     const modal = document.createElement('div');
-    modal.className = 'verification-modal';
-    modal.style.cssText = `
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        z-index: 2000;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 20px;
-        overflow-y: auto;
-    `;
+    modal.className = 'verification-modal-enhanced';
+    modal.id = 'verificationModal';
     
     modal.innerHTML = `
         <div class="modal-overlay" onclick="closeVerificationModal()" style="
@@ -2482,7 +3940,7 @@ window.openVerificationModal = function(stopId) {
             position: relative;
             background: linear-gradient(135deg, #1C1C1F, #2C2C2E);
             border-radius: 24px;
-            max-width: 420px;
+            max-width: 480px;
             width: 100%;
             max-height: 90vh;
             overflow-y: auto;
@@ -2490,6 +3948,34 @@ window.openVerificationModal = function(stopId) {
             border: 1px solid rgba(255, 255, 255, 0.1);
             box-shadow: 0 25px 80px rgba(0, 0, 0, 0.6);
         ">
+            <!-- Verification Steps -->
+            <div class="verification-steps">
+                <div class="verification-step active" data-step="1">
+                    <div class="step-circle">📸</div>
+                    <div class="step-label">Photo</div>
+                </div>
+                <div class="verification-step" data-step="2">
+                    <div class="step-circle">🔑</div>
+                    <div class="step-label">Code</div>
+                </div>
+                ${stop.type === 'delivery' ? `
+                    <div class="verification-step" data-step="3">
+                        <div class="step-circle">✍️</div>
+                        <div class="step-label">Signature</div>
+                    </div>
+                    <div class="verification-step" data-step="4">
+                        <div class="step-circle">💰</div>
+                        <div class="step-label">Payment</div>
+                    </div>
+                ` : ''}
+            </div>
+            
+            <!-- Progress Bar -->
+            <div class="verification-progress">
+                <div class="verification-progress-bar" style="width: 25%;"></div>
+            </div>
+            
+            <!-- Modal Header -->
             <div class="modal-header" style="
                 padding: 20px 24px;
                 background: ${stop.type === 'pickup' ? 'linear-gradient(135deg, #FF9F0A, #FF6B00)' : 'linear-gradient(135deg, #34C759, #30D158)'};
@@ -2497,46 +3983,64 @@ window.openVerificationModal = function(stopId) {
                 display: flex;
                 align-items: center;
                 gap: 12px;
-                border-radius: 24px 24px 0 0;
             ">
                 <span style="font-size: 24px;">${stop.type === 'pickup' ? '📦' : '📍'}</span>
                 <h2 style="margin: 0; font-size: 20px; font-weight: 700;">
-                    Verify ${stop.type === 'pickup' ? 'Pickup' : 'Delivery'}
+                    Enhanced ${stop.type === 'pickup' ? 'Pickup' : 'Delivery'} Verification
                 </h2>
             </div>
+            
+            <!-- Modal Body -->
             <div class="modal-body" style="padding: 24px;">
-                <div class="stop-summary" style="margin-bottom: 24px;">
-                    <h3 style="font-size: 18px; margin-bottom: 14px; color: white; font-weight: 600;">
-                        ${stop.address}
-                    </h3>
-                    <div style="display: flex; flex-direction: column; gap: 12px;">
-                        <div style="display: flex; gap: 12px; font-size: 15px;">
-                            <span style="color: rgba(255, 255, 255, 0.5); min-width: 90px;">Customer:</span>
-                            <span style="color: white; font-weight: 600;">
-                                ${stop.customerName || stop.vendor_name || stop.recipient_name || 'N/A'}
-                            </span>
-                        </div>
-                        <div style="display: flex; gap: 12px; font-size: 15px;">
-                            <span style="color: rgba(255, 255, 255, 0.5); min-width: 90px;">Phone:</span>
-                            <span style="color: white; font-weight: 600;">
-                                ${stop.customerPhone || stop.vendor_phone || stop.recipient_phone || 'N/A'}
-                            </span>
-                        </div>
-                        <div style="display: flex; gap: 12px; font-size: 15px;">
-                            <span style="color: rgba(255, 255, 255, 0.5); min-width: 90px;">Parcel Code:</span>
-                            <span style="color: white; font-weight: 600;">
-                                ${stop.parcelCode || 'N/A'}
-                            </span>
-                        </div>
+                <!-- Step 1: Photo Capture -->
+                <div id="step1" class="verification-step-content">
+                    <h3 style="color: white; margin-bottom: 16px;">Step 1: Capture Package Photo</h3>
+                    <p style="color: rgba(255, 255, 255, 0.6); margin-bottom: 20px;">
+                        Take a clear photo of the package ${stop.type === 'pickup' ? 'being picked up' : 'at delivery location'}
+                    </p>
+                    <div id="photoContainer">
+                        <button onclick="startPhotoCapture()" style="
+                            width: 100%;
+                            padding: 18px;
+                            background: linear-gradient(135deg, #9333EA, #7928CA);
+                            border: none;
+                            border-radius: 14px;
+                            color: white;
+                            font-size: 16px;
+                            font-weight: 600;
+                            cursor: pointer;
+                        ">
+                            📸 Take Photo
+                        </button>
                     </div>
                 </div>
                 
-                <div class="verification-section">
+                <!-- Step 2: Verification Code -->
+                <div id="step2" class="verification-step-content" style="display: none;">
+                    <h3 style="color: white; margin-bottom: 16px;">Step 2: Verification Code</h3>
+                    <div class="stop-summary" style="margin-bottom: 20px;">
+                        <div style="display: flex; flex-direction: column; gap: 10px;">
+                            <div style="display: flex; gap: 12px; font-size: 15px;">
+                                <span style="color: rgba(255, 255, 255, 0.5); min-width: 90px;">Location:</span>
+                                <span style="color: white; font-weight: 600;">${stop.address}</span>
+                            </div>
+                            <div style="display: flex; gap: 12px; font-size: 15px;">
+                                <span style="color: rgba(255, 255, 255, 0.5); min-width: 90px;">Customer:</span>
+                                <span style="color: white; font-weight: 600;">
+                                    ${stop.customerName || stop.vendor_name || stop.recipient_name || 'N/A'}
+                                </span>
+                            </div>
+                            <div style="display: flex; gap: 12px; font-size: 15px;">
+                                <span style="color: rgba(255, 255, 255, 0.5); min-width: 90px;">Parcel:</span>
+                                <span style="color: white; font-weight: 600;">${stop.parcelCode || 'N/A'}</span>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <label style="font-weight: 600; font-size: 15px; color: white; display: block; margin-bottom: 12px;">
                         Enter ${stop.type} verification code:
                     </label>
                     <input type="text" 
-                           class="verification-input" 
                            id="verificationCode" 
                            placeholder="XXX-XXXX"
                            maxlength="8"
@@ -2562,19 +4066,103 @@ window.openVerificationModal = function(stopId) {
                     </p>
                 </div>
                 
-                ${stop.type === 'delivery' && paymentInfo.needsCollection ? `
-                    <div style="margin-top: 18px; padding: 14px; background: rgba(255, 255, 255, 0.05); border-radius: 12px;">
-                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-weight: 600;">
-                            <input type="checkbox" id="paymentCollected" style="width: 22px; height: 22px; cursor: pointer;">
-                            <span style="font-size: 15px; color: white;">
-                                I have collected KES ${paymentInfo.amount.toLocaleString()} cash
-                            </span>
-                        </label>
+                ${stop.type === 'delivery' ? `
+                    <!-- Step 3: Digital Signature -->
+                    <div id="step3" class="verification-step-content" style="display: none;">
+                        <h3 style="color: white; margin-bottom: 16px;">Step 3: Customer Signature</h3>
+                        <p style="color: rgba(255, 255, 255, 0.6); margin-bottom: 20px;">
+                            Please ask the recipient to sign below
+                        </p>
+                        <div id="signatureContainer">
+                            <button onclick="startSignatureCapture()" style="
+                                width: 100%;
+                                padding: 18px;
+                                background: linear-gradient(135deg, #9333EA, #7928CA);
+                                border: none;
+                                border-radius: 14px;
+                                color: white;
+                                font-size: 16px;
+                                font-weight: 600;
+                                cursor: pointer;
+                            ">
+                                ✍️ Collect Signature
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Step 4: Payment -->
+                    <div id="step4" class="verification-step-content" style="display: none;">
+                        <h3 style="color: white; margin-bottom: 16px;">Step 4: Payment Collection</h3>
+                        ${paymentInfo.needsCollection ? `
+                            <div style="
+                                padding: 20px;
+                                background: linear-gradient(135deg, rgba(255, 159, 10, 0.15), rgba(255, 107, 0, 0.1));
+                                border: 1px solid rgba(255, 159, 10, 0.3);
+                                border-radius: 14px;
+                                margin-bottom: 20px;
+                            ">
+                                <div style="text-align: center;">
+                                    <div style="font-size: 14px; color: rgba(255, 255, 255, 0.7); margin-bottom: 8px;">
+                                        Amount to Collect
+                                    </div>
+                                    <div style="font-size: 32px; font-weight: 800; color: #FF9F0A;">
+                                        KES ${paymentInfo.amount.toLocaleString()}
+                                    </div>
+                                </div>
+                            </div>
+                            <div style="display: flex; flex-direction: column; gap: 12px;">
+                                <button onclick="promptMpesaPaymentForStop('${stop.id}')" style="
+                                    padding: 18px;
+                                    background: linear-gradient(135deg, #34C759, #30D158);
+                                    border: none;
+                                    border-radius: 14px;
+                                    color: white;
+                                    font-size: 16px;
+                                    font-weight: 600;
+                                    cursor: pointer;
+                                ">
+                                    📱 M-Pesa Payment
+                                </button>
+                                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 14px; background: rgba(255, 255, 255, 0.05); border-radius: 12px;">
+                                    <input type="checkbox" id="cashCollected" style="width: 22px; height: 22px; cursor: pointer;">
+                                    <span style="font-size: 15px; color: white; font-weight: 600;">
+                                        I have collected KES ${paymentInfo.amount.toLocaleString()} cash
+                                    </span>
+                                </label>
+                            </div>
+                        ` : `
+                            <div style="
+                                padding: 20px;
+                                background: rgba(52, 199, 89, 0.1);
+                                border: 1px solid rgba(52, 199, 89, 0.3);
+                                border-radius: 14px;
+                                text-align: center;
+                            ">
+                                <span style="font-size: 24px;">✅</span>
+                                <p style="color: #34C759; font-weight: 600; margin-top: 10px;">
+                                    Payment already received online
+                                </p>
+                            </div>
+                        `}
                     </div>
                 ` : ''}
                 
+                <!-- Navigation Buttons -->
                 <div class="modal-actions" style="display: flex; gap: 12px; margin-top: 24px;">
-                    <button class="modal-btn primary" onclick="verifyCode('${stop.id}')" style="
+                    <button id="prevBtn" onclick="previousVerificationStep()" style="
+                        padding: 18px 24px;
+                        border: none;
+                        border-radius: 14px;
+                        font-size: 16px;
+                        font-weight: 600;
+                        cursor: pointer;
+                        background: rgba(255, 255, 255, 0.1);
+                        color: white;
+                        display: none;
+                    ">
+                        ← Back
+                    </button>
+                    <button id="nextBtn" onclick="nextVerificationStep()" style="
                         flex: 1;
                         padding: 18px;
                         border: none;
@@ -2584,10 +4172,25 @@ window.openVerificationModal = function(stopId) {
                         cursor: pointer;
                         background: linear-gradient(135deg, #0066FF, #0052CC);
                         color: white;
+                        display: none;
                     ">
-                        ✓ Verify ${stop.type === 'pickup' ? 'Pickup' : 'Delivery'}
+                        Continue →
                     </button>
-                    <button class="modal-btn secondary" onclick="closeVerificationModal()" style="
+                    <button id="completeBtn" onclick="completeEnhancedVerification('${stop.id}')" style="
+                        flex: 1;
+                        padding: 18px;
+                        border: none;
+                        border-radius: 14px;
+                        font-size: 16px;
+                        font-weight: 700;
+                        cursor: pointer;
+                        background: linear-gradient(135deg, #34C759, #30D158);
+                        color: white;
+                        display: none;
+                    ">
+                        ✓ Complete Verification
+                    </button>
+                    <button onclick="closeVerificationModal()" style="
                         padding: 18px 24px;
                         border: none;
                         border-radius: 14px;
@@ -2606,70 +4209,274 @@ window.openVerificationModal = function(stopId) {
     
     document.body.appendChild(modal);
     
+    // Initialize first step
     setTimeout(() => {
-        document.getElementById('verificationCode').focus();
+        updateVerificationStep(0, 'active');
     }, 100);
 };
 
-window.closeVerificationModal = function() {
-    const modal = document.querySelector('.verification-modal');
-    if (modal) {
-        modal.classList.add('closing');
-        setTimeout(() => modal.remove(), 300);
+// Enhanced verification step navigation
+let currentVerificationStep = 1;
+const totalVerificationSteps = 4;
+
+window.nextVerificationStep = function() {
+    const stop = state.activeRoute.stops.find(s => s.id === state.currentVerification.stopId);
+    const maxSteps = stop.type === 'delivery' ? 4 : 2;
+    
+    if (currentVerificationStep < maxSteps) {
+        // Hide current step
+        document.getElementById(`step${currentVerificationStep}`).style.display = 'none';
+        currentVerificationStep++;
+        // Show next step
+        document.getElementById(`step${currentVerificationStep}`).style.display = 'block';
+        
+        updateVerificationStep(currentVerificationStep - 1, 'completed');
+        showVerificationProgress(currentVerificationStep, maxSteps);
+        
+        // Update buttons
+        document.getElementById('prevBtn').style.display = 'block';
+        if (currentVerificationStep === maxSteps) {
+            document.getElementById('nextBtn').style.display = 'none';
+            document.getElementById('completeBtn').style.display = 'block';
+        }
+        
+        // Focus on code input if on step 2
+        if (currentVerificationStep === 2) {
+            document.getElementById('verificationCode').focus();
+        }
     }
 };
 
-window.verifyCode = async function(stopId) {
+window.previousVerificationStep = function() {
+    if (currentVerificationStep > 1) {
+        // Hide current step
+        document.getElementById(`step${currentVerificationStep}`).style.display = 'none';
+        currentVerificationStep--;
+        // Show previous step
+        document.getElementById(`step${currentVerificationStep}`).style.display = 'block';
+        
+        updateVerificationStep(currentVerificationStep - 1, 'active');
+        const stop = state.activeRoute.stops.find(s => s.id === state.currentVerification.stopId);
+        const maxSteps = stop.type === 'delivery' ? 4 : 2;
+        showVerificationProgress(currentVerificationStep, maxSteps);
+        
+        // Update buttons
+        if (currentVerificationStep === 1) {
+            document.getElementById('prevBtn').style.display = 'none';
+        }
+        document.getElementById('nextBtn').style.display = 'block';
+        document.getElementById('completeBtn').style.display = 'none';
+    }
+};
+
+window.startPhotoCapture = function() {
+    showCameraUI((photoData) => {
+        state.currentVerification.photoData = photoData;
+        
+        // Update UI to show captured photo
+        const container = document.getElementById('photoContainer');
+        container.innerHTML = `
+            <img src="${photoData}" class="photo-preview" alt="Package photo">
+            <button onclick="startPhotoCapture()" style="
+                width: 100%;
+                margin-top: 10px;
+                padding: 12px;
+                background: rgba(255, 255, 255, 0.1);
+                border: none;
+                border-radius: 10px;
+                color: white;
+                font-size: 14px;
+                font-weight: 600;
+                cursor: pointer;
+            ">
+                Retake Photo
+            </button>
+        `;
+        
+        // Enable next button
+        document.getElementById('nextBtn').style.display = 'block';
+    });
+};
+
+window.startSignatureCapture = function() {
+    showSignaturePad((signatureData) => {
+        state.currentVerification.signatureData = signatureData;
+        
+        // Update UI to show captured signature
+        const container = document.getElementById('signatureContainer');
+        container.innerHTML = `
+            <img src="${signatureData}" style="
+                width: 100%;
+                height: 150px;
+                object-fit: contain;
+                background: white;
+                border-radius: 12px;
+                padding: 10px;
+            " alt="Customer signature">
+            <button onclick="startSignatureCapture()" style="
+                width: 100%;
+                margin-top: 10px;
+                padding: 12px;
+                background: rgba(255, 255, 255, 0.1);
+                border: none;
+                border-radius: 10px;
+                color: white;
+                font-size: 14px;
+                font-weight: 600;
+                cursor: pointer;
+            ">
+                Redo Signature
+            </button>
+        `;
+        
+        // Enable next button
+        document.getElementById('nextBtn').style.display = 'block';
+    });
+};
+
+window.promptMpesaPaymentForStop = async function(stopId) {
+    const stop = state.activeRoute.stops.find(s => s.id === stopId);
+    const paymentInfo = getPaymentInfoForStop(stop);
+    const customerPhone = stop.recipient_phone || stop.customer_phone || '';
+    
+    const result = await promptMpesaPayment(paymentInfo.amount, customerPhone);
+    
+    if (result.success) {
+        state.currentVerification.mpesaCode = result.code;
+        state.verificationData.mpesaCodes[stopId] = result.code;
+        
+        showNotification('M-Pesa payment confirmed', 'success');
+        
+        // Update UI
+        const checkbox = document.getElementById('cashCollected');
+        if (checkbox) {
+            checkbox.checked = true;
+            checkbox.disabled = true;
+        }
+    } else if (result.method === 'cash') {
+        showNotification('Please collect cash payment', 'info');
+    }
+};
+
+window.completeEnhancedVerification = async function(stopId) {
     const stop = state.activeRoute.stops.find(s => s.id === stopId);
     if (!stop) return;
     
     const codeInput = document.getElementById('verificationCode');
-    const code = codeInput.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const code = codeInput?.value?.toUpperCase().replace(/[^A-Z0-9]/g, '') || '';
     const paymentInfo = getPaymentInfoForStop(stop);
     
-    // Demo mode - accept any code for testing
+    // Validate verification code
     const isValidCode = DEV_CONFIG.isDevelopment ? 
         code.length >= 6 : 
         code === stop.verificationCode?.toUpperCase().replace(/[^A-Z0-9]/g, '');
     
     if (!isValidCode) {
-        codeInput.classList.add('error');
-        showNotification('Invalid code. Please try again.', 'error');
+        showNotification('Invalid verification code', 'error');
         return;
     }
     
+    // Validate photo (if required)
+    if (config.verification.requirePhoto && !DEV_CONFIG.skipPhotoCapture && !state.currentVerification.photoData) {
+        showNotification('Please capture a photo of the package', 'warning');
+        return;
+    }
+    
+    // Validate signature for deliveries (if required)
+    if (stop.type === 'delivery' && config.verification.requireSignature && 
+        !DEV_CONFIG.skipSignature && !state.currentVerification.signatureData) {
+        showNotification('Please collect customer signature', 'warning');
+        return;
+    }
+    
+    // Validate payment for deliveries
     if (stop.type === 'delivery' && paymentInfo.needsCollection) {
-        const paymentCheckbox = document.getElementById('paymentCollected');
-        if (paymentCheckbox && !paymentCheckbox.checked) {
-            showNotification('Please confirm cash collection before verifying', 'warning');
+        const paymentCheckbox = document.getElementById('cashCollected');
+        if (!paymentCheckbox?.checked && !state.currentVerification.mpesaCode) {
+            showNotification('Please confirm payment collection', 'warning');
             return;
         }
     }
     
+    // Store verification data
+    state.verificationData.photos[stopId] = {
+        [stop.type]: state.currentVerification.photoData
+    };
+    state.verificationData.signatures[stopId] = state.currentVerification.signatureData;
+    state.verificationData.timestamps[stopId] = {
+        [stop.type]: new Date().toISOString()
+    };
+    state.verificationData.locations[stopId] = {
+        [stop.type]: state.currentVerification.locationData
+    };
+    
+    // Mark stop as completed
     stop.completed = true;
     stop.timestamp = new Date();
+    stop.verificationCode = code;
     
+    // Handle payment tracking
     if (stop.type === 'delivery' && paymentInfo.needsCollection) {
-        state.paymentsByStop[stop.id] = {
+        state.paymentsByStop[stopId] = {
             collected: true,
             amount: paymentInfo.amount,
-            timestamp: stop.timestamp
+            timestamp: stop.timestamp,
+            method: state.currentVerification.mpesaCode ? 'mpesa' : 'cash',
+            mpesaCode: state.currentVerification.mpesaCode
         };
         updateCashCollectionWidget();
     }
     
+    // Store verification data in Supabase
+    await storeVerificationData(stopId, stop.type, {
+        code: code,
+        photoUrl: state.currentVerification.photoData,
+        signatureData: state.currentVerification.signatureData,
+        location: state.currentVerification.locationData,
+        mpesaCode: state.currentVerification.mpesaCode,
+        cashCollected: paymentInfo.needsCollection
+    });
+    
+    // Sync route data
     await syncRouteData();
     
+    // Close modal
     closeVerificationModal();
+    
+    // Show success animation
     showSuccessAnimation(stop.type);
     
+    // Update UI
     displayRouteInfo();
     plotRoute();
     drawOptimizedRoute();
     
+    // Check if route is complete
     if (state.activeRoute.stops.every(s => s.completed)) {
         await completeRoute();
     }
+    
+    // Reset verification step counter
+    currentVerificationStep = 1;
+};
+
+window.closeVerificationModal = function() {
+    const modal = document.querySelector('.verification-modal-enhanced');
+    if (modal) {
+        modal.classList.add('closing');
+        setTimeout(() => modal.remove(), 300);
+    }
+    currentVerificationStep = 1;
+    
+    // Clear current verification session
+    state.currentVerification = {
+        stopId: null,
+        type: null,
+        photoData: null,
+        signatureData: null,
+        locationData: null,
+        startTime: null
+    };
 };
 
 function showSuccessAnimation(type) {
@@ -2709,14 +4516,21 @@ function showSuccessAnimation(type) {
             color: white;
             letter-spacing: -0.5px;
         ">${type === 'pickup' ? 'Pickup' : 'Delivery'} Verified!</div>
+        <div style="
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.6);
+            margin-top: 10px;
+        ">
+            📷 Photo captured • ✍️ Signature collected
+        </div>
     `;
     
     document.body.appendChild(animation);
-    setTimeout(() => animation.remove(), 2000);
+    setTimeout(() => animation.remove(), 2500);
 }
 
 async function completeRoute() {
-    console.log('Completing route...');
+    console.log('Completing route with enhanced verification data...');
     
     await handleRouteCompletion();
     
@@ -2744,7 +4558,7 @@ async function completeRoute() {
                 Route Complete!
             </h1>
             <p style="font-size: 16px; color: rgba(255, 255, 255, 0.6); margin-bottom: 28px; font-weight: 500;">
-                Excellent work! All deliveries completed successfully.
+                All deliveries verified and completed successfully.
             </p>
             <div style="display: flex; justify-content: center; gap: 40px; margin-bottom: 36px;">
                 <div style="text-align: center;">
@@ -2956,7 +4770,8 @@ window.goBack = function() {
 // ============================================================================
 
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log('Route.js v4.0.0 initializing with external optimizer...');
+    console.log('Enhanced Route.js v5.0.0 initializing...');
+    console.log('New features: Photo capture, Digital signatures, M-Pesa integration');
     
     injectNavigationStyles();
     
@@ -2966,9 +4781,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         const storedRoute = localStorage.getItem('tuma_active_route');
         
         if (storedRoute) {
-            state.activeRoute = JSON.parse(storedRoute);
+            const routeData = JSON.parse(storedRoute);
+            state.activeRoute = routeData;
+            
+            // Restore verification data if exists
+            if (routeData.verificationData) {
+                state.verificationData = routeData.verificationData;
+            }
+            
             console.log('Route loaded:', state.activeRoute);
-            console.log('Using external route optimizer module');
+            console.log('Verification features enabled:', {
+                photos: config.verification.requirePhoto,
+                signatures: config.verification.requireSignature,
+                location: config.verification.requireLocation,
+                mpesa: true
+            });
             
             updateStopOrderMap();
             calculateRouteFinancials();
@@ -3008,7 +4835,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             
             startLocationTracking();
             
-            console.log('Route initialization complete');
+            console.log('Enhanced route initialization complete');
         } else {
             console.log('No active route found');
             
@@ -3041,20 +4868,21 @@ window.routeDebug = {
             return;
         }
         
-        // Test optimization without current location
         const result = routeOptimizer.optimizeRoute(state.activeRoute.stops);
-        
-        // Get statistics
-        const stats = routeOptimizer.getStatistics();
+        const stats = routeOptimizer.getStatistics ? routeOptimizer.getStatistics() : {};
         
         console.log('Optimization result:', result);
         console.log('Statistics:', stats);
         return { optimizedRoute: result, statistics: stats };
     },
-    getOptimizerConfig: () => routeOptimizer.getConfig(),
-    updateOptimizerConfig: (newConfig) => routeOptimizer.updateConfig(newConfig)
+    getOptimizerConfig: () => routeOptimizer.getConfig ? routeOptimizer.getConfig() : {},
+    updateOptimizerConfig: (newConfig) => routeOptimizer.updateConfig ? routeOptimizer.updateConfig(newConfig) : null,
+    verificationData: state.verificationData,
+    testCamera: () => startPhotoCapture(),
+    testSignature: () => startSignatureCapture(),
+    testMpesa: () => promptMpesaPayment(1000, '0712345678')
 };
 
-console.log('✅ Route.js v4.0.0 loaded - Using external route-optimizer.js module');
-console.log('Debug: window.routeDebug');
-console.log('Optimizer config:', routeOptimizer.getConfig());
+console.log('✅ Enhanced Route.js v5.0.0 loaded successfully');
+console.log('Debug utilities available at: window.routeDebug');
+console.log('Enhanced features: Photo capture, Digital signatures, M-Pesa payments');
