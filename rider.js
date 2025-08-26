@@ -4,19 +4,51 @@
  */
 
 // Development Configuration
+
 const DEV_CONFIG = {
+
+    // Set to true when testing locally without Telegram
+
     isDevelopment: window.location.hostname === 'localhost' || 
+
                    window.location.hostname === '127.0.0.1' ||
+
                    window.location.hostname.includes('github.io'),
+
+    
+
+    // Test rider configuration (only used in development)
+
     testRider: {
-        id: 'ef5438ef-0cc0-4e35-8d1b-be18dbce7fe4',
+
+        id: 'ef5438ef-0cc0-4e35-8d1b-be18dbce7fe4', // Bobby G's test ID
+
         name: 'Bobby G',
+
         phone: '0725046880'
+
     },
+
+    
+
+    // Whether to show detailed console logs
+
     verboseLogging: true,
+
+    
+
+    // Whether to ignore API errors for missing riders
+
     ignoreRiderNotFound: true,
-    bypassCommissionBlock: true,
-    commissionWarningsOnly: true
+
+    
+
+    // Development-only commission settings
+
+    bypassCommissionBlock: true, // Set to false in production
+
+    commissionWarningsOnly: true // Show warnings but don't block
+
 };
 
 // Business Configuration
@@ -523,10 +555,12 @@ const supabaseAPI = {
     async query(table, options = {}) {
         const { select = '*', filter = '', order = '', limit } = options;
         
-        if (filter && filter.includes('temp-')) {
-            console.log('Skipping API call for temporary rider');
-            return [];
-        }
+// Only skip API calls for temp- IDs, not for Bobby G's real ID
+if (filter && filter.includes('temp-')) {
+    console.log('Skipping API call for temporary rider');
+    return [];
+}
+// Bobby G's ID (ef5438ef-0cc0-4e35-8d1b-be18dbce7fe4) will pass through
         
         let url = `${SUPABASE_URL}/rest/v1/${table}?select=${select}`;
         if (filter) url += `&${filter}`;
@@ -2075,9 +2109,10 @@ async function loadRiderByPhone(phone) {
 }
 
 async function createTemporaryRider() {
+    // Use Bobby G's real ID in development, temp ID in production
     const tempId = DEV_CONFIG.isDevelopment && DEV_CONFIG.testRider ? 
-        DEV_CONFIG.testRider.id : 
-        'temp-' + Date.now();
+        DEV_CONFIG.testRider.id :  // Uses 'ef5438ef-0cc0-4e35-8d1b-be18dbce7fe4' in dev
+        'temp-' + Date.now();      // Only uses temp- in production
     
     state.rider = {
         id: tempId,
@@ -2096,7 +2131,8 @@ async function createTemporaryRider() {
         verification_status: 'verified'
     };
     
-    console.log('Created temporary rider:', state.rider.id);
+    console.log('Created rider:', state.rider.id);
+    // In dev mode this should log: 'Created rider: ef5438ef-0cc0-4e35-8d1b-be18dbce7fe4'
 }
 
 // Main Initialization
