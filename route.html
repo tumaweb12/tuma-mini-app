@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>Tuma - Route Navigation</title>
+    <title>Tuma - Enhanced Route Navigation</title>
     
     <!-- Premium Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -173,20 +173,33 @@
             letter-spacing: 0.02em;
         }
 
+        .route-badge.verify-btn {
+            background: linear-gradient(135deg, var(--success), var(--success-dark));
+            box-shadow: 0 2px 8px rgba(52, 199, 89, 0.3);
+        }
+
         .route-badge:hover {
             transform: translateY(-2px);
             box-shadow: 0 4px 12px rgba(0, 102, 255, 0.4);
         }
 
+        .route-badge.verify-btn:hover {
+            box-shadow: 0 4px 12px rgba(52, 199, 89, 0.4);
+        }
+
         .route-badge:active {
             transform: translateY(0);
         }
+
+        .route-badge.completed {
+            background: var(--surface-high);
+            color: var(--text-secondary);
+            cursor: default;
+        }
         
         /* Make verify button more prominent during navigation */
-        body.navigating .route-badge {
-            background: linear-gradient(135deg, var(--success), var(--success-dark));
+        body.navigating .route-badge.verify-btn {
             animation: pulseGlow 2s infinite;
-            box-shadow: 0 4px 16px rgba(52, 199, 89, 0.4);
         }
         
         @keyframes pulseGlow {
@@ -230,68 +243,31 @@
             margin-bottom: 80px !important;
         }
 
-        /* Premium Wallet Widget (replacing Cash Collection) */
-        .wallet-widget {
+        /* Cash Collection Widget */
+        .cash-collection-widget {
             position: fixed;
-            top: 100px;
+            top: 80px;
             right: 20px;
-            background: linear-gradient(135deg, rgba(28, 28, 31, 0.95), rgba(44, 44, 46, 0.95));
+            background: linear-gradient(135deg, #0A0A0B 0%, #1C1C1F 100%);
             backdrop-filter: blur(20px);
-            border-radius: 16px;
-            padding: 14px 16px;
-            min-width: 180px;
-            max-width: 220px;
-            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
-            z-index: 95;
-            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 20px;
+            padding: 20px;
+            min-width: 240px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5), 0 2px 10px rgba(0, 0, 0, 0.3);
+            z-index: 100;
+            transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            font-weight: 500;
         }
 
-        .wallet-widget:hover {
+        .cash-collection-widget:hover {
             transform: translateY(-2px);
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+            box-shadow: 0 12px 44px rgba(0, 0, 0, 0.6);
         }
 
-        .wallet-widget-title {
-            font-size: 11px;
-            font-weight: 600;
-            margin-bottom: 6px;
-            color: var(--text-secondary);
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            display: flex;
-            align-items: center;
-            gap: 4px;
-        }
-
-        .wallet-widget-amount {
-            font-size: 20px;
-            font-weight: 700;
-            color: var(--mpesa);
-            margin-bottom: 10px;
-            letter-spacing: -0.02em;
-        }
-
-        .wallet-widget-breakdown {
-            font-size: 11px;
-            color: var(--text-secondary);
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-            padding-top: 8px;
-            border-top: 1px solid rgba(255, 255, 255, 0.06);
-        }
-
-        .wallet-breakdown-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 2px 0;
-        }
-
-        .wallet-breakdown-value {
-            font-weight: 600;
-            color: var(--text-primary);
+        .cash-collection-widget.has-pending {
+            border-color: rgba(255, 159, 10, 0.3);
+            box-shadow: 0 10px 40px rgba(255, 159, 10, 0.2);
         }
 
         /* Premium Route Panel (Collapsible) */
@@ -325,27 +301,6 @@
         .route-panel.hidden {
             transform: translateY(100%);
             pointer-events: none;
-        }
-
-        .route-panel.navigation-hidden {
-            display: none !important;
-        }
-        
-        body.navigating .route-panel {
-            display: none !important;
-        }
-        
-        body.navigating .nav-controls {
-            bottom: calc(20px + var(--safe-area-bottom));
-        }
-        
-        body.navigating .optimize-button-container,
-        body.navigating .nav-button.secondary {
-            display: none !important;
-        }
-        
-        body.navigating #map {
-            z-index: 1;
         }
 
         .panel-handle {
@@ -405,452 +360,736 @@
             letter-spacing: 0.08em;
             font-weight: 600;
         }
-
-        /* Premium Route Phases Widget */
-        .route-phases {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            background: linear-gradient(135deg, var(--surface-high), var(--surface-higher));
-            border-radius: 16px;
-            padding: 18px;
-            margin-bottom: 24px;
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
-        }
-
-        .phase {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            flex: 1;
-            padding: 10px 14px;
-            border-radius: 12px;
-            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-        }
-
-        .phase.active {
-            background: linear-gradient(135deg, rgba(0, 102, 255, 0.15), rgba(0, 82, 204, 0.1));
-            border: 1px solid var(--primary);
-            box-shadow: 0 4px 12px rgba(0, 102, 255, 0.2);
-        }
-
-        .phase.completed {
-            background: linear-gradient(135deg, rgba(52, 199, 89, 0.15), rgba(48, 209, 88, 0.1));
-            border: 1px solid var(--success);
-            box-shadow: 0 4px 12px rgba(52, 199, 89, 0.2);
-        }
-
-        .phase-icon {
-            font-size: 26px;
-            width: 44px;
-            height: 44px;
+    </style>
+</head>
+<!-- Continue from Part 1 styles -->
+    <style>
+        /* Enhanced Verification Modal Styles */
+        .verification-modal-enhanced {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 3000;
             display: flex;
             align-items: center;
             justify-content: center;
-            background: var(--surface);
-            border-radius: 50%;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            padding: 20px;
+            animation: fadeIn 0.3s ease;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
         }
 
-        .phase.active .phase-icon {
-            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(10, 10, 11, 0.9);
+            backdrop-filter: blur(20px);
         }
 
-        .phase.completed .phase-icon {
-            background: linear-gradient(135deg, var(--success), var(--success-dark));
-        }
-
-        .phase-info {
-            flex: 1;
-        }
-
-        .phase-title {
-            font-size: 14px;
-            font-weight: 700;
-            color: var(--text-primary);
-            margin-bottom: 2px;
-            letter-spacing: -0.02em;
-        }
-
-        .phase-progress {
-            font-size: 12px;
-            color: var(--text-secondary);
-            font-weight: 600;
-        }
-
-        .phase-arrow {
-            font-size: 20px;
-            color: var(--text-tertiary);
-            margin: 0 10px;
-        }
-
-        /* Premium Stops List */
-        .stops-header {
-            font-size: 13px;
-            font-weight: 700;
-            color: var(--text-secondary);
-            margin-bottom: 14px;
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-        }
-
-        .stops-list {
-            display: flex;
-            flex-direction: column;
-            gap: 14px;
-        }
-
-        .phase-section {
-            margin-bottom: 28px;
-        }
-
-        .phase-section.completed {
-            opacity: 0.75;
-        }
-
-        .phase-section.locked {
-            opacity: 0.5;
-        }
-
-        .phase-section h3 {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 16px;
-            font-weight: 700;
-            margin-bottom: 14px;
-            padding: 10px 0;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-            letter-spacing: -0.02em;
-        }
-
-        .phase-count {
-            font-size: 14px;
-            color: var(--text-secondary);
-            font-weight: 600;
-        }
-
-        /* Premium Stop Card */
-        .stop-card {
-            background: linear-gradient(135deg, var(--surface-high), var(--surface-higher));
-            border-radius: 16px;
-            padding: 18px;
-            display: flex;
-            align-items: stretch;
-            gap: 14px;
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-            cursor: pointer;
+        .modal-content {
             position: relative;
-            overflow: hidden;
+            background: linear-gradient(135deg, #1C1C1F, #2C2C2E);
+            border-radius: 24px;
+            max-width: 480px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+            z-index: 1;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 25px 80px rgba(0, 0, 0, 0.6);
         }
-
-        .stop-card:hover:not(.completed):not(.blocked) {
-            border-color: var(--primary);
-            transform: translateX(6px);
-            box-shadow: 0 6px 20px rgba(0, 102, 255, 0.25);
-        }
-
-        .stop-card.completed {
-            background: linear-gradient(135deg, rgba(52, 199, 89, 0.08), rgba(48, 209, 88, 0.05));
-            border-color: rgba(52, 199, 89, 0.3);
-        }
-
-        .stop-card.active {
-            border-color: var(--primary);
-            background: linear-gradient(135deg, rgba(0, 102, 255, 0.08), rgba(0, 82, 204, 0.05));
-            box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.15);
-        }
-
-        .stop-card.blocked {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        .stop-number-badge {
-            width: 44px;
-            height: 44px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 800;
-            font-size: 17px;
-            flex-shrink: 0;
-            background: var(--surface);
-            color: white;
-            border: 2px solid var(--border);
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-        }
-
-        .stop-number-badge.pickup {
-            background: linear-gradient(135deg, var(--warning), var(--warning-dark));
-            border-color: var(--warning);
-            color: black;
-        }
-
-        .stop-number-badge.delivery {
-            background: linear-gradient(135deg, var(--success), var(--success-dark));
-            border-color: var(--success);
-        }
-
-        .stop-card.completed .stop-number-badge {
-            background: var(--surface-high);
-            border-color: var(--success);
-            color: var(--success);
-        }
-
-        .stop-content {
-            flex: 1;
-            min-width: 0;
-        }
-
-        .stop-header {
+        
+        .verification-steps {
             display: flex;
             justify-content: space-between;
-            align-items: start;
-            margin-bottom: 10px;
+            margin: 20px 0;
+            padding: 0 10px;
         }
-
-        .stop-address {
-            font-size: 16px;
-            font-weight: 700;
-            line-height: 1.3;
-            margin: 0;
-            color: var(--text-primary);
-            overflow: hidden;
-            text-overflow: ellipsis;
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
-            letter-spacing: -0.02em;
-        }
-
-        .stop-distance {
-            font-size: 14px;
-            color: var(--text-secondary);
-            flex-shrink: 0;
-            margin-left: 10px;
-            font-weight: 600;
-        }
-
-        .stop-details {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        .detail-row {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            font-size: 14px;
-            color: var(--text-secondary);
-            font-weight: 500;
-        }
-
-        .detail-icon {
-            font-size: 16px;
-            width: 20px;
+        
+        .verification-step {
+            flex: 1;
             text-align: center;
-            flex-shrink: 0;
+            position: relative;
         }
-
-        .detail-row.instructions {
-            background: linear-gradient(135deg, rgba(255, 159, 10, 0.12), rgba(255, 107, 0, 0.08));
-            padding: 10px;
-            border-radius: 10px;
-            border-left: 3px solid var(--warning);
-            margin-top: 6px;
+        
+        .verification-step::after {
+            content: '';
+            position: absolute;
+            top: 20px;
+            right: -50%;
+            width: 100%;
+            height: 2px;
+            background: rgba(255, 255, 255, 0.1);
         }
-
-        .stop-status {
-            margin-top: 10px;
-            padding: 8px 14px;
-            border-radius: 10px;
-            font-size: 12px;
-            font-weight: 700;
-            text-align: center;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
+        
+        .verification-step:last-child::after {
+            display: none;
         }
-
-        .stop-status.completed {
-            background: linear-gradient(135deg, rgba(52, 199, 89, 0.15), rgba(48, 209, 88, 0.1));
-            color: var(--success);
-        }
-
-        .stop-status.active {
-            background: linear-gradient(135deg, rgba(0, 102, 255, 0.15), rgba(0, 82, 204, 0.1));
-            color: var(--primary);
-        }
-
-        .stop-status.blocked {
-            background: linear-gradient(135deg, rgba(255, 59, 48, 0.15), rgba(255, 45, 85, 0.1));
-            color: var(--danger);
-        }
-
-        .stop-actions {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            margin-left: 14px;
-        }
-
-        .action-btn {
-            width: 42px;
-            height: 42px;
+        
+        .step-circle {
+            width: 40px;
+            height: 40px;
             border-radius: 50%;
-            border: none;
-            background: linear-gradient(135deg, var(--surface), var(--surface-elevated));
-            color: var(--text-primary);
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.2);
             display: flex;
             align-items: center;
             justify-content: center;
-            cursor: pointer;
-            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-            text-decoration: none;
+            margin: 0 auto 8px;
             font-size: 18px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            transition: all 0.3s ease;
         }
-
-        .action-btn:hover {
-            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+        
+        .verification-step.active .step-circle {
+            background: linear-gradient(135deg, #9333EA, #7928CA);
+            border-color: #9333EA;
             color: white;
-            transform: scale(1.15);
-            box-shadow: 0 4px 12px rgba(0, 102, 255, 0.3);
+        }
+        
+        .verification-step.completed .step-circle {
+            background: linear-gradient(135deg, #34C759, #30D158);
+            border-color: #34C759;
+            color: white;
+        }
+        
+        .step-label {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.6);
+            font-weight: 600;
+        }
+        
+        .verification-step.active .step-label {
+            color: white;
         }
 
-        .action-btn:active {
+        /* Camera View Styles */
+        .camera-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.95);
+            z-index: 3500;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .camera-container {
+            position: relative;
+            width: 100%;
+            max-width: 500px;
+            height: 400px;
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            margin: 20px;
+        }
+        
+        .camera-video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .camera-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+        }
+        
+        .camera-frame {
+            width: 80%;
+            height: 80%;
+            border: 3px solid rgba(255, 255, 255, 0.5);
+            border-radius: 12px;
+            position: relative;
+        }
+        
+        .camera-frame::before,
+        .camera-frame::after {
+            content: '';
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            border: 3px solid #9333EA;
+        }
+        
+        .camera-frame::before {
+            top: -3px;
+            left: -3px;
+            border-right: none;
+            border-bottom: none;
+        }
+        
+        .camera-frame::after {
+            bottom: -3px;
+            right: -3px;
+            border-left: none;
+            border-top: none;
+        }
+        
+        .camera-controls {
+            position: absolute;
+            bottom: 20px;
+            left: 0;
+            right: 0;
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+        }
+        
+        .camera-button {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: white;
+            border: 4px solid #9333EA;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+        
+        .camera-button:hover {
+            transform: scale(1.1);
+        }
+        
+        .camera-button:active {
             transform: scale(0.95);
         }
+        
+        .photo-preview {
+            width: 100%;
+            max-width: 400px;
+            height: 200px;
+            object-fit: cover;
+            border-radius: 12px;
+            margin: 10px 0;
+        }
 
-        /* Premium Empty State */
-        .empty-state {
+        /* Signature Pad Styles */
+        .signature-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.95);
+            z-index: 3500;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .signature-container {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+            max-width: 500px;
+            width: 100%;
+        }
+        
+        .signature-canvas {
+            width: 100%;
+            height: 200px;
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            cursor: crosshair;
+            touch-action: none;
+        }
+        
+        .signature-label {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 10px;
+            display: block;
+        }
+        
+        .signature-controls {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 10px;
+        }
+        
+        .signature-clear {
+            padding: 8px 16px;
+            background: #f0f0f0;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        /* M-Pesa Prompt Styles */
+        .mpesa-prompt-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.9);
+            backdrop-filter: blur(10px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 4000;
+            animation: slideUp 0.3s ease;
+        }
+        
+        @keyframes slideUp {
+            from {
+                transform: translateY(100%);
+            }
+            to {
+                transform: translateY(0);
+            }
+        }
+        
+        .mpesa-content {
+            background: linear-gradient(135deg, #1C1C1F, #2C2C2E);
+            border-radius: 24px;
+            padding: 30px;
+            max-width: 400px;
+            width: 90%;
+            box-shadow: 0 25px 80px rgba(0, 0, 0, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .mpesa-content h3 {
+            color: white;
+            font-size: 24px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .mpesa-content h3::before {
+            content: '';
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #34C759, #30D158);
+            border-radius: 50%;
+            display: inline-block;
+        }
+        
+        .mpesa-amount {
+            font-size: 36px;
+            font-weight: 800;
+            color: #34C759;
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        .mpesa-instructions {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .mpesa-instructions ol {
+            margin: 0;
+            padding-left: 20px;
+            color: rgba(255, 255, 255, 0.8);
+        }
+        
+        .mpesa-instructions li {
+            margin: 10px 0;
+        }
+        
+        .mpesa-input {
+            margin: 20px 0;
+        }
+        
+        .mpesa-input label {
+            display: block;
+            color: rgba(255, 255, 255, 0.6);
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+        
+        .mpesa-input input {
+            width: 100%;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            color: white;
+            font-size: 18px;
+            font-weight: 600;
+            text-align: center;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+        
+        .mpesa-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        .mpesa-actions button {
+            flex: 1;
+            padding: 16px;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+        
+        .mpesa-actions button:first-child {
+            background: linear-gradient(135deg, #34C759, #30D158);
+            color: white;
+        }
+        
+        .mpesa-actions button:last-child {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+        }
+        
+        .mpesa-actions button:hover {
+            transform: translateY(-2px);
+        }
+
+        /* Verification Progress Bar */
+        .verification-progress {
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+            overflow: hidden;
+            margin: 20px 0;
+        }
+        
+        .verification-progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #9333EA, #7928CA);
+            border-radius: 2px;
+            transition: width 0.3s ease;
+        }
+
+        /* Photo Grid for Multiple Photos */
+        .photo-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin: 20px 0;
+        }
+        
+        .photo-grid-item {
+            position: relative;
+            padding-bottom: 100%;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        
+        .photo-grid-item img {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .photo-grid-item .photo-label {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(to top, rgba(0, 0, 0, 0.8), transparent);
+            color: white;
+            padding: 10px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        /* Success Animation */
+        .success-animation {
             position: fixed;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            text-align: center;
-            z-index: 10;
-            padding: 48px;
-            background: linear-gradient(135deg, var(--surface-elevated), var(--surface-high));
+            background: linear-gradient(135deg, #1C1C1F, #2C2C2E);
             border-radius: 24px;
-            max-width: 320px;
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
-            display: none;
-        }
-
-        .empty-icon {
-            width: 84px;
-            height: 84px;
-            background: linear-gradient(135deg, var(--surface-high), var(--surface-higher));
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto 24px;
-            font-size: 40px;
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
-        }
-
-        .empty-title {
-            font-size: 22px;
-            font-weight: 800;
-            margin-bottom: 10px;
-            letter-spacing: -0.03em;
-        }
-
-        .empty-message {
-            font-size: 16px;
-            color: var(--text-secondary);
-            line-height: 1.5;
-            font-weight: 500;
-        }
-
-        /* Premium Location Button */
-        .location-button {
-            position: fixed;
-            bottom: 280px;
-            right: 20px;
-            width: 48px;
-            height: 48px;
-            background: linear-gradient(135deg, white, #f5f5f5);
-            border-radius: 50%;
-            border: none;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
-            z-index: 90;
-            color: var(--surface);
-            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-        }
-
-        .location-button:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
-        }
-
-        .location-button.active {
-            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-            color: white;
+            padding: 48px;
+            text-align: center;
+            z-index: 3000;
+            box-shadow: 0 25px 80px rgba(0, 0, 0, 0.6);
+            animation: popIn 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            border: 1px solid rgba(255, 255, 255, 0.1);
         }
         
-        body.navigating .location-button {
-            bottom: 160px;
-        }
-        
-        /* Floating Verify Button */
-        .floating-verify-btn {
-            position: fixed;
-            bottom: 220px;
-            right: 20px;
-            background: linear-gradient(135deg, var(--success), var(--success-dark));
-            color: white;
-            border: none;
-            border-radius: 50px;
-            padding: 14px 20px;
-            font-size: 15px;
-            font-weight: 700;
-            cursor: pointer;
-            box-shadow: 0 6px 20px rgba(52, 199, 89, 0.4);
-            z-index: 91;
-            display: none;
-            align-items: center;
-            gap: 8px;
-            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-            animation: slideInRight 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-        }
-        
-        @keyframes slideInRight {
+        @keyframes popIn {
             from {
-                transform: translateX(100px);
+                transform: translate(-50%, -50%) scale(0.8);
                 opacity: 0;
             }
             to {
-                transform: translateX(0);
+                transform: translate(-50%, -50%) scale(1);
                 opacity: 1;
             }
         }
         
-        .floating-verify-btn:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 8px 24px rgba(52, 199, 89, 0.5);
+        .closing {
+            animation: fadeOut 0.3s ease;
         }
         
-        .floating-verify-btn:active {
-            transform: scale(0.95);
+        @keyframes fadeOut {
+            to {
+                opacity: 0;
+            }
         }
-        
-        body.navigating .floating-verify-btn {
+    </style>
+    <!-- Continue from Part 2 styles -->
+    <style>
+        /* Optimization Button Styles */
+        .optimize-button-container {
             display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+            width: 100%;
+        }
+        
+        .optimize-route-btn {
+            flex: 1;
+            background: linear-gradient(135deg, #9333EA, #7928CA);
+            color: white;
+            border: none;
+            border-radius: 16px;
+            padding: 16px 20px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            box-shadow: 0 4px 15px rgba(147, 51, 234, 0.4);
+            letter-spacing: 0.5px;
+        }
+        
+        .optimize-route-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(147, 51, 234, 0.5);
+        }
+        
+        .optimize-route-btn.optimized {
+            background: linear-gradient(135deg, #34C759, #30D158);
+            cursor: default;
+        }
+        
+        .undo-optimize-btn {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 16px;
+            padding: 16px 20px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all 0.3s ease;
+        }
+        
+        .undo-optimize-btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+        
+        /* Optimization Animation */
+        .optimizing-animation {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.9);
+            backdrop-filter: blur(10px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 5000;
+        }
+        
+        .optimizing-content {
+            background: linear-gradient(135deg, #1C1C1F, #2C2C2E);
+            border-radius: 24px;
+            padding: 40px;
+            text-align: center;
+            box-shadow: 0 25px 80px rgba(0, 0, 0, 0.6);
+            max-width: 400px;
+        }
+        
+        .optimizing-spinner {
+            width: 60px;
+            height: 60px;
+            border: 3px solid rgba(147, 51, 234, 0.3);
+            border-top-color: #9333EA;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .optimizing-steps {
+            margin-top: 20px;
+        }
+        
+        .optimizing-steps .step {
+            padding: 8px;
+            margin: 6px 0;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            color: rgba(255, 255, 255, 0.5);
+            transition: all 0.3s;
+        }
+        
+        .optimizing-steps .step.active {
+            background: rgba(147, 51, 234, 0.2);
+            color: white;
+            border-left: 3px solid #9333EA;
+        }
+        
+        .fade-out {
+            animation: fadeOut 0.3s ease;
+        }
+        
+        /* Optimization Results */
+        .optimization-results {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: linear-gradient(135deg, #1C1C1F, #2C2C2E);
+            border-radius: 24px;
+            padding: 40px;
+            z-index: 4000;
+            box-shadow: 0 25px 80px rgba(0, 0, 0, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            animation: popIn 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        }
+        
+        .results-content {
+            text-align: center;
+        }
+        
+        .results-icon {
+            font-size: 60px;
+            margin-bottom: 20px;
+        }
+        
+        .results-stats {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin: 30px 0;
+        }
+        
+        .stat {
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 28px;
+            font-weight: 800;
+            color: #9333EA;
+            display: block;
+            margin-bottom: 8px;
+        }
+        
+        .stat-label {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.6);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+        
+        .results-comparison {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .comparison-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+        }
+        
+        .comparison-label {
+            color: rgba(255, 255, 255, 0.6);
+        }
+        
+        .comparison-value {
+            font-weight: 600;
+            color: white;
+        }
+        
+        .comparison-value.success {
+            color: #34C759;
+        }
+        
+        .results-close {
+            width: 100%;
+            padding: 16px;
+            background: linear-gradient(135deg, #9333EA, #7928CA);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+        
+        /* Reoptimize Float Button */
+        .reoptimize-float-btn {
+            position: fixed;
+            bottom: 100px;
+            right: 20px;
+            background: linear-gradient(135deg, #FF9F0A, #FF6B00);
+            color: white;
+            border: none;
+            border-radius: 50px;
+            padding: 15px 25px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 6px 20px rgba(255, 159, 10, 0.4);
+            z-index: 1000;
+            animation: pulse 2s infinite;
         }
 
-        /* Premium Live Tracking Indicator */
+        /* Live Tracking Indicator */
         .tracking-indicator {
             position: fixed;
             top: 100px;
@@ -975,8 +1214,18 @@
         body.navigating .nav-controls {
             flex-direction: row;
             gap: 12px;
+            bottom: calc(20px + var(--safe-area-bottom));
         }
         
+        body.navigating .route-panel {
+            display: none !important;
+        }
+        
+        body.navigating .optimize-button-container,
+        body.navigating .nav-button.secondary {
+            display: none !important;
+        }
+
         /* Quick Verify Button during navigation */
         .nav-verify-btn {
             flex: 1;
@@ -1004,67 +1253,6 @@
         .nav-verify-btn:hover {
             transform: translateY(-3px);
             box-shadow: 0 6px 24px rgba(52, 199, 89, 0.4);
-        }
-
-        /* Optimize buttons */
-        .optimize-button-container {
-            display: flex;
-            gap: 8px;
-            margin-bottom: 8px;
-        }
-
-        #optimizeBtn {
-            flex: 1;
-            background: linear-gradient(135deg, var(--purple), var(--purple-dark));
-            color: white;
-            border: none;
-            border-radius: 16px;
-            padding: 16px;
-            font-size: 15px;
-            font-weight: 700;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-            box-shadow: 0 4px 16px rgba(147, 51, 234, 0.3);
-        }
-
-        #optimizeBtn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(147, 51, 234, 0.4);
-        }
-
-        #optimizeBtn:disabled {
-            opacity: 0.7;
-            cursor: not-allowed;
-        }
-
-        #optimizeBtn.optimized {
-            background: linear-gradient(135deg, var(--success), var(--success-dark));
-            cursor: default;
-        }
-
-        #undoOptimizeBtn {
-            background: rgba(255, 255, 255, 0.1);
-            color: white;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 16px;
-            padding: 16px 20px;
-            font-size: 15px;
-            font-weight: 600;
-            cursor: pointer;
-            display: none;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            transition: all 0.3s ease;
-        }
-
-        #undoOptimizeBtn:hover {
-            background: rgba(255, 255, 255, 0.15);
-            border-color: rgba(255, 255, 255, 0.3);
         }
 
         .nav-button {
@@ -1109,169 +1297,41 @@
             box-shadow: 0 6px 24px rgba(0, 102, 255, 0.2);
         }
 
-        /* Ensure Leaflet Popups match premium theme */
-        .leaflet-popup-content-wrapper {
-            padding: 0;
-            background: linear-gradient(135deg, var(--surface-elevated), var(--surface-high));
-            border-radius: 18px;
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-        }
-
-        .leaflet-popup-content {
-            margin: 0;
-            max-width: 280px;
-            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', 'Segoe UI', system-ui, sans-serif;
-            font-weight: 500;
-        }
-
-        .leaflet-popup-tip {
-            background: var(--surface-elevated);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-        }
-
-        /* Rider location marker styles */
-        .rider-location-marker {
-            z-index: 3000 !important;
-        }
-
-        .rider-marker-wrapper {
-            position: relative;
-            width: 60px;
-            height: 60px;
-        }
-
-        .rider-pulse {
-            position: absolute;
-            width: 60px;
-            height: 60px;
+        /* Location Button */
+        .location-button {
+            position: fixed;
+            bottom: 280px;
+            right: 20px;
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, white, #f5f5f5);
             border-radius: 50%;
-            background: rgba(0, 102, 255, 0.3);
-            animation: ripple 2s infinite;
-        }
-
-        @keyframes ripple {
-            0% {
-                transform: scale(0.8);
-                opacity: 1;
-            }
-            100% {
-                transform: scale(2);
-                opacity: 0;
-            }
-        }
-
-        .rider-marker-container {
-            position: absolute;
-            width: 60px;
-            height: 60px;
+            border: none;
             display: flex;
             align-items: center;
             justify-content: center;
-        }
-
-        .rider-direction-cone {
-            position: absolute;
-            width: 0;
-            height: 0;
-            border-left: 10px solid transparent;
-            border-right: 10px solid transparent;
-            border-bottom: 20px solid rgba(0, 102, 255, 0.5);
-            top: -10px;
-            left: 50%;
-            transform: translateX(-50%);
-        }
-
-        .rider-dot {
-            width: 24px;
-            height: 24px;
-            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-            border: 3px solid white;
-        }
-
-        .rider-inner-dot {
-            width: 8px;
-            height: 8px;
-            background: white;
-            border-radius: 50%;
-        }
-
-        /* Marker pulse animation */
-        .marker-pulse {
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            border-radius: 50%;
-            border: 2px solid var(--primary);
-            animation: markerPulse 2s infinite;
-        }
-
-        @keyframes markerPulse {
-            0% {
-                transform: scale(1);
-                opacity: 1;
-            }
-            100% {
-                transform: scale(1.5);
-                opacity: 0;
-            }
-        }
-
-        /* Responsive */
-        @media (min-width: 428px) {
-            .app {
-                max-width: 428px;
-                margin: 0 auto;
-                box-shadow: 0 0 80px rgba(0, 0, 0, 0.6);
-            }
-        }
-
-        /* Additional premium touches */
-        button, .action-btn, .nav-button {
-            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', 'Segoe UI', system-ui, sans-serif;
-            font-weight: 600;
-        }
-
-        /* Smooth transitions for all interactive elements */
-        button, a, .stop-card, .stat-box, .phase, .action-btn {
+            cursor: pointer;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+            z-index: 90;
+            color: var(--surface);
             transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
         }
 
-        /* Animation for optimize/loading states */
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-        
-        @keyframes progress {
-            from { transform: translateX(-100%); }
-            to { transform: translateX(0); }
+        .location-button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
         }
 
-        /* Reoptimize button */
-        .reoptimize-float-btn {
-            position: fixed;
-            bottom: 100px;
-            right: 20px;
-            background: linear-gradient(135deg, #FF9F0A, #FF6B00);
+        .location-button.active {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
             color: white;
-            border: none;
-            border-radius: 50px;
-            padding: 15px 25px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            box-shadow: 0 6px 20px rgba(255, 159, 10, 0.4);
-            z-index: 1000;
-            animation: pulse 2s infinite;
+        }
+        
+        body.navigating .location-button {
+            bottom: 160px;
         }
     </style>
-</head>
-<body>
+    <body>
     <div class="app">
         <!-- Map Container - MUST come first for proper z-index -->
         <div class="map-container">
@@ -1320,14 +1380,6 @@
                 <path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3c-.46-4.17-3.77-7.48-7.94-7.94V1h-2v2.06C6.83 3.52 3.52 6.83 3.06 11H1v2h2.06c.46 4.17 3.77 7.48 7.94 7.94V23h2v-2.06c4.17-.46 7.48-3.77 7.94-7.94H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/>
             </svg>
         </button>
-        
-        <!-- Floating Verify Button (shows during navigation) -->
-        <button class="floating-verify-btn" id="floatingVerifyBtn" onclick="openQuickVerification()" style="display: none;">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
-            </svg>
-            <span>Verify Stop</span>
-        </button>
 
         <!-- Empty State (hidden by default, shown only when no route) -->
         <div class="empty-state" id="emptyState" style="display: none;">
@@ -1363,6 +1415,7 @@
         <!-- Navigation Controls -->
         <div class="nav-controls" id="navControls" style="display: none;">
             <!-- Optimize buttons container (will be added by JS) -->
+            <div id="optimizeContainer"></div>
             
             <button class="nav-button secondary" onclick="toggleRoutePanel()">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
@@ -1379,7 +1432,7 @@
                 <span>Verify Stop</span>
             </button>
             
-            <button class="nav-button" onclick="startNavigation()">
+            <button class="nav-button" id="startNavBtn" onclick="startNavigation()">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/>
                 </svg>
@@ -1388,10 +1441,10 @@
         </div>
     </div>
 
-    <!-- Load the route.js module with type="module" -->
+    <!-- Load the route.js module -->
     <script type="module" src="./route.js"></script>
     
-    <!-- Add helper functions for UI interactions -->
+    <!-- Helper functions for UI interactions -->
     <script>
         // Toggle panel expansion state
         window.togglePanelExpansion = function() {
@@ -1427,10 +1480,7 @@
             const trackingIndicator = document.getElementById('trackingIndicator');
             const locationButton = document.getElementById('locationButton');
             const panel = document.getElementById('routePanel');
-            const navControls = document.getElementById('navControls');
-            const optimizeContainer = document.querySelector('.optimize-button-container');
-            const detailsButton = document.querySelector('.nav-button.secondary');
-            const startNavButton = document.querySelector('.nav-button:not(.secondary):not(.nav-verify-btn)');
+            const startNavButton = document.getElementById('startNavBtn');
             
             // Show navigation overlay
             if (overlay) {
@@ -1447,20 +1497,9 @@
                 locationButton.classList.add('active');
             }
             
-            // COMPLETELY HIDE route panel during navigation
+            // Hide route panel during navigation
             if (panel) {
                 panel.classList.add('hidden');
-                panel.classList.remove('expanded', 'minimized');
-            }
-            
-            // Hide optimization buttons
-            if (optimizeContainer) {
-                optimizeContainer.style.display = 'none';
-            }
-            
-            // Hide details button
-            if (detailsButton) {
-                detailsButton.style.display = 'none';
             }
             
             // Change Start Navigation button to Stop Navigation
@@ -1482,7 +1521,10 @@
             document.body.classList.add('navigating');
             
             // Call the actual navigation function from route.js if it exists
-            if (window.proceedWithNavigation) {
+            if (typeof window.startNavigation === 'function' && window.startNavigation !== arguments.callee) {
+                // Call the route.js startNavigation function
+                window.startNavigation();
+            } else if (window.proceedWithNavigation) {
                 const nextStop = window.getNextStop ? window.getNextStop() : null;
                 if (nextStop) {
                     // Update navigation overlay with stop info
@@ -1493,20 +1535,9 @@
                     if (navAddress) {
                         navAddress.textContent = nextStop.address || 'Unknown Location';
                     }
-                    if (navDistance && window.calculateDistance && window.state && window.state.currentLocation) {
-                        const distance = window.calculateDistance(window.state.currentLocation, nextStop.location);
-                        navDistance.textContent = `${distance.toFixed(1)} km away`;
-                    }
-                    if (navETA) {
-                        const estimatedMinutes = Math.round(Math.random() * 10 + 5); // Placeholder
-                        navETA.textContent = `${estimatedMinutes} min`;
-                    }
                     
                     window.proceedWithNavigation(nextStop);
                 }
-            } else {
-                // Fallback if route.js isn't loaded yet
-                console.log('Navigation started - waiting for route.js to load');
             }
         };
         
@@ -1516,10 +1547,7 @@
             const trackingIndicator = document.getElementById('trackingIndicator');
             const locationButton = document.getElementById('locationButton');
             const panel = document.getElementById('routePanel');
-            const navControls = document.getElementById('navControls');
-            const optimizeContainer = document.querySelector('.optimize-button-container');
-            const detailsButton = document.querySelector('.nav-button.secondary');
-            const stopNavButton = document.querySelector('.nav-button:not(.secondary):not(.nav-verify-btn)');
+            const stopNavButton = document.getElementById('startNavBtn');
             
             // Hide navigation overlay
             if (overlay) {
@@ -1540,17 +1568,6 @@
             if (panel) {
                 panel.classList.remove('hidden');
                 panel.classList.add('minimized');
-                panel.classList.remove('expanded');
-            }
-            
-            // Show optimization buttons
-            if (optimizeContainer) {
-                optimizeContainer.style.display = 'flex';
-            }
-            
-            // Show details button
-            if (detailsButton) {
-                detailsButton.style.display = 'flex';
             }
             
             // Change Stop Navigation button back to Start Navigation
@@ -1561,7 +1578,7 @@
                     </svg>
                     <span>Start Navigation</span>
                 `;
-                stopNavButton.style.background = 'linear-gradient(135deg, #0066FF, #0052CC)';
+                stopNavButton.style.background = '';
                 stopNavButton.onclick = startNavigation;
             }
             
@@ -1576,6 +1593,24 @@
                 window.stopLocationTracking();
             }
         };
+        
+        // Add more helper functions as needed
+        window.toggleNumberedMarkers = function() {
+            if (window.routeDebug && window.routeDebug.state) {
+                window.routeDebug.state.showNumberedMarkers = !window.routeDebug.state.showNumberedMarkers;
+                if (window.plotRoute) {
+                    window.plotRoute();
+                }
+            }
+        };
+        
+        // Initialize optimize button container
+        document.addEventListener('DOMContentLoaded', function() {
+            const container = document.getElementById('optimizeContainer');
+            if (container && !document.getElementById('optimizeBtn')) {
+                // This will be populated by route.js
+            }
+        });
     </script>
 </body>
 </html>
