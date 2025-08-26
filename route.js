@@ -6,16 +6,19 @@
 
 // Fix: Make route optimizer optional - fallback to inline optimization if module not found
 let routeOptimizer;
-try {
-    // Try to import as ES6 module
-    if (typeof module !== 'undefined' && module.exports) {
-        routeOptimizer = require('./route-optimizer.js');
-    } else {
-        // For browser ES6 modules, this will be handled by import statement in HTML
-        console.log('Route optimizer will be loaded via ES6 import');
+
+// Try to use the comprehensive optimizer if available
+if (typeof RouteOptimizer !== 'undefined') {
+    // If loaded as global
+    routeOptimizer = new RouteOptimizer();
+} else {
+    // Fallback to simple optimizer
+    class FallbackRouteOptimizer {
+        // ... keep your existing fallback code ...
     }
-} catch (e) {
-    console.log('External route optimizer not found, using fallback optimization');
+    routeOptimizer = new FallbackRouteOptimizer({
+        // ... existing config ...
+    });
 }
 
 // Fallback route optimizer if external module not available
