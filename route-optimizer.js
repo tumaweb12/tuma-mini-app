@@ -1417,8 +1417,6 @@ class RouteOptimizer {
     }
 }
 
-// Export for use in other modules
-export default RouteOptimizer;
 // Make available globally for non-module environments
 if (typeof window !== 'undefined') {
     window.RouteOptimizer = RouteOptimizer;
