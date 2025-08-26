@@ -693,11 +693,6 @@ function optimizeRouteStops() {
         showNotification('No route to optimize', 'warning');
         return;
     }
-
-       // Store original ONLY if we haven't already optimized
-    if (!state.originalRouteOrder) {
-        state.originalRouteOrder = [...state.activeRoute.stops];
-    }
     
     const hasCompletedStops = state.activeRoute.stops.some(s => s.completed);
     
@@ -709,16 +704,20 @@ function optimizeRouteStops() {
         // Full route optimization
         console.log('Starting full route optimization...');
         
-        // Store original for undo
-        state.originalRouteOrder = [...state.activeRoute.stops];
-        const originalDistance = calculateTotalRouteDistance(state.originalRouteOrder);
+        // Store original for undo - ONLY IF NOT ALREADY STORED
+        if (!state.originalRouteOrder || state.originalRouteOrder.length === 0) {
+            state.originalRouteOrder = JSON.parse(JSON.stringify(state.activeRoute.stops)); // Deep copy
+            console.log('Stored original route for undo:', state.originalRouteOrder);
+        }
+        
+        const originalDistance = calculateTotalRouteDistance(state.activeRoute.stops);
         
         showOptimizingAnimation();
         
         setTimeout(() => {
             try {
                 // Use the route optimizer (either external or fallback)
-                const optimizedStops = routeOptimizer.optimizeRoute(state.originalRouteOrder);
+                const optimizedStops = routeOptimizer.optimizeRoute(state.activeRoute.stops);
                 
                 // Calculate statistics
                 const optimizedDistance = calculateTotalRouteDistance(optimizedStops);
@@ -737,7 +736,10 @@ function optimizeRouteStops() {
                 
                 // Update UI
                 updateStopOrderMap();
-                localStorage.setItem('tuma_active_route', JSON.stringify(state.activeRoute));
+                localStorage.setItem('tuma_active_route', JSON.stringify({
+                    ...state.activeRoute,
+                    originalRouteOrder: state.originalRouteOrder // Save original in localStorage
+                }));
                 
                 console.log('Optimization complete:');
                 console.log(`Original distance: ${state.optimizationStats.originalDistance.toFixed(1)}km`);
@@ -846,17 +848,25 @@ function checkForBetterRoute() {
  * Undo the last optimization
  */
 function undoOptimization() {
-    if (!state.originalRouteOrder) {
+    console.log('Undo called. Original route:', state.originalRouteOrder);
+    
+    if (!state.originalRouteOrder || state.originalRouteOrder.length === 0) {
         showNotification('No original route to restore', 'warning');
         return;
     }
     
-    state.activeRoute.stops = [...state.originalRouteOrder];
+    // Deep copy to restore
+    state.activeRoute.stops = JSON.parse(JSON.stringify(state.originalRouteOrder));
     state.activeRoute.isOptimized = false;
-    state.originalRouteOrder = null; // Clear after restoring
+    
+    // DON'T clear originalRouteOrder - keep it for multiple undos
+    // state.originalRouteOrder = null; 
     
     updateStopOrderMap();
-    localStorage.setItem('tuma_active_route', JSON.stringify(state.activeRoute));
+    localStorage.setItem('tuma_active_route', JSON.stringify({
+        ...state.activeRoute,
+        originalRouteOrder: state.originalRouteOrder // Keep original in localStorage
+    }));
     
     displayRouteInfo();
     plotRoute();
@@ -4593,7 +4603,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (storedRoute) {
             const routeData = JSON.parse(storedRoute);
             state.activeRoute = routeData;
-            
+
+            // Restore original route order if it was saved
+            if (routeData.originalRouteOrder) {
+                state.originalRouteOrder = routeData.originalRouteOrder;
+                console.log('Restored original route from localStorage');
+        
             // Restore verification data if exists
             if (routeData.verificationData) {
                 state.verificationData = routeData.verificationData;
