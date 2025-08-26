@@ -1423,3 +1423,4 @@ export default RouteOptimizer;
 if (typeof window !== 'undefined') {
     window.RouteOptimizer = RouteOptimizer;
 }
+var RouteOptimizer = RouteOptimizer || window.RouteOptimizer;
