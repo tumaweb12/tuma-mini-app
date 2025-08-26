@@ -4672,14 +4672,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (navControls) navControls.style.display = 'none';
             if (emptyState) emptyState.style.display = 'block';
         }
-    } catch (error) {
-        console.error('Error initializing route:', error);
-        
-        const emptyState = document.getElementById('emptyState');
-        if (emptyState) {
-            emptyState.style.display = 'block';
-        }
-    }
 });
 
 // Debug utilities
