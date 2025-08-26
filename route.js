@@ -4882,6 +4882,35 @@ window.routeDebug = {
     testSignature: () => startSignatureCapture(),
     testMpesa: () => promptMpesaPayment(1000, '0712345678')
 };
+// ... all your existing code ...
+
+// Export all necessary functions to window for HTML access
+window.optimizeRouteStops = optimizeRouteStops;
+window.undoOptimization = undoOptimization;
+window.toggleNumberedMarkers = toggleNumberedMarkers;
+window.updateOptimizerSetting = updateOptimizerSetting;
+window.selectStop = selectStop;
+window.goBack = goBack;
+window.centerOnLocation = centerOnLocation;
+window.toggleLocationTracking = toggleLocationTracking;
+window.startNavigation = startNavigation;
+window.navigateToStop = navigateToStop;
+window.openQuickVerification = openQuickVerification;
+window.openEnhancedVerificationModal = openEnhancedVerificationModal;
+window.closeVerificationModal = closeVerificationModal;
+window.completeEnhancedVerification = completeEnhancedVerification;
+window.nextVerificationStep = nextVerificationStep;
+window.previousVerificationStep = previousVerificationStep;
+window.startPhotoCapture = startPhotoCapture;
+window.startSignatureCapture = startSignatureCapture;
+window.promptMpesaPaymentForStop = promptMpesaPaymentForStop;
+window.finishRoute = finishRoute;
+
+// Export helper functions for debugging
+window.getNextStop = getNextStop;
+window.proceedWithNavigation = proceedWithNavigation;
+window.plotRoute = plotRoute;
+window.stopLocationTracking = stopLocationTracking;
 
 console.log('✅ Enhanced Route.js v5.0.0 loaded successfully');
 console.log('Debug utilities available at: window.routeDebug');
