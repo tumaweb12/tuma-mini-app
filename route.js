@@ -2272,11 +2272,18 @@ function showSignaturePad(onSign) {
                 signatureModal.remove();
                 onSign(signatureData);
             }
-        } else {
+} else {
             showNotification('Please provide a signature', 'warning');
         }
     };
-}ized) {
+}
+
+function updateOptimizeButton(isOptimized) {
+    const optimizeBtn = document.getElementById('optimizeBtn');
+    const undoBtn = document.getElementById('undoOptimizeBtn');
+    
+    if (optimizeBtn) {
+        if (isOptimized) {
             optimizeBtn.innerHTML = `
                 <span class="optimize-icon">✅</span>
                 <span class="optimize-text">Route Optimized</span>
@@ -2297,7 +2304,6 @@ function showSignaturePad(onSign) {
         undoBtn.style.display = isOptimized ? 'flex' : 'none';
     }
 }
-
 function showOptimizingAnimation() {
     const animation = document.createElement('div');
     animation.id = 'optimizingAnimation';
