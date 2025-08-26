@@ -4603,12 +4603,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (storedRoute) {
             const routeData = JSON.parse(storedRoute);
             state.activeRoute = routeData;
-
+            
             // Restore original route order if it was saved
             if (routeData.originalRouteOrder) {
                 state.originalRouteOrder = routeData.originalRouteOrder;
                 console.log('Restored original route from localStorage');
-        
+            } // <- This closing brace was missing
+            
             // Restore verification data if exists
             if (routeData.verificationData) {
                 state.verificationData = routeData.verificationData;
@@ -4672,6 +4673,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (navControls) navControls.style.display = 'none';
             if (emptyState) emptyState.style.display = 'block';
         }
+    } catch (error) {
+        console.error('Error initializing route:', error);
+        
+        const emptyState = document.getElementById('emptyState');
+        if (emptyState) {
+            emptyState.style.display = 'block';
+        }
+    }
 });
 
 // Debug utilities
