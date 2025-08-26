@@ -1,41 +1,31 @@
 /**
- * Complete Rider Dashboard with Multi-Pickup/Delivery Support
- * Includes commission tracking, route optimization, and enhanced features
+ * Complete Rider Dashboard with Bottom Navigation Support
+ * Part 1: Configuration and State Management
  */
 
 // Development Configuration
 const DEV_CONFIG = {
-    // Set to true when testing locally without Telegram
     isDevelopment: window.location.hostname === 'localhost' || 
                    window.location.hostname === '127.0.0.1' ||
                    window.location.hostname.includes('github.io'),
-    
-    // Test rider configuration (only used in development)
     testRider: {
-        id: 'ef5438ef-0cc0-4e35-8d1b-be18dbce7fe4', // Bobby G's test ID
+        id: 'ef5438ef-0cc0-4e35-8d1b-be18dbce7fe4',
         name: 'Bobby G',
         phone: '0725046880'
     },
-    
-    // Whether to show detailed console logs
     verboseLogging: true,
-    
-    // Whether to ignore API errors for missing riders
     ignoreRiderNotFound: true,
-    
-    // Development-only commission settings
-    bypassCommissionBlock: true, // Set to false in production
-    commissionWarningsOnly: true // Show warnings but don't block
+    bypassCommissionBlock: true,
+    commissionWarningsOnly: true
 };
 
-// ─── Configuration ─────────────────────────────────────────────────────────
-
+// Business Configuration
 const BUSINESS_CONFIG = {
     commission: {
-        rider: 0.70,      // 70% of delivery fee goes to rider
-        platform: 0.30,   // 30% platform fee
-        maxUnpaid: 300,   // Max unpaid commission before blocking
-        warningThreshold: 250  // Show warning at this amount
+        rider: 0.70,
+        platform: 0.30,
+        maxUnpaid: 300,
+        warningThreshold: 250
     },
     routeTypes: {
         express: { label: 'Express', multiplier: 1.4 },
@@ -54,10 +44,8 @@ const BUSINESS_CONFIG = {
 const SUPABASE_URL = 'https://btxavqfoirdzwpfrvezp.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ0eGF2cWZvaXJkendwZnJ2ZXpwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE0ODcxMTcsImV4cCI6MjA2NzA2MzExN30.kQKpukFGx-cBl1zZRuXmex02ifkZ751WCUfQPogYutk';
 
-// ─── Initialize Route Clustering ───────────────────────────────────────────
-
-// Initialize clustering instance (TumaRouteClustering should be available from clustering.js)
-const routeClusterer = new TumaRouteClustering({
+// Initialize clustering instance
+const routeClusterer = typeof TumaRouteClustering !== 'undefined' ? new TumaRouteClustering({
     maxRouteDistance: 25,
     minClusterScore: 50,
     maxPickupRadius: {
@@ -65,161 +53,130 @@ const routeClusterer = new TumaRouteClustering({
         smart: 3,
         eco: 4
     }
-});
+}) : null;
 
-// ─── Enhanced Route Manager ────────────────────────────────────────────────
-
-const EnhancedRouteManager = {
-    // Group and sequence stops by type
-    sequenceStops(parcels) {
-        const pickups = [];
-        const deliveries = [];
-        
-        parcels.forEach(parcel => {
-            // Handle location data - could be JSONB or separate columns
-            let pickupLocation, deliveryLocation;
-            
-            // Check if using JSONB format
-            if (parcel.pickup_location && typeof parcel.pickup_location === 'object') {
-                pickupLocation = parcel.pickup_location;
-                deliveryLocation = parcel.delivery_location;
-            } else if (parcel.pickup_location && typeof parcel.pickup_location === 'string') {
-                // Parse string JSONB
-                try {
-                    pickupLocation = JSON.parse(parcel.pickup_location);
-                    deliveryLocation = JSON.parse(parcel.delivery_location);
-                } catch (e) {
-                    console.error('Error parsing location:', e);
-                }
-            } else if (parcel.pickup_lat && parcel.pickup_lng) {
-                // Use separate lat/lng columns
-                pickupLocation = {
-                    lat: parcel.pickup_lat,
-                    lng: parcel.pickup_lng,
-                    address: parcel.pickup_address || 'Pickup location'
-                };
-                deliveryLocation = {
-                    lat: parcel.delivery_lat,
-                    lng: parcel.delivery_lng,
-                    address: parcel.delivery_address || 'Delivery location'
-                };
-            } else {
-                // Fallback to default locations
-                pickupLocation = { lat: -1.2921, lng: 36.8219, address: 'Pickup location' };
-                deliveryLocation = { lat: -1.2921, lng: 36.8219, address: 'Delivery location' };
-            }
-            
-            // Create pickup stop
-            pickups.push({
-                id: `${parcel.id}-pickup`,
-                parcelId: parcel.id,
-                type: 'pickup',
-                address: pickupLocation.address || parcel.pickup_address || 'Pickup location',
-                location: {
-                    lat: parseFloat(pickupLocation.lat) || -1.2921,
-                    lng: parseFloat(pickupLocation.lng) || 36.8219
-                },
-                parcelCode: parcel.parcel_code,
-                verificationCode: parcel.pickup_code,
-                customerName: parcel.sender_name || 'Sender',
-                customerPhone: parcel.sender_phone || '',
-                specialInstructions: parcel.pickup_instructions,
-                completed: false,
-                timestamp: null
-            });
-            
-            // Create delivery stop
-            deliveries.push({
-                id: `${parcel.id}-delivery`,
-                parcelId: parcel.id,
-                type: 'delivery',
-                address: deliveryLocation.address || parcel.delivery_address || 'Delivery location',
-                location: {
-                    lat: parseFloat(deliveryLocation.lat) || -1.2921,
-                    lng: parseFloat(deliveryLocation.lng) || 36.8219
-                },
-                parcelCode: parcel.parcel_code,
-                verificationCode: parcel.delivery_code,
-                customerName: parcel.recipient_name || 'Recipient',
-                customerPhone: parcel.recipient_phone || '',
-                specialInstructions: parcel.delivery_instructions,
-                completed: false,
-                timestamp: null,
-                dependsOn: `${parcel.id}-pickup`,
-                // Payment information
-                paymentMethod: parcel.payment_method || 'cash',
-                paymentStatus: parcel.payment_status || 'pending',
-                amountToCollect: parcel.payment_status === 'pending' ? (parcel.price || 500) : 0
-            });
-        });
-        
-        // Optimize order
-        const optimizedPickups = this.optimizeStopOrder(pickups);
-        const optimizedDeliveries = this.optimizeStopOrder(deliveries);
-        
-        return [...optimizedPickups, ...optimizedDeliveries];
+// Global State Management
+const state = {
+    rider: null,
+    status: 'online',
+    earnings: {
+        daily: 0,
+        weekly: 0,
+        monthly: 0
     },
-    
-    optimizeStopOrder(stops) {
-        if (stops.length <= 1) return stops;
-        
-        // Simple nearest neighbor optimization
-        const optimized = [stops[0]];
-        const remaining = stops.slice(1);
-        
-        while (remaining.length > 0) {
-            const lastStop = optimized[optimized.length - 1];
-            let nearestIndex = 0;
-            let nearestDistance = Infinity;
-            
-            remaining.forEach((stop, index) => {
-                const distance = calculateDistance(lastStop.location, stop.location);
-                if (distance < nearestDistance) {
-                    nearestDistance = distance;
-                    nearestIndex = index;
-                }
-            });
-            
-            optimized.push(remaining.splice(nearestIndex, 1)[0]);
-        }
-        
-        return optimized;
+    stats: {
+        deliveries: 0,
+        distance: 0,
+        rating: 5.0,
+        acceptRate: 95
     },
-    
-    canCompleteStop(stop, allStops) {
-        if (stop.type === 'delivery' && stop.dependsOn) {
-            const pickupStop = allStops.find(s => s.id === stop.dependsOn);
-            return pickupStop && pickupStop.completed;
-        }
-        return true;
-    },
-    
-    getParcelsInPossession(stops) {
-        const inPossession = [];
-        
-        stops.forEach(stop => {
-            if (stop.type === 'pickup' && stop.completed) {
-                const deliveryStop = stops.find(s => 
-                    s.type === 'delivery' && s.parcelId === stop.parcelId
-                );
-                
-                if (deliveryStop && !deliveryStop.completed) {
-                    inPossession.push({
-                        parcelId: stop.parcelId,
-                        parcelCode: stop.parcelCode,
-                        pickupTime: stop.timestamp,
-                        destination: deliveryStop.address
-                    });
-                }
-            }
-        });
-        
-        return inPossession;
-    }
+    activeDelivery: null,
+    claimedRoute: null,
+    availableRoutes: [],
+    currentFilter: 'all',
+    isLoading: false,
+    commissionTracker: null,
+    currentLocation: null,
+    mapInitialized: false,
+    parcelsInPossession: [],
+    activeBonuses: [],
+    transactions: [],
+    notifications: []
 };
 
-// ─── Commission Tracking Class ─────────────────────────────────────────────
+// DOM Elements Cache
+let elements = {};
 
+function initializeElements() {
+    elements = {
+        // Status elements
+        statusBadge: document.getElementById('statusBadge'),
+        statusText: document.getElementById('statusText'),
+        
+        // Dashboard stats
+        todayEarnings: document.getElementById('todayEarnings'),
+        todayDeliveries: document.getElementById('todayDeliveries'),
+        todayDistance: document.getElementById('todayDistance'),
+        earningsTrend: document.getElementById('earningsTrend'),
+        
+        // Earnings elements
+        dailyEarnings: document.getElementById('dailyEarnings'),
+        weeklyEarnings: document.getElementById('weeklyEarnings'),
+        monthlyEarnings: document.getElementById('monthlyEarnings'),
+        weeklyTotal: document.getElementById('weeklyTotal'),
+        
+        // Stats elements
+        totalDeliveries: document.getElementById('totalDeliveries'),
+        totalDistance: document.getElementById('totalDistance'),
+        riderRating: document.getElementById('riderRating'),
+        acceptRate: document.getElementById('acceptRate'),
+        
+        // Rider info
+        riderName: document.getElementById('riderName'),
+        profileName: document.getElementById('profileName'),
+        profilePhone: document.getElementById('profilePhone'),
+        profileInitial: document.getElementById('profileInitial'),
+        profileRating: document.getElementById('profileRating'),
+        
+        // Active route elements
+        activeRouteSection: document.getElementById('activeRouteSection'),
+        completedStops: document.getElementById('completedStops'),
+        totalStops: document.getElementById('totalStops'),
+        routeProgress: document.getElementById('routeProgress'),
+        stopType: document.getElementById('stopType'),
+        stopAddress: document.getElementById('stopAddress'),
+        stopCode: document.getElementById('stopCode'),
+        stopCustomer: document.getElementById('stopCustomer'),
+        
+        // Route list
+        routeList: document.getElementById('routeList'),
+        noRoutesState: document.getElementById('noRoutesState'),
+        
+        // Navigation badges
+        routesBadge: document.getElementById('routesBadge'),
+        walletBadge: document.getElementById('walletBadge'),
+        notificationBadge: document.getElementById('notificationBadge'),
+        
+        // Commission elements
+        commissionAlert: document.getElementById('commissionAlert'),
+        commissionDebt: document.getElementById('commissionDebt'),
+        walletCommissionDebt: document.getElementById('walletCommissionDebt'),
+        commissionDebtCard: document.getElementById('commissionDebtCard'),
+        
+        // Wallet elements
+        mpesaBalance: document.getElementById('mpesaBalance'),
+        cashBalance: document.getElementById('cashBalance'),
+        cashCard: document.getElementById('cashCard'),
+        transactionList: document.getElementById('transactionList'),
+        
+        // Earnings page elements
+        earningsDailyPage: document.getElementById('earningsDailyPage'),
+        earningsWeeklyPage: document.getElementById('earningsWeeklyPage'),
+        earningsMonthlyPage: document.getElementById('earningsMonthlyPage'),
+        earningsBreakdown: document.getElementById('earningsBreakdown'),
+        
+        // Profile elements
+        infoName: document.getElementById('infoName'),
+        infoPhone: document.getElementById('infoPhone'),
+        infoEmail: document.getElementById('infoEmail'),
+        infoID: document.getElementById('infoID'),
+        vehicleType: document.getElementById('vehicleType'),
+        vehicleReg: document.getElementById('vehicleReg'),
+        vehicleModel: document.getElementById('vehicleModel'),
+        statDeliveries: document.getElementById('statDeliveries'),
+        statDistance: document.getElementById('statDistance'),
+        statJoined: document.getElementById('statJoined'),
+        
+        // FAB
+        fab: document.getElementById('fab'),
+        fabIcon: document.getElementById('fabIcon'),
+        
+        // Main content
+        mainContent: document.getElementById('mainContent')
+    };
+}
+
+// Commission Tracking Class
 class CommissionTracker {
     constructor(config) {
         this.config = config;
@@ -234,7 +191,6 @@ class CommissionTracker {
 
     async initialize(riderId, api) {
         try {
-            // Skip database initialization for temporary riders
             if (riderId.startsWith('temp-')) {
                 console.log('Using default commission values for temporary rider');
                 return;
@@ -276,7 +232,6 @@ class CommissionTracker {
             isBlocked: false
         };
 
-        // Check if should block (but respect dev bypass)
         const shouldBlock = this.state.unpaidCommission >= this.config.maxUnpaid;
         const devBypass = DEV_CONFIG.isDevelopment && DEV_CONFIG.bypassCommissionBlock;
 
@@ -284,7 +239,6 @@ class CommissionTracker {
             this.state.isBlocked = true;
             result.isBlocked = true;
         } else if (shouldBlock && devBypass) {
-            // In dev mode with bypass, show warning but don't block
             console.warn(`[DEV MODE] Commission block bypassed. Amount: KES ${Math.round(this.state.unpaidCommission)}`);
             result.warningShown = true;
         } else if (this.state.unpaidCommission >= this.config.warningThreshold) {
@@ -310,7 +264,6 @@ class CommissionTracker {
         const isWarning = percentage >= 83;
         const isBlocked = percentage >= 100 && !(DEV_CONFIG.isDevelopment && DEV_CONFIG.bypassCommissionBlock);
         
-        // Show dev mode indicator if bypassing
         const devModeIndicator = (DEV_CONFIG.isDevelopment && DEV_CONFIG.bypassCommissionBlock && percentage >= 100) ? 
             '<span class="dev-mode-badge">DEV MODE</span>' : '';
 
@@ -419,301 +372,157 @@ class CommissionTracker {
             .commission-status.blocked .commission-progress-bar {
                 background: var(--danger);
             }
-            
-            .commission-actions {
-                display: flex;
-                gap: 8px;
-            }
-            
-            .commission-pay-button,
-            .commission-details-button {
-                flex: 1;
-                padding: 10px;
-                border-radius: 8px;
-                border: none;
-                font-size: 14px;
-                font-weight: 600;
-                cursor: pointer;
-                transition: all 0.2s;
-            }
-            
-            .commission-pay-button {
-                background: var(--primary);
-                color: white;
-            }
-            
-            .commission-details-button {
-                background: var(--surface-high);
-                color: var(--text-secondary);
-            }
-            
-            .commission-warning {
-                background: rgba(255, 159, 10, 0.1);
-                border: 1px solid var(--warning);
-                border-radius: 12px;
-                padding: 12px;
-                margin: 0 20px 20px;
-                display: flex;
-                align-items: center;
-                gap: 12px;
-                font-size: 14px;
-            }
-            
-            .commission-blocked-overlay {
-                position: fixed;
-                top: 0;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                background: rgba(0, 0, 0, 0.9);
-                backdrop-filter: blur(10px);
-                z-index: 9999;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                padding: 20px;
-            }
-            
-            .blocked-content {
-                background: var(--surface-elevated);
-                border-radius: 20px;
-                padding: 32px 24px;
-                max-width: 360px;
-                width: 100%;
-                text-align: center;
-            }
-            
-            .blocked-icon {
-                font-size: 64px;
-                margin-bottom: 20px;
-            }
-            
-            .blocked-content h2 {
-                font-size: 24px;
-                font-weight: 700;
-                margin-bottom: 12px;
-            }
-            
-            .blocked-content p {
-                color: var(--text-secondary);
-                margin-bottom: 16px;
-                line-height: 1.5;
-            }
-            
-            .blocked-amount {
-                font-size: 32px;
-                font-weight: 700;
-                color: var(--danger);
-                margin: 24px 0;
-            }
-            
-            .pay-now-button {
-                width: 100%;
-                background: var(--success);
-                color: white;
-                border: none;
-                border-radius: 12px;
-                padding: 16px;
-                font-size: 18px;
-                font-weight: 700;
-                cursor: pointer;
-                margin-bottom: 16px;
-            }
-            
-            .blocked-help {
-                font-size: 14px;
-                color: var(--text-tertiary);
-            }
-            
-            .dev-mode-badge {
-                background: #FF9F0A;
-                color: black;
-                padding: 2px 8px;
-                border-radius: 4px;
-                font-size: 10px;
-                font-weight: 700;
-                margin-left: 8px;
-                vertical-align: middle;
-            }
-            
-            /* Make route cards clickable */
-            .route-card:not(.claimed) {
-                transition: all 0.3s ease;
-            }
-            
-            .route-card:not(.claimed):hover {
-                transform: translateY(-2px);
-                box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
-                border-color: var(--primary);
-            }
-            
-            .route-card:not(.claimed):active {
-                transform: translateY(0);
-            }
-            
-            .route-card.claimed {
-                opacity: 0.6;
-                background: var(--surface-dim);
-            }
-            
-            /* Prevent button from triggering card click */
-            .claim-button {
-                position: relative;
-                z-index: 2;
-            }
-            
-            /* Urgent payment warning */
-            .urgent-payment-warning {
-                position: fixed;
-                top: 0;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                background: rgba(0, 0, 0, 0.95);
-                backdrop-filter: blur(20px);
-                z-index: 9998;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                padding: 20px;
-                animation: fadeIn 0.3s ease-out;
-            }
-            
-            @keyframes fadeIn {
-                from { opacity: 0; }
-                to { opacity: 1; }
-            }
-            
-            .warning-content {
-                background: var(--surface-elevated);
-                border-radius: 24px;
-                padding: 32px;
-                max-width: 400px;
-                width: 100%;
-                text-align: center;
-                border: 2px solid var(--warning);
-            }
-            
-            .warning-icon {
-                font-size: 64px;
-                margin-bottom: 20px;
-            }
-            
-            .warning-content h2 {
-                font-size: 28px;
-                margin-bottom: 16px;
-            }
-            
-            .warning-amount {
-                font-size: 24px;
-                font-weight: 700;
-                color: var(--warning);
-                margin-bottom: 12px;
-            }
-            
-            .warning-message {
-                font-size: 16px;
-                color: var(--text-secondary);
-                margin-bottom: 24px;
-            }
-            
-            .timer {
-                font-size: 20px;
-                font-weight: 700;
-                color: var(--danger);
-                font-family: monospace;
-            }
-            
-            .warning-actions {
-                display: grid;
-                gap: 12px;
-            }
-            
-            .pay-now-btn {
-                width: 100%;
-                padding: 16px;
-                background: var(--success);
-                color: white;
-                border: none;
-                border-radius: 12px;
-                font-size: 18px;
-                font-weight: 700;
-                cursor: pointer;
-            }
-            
-            .later-btn {
-                width: 100%;
-                padding: 16px;
-                background: var(--surface-high);
-                color: var(--text-primary);
-                border: none;
-                border-radius: 12px;
-                font-size: 16px;
-                font-weight: 600;
-                cursor: pointer;
-            }
         `;
     }
 }
 
-// ─── State Management ──────────────────────────────────────────────────────
-
-const state = {
-    rider: null,
-    status: 'online',
-    earnings: {
-        daily: 0,
-        weekly: 0,
-        monthly: 0
+// Enhanced Route Manager
+const EnhancedRouteManager = {
+    sequenceStops(parcels) {
+        const pickups = [];
+        const deliveries = [];
+        
+        parcels.forEach(parcel => {
+            let pickupLocation, deliveryLocation;
+            
+            if (parcel.pickup_location && typeof parcel.pickup_location === 'object') {
+                pickupLocation = parcel.pickup_location;
+                deliveryLocation = parcel.delivery_location;
+            } else if (parcel.pickup_location && typeof parcel.pickup_location === 'string') {
+                try {
+                    pickupLocation = JSON.parse(parcel.pickup_location);
+                    deliveryLocation = JSON.parse(parcel.delivery_location);
+                } catch (e) {
+                    console.error('Error parsing location:', e);
+                }
+            } else if (parcel.pickup_lat && parcel.pickup_lng) {
+                pickupLocation = {
+                    lat: parcel.pickup_lat,
+                    lng: parcel.pickup_lng,
+                    address: parcel.pickup_address || 'Pickup location'
+                };
+                deliveryLocation = {
+                    lat: parcel.delivery_lat,
+                    lng: parcel.delivery_lng,
+                    address: parcel.delivery_address || 'Delivery location'
+                };
+            } else {
+                pickupLocation = { lat: -1.2921, lng: 36.8219, address: 'Pickup location' };
+                deliveryLocation = { lat: -1.2921, lng: 36.8219, address: 'Delivery location' };
+            }
+            
+            pickups.push({
+                id: `${parcel.id}-pickup`,
+                parcelId: parcel.id,
+                type: 'pickup',
+                address: pickupLocation.address || parcel.pickup_address || 'Pickup location',
+                location: {
+                    lat: parseFloat(pickupLocation.lat) || -1.2921,
+                    lng: parseFloat(pickupLocation.lng) || 36.8219
+                },
+                parcelCode: parcel.parcel_code,
+                verificationCode: parcel.pickup_code,
+                customerName: parcel.sender_name || 'Sender',
+                customerPhone: parcel.sender_phone || '',
+                specialInstructions: parcel.pickup_instructions,
+                completed: false,
+                timestamp: null
+            });
+            
+            deliveries.push({
+                id: `${parcel.id}-delivery`,
+                parcelId: parcel.id,
+                type: 'delivery',
+                address: deliveryLocation.address || parcel.delivery_address || 'Delivery location',
+                location: {
+                    lat: parseFloat(deliveryLocation.lat) || -1.2921,
+                    lng: parseFloat(deliveryLocation.lng) || 36.8219
+                },
+                parcelCode: parcel.parcel_code,
+                verificationCode: parcel.delivery_code,
+                customerName: parcel.recipient_name || 'Recipient',
+                customerPhone: parcel.recipient_phone || '',
+                specialInstructions: parcel.delivery_instructions,
+                completed: false,
+                timestamp: null,
+                dependsOn: `${parcel.id}-pickup`,
+                paymentMethod: parcel.payment_method || 'cash',
+                paymentStatus: parcel.payment_status || 'pending',
+                amountToCollect: parcel.payment_status === 'pending' ? (parcel.price || 500) : 0
+            });
+        });
+        
+        const optimizedPickups = this.optimizeStopOrder(pickups);
+        const optimizedDeliveries = this.optimizeStopOrder(deliveries);
+        
+        return [...optimizedPickups, ...optimizedDeliveries];
     },
-    stats: {
-        deliveries: 0,
-        distance: 0,
-        rating: 5.0
+    
+    optimizeStopOrder(stops) {
+        if (stops.length <= 1) return stops;
+        
+        const optimized = [stops[0]];
+        const remaining = stops.slice(1);
+        
+        while (remaining.length > 0) {
+            const lastStop = optimized[optimized.length - 1];
+            let nearestIndex = 0;
+            let nearestDistance = Infinity;
+            
+            remaining.forEach((stop, index) => {
+                const distance = calculateDistance(lastStop.location, stop.location);
+                if (distance < nearestDistance) {
+                    nearestDistance = distance;
+                    nearestIndex = index;
+                }
+            });
+            
+            optimized.push(remaining.splice(nearestIndex, 1)[0]);
+        }
+        
+        return optimized;
     },
-    activeDelivery: null,
-    claimedRoute: null,
-    availableRoutes: [],
-    currentFilter: 'all',
-    isLoading: false,
-    commissionTracker: null,
-    currentLocation: null,
-    mapInitialized: false,
-    parcelsInPossession: [],
-    activeBonuses: [] // Admin-triggered bonuses
+    
+    canCompleteStop(stop, allStops) {
+        if (stop.type === 'delivery' && stop.dependsOn) {
+            const pickupStop = allStops.find(s => s.id === stop.dependsOn);
+            return pickupStop && pickupStop.completed;
+        }
+        return true;
+    },
+    
+    getParcelsInPossession(stops) {
+        const inPossession = [];
+        
+        stops.forEach(stop => {
+            if (stop.type === 'pickup' && stop.completed) {
+                const deliveryStop = stops.find(s => 
+                    s.type === 'delivery' && s.parcelId === stop.parcelId
+                );
+                
+                if (deliveryStop && !deliveryStop.completed) {
+                    inPossession.push({
+                        parcelId: stop.parcelId,
+                        parcelCode: stop.parcelCode,
+                        pickupTime: stop.timestamp,
+                        destination: deliveryStop.address
+                    });
+                }
+            }
+        });
+        
+        return inPossession;
+    }
 };
+/**
+ * Part 2: API Functions, Display Functions, and UI Management
+ */
 
-// ─── DOM Elements ──────────────────────────────────────────────────────────
-
-let elements = {};
-
-function initializeElements() {
-    elements = {
-        statusBadge: document.getElementById('statusBadge'),
-        dailyEarnings: document.getElementById('dailyEarnings'),
-        weeklyEarnings: document.getElementById('weeklyEarnings'),
-        monthlyEarnings: document.getElementById('monthlyEarnings'),
-        totalDeliveries: document.getElementById('totalDeliveries'),
-        totalDistance: document.getElementById('totalDistance'),
-        riderRating: document.getElementById('riderRating'),
-        riderName: document.getElementById('riderName'),
-        activeDeliverySection: document.getElementById('activeDeliverySection'),
-        currentAddress: document.getElementById('currentAddress'),
-        currentParcel: document.getElementById('currentParcel'),
-        currentETA: document.getElementById('currentETA'),
-        codeInput: document.getElementById('codeInput'),
-        routeList: document.getElementById('routeList'),
-        mainContent: document.getElementById('mainContent')
-    };
-}
-
-// ─── Database Functions ────────────────────────────────────────────────────
-
+// Supabase API Functions
 const supabaseAPI = {
     async query(table, options = {}) {
         const { select = '*', filter = '', order = '', limit } = options;
         
-        // Don't make API calls for temporary riders
         if (filter && filter.includes('temp-')) {
             console.log('Skipping API call for temporary rider');
             return [];
@@ -733,7 +542,6 @@ const supabaseAPI = {
         });
         
         if (!response.ok) {
-            // Log error but don't throw for development
             if (DEV_CONFIG.isDevelopment && DEV_CONFIG.ignoreRiderNotFound) {
                 console.log(`API Error (ignored in dev): ${response.status}`);
                 return [];
@@ -745,7 +553,6 @@ const supabaseAPI = {
     },
     
     async insert(table, data) {
-        // Skip for temporary riders
         if (data.rider_id && data.rider_id.includes('temp-')) {
             console.log('Skipping insert for temporary rider');
             return [data];
@@ -771,7 +578,6 @@ const supabaseAPI = {
     },
     
     async update(table, filter, data) {
-        // Skip for temporary riders
         if (filter && filter.includes('temp-')) {
             console.log('Skipping update for temporary rider');
             return [data];
@@ -797,8 +603,7 @@ const supabaseAPI = {
     }
 };
 
-// ─── Notification Functions ────────────────────────────────────────────────
-
+// Notification System
 function showNotification(message, type = 'info') {
     const notification = document.createElement('div');
     notification.className = `notification ${type}`;
@@ -826,26 +631,13 @@ function showNotification(message, type = 'info') {
     }, type === 'error' ? 5000 : 3000);
 }
 
-// ─── Helper Functions ──────────────────────────────────────────────────────
-
+// Helper Functions
 function formatPhone(phone) {
     return phone.replace(/\D/g, '').slice(0, 10);
 }
 
-function haptic(type = 'light') {
-    if (window.navigator && window.navigator.vibrate) {
-        switch(type) {
-            case 'light': window.navigator.vibrate(10); break;
-            case 'medium': window.navigator.vibrate(30); break;
-            case 'heavy': window.navigator.vibrate(50); break;
-            case 'success': window.navigator.vibrate([10, 50, 10]); break;
-            default: window.navigator.vibrate(10);
-        }
-    }
-}
-
 function calculateDistance(point1, point2) {
-    const R = 6371; // Earth's radius in km
+    const R = 6371;
     const dLat = (point2.lat - point1.lat) * Math.PI / 180;
     const dLon = (point2.lng - point1.lng) * Math.PI / 180;
     const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
@@ -863,8 +655,16 @@ function formatTimeAgo(timestamp) {
     return `${hours} hour${hours > 1 ? 's' : ''} ago`;
 }
 
-// ─── Enhanced Features ─────────────────────────────────────────────────────
+function parsePrice(priceValue) {
+    if (typeof priceValue === 'number') return priceValue;
+    if (typeof priceValue === 'string') {
+        const cleaned = priceValue.replace(/[^0-9.-]+/g, '');
+        return parseFloat(cleaned) || 0;
+    }
+    return 0;
+}
 
+// Enhanced Features Functions
 function isPeakHour() {
     const hour = new Date().getHours();
     const { morning, evening } = BUSINESS_CONFIG.incentives.peak_hours;
@@ -880,13 +680,11 @@ function isPeakHour() {
 
 async function loadActiveBonuses() {
     try {
-        // Skip for temporary riders
         if (!state.rider || state.rider.id.startsWith('temp-')) {
             state.activeBonuses = [];
             return;
         }
         
-        // Load active bonuses from database
         const bonuses = await supabaseAPI.query('rider_bonuses', {
             filter: `rider_id=eq.${state.rider.id}&is_active=eq.true&expires_at=gt.${new Date().toISOString()}`,
             order: 'created_at.desc'
@@ -894,7 +692,6 @@ async function loadActiveBonuses() {
         
         state.activeBonuses = bonuses;
         
-        // Also check for global bonuses
         const globalBonuses = await supabaseAPI.query('global_bonuses', {
             filter: `is_active=eq.true&expires_at=gt.${new Date().toISOString()}`,
             order: 'created_at.desc'
@@ -912,14 +709,12 @@ function calculateDailyBonus() {
     const deliveries = state.stats.deliveries;
     let applicableBonuses = [];
     
-    // Check each active bonus
     state.activeBonuses.forEach(bonus => {
         if (bonus.type === 'delivery_target' && deliveries >= bonus.target_deliveries) {
             applicableBonuses.push(bonus);
         }
     });
     
-    // Sort by bonus amount descending and take the highest
     applicableBonuses.sort((a, b) => b.bonus_amount - a.bonus_amount);
     
     return {
@@ -936,7 +731,6 @@ function displayIncentiveProgress() {
     const { currentBonus, nextBonus, deliveries } = calculateDailyBonus();
     const peakStatus = isPeakHour();
     
-    // Only show if there are active bonuses
     if (state.activeBonuses.length === 0 && !peakStatus.isPeak) {
         return;
     }
@@ -1056,8 +850,1027 @@ function addQuickActions() {
     }
 }
 
-// ─── Route Completion Handling ─────────────────────────────────────────────
+// Display Update Functions
+function updateEarningsDisplay() {
+    // Dashboard page elements
+    if (elements.todayEarnings) elements.todayEarnings.textContent = Math.round(state.earnings.daily).toLocaleString();
+    if (elements.dailyEarnings) elements.dailyEarnings.textContent = Math.round(state.earnings.daily).toLocaleString();
+    if (elements.weeklyEarnings) elements.weeklyEarnings.textContent = Math.round(state.earnings.weekly).toLocaleString();
+    if (elements.monthlyEarnings) elements.monthlyEarnings.textContent = Math.round(state.earnings.monthly).toLocaleString();
+    if (elements.weeklyTotal) elements.weeklyTotal.textContent = Math.round(state.earnings.weekly).toLocaleString();
+    
+    // Earnings page elements
+    if (elements.earningsDailyPage) elements.earningsDailyPage.textContent = Math.round(state.earnings.daily).toLocaleString();
+    if (elements.earningsWeeklyPage) elements.earningsWeeklyPage.textContent = Math.round(state.earnings.weekly).toLocaleString();
+    if (elements.earningsMonthlyPage) elements.earningsMonthlyPage.textContent = Math.round(state.earnings.monthly).toLocaleString();
+    
+    // Update earnings trend
+    if (elements.earningsTrend) {
+        const trend = Math.random() > 0.5 ? '↑' : '↓';
+        const percentage = Math.floor(Math.random() * 20) + 1;
+        elements.earningsTrend.textContent = `${trend} ${percentage}%`;
+        elements.earningsTrend.className = trend === '↑' ? 'stat-trend up' : 'stat-trend down';
+    }
+}
 
+function updateStatsDisplay() {
+    // Dashboard stats
+    if (elements.todayDeliveries) elements.todayDeliveries.textContent = state.stats.deliveries;
+    if (elements.todayDistance) elements.todayDistance.textContent = state.stats.distance;
+    
+    // General stats
+    if (elements.totalDeliveries) elements.totalDeliveries.textContent = state.stats.deliveries;
+    if (elements.totalDistance) elements.totalDistance.textContent = state.stats.distance;
+    if (elements.riderRating) elements.riderRating.textContent = state.stats.rating.toFixed(1);
+    if (elements.acceptRate) elements.acceptRate.textContent = state.stats.acceptRate;
+    
+    // Profile stats
+    if (elements.statDeliveries) elements.statDeliveries.textContent = state.stats.deliveries;
+    if (elements.statDistance) elements.statDistance.textContent = `${state.stats.distance} km`;
+    if (elements.profileRating) elements.profileRating.textContent = state.stats.rating.toFixed(1);
+}
+
+function updateProfileDisplay() {
+    if (!state.rider) return;
+    
+    // Update profile name and phone
+    if (elements.profileName) elements.profileName.textContent = state.rider.rider_name || 'Rider Name';
+    if (elements.profilePhone) elements.profilePhone.textContent = state.rider.phone || '+254700000000';
+    if (elements.profileInitial) elements.profileInitial.textContent = (state.rider.rider_name || 'R')[0].toUpperCase();
+    
+    // Update info fields
+    if (elements.infoName) elements.infoName.textContent = state.rider.rider_name || '-';
+    if (elements.infoPhone) elements.infoPhone.textContent = state.rider.phone || '-';
+    if (elements.infoEmail) elements.infoEmail.textContent = state.rider.email || '-';
+    if (elements.infoID) elements.infoID.textContent = state.rider.national_id || '-';
+    
+    // Update vehicle details
+    if (elements.vehicleType) elements.vehicleType.textContent = state.rider.vehicle_type || 'Motorcycle';
+    if (elements.vehicleReg) elements.vehicleReg.textContent = state.rider.vehicle_registration || 'KXX 123X';
+    if (elements.vehicleModel) elements.vehicleModel.textContent = state.rider.vehicle_model || '-';
+    
+    // Update join date
+    if (elements.statJoined) {
+        const joinDate = state.rider.created_at ? new Date(state.rider.created_at).toLocaleDateString() : '-';
+        elements.statJoined.textContent = joinDate;
+    }
+}
+
+function updateWalletDisplay() {
+    // Update M-Pesa balance
+    if (elements.mpesaBalance) {
+        const balance = state.rider?.mpesa_balance || 0;
+        elements.mpesaBalance.textContent = Math.round(balance).toLocaleString();
+    }
+    
+    // Update cash balance
+    if (elements.cashBalance) {
+        const cashBalance = state.rider?.cash_balance || 0;
+        elements.cashBalance.textContent = Math.round(cashBalance).toLocaleString();
+    }
+    
+    // Update commission debt card
+    if (window.commissionOffsetManager) {
+        const debt = window.commissionOffsetManager.commissionDebt;
+        if (debt > 0) {
+            if (elements.commissionDebtCard) elements.commissionDebtCard.style.display = 'block';
+            if (elements.walletCommissionDebt) elements.walletCommissionDebt.textContent = Math.round(debt).toLocaleString();
+            if (elements.walletBadge) elements.walletBadge.style.display = 'block';
+        } else {
+            if (elements.commissionDebtCard) elements.commissionDebtCard.style.display = 'none';
+            if (elements.walletBadge) elements.walletBadge.style.display = 'none';
+        }
+    }
+    
+    // Load recent transactions
+    loadTransactions();
+}
+
+async function loadTransactions() {
+    try {
+        // Create sample transactions for display
+        const transactions = [
+            {
+                type: 'earnings',
+                description: 'Delivery completed',
+                amount: 350,
+                timestamp: new Date(Date.now() - 3600000),
+                icon: '💰'
+            },
+            {
+                type: 'withdrawal',
+                description: 'M-Pesa withdrawal',
+                amount: -1000,
+                timestamp: new Date(Date.now() - 7200000),
+                icon: '📱'
+            },
+            {
+                type: 'commission',
+                description: 'Commission deducted',
+                amount: -150,
+                timestamp: new Date(Date.now() - 10800000),
+                icon: '💳'
+            }
+        ];
+        
+        // Add commission offset transactions if any
+        if (window.commissionOffsetManager) {
+            const offsetTransactions = window.commissionOffsetManager.getOffsetTransactions();
+            transactions.push(...offsetTransactions);
+        }
+        
+        // Sort by timestamp
+        transactions.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        
+        // Display transactions
+        if (elements.transactionList) {
+            elements.transactionList.innerHTML = transactions.slice(0, 10).map(tx => `
+                <div class="transaction-item">
+                    <span class="transaction-icon">${tx.icon}</span>
+                    <div class="transaction-info">
+                        <div class="transaction-desc">${tx.description}</div>
+                        <div class="transaction-time">${formatTimeAgo(tx.timestamp)}</div>
+                    </div>
+                    <div class="transaction-amount ${tx.amount > 0 ? 'positive' : tx.type === 'commission' ? 'offset' : 'negative'}">
+                        ${tx.amount > 0 ? '+' : ''}KES ${Math.abs(tx.amount).toLocaleString()}
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        // Display in earnings breakdown
+        if (elements.earningsBreakdown) {
+            const todayTransactions = transactions.filter(tx => {
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                return new Date(tx.timestamp) >= today;
+            });
+            
+            if (todayTransactions.length > 0) {
+                elements.earningsBreakdown.innerHTML = todayTransactions.map(tx => `
+                    <div class="transaction-item">
+                        <span class="transaction-icon">${tx.icon}</span>
+                        <div class="transaction-info">
+                            <div class="transaction-desc">${tx.description}</div>
+                            <div class="transaction-time">${formatTimeAgo(tx.timestamp)}</div>
+                        </div>
+                        <div class="transaction-amount ${tx.amount > 0 ? 'positive' : 'negative'}">
+                            ${tx.amount > 0 ? '+' : ''}KES ${Math.abs(tx.amount).toLocaleString()}
+                        </div>
+                    </div>
+                `).join('');
+            } else {
+                elements.earningsBreakdown.innerHTML = `
+                    <div class="empty-state">
+                        <p>No transactions today yet</p>
+                    </div>
+                `;
+            }
+        }
+    } catch (error) {
+        console.error('Error loading transactions:', error);
+    }
+}
+
+// Route Display Function
+function displayRoutes() {
+    const filteredRoutes = state.currentFilter === 'all' 
+        ? state.availableRoutes 
+        : state.availableRoutes.filter(r => r.type === state.currentFilter);
+    
+    if (!elements.routeList) return;
+    
+    const hasActiveRoute = state.claimedRoute !== null;
+    
+    // Update routes badge
+    if (elements.routesBadge) {
+        const availableCount = filteredRoutes.filter(r => r.status === 'available').length;
+        if (availableCount > 0 && !hasActiveRoute) {
+            elements.routesBadge.textContent = availableCount;
+            elements.routesBadge.style.display = 'block';
+        } else {
+            elements.routesBadge.style.display = 'none';
+        }
+    }
+    
+    if (filteredRoutes.length === 0) {
+        elements.routeList.innerHTML = '';
+        if (elements.noRoutesState) elements.noRoutesState.style.display = 'block';
+        return;
+    }
+    
+    if (elements.noRoutesState) elements.noRoutesState.style.display = 'none';
+    
+    elements.routeList.innerHTML = filteredRoutes.map(route => {
+        const riderEarnings = Math.round(route.total_earnings * BUSINESS_CONFIG.commission.rider);
+        const routeIcon = route.type === 'express' ? '⚡' : route.type === 'eco' ? '🌿' : '📦';
+        
+        // Check if commission offset applies
+        let offsetMessage = '';
+        if (window.commissionOffsetManager && window.commissionOffsetManager.commissionDebt > 0) {
+            const offsetResult = window.commissionOffsetManager.calculateOffset(riderEarnings);
+            if (offsetResult.offset > 0) {
+                offsetMessage = `
+                    <div class="route-commission-offset">
+                        <span class="offset-icon">💳</span>
+                        <span>KES ${offsetResult.offset} commission will be deducted</span>
+                    </div>
+                `;
+            }
+        }
+        
+        return `
+            <div class="route-card ${route.status !== 'available' || hasActiveRoute ? 'claimed' : ''}" 
+                 ${route.status === 'available' && !hasActiveRoute ? `onclick="claimRoute('${route.id}')"` : ''}>
+                <div class="route-header">
+                    <div class="route-name">${route.name}</div>
+                    <div class="route-type ${route.type}">${route.type.toUpperCase()}</div>
+                </div>
+                
+                <div class="route-stats">
+                    <div class="route-stat">
+                        <div class="route-stat-value">${route.pickups}</div>
+                        <div class="route-stat-label">Stops</div>
+                    </div>
+                    <div class="route-stat">
+                        <div class="route-stat-value">${route.distance}</div>
+                        <div class="route-stat-label">KM</div>
+                    </div>
+                    <div class="route-stat">
+                        <div class="route-stat-value">KES ${riderEarnings.toLocaleString()}</div>
+                        <div class="route-stat-label">Earnings</div>
+                    </div>
+                </div>
+                
+                ${offsetMessage}
+                
+                <button type="button" class="claim-button" 
+                        ${route.status !== 'available' || hasActiveRoute ? 'disabled' : ''}
+                        onclick="event.stopPropagation(); ${route.status === 'available' && !hasActiveRoute ? `claimRoute('${route.id}')` : ''}">
+                    ${hasActiveRoute ? 'Route Active' : 
+                      route.status === 'available' ? 'Claim Route' : 'Already Claimed'}
+                </button>
+            </div>
+        `;
+    }).join('');
+}
+/**
+ * Part 3: Route Management, Active Delivery, and Location Functions
+ */
+
+// Show Active Route
+function showActiveRoute() {
+    if (!state.claimedRoute) return;
+    
+    const allComplete = state.claimedRoute.stops && state.claimedRoute.stops.every(s => s.completed);
+    if (allComplete) {
+        console.log('All stops completed - route should be cleared');
+        state.claimedRoute = null;
+        localStorage.removeItem('tuma_active_route');
+        
+        if (elements.activeRouteSection) {
+            elements.activeRouteSection.style.display = 'none';
+        }
+        return;
+    }
+    
+    const activeStops = state.claimedRoute.stops.filter(s => !s.completed);
+    if (activeStops.length === 0) return;
+    
+    const nextStop = activeStops[0];
+    const completedCount = state.claimedRoute.stops.filter(s => s.completed).length;
+    const totalCount = state.claimedRoute.stops.length;
+    
+    // Show the active route section
+    if (elements.activeRouteSection) {
+        elements.activeRouteSection.style.display = 'block';
+    }
+    
+    // Update progress
+    if (elements.completedStops) elements.completedStops.textContent = completedCount;
+    if (elements.totalStops) elements.totalStops.textContent = totalCount;
+    if (elements.routeProgress) {
+        elements.routeProgress.style.width = `${(completedCount / totalCount * 100)}%`;
+    }
+    
+    // Update stop info
+    if (elements.stopType) {
+        elements.stopType.textContent = nextStop.type === 'pickup' ? '📦 PICKUP' : '📍 DELIVERY';
+        elements.stopType.className = `stop-type ${nextStop.type}`;
+    }
+    if (elements.stopAddress) elements.stopAddress.textContent = getLocationName(nextStop.address);
+    if (elements.stopCode) elements.stopCode.textContent = nextStop.parcelCode;
+    if (elements.stopCustomer) elements.stopCustomer.textContent = nextStop.customerName;
+}
+
+function getLocationName(address) {
+    if (!address || address === 'Pickup location' || address === 'Delivery location') {
+        return address;
+    }
+    
+    const patterns = [
+        /^([^,]+),/,
+        /^(.+?)(?:\s+Road|\s+Street|\s+Avenue|\s+Drive)/i,
+        /^(.+?)(?:\s+Mall|\s+Centre|\s+Center|\s+Plaza)/i
+    ];
+    
+    for (const pattern of patterns) {
+        const match = address.match(pattern);
+        if (match) {
+            return match[1].trim();
+        }
+    }
+    
+    return address.split(',')[0].trim();
+}
+
+// Create Routes Functions
+function createRoutes(parcels) {
+    console.log(`Creating routes from ${parcels.length} parcels using advanced clustering...`);
+    
+    try {
+        if (routeClusterer) {
+            const routes = routeClusterer.createOptimizedRoutes(parcels);
+            
+            console.log(`Created ${routes.length} optimized routes:`);
+            routes.forEach(route => {
+                console.log(`- ${route.name}: ${route.pickups} parcels, ${route.distance}km, ` +
+                           `KES ${route.total_earnings} (Score: ${route.qualityScore})`);
+            });
+            
+            return routes.length > 0 ? routes : createDemoRoutes();
+        } else {
+            return createDemoRoutes();
+        }
+    } catch (error) {
+        console.error('Error creating routes:', error);
+        return createDemoRoutes();
+    }
+}
+
+function createDemoRoutes() {
+    console.log('Creating demo routes for testing...');
+    const demoTotalEarnings = [2500, 1714, 3429];
+    
+    return [
+        {
+            id: 'demo-route-001',
+            name: 'Sarit Centre → Village Market',
+            type: 'smart',
+            deliveries: 5,
+            pickups: 5,
+            distance: 12,
+            total_earnings: demoTotalEarnings[0],
+            status: 'available',
+            parcels: [],
+            qualityScore: 75,
+            estimatedTime: 45,
+            metadata: {
+                pickupAreas: ['Westlands'],
+                deliveryCorridors: ['north'],
+                hasReturnTrip: false
+            }
+        },
+        {
+            id: 'demo-route-002',
+            name: 'CBD → Eastlands Express',
+            type: 'express',
+            deliveries: 1,
+            pickups: 1,
+            distance: 8,
+            total_earnings: demoTotalEarnings[1],
+            status: 'available',
+            parcels: [],
+            qualityScore: 82,
+            estimatedTime: 25,
+            metadata: {
+                pickupAreas: ['CBD'],
+                deliveryCorridors: ['east'],
+                hasReturnTrip: false
+            }
+        },
+        {
+            id: 'demo-route-003',
+            name: 'Karen Local',
+            type: 'eco',
+            deliveries: 8,
+            pickups: 8,
+            distance: 25,
+            total_earnings: demoTotalEarnings[2],
+            status: 'available',
+            parcels: [],
+            qualityScore: 68,
+            estimatedTime: 90,
+            metadata: {
+                pickupAreas: ['Karen'],
+                deliveryCorridors: ['south'],
+                hasReturnTrip: true
+            }
+        }
+    ];
+}
+
+// Load Available Routes
+async function loadAvailableRoutes() {
+    try {
+        console.log('Loading available routes...');
+        
+        if (elements.routeList) {
+            elements.routeList.innerHTML = `
+                <div class="skeleton skeleton-card"></div>
+                <div class="skeleton skeleton-card"></div>
+                <div class="skeleton skeleton-card"></div>
+            `;
+        }
+        
+        const unclaimedParcels = await supabaseAPI.query('parcels', {
+            filter: 'status=eq.submitted&rider_id=is.null',
+            limit: 1000,
+            order: 'created_at.asc'
+        });
+        
+        console.log(`Found ${unclaimedParcels.length} unclaimed parcels`);
+        
+        if (unclaimedParcels.length === 0) {
+            state.availableRoutes = createDemoRoutes();
+        } else {
+            state.availableRoutes = createRoutes(unclaimedParcels);
+            console.log(`Created ${state.availableRoutes.length} routes from ${unclaimedParcels.length} parcels`);
+        }
+        
+        displayRoutes();
+        
+    } catch (error) {
+        console.error('Error loading routes:', error);
+        state.availableRoutes = createDemoRoutes();
+        displayRoutes();
+    }
+}
+
+// Check Active Deliveries
+async function checkActiveDeliveries() {
+    try {
+        const storedRoute = localStorage.getItem('tuma_active_route');
+        if (storedRoute) {
+            try {
+                const route = JSON.parse(storedRoute);
+                console.log('Found stored route:', route);
+                
+                const allStopsCompleted = route.stops && route.stops.every(s => s.completed);
+                
+                if (allStopsCompleted) {
+                    console.log('All stops completed - clearing route');
+                    localStorage.removeItem('tuma_active_route');
+                    state.claimedRoute = null;
+                    
+                    if (elements.activeRouteSection) {
+                        elements.activeRouteSection.style.display = 'none';
+                    }
+                    return;
+                }
+                
+                state.claimedRoute = route;
+                
+                if (state.availableRoutes) {
+                    state.availableRoutes.forEach(r => {
+                        r.status = 'claimed';
+                    });
+                }
+                
+                showActiveRoute();
+                displayRoutes();
+                return;
+            } catch (error) {
+                console.error('Error parsing stored route:', error);
+                localStorage.removeItem('tuma_active_route');
+                state.claimedRoute = null;
+            }
+        }
+        
+        if (!state.rider || state.rider.id.startsWith('temp-')) {
+            console.log('No active route for temporary rider');
+            state.claimedRoute = null;
+            return;
+        }
+        
+        const activeParcels = await supabaseAPI.query('parcels', {
+            filter: `rider_id=eq.${state.rider.id}&status=in.(route_assigned,picked,in_transit)`,
+            order: 'created_at.asc'
+        });
+        
+        if (activeParcels.length > 0) {
+            state.claimedRoute = {
+                parcels: activeParcels,
+                stops: EnhancedRouteManager.sequenceStops(activeParcels)
+            };
+            
+            showActiveRoute();
+        } else {
+            console.log('No active parcels found');
+            state.claimedRoute = null;
+        }
+        
+    } catch (error) {
+        console.error('Error checking active deliveries:', error);
+        state.claimedRoute = null;
+    }
+}
+
+// Claim Route Function
+window.claimRoute = async function(routeId) {
+    console.log('claimRoute called with ID:', routeId);
+    
+    if (window.event) {
+        window.event.preventDefault();
+        window.event.stopPropagation();
+    }
+    
+    if (state.claimedRoute) {
+        showNotification('You already have an active route!', 'warning');
+        return;
+    }
+    
+    const route = state.availableRoutes.find(r => r.id === routeId);
+    console.log('Found route:', route);
+    
+    if (!route || route.status !== 'available') {
+        showNotification('This route is not available', 'warning');
+        return;
+    }
+    
+    if (state.isLoading) return;
+    state.isLoading = true;
+    
+    showNotification('Claiming route...', 'info');
+    
+    try {
+        if (route.parcelDetails && route.parcelDetails.length > 0) {
+            state.claimedRoute = {
+                ...route,
+                parcels: route.parcelDetails,
+                stops: EnhancedRouteManager.sequenceStops(route.parcelDetails)
+            };
+            
+            if (route.metadata?.pickupSequence) {
+                const optimizedStops = [];
+                const deliveryStops = [];
+                
+                route.metadata.pickupSequence.forEach(parcelId => {
+                    const pickupStop = state.claimedRoute.stops.find(s => 
+                        s.parcelId === parcelId && s.type === 'pickup'
+                    );
+                    if (pickupStop) optimizedStops.push(pickupStop);
+                });
+                
+                state.claimedRoute.stops.forEach(stop => {
+                    if (stop.type === 'delivery') {
+                        deliveryStops.push(stop);
+                    }
+                });
+                
+                state.claimedRoute.stops = [...optimizedStops, ...deliveryStops];
+            }
+            
+            localStorage.setItem('tuma_active_route', JSON.stringify(state.claimedRoute));
+            
+            showActiveRoute();
+            
+            state.availableRoutes.forEach(r => r.status = 'claimed');
+            displayRoutes();
+            
+            const pickupAreas = route.metadata?.pickupAreas?.join(', ') || 'Multiple areas';
+            showNotification(
+                `Route claimed successfully! ${route.pickups} pickup${route.pickups > 1 ? 's' : ''} in ${pickupAreas}`, 
+                'success'
+            );
+            
+            if (!route.id.startsWith('demo-') && !state.rider.id.startsWith('temp-')) {
+                try {
+                    for (const parcel of route.parcelDetails) {
+                        await supabaseAPI.update('parcels', 
+                            `id=eq.${parcel.id}`,
+                            { 
+                                rider_id: state.rider.id,
+                                status: 'route_assigned',
+                                assigned_at: new Date().toISOString()
+                            }
+                        );
+                    }
+                } catch (dbError) {
+                    console.error('Error updating database:', dbError);
+                }
+            }
+            
+            if (window.haptic) window.haptic('success');
+        } else {
+            // For demo routes without parcel details
+            state.claimedRoute = {
+                ...route,
+                parcels: [],
+                stops: []
+            };
+            
+            localStorage.setItem('tuma_active_route', JSON.stringify(state.claimedRoute));
+            showActiveRoute();
+            
+            state.availableRoutes.forEach(r => r.status = 'claimed');
+            displayRoutes();
+            
+            showNotification('Demo route claimed successfully!', 'success');
+            if (window.haptic) window.haptic('success');
+        }
+        
+    } catch (error) {
+        console.error('Error claiming route:', error);
+        showNotification('Failed to claim route. Please try again.', 'error');
+        
+        localStorage.removeItem('tuma_active_route');
+        state.claimedRoute = null;
+    } finally {
+        state.isLoading = false;
+    }
+};
+
+// Navigate to Route
+window.navigateToRoute = function() {
+    if (!state.claimedRoute) {
+        showNotification('Claim a route first to see navigation', 'warning');
+        return;
+    }
+    
+    localStorage.setItem('tuma_active_route', JSON.stringify(state.claimedRoute));
+    window.location.href = './route.html?active=true';
+    
+    if (window.haptic) window.haptic('light');
+};
+
+// Location Functions
+function getCurrentLocation() {
+    if ("geolocation" in navigator) {
+        navigator.geolocation.getCurrentPosition(
+            position => {
+                state.currentLocation = {
+                    lat: position.coords.latitude,
+                    lng: position.coords.longitude
+                };
+                console.log('Current location:', state.currentLocation);
+            },
+            error => {
+                console.error('Error getting location:', error);
+                showNotification('Location access needed for navigation', 'warning');
+            },
+            {
+                enableHighAccuracy: true,
+                timeout: 5000,
+                maximumAge: 0
+            }
+        );
+    }
+}
+
+function startLocationUpdates() {
+    setInterval(() => {
+        if (state.status === 'online' && state.rider && !state.rider.id.startsWith('temp-')) {
+            getCurrentLocation();
+            
+            if (state.currentLocation) {
+                supabaseAPI.update('riders', 
+                    `id=eq.${state.rider.id}`,
+                    {
+                        last_location_lat: state.currentLocation.lat,
+                        last_location_lng: state.currentLocation.lng,
+                        last_location_update: new Date().toISOString()
+                    }
+                ).catch(error => console.error('Error updating location:', error));
+            }
+        }
+    }, 30000);
+}
+
+// Quick Verify Function
+window.quickVerify = function() {
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.innerHTML = `
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Quick Verify</h2>
+                <button class="modal-close" onclick="closeModal(this)">×</button>
+            </div>
+            <div style="padding: 20px 0;">
+                <input type="text" id="quickCode" placeholder="Enter code (XXX-XXXX)" 
+                       style="width: 100%; padding: 16px; background: var(--surface-high); 
+                              border: 2px solid var(--border); border-radius: 12px; 
+                              color: white; font-size: 20px; text-align: center; 
+                              letter-spacing: 2px; text-transform: uppercase;">
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 20px;">
+                    <button class="claim-button" style="background: var(--warning); color: black;" 
+                            onclick="quickVerifyCode('pickup')">
+                        📦 Pickup
+                    </button>
+                    <button class="claim-button" style="background: var(--success);" 
+                            onclick="quickVerifyCode('delivery')">
+                        📍 Delivery
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    
+    setTimeout(() => {
+        document.getElementById('quickCode').focus();
+    }, 100);
+};
+
+window.quickVerifyCode = async function(type) {
+    const code = document.getElementById('quickCode').value;
+    if (!code) {
+        showNotification('Please enter a code', 'error');
+        return;
+    }
+    
+    closeModal(document.querySelector('.modal-overlay'));
+    
+    // Process verification using the main verify function
+    await verifyStopCode(type, code);
+};
+
+// Close Modal Helper
+window.closeModal = function(element) {
+    const modal = element.closest('.modal-overlay');
+    if (modal) {
+        modal.remove();
+    }
+};
+/**
+ * Part 4: Verification System, Data Loading, and Quick Actions
+ */
+
+// Verify Stop Code Function
+async function verifyStopCode(type, code) {
+    if (!code || code.length < 6) {
+        showNotification('Please enter a valid code', 'error');
+        return;
+    }
+    
+    if (state.isLoading) return;
+    state.isLoading = true;
+    
+    try {
+        if (state.claimedRoute && state.claimedRoute.stops) {
+            const activeStop = state.claimedRoute.stops.find(s => 
+                !s.completed && 
+                s.type === type && 
+                s.verificationCode && s.verificationCode.toUpperCase() === code.toUpperCase()
+            );
+            
+            if (!activeStop) {
+                showNotification('Invalid code or wrong stop type', 'error');
+                return;
+            }
+            
+            if (!EnhancedRouteManager.canCompleteStop(activeStop, state.claimedRoute.stops)) {
+                showNotification('Please complete the pickup first', 'warning');
+                return;
+            }
+            
+            activeStop.completed = true;
+            activeStop.timestamp = new Date();
+            
+            let dbError = null;
+            if (!state.rider.id.startsWith('temp-')) {
+                try {
+                    await supabaseAPI.update('parcels',
+                        `id=eq.${activeStop.parcelId}`,
+                        {
+                            status: type === 'pickup' ? 'picked' : 'delivered',
+                            [`${type}_timestamp`]: activeStop.timestamp.toISOString()
+                        }
+                    );
+                } catch (error) {
+                    dbError = error;
+                    console.error('Database update error:', error);
+                    
+                    if (error.message && (
+                        error.message.includes('agent_notifications') ||
+                        error.message.includes('column "title"')
+                    )) {
+                        console.log('Continuing despite agent_notifications error');
+                        showNotification(
+                            type === 'delivery' ? 
+                            'Delivery completed! Database sync pending.' : 
+                            'Pickup completed!', 
+                            'success'
+                        );
+                    } else {
+                        console.error('Unexpected database error:', error);
+                        showNotification(
+                            `${type.charAt(0).toUpperCase() + type.slice(1)} recorded locally. Sync pending.`, 
+                            'warning'
+                        );
+                    }
+                }
+            }
+            
+            if (type === 'delivery') {
+                if (activeStop.amountToCollect > 0) {
+                    showNotification(
+                        `Remember to collect KES ${activeStop.amountToCollect.toLocaleString()} from ${activeStop.customerName}`,
+                        'warning'
+                    );
+                }
+                
+                let deliveryPrice = 0;
+                if (state.claimedRoute.parcels && state.claimedRoute.parcels.length > 0) {
+                    const parcel = state.claimedRoute.parcels.find(p => p.id === activeStop.parcelId);
+                    deliveryPrice = parcel?.price || 500;
+                } else {
+                    deliveryPrice = 500;
+                }
+                
+                // Update commission if commission offset manager exists
+                if (window.commissionOffsetManager) {
+                    const offsetResult = window.commissionOffsetManager.applyOffset(
+                        activeStop.parcelId,
+                        deliveryPrice * BUSINESS_CONFIG.commission.rider
+                    );
+                }
+                
+                const riderPayout = deliveryPrice * BUSINESS_CONFIG.commission.rider;
+                state.earnings.daily += riderPayout;
+                state.stats.deliveries++;
+                
+                updateEarningsDisplay();
+                updateStatsDisplay();
+            }
+            
+            localStorage.setItem('tuma_active_route', JSON.stringify(state.claimedRoute));
+            
+            if (!dbError || !dbError.message?.includes('agent_notifications')) {
+                showNotification(`${type.charAt(0).toUpperCase() + type.slice(1)} verified successfully!`, 'success');
+            }
+            
+            const allComplete = state.claimedRoute.stops.every(s => s.completed);
+            if (allComplete) {
+                const deliveryStops = state.claimedRoute.stops.filter(s => s.type === 'delivery');
+                const totalCollected = deliveryStops.reduce((sum, stop) => sum + (stop.amountToCollect || 0), 0);
+                
+                let totalEarnings = 0;
+                if (state.claimedRoute.total_earnings) {
+                    totalEarnings = state.claimedRoute.total_earnings * BUSINESS_CONFIG.commission.rider;
+                } else if (state.claimedRoute.parcels) {
+                    totalEarnings = state.claimedRoute.parcels.reduce((sum, p) => 
+                        sum + ((p.price || 500) * BUSINESS_CONFIG.commission.rider), 0
+                    );
+                } else {
+                    totalEarnings = state.claimedRoute.stops.filter(s => s.type === 'delivery').length * 350;
+                }
+                
+                if (totalCollected > 0) {
+                    showRouteCompletionSummary(totalCollected, totalEarnings, deliveryStops.length);
+                }
+                
+                const completionData = {
+                    completed: true,
+                    earnings: Math.round(totalEarnings),
+                    deliveries: deliveryStops.length,
+                    totalCollected: totalCollected,
+                    timestamp: new Date().toISOString(),
+                    parcels: state.claimedRoute.parcels || []
+                };
+                
+                console.log('Storing route completion data:', completionData);
+                localStorage.setItem('tuma_route_completion', JSON.stringify(completionData));
+                
+                if (elements.activeRouteSection) elements.activeRouteSection.style.display = 'none';
+                state.claimedRoute = null;
+                
+                localStorage.removeItem('tuma_active_route');
+                
+                state.availableRoutes.forEach(route => {
+                    route.status = 'available';
+                });
+                
+                showNotification('Route completed! Great work!', 'success');
+                
+                await loadAvailableRoutes();
+                await checkRouteCompletionStatus();
+            } else {
+                showActiveRoute();
+                
+                const pickups = state.claimedRoute.stops.filter(s => s.type === 'pickup');
+                const allPickupsComplete = pickups.every(p => p.completed);
+                
+                if (allPickupsComplete && type === 'pickup') {
+                    showNotification('All pickups complete! Starting delivery phase', 'success');
+                }
+            }
+        }
+        
+        if (window.haptic) window.haptic('success');
+        
+    } catch (error) {
+        console.error('Error verifying code:', error);
+        showNotification('Verification failed. Please try again.', 'error');
+    } finally {
+        state.isLoading = false;
+    }
+}
+
+// Load Earnings
+async function loadEarnings() {
+    try {
+        if (!state.rider) return;
+        
+        if (state.rider.id.startsWith('temp-')) {
+            console.log('Using default earnings for temporary rider');
+            state.earnings = {
+                daily: 0,
+                weekly: 0,
+                monthly: 0
+            };
+            updateEarningsDisplay();
+            return;
+        }
+        
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        const weekStart = new Date(today);
+        weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+        
+        const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+        
+        const dailyParcels = await supabaseAPI.query('parcels', {
+            filter: `rider_id=eq.${state.rider.id}&status=eq.delivered&delivery_timestamp=gte.${today.toISOString()}`,
+            select: 'rider_payout'
+        });
+        
+        const weeklyParcels = await supabaseAPI.query('parcels', {
+            filter: `rider_id=eq.${state.rider.id}&status=eq.delivered&delivery_timestamp=gte.${weekStart.toISOString()}`,
+            select: 'rider_payout'
+        });
+        
+        const monthlyParcels = await supabaseAPI.query('parcels', {
+            filter: `rider_id=eq.${state.rider.id}&status=eq.delivered&delivery_timestamp=gte.${monthStart.toISOString()}`,
+            select: 'rider_payout'
+        });
+        
+        state.earnings = {
+            daily: dailyParcels.reduce((sum, p) => sum + (p.rider_payout || 0), 0),
+            weekly: weeklyParcels.reduce((sum, p) => sum + (p.rider_payout || 0), 0),
+            monthly: monthlyParcels.reduce((sum, p) => sum + (p.rider_payout || 0), 0)
+        };
+        
+        updateEarningsDisplay();
+        
+    } catch (error) {
+        if (error.message.includes('400') && DEV_CONFIG.ignoreRiderNotFound) {
+            console.log('Earnings API error (expected in dev mode)');
+            state.earnings = {
+                daily: 0,
+                weekly: 0,
+                monthly: 0
+            };
+            updateEarningsDisplay();
+        } else {
+            console.error('Error loading earnings:', error);
+        }
+    }
+}
+
+// Load Stats
+async function loadStats() {
+    try {
+        if (!state.rider) {
+            state.stats = { deliveries: 0, distance: 0, rating: 5.0, acceptRate: 95 };
+            updateStatsDisplay();
+            return;
+        }
+        
+        if (state.rider.id.startsWith('temp-')) {
+            state.stats = { deliveries: 0, distance: 0, rating: 5.0, acceptRate: 95 };
+            updateStatsDisplay();
+            return;
+        }
+        
+        state.stats = {
+            deliveries: state.rider.completed_deliveries || 0,
+            distance: Math.round(state.rider.total_distance || 0),
+            rating: state.rider.rating || 5.0,
+            acceptRate: state.rider.acceptance_rate || 95
+        };
+        
+        updateStatsDisplay();
+        
+    } catch (error) {
+        console.error('Error loading stats:', error);
+    }
+}
+
+// Check Route Completion Status
 async function checkRouteCompletionStatus() {
     const completionData = localStorage.getItem('tuma_route_completion');
     if (!completionData) return;
@@ -1068,81 +1881,42 @@ async function checkRouteCompletionStatus() {
         
         console.log('Processing route completion:', data);
         
-        // Wait for page to fully load
         if (document.readyState !== 'complete') {
             await new Promise(resolve => {
                 window.addEventListener('load', resolve);
             });
         }
         
-        if (data.completed && state.commissionTracker) {
-            // Calculate total cash collected from parcels
+        if (data.completed) {
+            /**
+ * Part 5: Initialization, Authentication, Event Handlers, and Global Functions
+ */
+
             let totalCashCollected = 0;
             
             if (data.parcels && data.parcels.length > 0) {
-                // Sum up cash from all parcels where payment was pending
                 data.parcels.forEach(parcel => {
                     if (parcel.payment_status === 'pending' || !parcel.payment_status) {
                         totalCashCollected += parsePrice(parcel.price || parcel.total_price || 500);
                     }
                 });
             } else {
-                // Fallback: assume all deliveries were cash on delivery
                 totalCashCollected = data.deliveries * 500;
             }
             
-            // Show route completion summary if cash was collected
             if (totalCashCollected > 0) {
-                // Show the completion summary first
                 showRouteCompletionSummary(totalCashCollected, data.earnings, data.deliveries);
-                
-                // Also show a persistent reminder in the UI after a delay
                 setTimeout(() => {
                     showCashCollectionReminder(totalCashCollected);
                 }, 1000);
             }
             
-            // Calculate commission from the total earnings
-            const totalPrice = data.earnings / BUSINESS_CONFIG.commission.rider; // Convert rider earnings to total price
-            
-            // Add the commission from the completed route
-            const commissionResult = await state.commissionTracker.addDeliveryCommission(
-                'route-' + Date.now(),
-                totalPrice
-            );
-            
-            // Update display
-            displayCommissionStatus();
-            
-            // Show appropriate notification based on commission status
-            if (commissionResult.isBlocked && !(DEV_CONFIG.isDevelopment && DEV_CONFIG.bypassCommissionBlock)) {
-                showBlockedOverlay();
-            } else if (commissionResult.isBlocked && DEV_CONFIG.isDevelopment && DEV_CONFIG.bypassCommissionBlock) {
-                // Dev mode - show urgent warning but don't block
-                console.warn(`[DEV MODE] Would be blocked. Commission: KES ${commissionResult.totalUnpaid}`);
-                showNotification(
-                    `DEV MODE: Commission limit exceeded (KES ${commissionResult.totalUnpaid})`,
-                    'warning'
-                );
-            } else if (commissionResult.totalUnpaid >= 300) {
-                // Show urgent payment warning with timer
-                showUrgentPaymentWarning();
-            } else if (commissionResult.warningShown) {
-                showNotification(
-                    `Account balance: KES ${commissionResult.totalUnpaid}. Please deposit funds soon.`,
-                    'warning'
-                );
-            }
-            
-            // Update earnings - add the route earnings to daily total
             state.earnings.daily += data.earnings;
             state.stats.deliveries += data.deliveries;
             
-            // Update displays
             updateEarningsDisplay();
             updateStatsDisplay();
             
-            // Clear any active route state
             state.claimedRoute = null;
             localStorage.removeItem('tuma_active_route');
             
@@ -1153,212 +1927,7 @@ async function checkRouteCompletionStatus() {
     }
 }
 
-// Helper function to parse price
-function parsePrice(priceValue) {
-    if (typeof priceValue === 'number') return priceValue;
-    if (typeof priceValue === 'string') {
-        const cleaned = priceValue.replace(/[^0-9.-]+/g, '');
-        return parseFloat(cleaned) || 0;
-    }
-    return 0;
-}
-
-// Show persistent cash collection reminder (REFINED VERSION)
-function showCashCollectionReminder(totalCashCollected) {
-    // Check if reminder already exists
-    if (document.getElementById('cashCollectionReminder')) {
-        return;
-    }
-    
-    // Create a persistent reminder banner
-    const reminderBanner = document.createElement('div');
-    reminderBanner.id = 'cashCollectionReminder';
-    reminderBanner.className = 'cash-collection-reminder';
-    reminderBanner.style.opacity = '0';
-    reminderBanner.innerHTML = `
-        <div class="reminder-content">
-            <div class="reminder-icon">💰</div>
-            <div class="reminder-text">
-                <div class="reminder-title">Cash Collection Active</div>
-                <div class="reminder-details">
-                    <span>Collected: <strong>KES ${totalCashCollected.toLocaleString()}</strong></span>
-                    <span class="separator">•</span>
-                    <span>Deposit to wallet within 24 hours</span>
-                </div>
-            </div>
-            <button class="reminder-close" onclick="dismissCashReminder()">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-                </svg>
-            </button>
-        </div>
-    `;
-    
-    // Insert at the top of body instead
-    document.body.insertBefore(reminderBanner, document.body.firstChild);
-    
-    // Animate in after a short delay
-    setTimeout(() => {
-        reminderBanner.style.opacity = '1';
-        reminderBanner.style.transition = 'opacity 0.3s ease-in';
-    }, 100);
-    
-    // Add padding to body
-    document.body.classList.add('has-cash-reminder');
-    
-    // Add styles if not present
-    if (!document.getElementById('cash-reminder-styles')) {
-        const style = document.createElement('style');
-        style.id = 'cash-reminder-styles';
-        style.textContent = `
-            .cash-collection-reminder {
-                background: linear-gradient(135deg, #007AFF, #0051D5);
-                padding: 16px 20px;
-                margin: 0;
-                box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
-                position: fixed;
-                top: 0;
-                left: 0;
-                right: 0;
-                z-index: 1000;
-                transform: translateY(0);
-                transition: transform 0.3s ease-out;
-            }
-            
-            body.has-cash-reminder {
-                padding-top: 72px;
-                transition: padding-top 0.3s ease-out;
-            }
-            
-            .reminder-content {
-                display: flex;
-                align-items: center;
-                gap: 16px;
-                max-width: 1200px;
-                margin: 0 auto;
-            }
-            
-            .reminder-icon {
-                font-size: 28px;
-                flex-shrink: 0;
-            }
-            
-            .reminder-text {
-                flex: 1;
-                color: white;
-            }
-            
-            .reminder-title {
-                font-size: 16px;
-                font-weight: 700;
-                margin-bottom: 4px;
-            }
-            
-            .reminder-details {
-                font-size: 14px;
-                display: flex;
-                align-items: center;
-                flex-wrap: wrap;
-                gap: 8px;
-                opacity: 0.95;
-            }
-            
-            .reminder-details strong {
-                font-weight: 700;
-            }
-            
-            .separator {
-                opacity: 0.6;
-            }
-            
-            .reminder-close {
-                background: rgba(255, 255, 255, 0.2);
-                border: none;
-                border-radius: 50%;
-                width: 32px;
-                height: 32px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                cursor: pointer;
-                color: white;
-                transition: all 0.2s;
-            }
-            
-            .reminder-close:hover {
-                background: rgba(255, 255, 255, 0.3);
-            }
-        `;
-        document.head.appendChild(style);
-    }
-}
-
-window.dismissCashReminder = function() {
-    const reminder = document.getElementById('cashCollectionReminder');
-    if (reminder) {
-        reminder.style.transform = 'translateY(-100%)';
-        document.body.classList.remove('has-cash-reminder');
-        setTimeout(() => reminder.remove(), 300);
-    }
-};
-
-// Show urgent payment warning (REFINED VERSION)
-function showUrgentPaymentWarning() {
-    const warning = document.createElement('div');
-    warning.className = 'urgent-payment-warning';
-    warning.innerHTML = `
-        <div class="warning-content">
-            <div class="warning-icon">⚠️</div>
-            <h2>Deposit Required</h2>
-            <p class="warning-amount">Account Balance: -KES ${state.commissionTracker.state.unpaidCommission}</p>
-            <p class="warning-message">You have <span class="timer">60:00</span> to deposit funds or your account will be paused</p>
-            <div class="warning-actions">
-                <button class="pay-now-btn" onclick="openWalletModal()">
-                    Deposit Now
-                </button>
-                <button class="later-btn" onclick="dismissWarning()">
-                    Later
-                </button>
-            </div>
-        </div>
-    `;
-    
-    document.body.appendChild(warning);
-    
-    // Start countdown timer
-    let timeLeft = 3600; // 60 minutes in seconds
-    const timerElement = warning.querySelector('.timer');
-    
-    const countdown = setInterval(() => {
-        timeLeft--;
-        const minutes = Math.floor(timeLeft / 60);
-        const seconds = timeLeft % 60;
-        timerElement.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-        
-        if (timeLeft <= 0) {
-            clearInterval(countdown);
-            warning.remove();
-            
-            // Only show blocked overlay if not in dev bypass mode
-            if (!(DEV_CONFIG.isDevelopment && DEV_CONFIG.bypassCommissionBlock)) {
-                showBlockedOverlay();
-            } else {
-                console.warn('[DEV MODE] Timer expired but blocking bypassed');
-                showNotification('DEV MODE: Would be blocked now', 'warning');
-            }
-        }
-    }, 1000);
-    
-    // Store countdown reference
-    window.commissionCountdown = countdown;
-}
-
-window.dismissWarning = function() {
-    document.querySelector('.urgent-payment-warning')?.remove();
-    // Countdown continues in background
-};
-
-// Show route completion summary (REFINED VERSION)
+// Show Route Completion Summary
 function showRouteCompletionSummary(totalCollected, riderEarnings, deliveryCount) {
     const summary = document.createElement('div');
     summary.className = 'route-completion-summary';
@@ -1398,12 +1967,1013 @@ function showRouteCompletionSummary(totalCollected, riderEarnings, deliveryCount
     `;
     
     document.body.appendChild(summary);
+}
+
+window.closeCompletionSummary = function() {
+    const summary = document.querySelector('.route-completion-summary');
+    if (summary) {
+        summary.remove();
+    }
+};
+
+// Show Cash Collection Reminder
+function showCashCollectionReminder(totalCashCollected) {
+    if (document.getElementById('cashCollectionReminder')) {
+        return;
+    }
     
-    // Add styles if not present
-    if (!document.getElementById('completion-summary-styles')) {
+    const reminderBanner = document.createElement('div');
+    reminderBanner.id = 'cashCollectionReminder';
+    reminderBanner.className = 'cash-collection-reminder';
+    reminderBanner.style.opacity = '0';
+    reminderBanner.innerHTML = `
+        <div class="reminder-content">
+            <div class="reminder-icon">💰</div>
+            <div class="reminder-text">
+                <div class="reminder-title">Cash Collection Active</div>
+                <div class="reminder-details">
+                    <span>Collected: <strong>KES ${totalCashCollected.toLocaleString()}</strong></span>
+                    <span class="separator">•</span>
+                    <span>Deposit to wallet within 24 hours</span>
+                </div>
+            </div>
+            <button class="reminder-close" onclick="dismissCashReminder()">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                </svg>
+            </button>
+        </div>
+    `;
+    
+    document.body.insertBefore(reminderBanner, document.body.firstChild);
+    
+    setTimeout(() => {
+        reminderBanner.style.opacity = '1';
+        reminderBanner.style.transition = 'opacity 0.3s ease-in';
+    }, 100);
+    
+    document.body.classList.add('has-cash-reminder');
+}
+
+window.dismissCashReminder = function() {
+    const reminder = document.getElementById('cashCollectionReminder');
+    if (reminder) {
+        reminder.style.transform = 'translateY(-100%)';
+        document.body.classList.remove('has-cash-reminder');
+        setTimeout(() => reminder.remove(), 300);
+    }
+};
+
+// Authentication Functions
+async function checkAuthAndLoadRider() {
+    if (window.Telegram?.WebApp) {
+        const tg = window.Telegram.WebApp;
+        tg.ready();
+        tg.expand();
+        
+        const user = tg.initDataUnsafe.user;
+        if (user?.phone_number) {
+            const phone = formatPhone(user.phone_number);
+            return await loadRiderByPhone(phone);
+        }
+    }
+    
+    const storedPhone = localStorage.getItem('tuma_rider_phone');
+    if (storedPhone) {
+        return await loadRiderByPhone(storedPhone);
+    }
+    
+    return false;
+}
+
+async function loadRiderByPhone(phone) {
+    try {
+        const riders = await supabaseAPI.query('riders', {
+            filter: `phone=eq.${phone}`,
+            limit: 1
+        });
+        
+        if (riders.length > 0) {
+            state.rider = riders[0];
+            
+            if (state.rider.verification_status !== 'verified') {
+                showNotification('Your account is pending verification. Please contact support.', 'warning');
+            }
+            
+            if (state.rider.status === 'suspended' || state.rider.status === 'terminated') {
+                showNotification('Your account has been suspended. Please contact support.', 'error');
+                return false;
+            }
+            
+            return true;
+        }
+    } catch (error) {
+        console.error('Error loading rider:', error);
+    }
+    
+    return false;
+}
+
+async function createTemporaryRider() {
+    const tempId = DEV_CONFIG.isDevelopment && DEV_CONFIG.testRider ? 
+        DEV_CONFIG.testRider.id : 
+        'temp-' + Date.now();
+    
+    state.rider = {
+        id: tempId,
+        rider_name: DEV_CONFIG.isDevelopment && DEV_CONFIG.testRider ? 
+            DEV_CONFIG.testRider.name : 
+            'Test Rider',
+        phone: DEV_CONFIG.isDevelopment && DEV_CONFIG.testRider ? 
+            DEV_CONFIG.testRider.phone : 
+            '0700000000',
+        status: 'active',
+        total_deliveries: 0,
+        completed_deliveries: 0,
+        total_distance: 0,
+        rating: 5.0,
+        unpaid_commission: 0,
+        verification_status: 'verified'
+    };
+    
+    console.log('Created temporary rider:', state.rider.id);
+}
+
+// Main Initialization
+async function initialize() {
+    console.log('Initializing rider dashboard...');
+    
+    const storedRoute = localStorage.getItem('tuma_active_route');
+    if (storedRoute) {
+        try {
+            const route = JSON.parse(storedRoute);
+            const routeAge = Date.now() - new Date(route.created_at || 0).getTime();
+            if (routeAge > 24 * 60 * 60 * 1000) {
+                console.log('Clearing stale route data');
+                localStorage.removeItem('tuma_active_route');
+            }
+        } catch (e) {
+            console.error('Error parsing stored route:', e);
+            localStorage.removeItem('tuma_active_route');
+        }
+    }
+    
+    initializeElements();
+    
+    window.state = state;
+    
+    // Initialize commission tracker
+    state.commissionTracker = new CommissionTracker(BUSINESS_CONFIG.commission);
+    
+    const authenticated = await checkAuthAndLoadRider();
+    
+    if (!authenticated) {
+        await createTemporaryRider();
+    }
+    
+    if (elements.riderName && state.rider) {
+        elements.riderName.textContent = state.rider.rider_name || 'Rider';
+    }
+    
+    // Initialize commission tracker with rider data
+    if (state.rider && state.commissionTracker) {
+        try {
+            await state.commissionTracker.initialize(state.rider.id, supabaseAPI);
+            displayCommissionStatus();
+            
+            const devBypass = DEV_CONFIG.isDevelopment && DEV_CONFIG.bypassCommissionBlock;
+            
+            if (state.commissionTracker.state.isBlocked && !devBypass) {
+                showBlockedOverlay();
+                return;
+            } else if (state.commissionTracker.state.isBlocked && devBypass) {
+                console.warn('[DEV MODE] Commission block bypassed on initialization');
+                showNotification('DEV MODE: Commission block bypassed', 'warning');
+            }
+        } catch (error) {
+            console.error('Error initializing commission tracker:', error);
+        }
+    }
+    
+    // Initialize commission offset manager if exists
+    if (window.commissionOffsetManager && state.rider) {
+        await window.commissionOffsetManager.load();
+    }
+    
+    await checkRouteCompletionStatus();
+    
+    getCurrentLocation();
+    
+    setupEventListeners();
+    await loadEarnings();
+    await loadStats();
+    await loadActiveBonuses();
+    await loadAvailableRoutes();
+    await checkActiveDeliveries();
+    
+    // Add custom styles
+    addCustomStyles();
+    
+    // Add enhanced features
+    displayIncentiveProgress();
+    displayPerformanceMetrics();
+    addQuickActions();
+    
+    updateProfileDisplay();
+    updateWalletDisplay();
+    
+    if (state.status === 'online') {
+        startLocationUpdates();
+    }
+    
+    console.log('Rider dashboard initialized successfully');
+}
+
+// Event Listeners
+function setupEventListeners() {
+    // Status toggle is handled by inline onclick
+    
+    // No additional event listeners needed as most are handled inline
+}
+
+// Global Functions (called from HTML)
+window.toggleStatus = function() {
+    const statusBadge = document.getElementById('statusBadge');
+    const statusText = document.getElementById('statusText');
+    
+    if (statusText.textContent === 'Online') {
+        statusText.textContent = 'Offline';
+        statusBadge.classList.add('offline');
+        state.status = 'offline';
+    } else if (statusText.textContent === 'Offline') {
+        statusText.textContent = 'Online';
+        statusBadge.classList.remove('offline');
+        statusBadge.classList.remove('busy');
+        state.status = 'online';
+    }
+    
+    if (window.haptic) window.haptic('light');
+};
+
+window.scanQRCode = function() {
+    showNotification('QR Scanner will open camera (coming soon)', 'info');
+};
+
+window.callSupport = function() {
+    window.location.href = 'tel:+254700123456';
+};
+
+window.viewHotspots = function() {
+    showNotification('High demand areas: Westlands, CBD, Kilimani', 'info');
+};
+
+window.toggleBreak = function() {
+    const statusBadge = document.getElementById('statusBadge');
+    const statusText = document.getElementById('statusText');
+    
+    if (statusText.textContent === 'Online') {
+        statusText.textContent = 'On Break';
+        statusBadge.classList.add('busy');
+        showNotification('Break started. Take your time!', 'info');
+    } else {
+        statusText.textContent = 'Online';
+        statusBadge.classList.remove('busy');
+        showNotification('Welcome back! You\'re online again.', 'info');
+    }
+};
+
+window.showNotifications = function() {
+    showNotification('No new notifications', 'info');
+};
+
+window.showSettings = function() {
+    window.switchPage('profile');
+};
+
+window.showSupport = function() {
+    window.location.href = 'tel:+254700123456';
+};
+
+window.logout = function() {
+    if (confirm('Are you sure you want to logout?')) {
+        localStorage.clear();
+        window.location.href = './index.html';
+    }
+};
+
+window.showCommissionDetails = function() {
+    if (window.commissionOffsetManager) {
+        const debt = window.commissionOffsetManager.commissionDebt;
+        showNotification(`Commission balance: KES ${Math.round(debt)}`, 'info');
+    }
+};
+
+window.showWithdrawalModal = function() {
+    // Implemented in bottom nav version
+    showNotification('Withdrawal feature coming soon', 'info');
+};
+
+window.showPaymentInstructions = function() {
+    const cashBalance = elements.cashBalance?.textContent || '0';
+    showNotification(`Deposit KES ${cashBalance} via M-Pesa to 247247`, 'info');
+};
+
+window.processWithdrawal = function() {
+    showNotification('Withdrawal processing...', 'info');
+};
+
+window.showEarningsDetails = function() {
+    window.switchPage('earnings');
+};
+
+window.searchRoutes = function() {
+    showNotification('Search feature coming soon', 'info');
+};
+
+window.handleFAB = function() {
+    const page = window.appState?.currentPage || 'dashboard';
+    
+    switch(page) {
+        case 'dashboard':
+            if (state.claimedRoute) {
+                window.navigateToRoute();
+            } else {
+                window.switchPage('routes');
+            }
+            break;
+        case 'routes':
+            window.searchRoutes();
+            break;
+        case 'earnings':
+            window.showEarningsDetails();
+            break;
+        case 'wallet':
+            window.showPaymentInstructions();
+            break;
+        default:
+            break;
+    }
+};
+
+// Haptic feedback
+window.haptic = function(type = 'light') {
+    if (window.navigator && window.navigator.vibrate) {
+        switch(type) {
+            case 'light': window.navigator.vibrate(10); break;
+            case 'medium': window.navigator.vibrate(30); break;
+            case 'heavy': window.navigator.vibrate(50); break;
+            case 'success': window.navigator.vibrate([10, 50, 10]); break;
+            default: window.navigator.vibrate(10);
+        }
+    }
+};
+
+// Make functions globally available
+window.showNotification = showNotification;
+
+// DOM Ready
+document.addEventListener('DOMContentLoaded', async () => {
+    console.log('✅ Enhanced rider.js loaded successfully!');
+    
+    const tg = window.Telegram?.WebApp;
+    const telegramUser = tg?.initDataUnsafe?.user;
+    
+    let riderId;
+    let riderName;
+    
+    if (telegramUser?.id) {
+        riderId = telegramUser.id;
+        riderName = telegramUser.first_name || 'Rider';
+        if (DEV_CONFIG.verboseLogging) {
+            console.log('Using Telegram user:', riderId);
+        }
+    } else if (DEV_CONFIG.isDevelopment && DEV_CONFIG.testRider) {
+        riderId = DEV_CONFIG.testRider.id;
+        riderName = DEV_CONFIG.testRider.name;
+        if (DEV_CONFIG.verboseLogging) {
+            console.log('Development mode: Using test rider', riderId);
+        }
+    } else {
+        riderId = `temp-${Date.now()}`;
+        riderName = 'Guest Rider';
+        if (DEV_CONFIG.verboseLogging) {
+            console.log('Generated temporary rider:', riderId);
+        }
+    }
+    
+    window.currentRiderId = riderId;
+    
+    await initialize();
+});
+
+console.log('✅ rider.js loaded successfully with bottom navigation support!');
+console.log('Debug commands available: window.state');
+/**
+ * Part 6: Wallet Functions, Payment Modals, and Commission Display
+ */
+
+// Display Commission Status
+function displayCommissionStatus() {
+    if (!state.commissionTracker) return;
+    
+    const ui = state.commissionTracker.createCommissionUI();
+    
+    const existingContainer = document.getElementById('commissionContainer');
+    if (existingContainer) {
+        existingContainer.remove();
+    }
+    
+    const commissionContainer = document.createElement('div');
+    commissionContainer.id = 'commissionContainer';
+    commissionContainer.innerHTML = ui.statusBar;
+    
+    const heroSection = document.querySelector('.hero-section');
+    if (heroSection && heroSection.parentNode) {
+        heroSection.parentNode.insertBefore(commissionContainer, heroSection.nextSibling);
+    }
+    
+    if (ui.warningMessage) {
+        const warningDiv = document.createElement('div');
+        warningDiv.innerHTML = ui.warningMessage;
+        commissionContainer.appendChild(warningDiv.firstChild);
+    }
+}
+
+function showBlockedOverlay() {
+    if (!state.commissionTracker) return;
+    
+    const ui = state.commissionTracker.createCommissionUI();
+    
+    const existingOverlay = document.getElementById('commissionBlockedOverlay');
+    if (existingOverlay) {
+        existingOverlay.remove();
+    }
+    
+    const overlay = document.createElement('div');
+    overlay.id = 'commissionBlockedOverlay';
+    overlay.innerHTML = ui.blockedMessage;
+    document.body.appendChild(overlay);
+}
+
+// Show Urgent Payment Warning
+function showUrgentPaymentWarning() {
+    const warning = document.createElement('div');
+    warning.className = 'urgent-payment-warning';
+    warning.innerHTML = `
+        <div class="warning-content">
+            <div class="warning-icon">⚠️</div>
+            <h2>Deposit Required</h2>
+            <p class="warning-amount">Account Balance: -KES ${state.commissionTracker.state.unpaidCommission}</p>
+            <p class="warning-message">You have <span class="timer">60:00</span> to deposit funds or your account will be paused</p>
+            <div class="warning-actions">
+                <button class="pay-now-btn" onclick="openWalletModal()">
+                    Deposit Now
+                </button>
+                <button class="later-btn" onclick="dismissWarning()">
+                    Later
+                </button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(warning);
+    
+    let timeLeft = 3600;
+    const timerElement = warning.querySelector('.timer');
+    
+    const countdown = setInterval(() => {
+        timeLeft--;
+        const minutes = Math.floor(timeLeft / 60);
+        const seconds = timeLeft % 60;
+        timerElement.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        
+        if (timeLeft <= 0) {
+            clearInterval(countdown);
+            warning.remove();
+            
+            if (!(DEV_CONFIG.isDevelopment && DEV_CONFIG.bypassCommissionBlock)) {
+                showBlockedOverlay();
+            } else {
+                console.warn('[DEV MODE] Timer expired but blocking bypassed');
+                showNotification('DEV MODE: Would be blocked now', 'warning');
+            }
+        }
+    }, 1000);
+    
+    window.commissionCountdown = countdown;
+}
+
+window.dismissWarning = function() {
+    document.querySelector('.urgent-payment-warning')?.remove();
+};
+
+// Enhanced Withdrawal Modal
+window.showWithdrawalModal = function() {
+    const mpesaBalance = parseFloat(elements.mpesaBalance?.textContent || '0');
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.innerHTML = `
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Withdraw Funds</h2>
+                <button class="modal-close" onclick="closeModal(this)">×</button>
+            </div>
+            <div style="background: var(--surface-high); padding: 16px; border-radius: 12px; 
+                        text-align: center; margin-bottom: 20px;">
+                <p style="font-size: 14px; color: var(--text-secondary); margin-bottom: 8px;">Available Balance</p>
+                <p style="font-size: 28px; font-weight: 700; color: var(--primary);">KES ${mpesaBalance}</p>
+            </div>
+            
+            <div>
+                <label style="display: block; margin-bottom: 8px; font-weight: 600;">Amount to Withdraw</label>
+                <input type="number" id="withdrawAmount" placeholder="Enter amount" max="${mpesaBalance}" 
+                       style="width: 100%; padding: 16px; background: var(--surface-high); 
+                              border: 2px solid var(--border); border-radius: 12px; 
+                              color: white; font-size: 18px; margin-bottom: 16px;">
+                
+                <div id="feeCalculator" style="display: none; background: var(--surface-high); 
+                                               padding: 16px; border-radius: 12px; margin-bottom: 16px;">
+                    <div style="display: flex; justify-content: space-between; padding: 8px 0;">
+                        <span>Withdrawal Amount:</span>
+                        <span id="withdrawalAmount">KES 0</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; padding: 8px 0;">
+                        <span>M-Pesa Fee:</span>
+                        <span id="mpesaFee">KES 0</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; padding: 8px 0; 
+                                border-top: 1px solid var(--border); margin-top: 8px; 
+                                padding-top: 12px; font-weight: 600;">
+                        <span>Total Deduction:</span>
+                        <span id="totalDeduction">KES 0</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; padding: 8px 0;">
+                        <span>You'll Receive:</span>
+                        <span id="amountReceived" style="color: var(--success); font-weight: 700;">KES 0</span>
+                    </div>
+                </div>
+                
+                <div style="background: rgba(255, 159, 10, 0.1); border: 1px solid var(--warning); 
+                            border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+                    <p style="font-size: 13px; line-height: 1.5;">
+                        ⚠️ M-Pesa transaction fees apply and will be deducted from your wallet balance
+                    </p>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <button class="claim-button" style="background: var(--surface-high);" 
+                            onclick="closeModal(this)">Cancel</button>
+                    <button class="claim-button" onclick="processWithdrawal()">Withdraw</button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    document.getElementById('withdrawAmount').addEventListener('input', function(e) {
+        const amount = parseFloat(e.target.value) || 0;
+        if (amount > 0) {
+            const fee = calculateMpesaFee(amount);
+            const total = amount + fee;
+            
+            document.getElementById('feeCalculator').style.display = 'block';
+            document.getElementById('withdrawalAmount').textContent = 'KES ' + amount;
+            document.getElementById('mpesaFee').textContent = 'KES ' + fee;
+            document.getElementById('totalDeduction').textContent = 'KES ' + total;
+            document.getElementById('amountReceived').textContent = 'KES ' + amount;
+        } else {
+            document.getElementById('feeCalculator').style.display = 'none';
+        }
+    });
+};
+
+// Calculate M-Pesa Fees
+function calculateMpesaFee(amount) {
+    const fees = [
+        { min: 0, max: 49, fee: 0 },
+        { min: 50, max: 100, fee: 7 },
+        { min: 101, max: 500, fee: 13 },
+        { min: 501, max: 1000, fee: 23 },
+        { min: 1001, max: 1500, fee: 33 },
+        { min: 1501, max: 2500, fee: 53 },
+        { min: 2501, max: 3500, fee: 58 },
+        { min: 3501, max: 5000, fee: 68 },
+        { min: 5001, max: 7500, fee: 78 },
+        { min: 7501, max: 10000, fee: 88 },
+        { min: 10001, max: 15000, fee: 98 },
+        { min: 15001, max: 20000, fee: 108 },
+        { min: 20001, max: 250000, fee: 108 }
+    ];
+    
+    for (const tier of fees) {
+        if (amount >= tier.min && amount <= tier.max) {
+            return tier.fee;
+        }
+    }
+    return 108;
+}
+
+// Process Withdrawal
+window.processWithdrawal = function() {
+    const amount = parseFloat(document.getElementById('withdrawAmount').value);
+    
+    if (!amount || amount <= 0) {
+        showNotification('Please enter a valid amount', 'error');
+        return;
+    }
+    
+    showNotification('Withdrawal of KES ' + amount + ' initiated. You will receive an M-Pesa notification shortly.', 'success');
+    closeModal(document.querySelector('.modal-overlay'));
+};
+
+// Enhanced Wallet Modal with Commission
+window.openWalletModal = function() {
+    const summary = state.commissionTracker ? state.commissionTracker.getSummary() : { unpaid: 0 };
+    
+    const modal = document.createElement('div');
+    modal.className = 'payment-modal';
+    modal.innerHTML = `
+        <div class="payment-content">
+            <h2>Deposit to Wallet</h2>
+            <div class="wallet-balance">
+                <span class="balance-label">Current Balance</span>
+                <span class="balance-amount ${summary.unpaid > 0 ? 'negative' : ''}">
+                    ${summary.unpaid > 0 ? '-' : ''}KES ${Math.abs(summary.unpaid)}
+                </span>
+            </div>
+            
+            <div class="deposit-options">
+                <h3>Deposit Options:</h3>
+                
+                <div class="deposit-method">
+                    <div class="method-header">
+                        <span class="method-icon">💵</span>
+                        <span class="method-name">Cash Deposit</span>
+                    </div>
+                    <p class="method-description">
+                        Deposit collected cash at any Tuma agent location
+                    </p>
+                    <button class="method-button" onclick="showAgentLocations()">
+                        Find Agents Near You
+                    </button>
+                </div>
+                
+                <div class="deposit-method">
+                    <div class="method-header">
+                        <span class="method-icon">📱</span>
+                        <span class="method-name">M-Pesa</span>
+                    </div>
+                    <div class="mpesa-instructions">
+                        <ol>
+                            <li>Go to M-Pesa</li>
+                            <li>Select "Lipa na M-Pesa" > "Pay Bill"</li>
+                            <li>Business Number: <strong>247247</strong></li>
+                            <li>Account: <strong>${state.rider?.phone || 'Your Phone'}</strong></li>
+                            <li>Amount: <strong>${summary.unpaid}</strong></li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+            
+            <button class="modal-close" onclick="closeWalletModal()">Close</button>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    if (window.haptic) window.haptic('light');
+};
+
+window.viewAccountDetails = function() {
+    const summary = state.commissionTracker ? state.commissionTracker.getSummary() : { unpaid: 0 };
+    
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.innerHTML = `
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Account Details</h2>
+                <button class="modal-close" onclick="closeModal(this)">×</button>
+            </div>
+            <div style="padding: 20px 0;">
+                <div style="background: var(--surface-high); border-radius: 12px; padding: 16px; margin-bottom: 16px;">
+                    <h3 style="font-size: 14px; color: var(--text-secondary); margin-bottom: 8px;">Wallet Balance</h3>
+                    <p style="font-size: 28px; font-weight: 700; color: ${summary.unpaid > 0 ? 'var(--danger)' : 'var(--success)'};">
+                        ${summary.unpaid > 0 ? '-' : ''}KES ${Math.abs(summary.unpaid)}
+                    </p>
+                </div>
+                
+                <div style="display: grid; gap: 12px;">
+                    <div style="display: flex; justify-content: space-between; padding: 12px; background: var(--surface-high); border-radius: 8px;">
+                        <span>Total Paid</span>
+                        <span>KES ${summary.totalPaid}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; padding: 12px; background: var(--surface-high); border-radius: 8px;">
+                        <span>Pending Deliveries</span>
+                        <span>${summary.pendingCount}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; padding: 12px; background: var(--surface-high); border-radius: 8px;">
+                        <span>Account Usage</span>
+                        <span>${summary.percentageUsed}%</span>
+                    </div>
+                </div>
+                
+                <button class="claim-button" style="margin-top: 20px;" onclick="closeModal(this)">
+                    Close
+                </button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    if (window.haptic) window.haptic('light');
+};
+
+window.closeWalletModal = function() {
+    const modal = document.querySelector('.payment-modal');
+    if (modal) {
+        modal.remove();
+    }
+};
+
+window.showAgentLocations = function() {
+    showNotification('Opening agent locations...', 'info');
+    if (window.haptic) window.haptic('light');
+};
+
+// Enhanced Payment Instructions Modal
+window.showPaymentInstructions = function() {
+    const cashBalance = elements.cashBalance?.textContent || '0';
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.innerHTML = `
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Pay Commission</h2>
+                <button class="modal-close" onclick="closeModal(this)">×</button>
+            </div>
+            <div style="padding: 20px 0;">
+                <h3 style="margin-bottom: 16px; font-size: 16px;">M-Pesa Paybill Instructions:</h3>
+                <ol style="padding-left: 20px; line-height: 2; color: var(--text-secondary);">
+                    <li>Go to M-Pesa on your phone</li>
+                    <li>Select "Lipa na M-Pesa"</li>
+                    <li>Select "Pay Bill"</li>
+                    <li>Enter Business Number: <strong style="color: var(--primary);">247247</strong></li>
+                    <li>Enter Account Number: <strong style="color: var(--primary);">${state.rider?.rider_name || 'Your Name'}</strong></li>
+                    <li>Enter Amount: <strong style="color: var(--primary);">KES ${cashBalance}</strong></li>
+                    <li>Enter your M-Pesa PIN</li>
+                    <li>Confirm the transaction</li>
+                </ol>
+                <div style="background: rgba(255, 159, 10, 0.1); border: 1px solid var(--warning); 
+                            border-radius: 8px; padding: 12px; margin-top: 16px;">
+                    <p style="font-size: 13px; line-height: 1.5;">
+                        ⚠️ <strong>Important:</strong> Use your exact name as registered with Tuma as the account number
+                    </p>
+                </div>
+            </div>
+            <button class="claim-button" onclick="closeModal(this)">
+                Got it
+            </button>
+        </div>
+    `;
+    document.body.appendChild(modal);
+};
+
+// Enhanced Commission Details Modal  
+window.showCommissionDetails = function() {
+    const debt = window.commissionOffsetManager ? window.commissionOffsetManager.commissionDebt : 0;
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.innerHTML = `
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Commission Details</h2>
+                <button class="modal-close" onclick="closeModal(this)">×</button>
+            </div>
+            <div style="padding: 20px 0;">
+                <div style="background: var(--surface-high); border-radius: 12px; padding: 16px; margin-bottom: 16px;">
+                    <h3 style="font-size: 14px; color: var(--text-secondary); margin-bottom: 8px;">Outstanding Commission</h3>
+                    <p style="font-size: 28px; font-weight: 700; color: var(--warning);">
+                        KES ${Math.round(debt)}
+                    </p>
+                </div>
+                
+                <div style="background: rgba(0, 122, 255, 0.1); border: 1px solid var(--primary); 
+                            border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+                    <p style="font-size: 14px; line-height: 1.5;">
+                        <strong>How it works:</strong><br>
+                        When you complete deliveries, we'll automatically deduct any outstanding commission 
+                        from your earnings before adding the balance to your wallet.
+                    </p>
+                </div>
+                
+                <div style="margin-top: 20px;">
+                    <h4 style="font-size: 14px; margin-bottom: 12px;">Example:</h4>
+                    <div style="background: var(--surface-high); border-radius: 8px; padding: 12px; 
+                                font-size: 13px; line-height: 1.8;">
+                        <div>Next delivery earnings: KES 500</div>
+                        <div>Commission owed: KES ${Math.round(debt)}</div>
+                        <div style="border-top: 1px solid var(--border); margin: 8px 0; padding-top: 8px;">
+                            You'll receive: KES ${Math.max(0, 500 - Math.round(debt))}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <button class="claim-button" onclick="closeModal(this)">
+                Understood
+            </button>
+        </div>
+    `;
+    document.body.appendChild(modal);
+};
+/**
+ * Part 7: Additional Global Functions, Custom Styles, and Debug Utilities
+ */
+
+// Additional Global Functions
+window.toggleBreakMode = function() {
+    const isOnBreak = state.status === 'break';
+    state.status = isOnBreak ? 'online' : 'break';
+    
+    if (elements.statusBadge) {
+        elements.statusBadge.className = `status-badge ${state.status === 'break' ? 'offline' : ''}`;
+        elements.statusBadge.innerHTML = `
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <circle cx="12" cy="12" r="4"/>
+            </svg>
+            <span>${state.status === 'break' ? 'On Break' : 'Online'}</span>
+        `;
+    }
+    
+    showNotification(
+        state.status === 'break' ? 'Break started. Take your time!' : 'Welcome back! You\'re online again.',
+        'info'
+    );
+    
+    if (window.haptic) window.haptic('medium');
+};
+
+window.viewEarningsDetails = function() {
+    showNotification('Detailed analytics coming soon!', 'info');
+    console.log('Earnings breakdown:', {
+        daily: state.earnings,
+        performance: calculatePerformanceMetrics(),
+        bonus: calculateDailyBonus()
+    });
+    if (window.haptic) window.haptic('light');
+};
+
+window.showHotZones = function() {
+    showNotification('High demand in Westlands and CBD areas!', 'info');
+    if (window.haptic) window.haptic('light');
+};
+
+window.filterRoutes = function(type) {
+    state.currentFilter = type;
+    
+    document.querySelectorAll('.route-tab').forEach(tab => {
+        tab.classList.remove('active');
+    });
+    event.target.classList.add('active');
+    
+    displayRoutes();
+    if (window.haptic) window.haptic('light');
+};
+
+// Verify Code (Full Implementation)
+window.verifyCode = async function(type) {
+    const codeInput = document.getElementById('codeInput');
+    if (!codeInput) {
+        console.error('Code input element not found');
+        return;
+    }
+    
+    const code = codeInput.value.toUpperCase();
+    await verifyStopCode(type, code);
+    codeInput.value = '';
+};
+
+// Add Custom Styles
+function addCustomStyles() {
+    const existingStyle = document.getElementById('custom-styles');
+    if (!existingStyle && state.commissionTracker) {
         const style = document.createElement('style');
-        style.id = 'completion-summary-styles';
-        style.textContent = `
+        style.id = 'custom-styles';
+        style.textContent = state.commissionTracker.getCommissionStyles() + `
+            /* Additional custom styles */
+            .route-stats {
+                display: grid;
+                grid-template-columns: repeat(3, 1fr);
+                gap: 12px;
+                margin-bottom: 12px;
+                padding: 12px;
+                background: var(--surface-high);
+                border-radius: 10px;
+                text-align: center;
+            }
+            
+            .route-stats > div {
+                font-size: 14px;
+                font-weight: 600;
+            }
+            
+            .route-meta {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 12px;
+                font-size: 13px;
+                color: var(--text-secondary);
+            }
+            
+            .route-meta .return-trip {
+                color: var(--success);
+                font-weight: 600;
+            }
+            
+            .loading-routes {
+                text-align: center;
+                padding: 60px 20px;
+            }
+            
+            .loading-spinner {
+                width: 40px;
+                height: 40px;
+                border: 3px solid var(--surface-high);
+                border-top-color: var(--primary);
+                border-radius: 50%;
+                margin: 0 auto 20px;
+                animation: spin 1s linear infinite;
+            }
+            
+            @keyframes spin {
+                to { transform: rotate(360deg); }
+            }
+            
+            @keyframes slideIn {
+                from { transform: translateX(100%); opacity: 0; }
+                to { transform: translateX(0); opacity: 1; }
+            }
+            
+            @keyframes slideOut {
+                from { transform: translateX(0); opacity: 1; }
+                to { transform: translateX(100%); opacity: 0; }
+            }
+            
+            /* Payment collection styles */
+            .payment-info {
+                background: var(--warning-light, rgba(255, 159, 10, 0.1));
+                border: 2px solid var(--warning);
+                border-radius: 12px;
+                padding: 16px;
+                margin-top: 16px;
+            }
+            
+            .payment-info.paid {
+                background: var(--success-light, rgba(52, 199, 89, 0.1));
+                border-color: var(--success);
+            }
+            
+            .collect-amount {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 8px;
+            }
+            
+            .collect-label {
+                font-size: 16px;
+                font-weight: 600;
+                color: var(--text-secondary);
+            }
+            
+            .collect-value {
+                font-size: 28px;
+                font-weight: 700;
+                color: var(--warning);
+            }
+            
+            .payment-note,
+            .paid-indicator {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                font-size: 14px;
+                color: var(--text-secondary);
+            }
+            
+            .note-icon,
+            .paid-icon {
+                font-size: 18px;
+            }
+            
+            .paid-indicator {
+                color: var(--success);
+                font-weight: 600;
+            }
+            
+            /* Completion summary styles */
             .route-completion-summary {
                 position: fixed;
                 top: 0;
@@ -1418,6 +2988,11 @@ function showRouteCompletionSummary(totalCollected, riderEarnings, deliveryCount
                 justify-content: center;
                 padding: 20px;
                 animation: fadeIn 0.3s ease-out;
+            }
+            
+            @keyframes fadeIn {
+                from { opacity: 0; }
+                to { opacity: 1; }
             }
             
             .summary-content {
@@ -1520,1378 +3095,87 @@ function showRouteCompletionSummary(totalCollected, riderEarnings, deliveryCount
             .continue-btn:hover {
                 opacity: 0.9;
             }
-        `;
-        document.head.appendChild(style);
-    }
-}
-
-window.closeCompletionSummary = function() {
-    const summary = document.querySelector('.route-completion-summary');
-    if (summary) {
-        summary.remove();
-    }
-};
-
-// ─── Display Functions ─────────────────────────────────────────────────────
-
-function updateEarningsDisplay() {
-    if (elements.dailyEarnings) elements.dailyEarnings.textContent = Math.round(state.earnings.daily).toLocaleString();
-    if (elements.weeklyEarnings) elements.weeklyEarnings.textContent = Math.round(state.earnings.weekly).toLocaleString();
-    if (elements.monthlyEarnings) elements.monthlyEarnings.textContent = Math.round(state.earnings.monthly).toLocaleString();
-}
-
-function updateStatsDisplay() {
-    if (elements.totalDeliveries) elements.totalDeliveries.textContent = state.stats.deliveries;
-    if (elements.totalDistance) elements.totalDistance.textContent = state.stats.distance;
-    if (elements.riderRating) elements.riderRating.textContent = state.stats.rating;
-}
-
-function displayRoutes() {
-    const filteredRoutes = state.currentFilter === 'all' 
-        ? state.availableRoutes 
-        : state.availableRoutes.filter(r => r.type === state.currentFilter);
-    
-    if (!elements.routeList) return;
-    
-    // Check if rider already has an active route
-    const hasActiveRoute = state.claimedRoute !== null;
-    
-    if (filteredRoutes.length === 0) {
-        elements.routeList.innerHTML = `
-            <div class="empty-state">
-                <div class="empty-icon">🗺️</div>
-                <h3 class="empty-title">No Routes Available</h3>
-                <p class="empty-message">Check back soon for new clustered routes</p>
-            </div>
-        `;
-        return;
-    }
-    
-    elements.routeList.innerHTML = filteredRoutes.map(route => {
-        // Calculate rider earnings (70% of total)
-        const riderEarnings = Math.round(route.total_earnings * BUSINESS_CONFIG.commission.rider);
-        
-        // Generate a unique function name for each route to avoid conflicts
-        const claimFunctionName = `claimRoute_${route.id.replace(/[^a-zA-Z0-9]/g, '_')}`;
-        
-        // Store the claim function on window
-        window[claimFunctionName] = function() {
-            claimRoute(route.id);
-        };
-        
-        // Determine route icon based on type
-        const routeIcon = route.type === 'express' ? '⚡' : route.type === 'eco' ? '🌿' : '📦';
-        
-        return `
-            <div class="route-card ${route.status !== 'available' || hasActiveRoute ? 'claimed' : ''}">
-                <div class="route-header">
-                    <div class="route-name">${routeIcon} ${route.name}</div>
-                    <div class="route-type ${route.type}">${route.type.toUpperCase()}</div>
-                </div>
-                
-                <div class="route-stats">
-                    <div>${route.pickups} parcel${route.pickups > 1 ? 's' : ''}</div>
-                    <div>${route.distance} km</div>
-                    <div>KES ${riderEarnings.toLocaleString()}</div>
-                </div>
-                
-                <div class="route-meta">
-                    <span class="time-estimate">~${route.estimatedTime} min</span>
-                    ${route.metadata?.hasReturnTrip ? '<span class="return-trip">↩️ Return trip</span>' : ''}
-                </div>
-                
-                <button type="button" class="claim-button" 
-                        ${route.status !== 'available' || hasActiveRoute ? 'disabled' : ''}
-                        onclick="${claimFunctionName}()">
-                    ${hasActiveRoute ? 'Route Active' : 
-                      route.status === 'available' ? 'Claim Route' : 'Already Claimed'}
-                </button>
-            </div>
-        `;
-    }).join('');
-}
-
-function displayCommissionStatus() {
-    if (!state.commissionTracker) return;
-    
-    const ui = state.commissionTracker.createCommissionUI();
-    
-    const existingContainer = document.getElementById('commissionContainer');
-    if (existingContainer) {
-        existingContainer.remove();
-    }
-    
-    const commissionContainer = document.createElement('div');
-    commissionContainer.id = 'commissionContainer';
-    commissionContainer.innerHTML = ui.statusBar;
-    
-    const heroSection = document.querySelector('.hero-section');
-    if (heroSection && heroSection.parentNode) {
-        heroSection.parentNode.insertBefore(commissionContainer, heroSection.nextSibling);
-    }
-    
-    if (ui.warningMessage) {
-        const warningDiv = document.createElement('div');
-        warningDiv.innerHTML = ui.warningMessage;
-        commissionContainer.appendChild(warningDiv.firstChild);
-    }
-}
-
-function showBlockedOverlay() {
-    if (!state.commissionTracker) return;
-    
-    const ui = state.commissionTracker.createCommissionUI();
-    
-    const existingOverlay = document.getElementById('commissionBlockedOverlay');
-    if (existingOverlay) {
-        existingOverlay.remove();
-    }
-    
-    const overlay = document.createElement('div');
-    overlay.id = 'commissionBlockedOverlay';
-    overlay.innerHTML = ui.blockedMessage;
-    document.body.appendChild(overlay);
-}
-
-// ─── Core Functions ────────────────────────────────────────────────────────
-
-async function initialize() {
-    console.log('Initializing rider dashboard...');
-    
-    // Clear any stale route data if page was refreshed
-    const storedRoute = localStorage.getItem('tuma_active_route');
-    if (storedRoute) {
-        try {
-            const route = JSON.parse(storedRoute);
-            // Check if route is older than 24 hours
-            const routeAge = Date.now() - new Date(route.created_at || 0).getTime();
-            if (routeAge > 24 * 60 * 60 * 1000) {
-                console.log('Clearing stale route data');
-                localStorage.removeItem('tuma_active_route');
-            }
-        } catch (e) {
-            console.error('Error parsing stored route:', e);
-            localStorage.removeItem('tuma_active_route');
-        }
-    }
-    
-    // Initialize DOM elements
-    initializeElements();
-    
-    // Update state reference for menu
-    window.state = state;
-    
-    // Initialize commission tracker
-    state.commissionTracker = new CommissionTracker(BUSINESS_CONFIG.commission);
-    
-    // Check if user is authenticated (optional for now)
-    const authenticated = await checkAuthAndLoadRider();
-    
-    if (!authenticated) {
-        // Create a temporary rider for testing
-        await createTemporaryRider();
-    }
-    
-    // Update rider name
-    if (elements.riderName && state.rider) {
-        elements.riderName.textContent = state.rider.rider_name || 'Rider';
-    }
-    
-    // Initialize commission tracker
-    if (state.rider) {
-        try {
-            await state.commissionTracker.initialize(state.rider.id, supabaseAPI);
-            displayCommissionStatus();
             
-            // Check if blocked (but respect dev bypass)
-            const devBypass = DEV_CONFIG.isDevelopment && DEV_CONFIG.bypassCommissionBlock;
-            
-            if (state.commissionTracker.state.isBlocked && !devBypass) {
-                showBlockedOverlay();
-                return;
-            } else if (state.commissionTracker.state.isBlocked && devBypass) {
-                console.warn('[DEV MODE] Commission block bypassed on initialization');
-                showNotification('DEV MODE: Commission block bypassed', 'warning');
-            }
-        } catch (error) {
-            console.error('Error initializing commission tracker:', error);
-        }
-    }
-    
-    // Check for route completion
-    await checkRouteCompletionStatus();
-    
-    // Get current location
-    getCurrentLocation();
-    
-    setupEventListeners();
-    await loadEarnings();
-    await loadStats();
-    await loadActiveBonuses();
-    await loadAvailableRoutes();
-    await checkActiveDeliveries();
-    
-    // Add styles for notifications and commission UI
-    addCustomStyles();
-    
-    // Add enhanced features
-    displayIncentiveProgress();
-    displayPerformanceMetrics();
-    addQuickActions();
-    
-    // Start location updates if rider is online
-    if (state.status === 'online') {
-        startLocationUpdates();
-    }
-    
-    console.log('Rider dashboard initialized successfully');
-}
-
-async function checkAuthAndLoadRider() {
-    // Check for Telegram Web App
-    if (window.Telegram?.WebApp) {
-        const tg = window.Telegram.WebApp;
-        tg.ready();
-        tg.expand();
-        
-        const user = tg.initDataUnsafe.user;
-        if (user?.phone_number) {
-            const phone = formatPhone(user.phone_number);
-            return await loadRiderByPhone(phone);
-        }
-    }
-    
-    // Check for stored phone
-    const storedPhone = localStorage.getItem('tuma_rider_phone');
-    if (storedPhone) {
-        return await loadRiderByPhone(storedPhone);
-    }
-    
-    return false;
-}
-
-async function loadRiderByPhone(phone) {
-    try {
-        const riders = await supabaseAPI.query('riders', {
-            filter: `phone=eq.${phone}`,
-            limit: 1
-        });
-        
-        if (riders.length > 0) {
-            state.rider = riders[0];
-            
-            if (state.rider.verification_status !== 'verified') {
-                showNotification('Your account is pending verification. Please contact support.', 'warning');
+            /* Cash reminder styles */
+            .cash-collection-reminder {
+                background: linear-gradient(135deg, #007AFF, #0051D5);
+                padding: 16px 20px;
+                margin: 0;
+                box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                z-index: 1000;
+                transform: translateY(0);
+                transition: transform 0.3s ease-out;
             }
             
-            if (state.rider.status === 'suspended' || state.rider.status === 'terminated') {
-                showNotification('Your account has been suspended. Please contact support.', 'error');
-                return false;
+            body.has-cash-reminder {
+                padding-top: 72px;
+                transition: padding-top 0.3s ease-out;
             }
             
-            return true;
-        }
-    } catch (error) {
-        console.error('Error loading rider:', error);
-    }
-    
-    return false;
-}
-
-async function createTemporaryRider() {
-    // Use the test rider configuration if in development
-    const tempId = DEV_CONFIG.isDevelopment && DEV_CONFIG.testRider ? 
-        DEV_CONFIG.testRider.id : 
-        'temp-' + Date.now();
-    
-    state.rider = {
-        id: tempId,
-        rider_name: DEV_CONFIG.isDevelopment && DEV_CONFIG.testRider ? 
-            DEV_CONFIG.testRider.name : 
-            'Test Rider',
-        phone: DEV_CONFIG.isDevelopment && DEV_CONFIG.testRider ? 
-            DEV_CONFIG.testRider.phone : 
-            '0700000000',
-        status: 'active',
-        total_deliveries: 0,
-        completed_deliveries: 0,
-        total_distance: 0,
-        rating: 5.0,
-        unpaid_commission: 0,
-        verification_status: 'verified'
-    };
-    
-    console.log('Created temporary rider:', state.rider.id);
-}
-
-async function loadEarnings() {
-    try {
-        if (!state.rider) return;
-        
-        // Use default values for temporary riders
-        if (state.rider.id.startsWith('temp-')) {
-            console.log('Using default earnings for temporary rider');
-            state.earnings = {
-                daily: 0,
-                weekly: 0,
-                monthly: 0
-            };
-            updateEarningsDisplay();
-            return;
-        }
-        
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        
-        const weekStart = new Date(today);
-        weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-        
-        const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-        
-        const dailyParcels = await supabaseAPI.query('parcels', {
-            filter: `rider_id=eq.${state.rider.id}&status=eq.delivered&delivery_timestamp=gte.${today.toISOString()}`,
-            select: 'rider_payout'
-        });
-        
-        const weeklyParcels = await supabaseAPI.query('parcels', {
-            filter: `rider_id=eq.${state.rider.id}&status=eq.delivered&delivery_timestamp=gte.${weekStart.toISOString()}`,
-            select: 'rider_payout'
-        });
-        
-        const monthlyParcels = await supabaseAPI.query('parcels', {
-            filter: `rider_id=eq.${state.rider.id}&status=eq.delivered&delivery_timestamp=gte.${monthStart.toISOString()}`,
-            select: 'rider_payout'
-        });
-        
-        state.earnings = {
-            daily: dailyParcels.reduce((sum, p) => sum + (p.rider_payout || 0), 0),
-            weekly: weeklyParcels.reduce((sum, p) => sum + (p.rider_payout || 0), 0),
-            monthly: monthlyParcels.reduce((sum, p) => sum + (p.rider_payout || 0), 0)
-        };
-        
-        updateEarningsDisplay();
-        
-    } catch (error) {
-        if (error.message.includes('400') && DEV_CONFIG.ignoreRiderNotFound) {
-            console.log('Earnings API error (expected in dev mode)');
-            // Use default values
-            state.earnings = {
-                daily: 0,
-                weekly: 0,
-                monthly: 0
-            };
-            updateEarningsDisplay();
-        } else {
-            console.error('Error loading earnings:', error);
-        }
-    }
-}
-
-async function loadStats() {
-    try {
-        if (!state.rider) {
-            state.stats = { deliveries: 0, distance: 0, rating: 5.0 };
-            updateStatsDisplay();
-            return;
-        }
-        
-        // For temporary riders, show default stats
-        if (state.rider.id.startsWith('temp-')) {
-            state.stats = { deliveries: 0, distance: 0, rating: 5.0 };
-            updateStatsDisplay();
-            return;
-        }
-        
-        state.stats = {
-            deliveries: state.rider.completed_deliveries || 0,
-            distance: Math.round(state.rider.total_distance || 0),
-            rating: state.rider.rating || 5.0
-        };
-        
-        updateStatsDisplay();
-        
-    } catch (error) {
-        console.error('Error loading stats:', error);
-    }
-}
-
-// ─── UPDATED ROUTE CREATION WITH CLUSTERING ───────────────────────────────
-
-function createRoutes(parcels) {
-    console.log(`Creating routes from ${parcels.length} parcels using advanced clustering...`);
-    
-    try {
-        // Use the clustering algorithm
-        const routes = routeClusterer.createOptimizedRoutes(parcels);
-        
-        // Log results for debugging
-        console.log(`Created ${routes.length} optimized routes:`);
-        routes.forEach(route => {
-            console.log(`- ${route.name}: ${route.pickups} parcels, ${route.distance}km, ` +
-                       `KES ${route.total_earnings} (Score: ${route.qualityScore})`);
-        });
-        
-        // Return routes or demo routes if none created
-        return routes.length > 0 ? routes : createDemoRoutes();
-        
-    } catch (error) {
-        console.error('Error creating routes:', error);
-        return createDemoRoutes();
-    }
-}
-
-async function loadAvailableRoutes() {
-    try {
-        console.log('Loading available routes...');
-        
-        // Show loading state
-        if (elements.routeList) {
-            elements.routeList.innerHTML = `
-                <div class="loading-routes">
-                    <div class="loading-spinner"></div>
-                    <p>Finding best routes for you...</p>
-                </div>
-            `;
-        }
-        
-        // Fetch ALL unclaimed parcels (increased limit)
-        const unclaimedParcels = await supabaseAPI.query('parcels', {
-            filter: 'status=eq.submitted&rider_id=is.null',
-            limit: 1000, // Increased limit to get all parcels
-            order: 'created_at.asc'
-        });
-        
-        console.log(`Found ${unclaimedParcels.length} unclaimed parcels`);
-        
-        if (unclaimedParcels.length === 0) {
-            // If no unclaimed parcels, check if there are any parcels at all
-            const allParcels = await supabaseAPI.query('parcels', {
-                limit: 100
-            });
-            
-            console.log('Total parcels in database:', allParcels.length);
-            
-            if (allParcels.length > 0) {
-                // Show why parcels aren't available
-                const statuses = {};
-                allParcels.forEach(p => {
-                    statuses[p.status] = (statuses[p.status] || 0) + 1;
-                });
-                console.log('Parcel statuses:', statuses);
-                
-                // Check service types
-                const serviceTypes = {};
-                allParcels.forEach(p => {
-                    const type = p.customer_choice || 'unknown';
-                    serviceTypes[type] = (serviceTypes[type] || 0) + 1;
-                });
-                console.log('Service types:', serviceTypes);
+            .reminder-content {
+                display: flex;
+                align-items: center;
+                gap: 16px;
+                max-width: 1200px;
+                margin: 0 auto;
             }
             
-            state.availableRoutes = createDemoRoutes();
-        } else {
-            // Log service type distribution
-            const typeDistribution = {};
-            unclaimedParcels.forEach(p => {
-                const type = p.customer_choice || 'smart';
-                typeDistribution[type] = (typeDistribution[type] || 0) + 1;
-            });
-            console.log('Unclaimed parcels by type:', typeDistribution);
-            
-            // Create optimized routes using clustering
-            state.availableRoutes = createRoutes(unclaimedParcels);
-            console.log(`Created ${state.availableRoutes.length} routes from ${unclaimedParcels.length} parcels`);
-        }
-        
-        displayRoutes();
-        
-    } catch (error) {
-        console.error('Error loading routes:', error);
-        state.availableRoutes = createDemoRoutes();
-        displayRoutes();
-    }
-}
-
-function createDemoRoutes() {
-    console.log('Creating demo routes for testing...');
-    const demoTotalEarnings = [2500, 1714, 3429]; // These are total earnings
-    
-    // Demo routes with specific Nairobi landmarks
-    return [
-        {
-            id: 'demo-route-001',
-            name: 'Sarit Centre → Village Market',
-            type: 'smart',
-            deliveries: 5,
-            pickups: 5,
-            distance: 12,
-            total_earnings: demoTotalEarnings[0], // Will show as KES 1,750 (70%)
-            status: 'available',
-            parcels: [],
-            qualityScore: 75,
-            estimatedTime: 45,
-            metadata: {
-                pickupAreas: ['Westlands'],
-                deliveryCorridors: ['north'],
-                hasReturnTrip: false
-            }
-        },
-        {
-            id: 'demo-route-002',
-            name: 'CBD → Eastlands Express',
-            type: 'express',
-            deliveries: 1,
-            pickups: 1,
-            distance: 8,
-            total_earnings: demoTotalEarnings[1], // Will show as KES 1,200 (70%)
-            status: 'available',
-            parcels: [],
-            qualityScore: 82,
-            estimatedTime: 25,
-            metadata: {
-                pickupAreas: ['CBD'],
-                deliveryCorridors: ['east'],
-                hasReturnTrip: false
-            }
-        },
-        {
-            id: 'demo-route-003',
-            name: 'Karen Local',
-            type: 'eco',
-            deliveries: 8,
-            pickups: 8,
-            distance: 25,
-            total_earnings: demoTotalEarnings[2], // Will show as KES 2,400 (70%)
-            status: 'available',
-            parcels: [],
-            qualityScore: 68,
-            estimatedTime: 90,
-            metadata: {
-                pickupAreas: ['Karen'],
-                deliveryCorridors: ['south'],
-                hasReturnTrip: true
-            }
-        }
-    ];
-}
-
-async function checkActiveDeliveries() {
-    try {
-        // First check if there's a stored active route
-        const storedRoute = localStorage.getItem('tuma_active_route');
-        if (storedRoute) {
-            try {
-                const route = JSON.parse(storedRoute);
-                console.log('Found stored route:', route);
-                
-                // Check if all stops are completed
-                const allStopsCompleted = route.stops && route.stops.every(s => s.completed);
-                
-                if (allStopsCompleted) {
-                    console.log('All stops completed - clearing route');
-                    localStorage.removeItem('tuma_active_route');
-                    state.claimedRoute = null;
-                    
-                    // Hide navigation button
-                    const navButton = document.getElementById('navButton');
-                    if (navButton) navButton.style.display = 'none';
-                    
-                    // Hide active delivery section
-                    if (elements.activeDeliverySection) {
-                        elements.activeDeliverySection.style.display = 'none';
-                    }
-                    
-                    return; // No active route
-                }
-                
-                state.claimedRoute = route;
-                
-                // Disable all routes if there's an active route
-                if (state.availableRoutes) {
-                    state.availableRoutes.forEach(r => {
-                        r.status = 'claimed';
-                    });
-                }
-                
-                showActiveRoute();
-                displayRoutes(); // Re-display routes with disabled state
-                
-                // Show navigation button
-                const navButton = document.getElementById('navButton');
-                if (navButton) {
-                    navButton.style.display = 'flex';
-                }
-                return;
-            } catch (error) {
-                console.error('Error parsing stored route:', error);
-                localStorage.removeItem('tuma_active_route');
-                state.claimedRoute = null;
-            }
-        }
-        
-        // Skip database check for temporary riders
-        if (!state.rider || state.rider.id.startsWith('temp-')) {
-            console.log('No active route for temporary rider');
-            state.claimedRoute = null;
-            return;
-        }
-        
-        const activeParcels = await supabaseAPI.query('parcels', {
-            filter: `rider_id=eq.${state.rider.id}&status=in.(route_assigned,picked,in_transit)`,
-            order: 'created_at.asc'
-        });
-        
-        if (activeParcels.length > 0) {
-            state.claimedRoute = {
-                parcels: activeParcels,
-                stops: EnhancedRouteManager.sequenceStops(activeParcels)
-            };
-            
-            showActiveRoute();
-            
-            // Show navigation button
-            const navButton = document.getElementById('navButton');
-            if (navButton) {
-                navButton.style.display = 'flex';
-            }
-        } else {
-            console.log('No active parcels found');
-            state.claimedRoute = null;
-        }
-        
-    } catch (error) {
-        console.error('Error checking active deliveries:', error);
-        state.claimedRoute = null;
-    }
-}
-
-function showActiveRoute() {
-    if (!state.claimedRoute) return;
-    
-    // Check if all stops are completed
-    const allComplete = state.claimedRoute.stops && state.claimedRoute.stops.every(s => s.completed);
-    if (allComplete) {
-        console.log('All stops completed - route should be cleared');
-        // Clear the route if all stops are complete
-        state.claimedRoute = null;
-        localStorage.removeItem('tuma_active_route');
-        
-        // Hide active delivery section
-        if (elements.activeDeliverySection) {
-            elements.activeDeliverySection.style.display = 'none';
-        }
-        
-        // Hide navigation button
-        const navButton = document.getElementById('navButton');
-        if (navButton) {
-            navButton.style.display = 'none';
-        }
-        
-        return;
-    }
-    
-    const activeStops = state.claimedRoute.stops.filter(s => !s.completed);
-    if (activeStops.length === 0) return;
-    
-    const nextStop = activeStops[0];
-    const parcelsInPossession = EnhancedRouteManager.getParcelsInPossession(state.claimedRoute.stops);
-    
-    // Show the active delivery section
-    if (elements.activeDeliverySection) {
-        elements.activeDeliverySection.style.display = 'block';
-    }
-    
-    // Show navigation button
-    const navButton = document.getElementById('navButton');
-    if (navButton) {
-        navButton.style.display = 'flex';
-        console.log('Navigation button shown');
-    }
-    
-    // Extract meaningful location name from address
-    const getLocationName = (address) => {
-        if (!address || address === 'Pickup location' || address === 'Delivery location') {
-            return address;
-        }
-        
-        // Try to extract the most meaningful part
-        const patterns = [
-            /^([^,]+),/, // First part before comma
-            /^(.+?)(?:\s+Road|\s+Street|\s+Avenue|\s+Drive)/i, // Before road/street
-            /^(.+?)(?:\s+Mall|\s+Centre|\s+Center|\s+Plaza)/i // Landmarks
-        ];
-        
-        for (const pattern of patterns) {
-            const match = address.match(pattern);
-            if (match) {
-                return match[1].trim();
-            }
-        }
-        
-        return address.split(',')[0].trim();
-    };
-    
-    const stopLocationName = getLocationName(nextStop.address);
-    
-    // Update active delivery display with more info
-    const deliveryHTML = `
-        <div class="active-route-info">
-            <div class="route-progress-header">
-                <span class="progress-label">Route Progress</span>
-                <span class="progress-stats">${state.claimedRoute.stops.filter(s => s.completed).length}/${state.claimedRoute.stops.length} stops</span>
-            </div>
-            <div class="route-progress-bar">
-                <div class="progress-fill" style="width: ${(state.claimedRoute.stops.filter(s => s.completed).length / state.claimedRoute.stops.length * 100)}%"></div>
-            </div>
-        </div>
-        
-        ${parcelsInPossession.length > 0 ? `
-            <div class="carrying-indicator">
-                <span class="carrying-icon">📦</span>
-                <span>Carrying ${parcelsInPossession.length} parcel${parcelsInPossession.length > 1 ? 's' : ''}</span>
-            </div>
-        ` : ''}
-        
-        <div class="next-stop-info">
-            <div class="stop-type-badge ${nextStop.type}">
-                ${nextStop.type === 'pickup' ? '📦 PICKUP' : '📍 DELIVERY'}
-            </div>
-            <div class="stop-address">${stopLocationName}</div>
-            <div class="stop-details">
-                <span>Code: ${nextStop.parcelCode}</span>
-                <span>Customer: ${nextStop.customerName}</span>
-            </div>
-            
-            ${nextStop.type === 'delivery' && nextStop.amountToCollect > 0 ? `
-                <div class="payment-info">
-                    <div class="collect-amount">
-                        <span class="collect-label">Collect Cash:</span>
-                        <span class="collect-value">KES ${nextStop.amountToCollect.toLocaleString()}</span>
-                    </div>
-                    <div class="payment-note">
-                        <span class="note-icon">💵</span>
-                        <span>Customer pays on delivery</span>
-                    </div>
-                </div>
-            ` : nextStop.type === 'delivery' && nextStop.paymentStatus === 'paid' ? `
-                <div class="payment-info paid">
-                    <div class="paid-indicator">
-                        <span class="paid-icon">✅</span>
-                        <span>Already paid - No collection needed</span>
-                    </div>
-                </div>
-            ` : ''}
-        </div>
-    `;
-    
-    // Replace the inner content of active delivery section
-    const activeDeliveryCard = elements.activeDeliverySection?.querySelector('.active-delivery');
-    if (activeDeliveryCard) {
-        activeDeliveryCard.innerHTML = deliveryHTML;
-    }
-}
-
-// ─── Location Functions ────────────────────────────────────────────────────
-
-function getCurrentLocation() {
-    if ("geolocation" in navigator) {
-        navigator.geolocation.getCurrentPosition(
-            position => {
-                state.currentLocation = {
-                    lat: position.coords.latitude,
-                    lng: position.coords.longitude
-                };
-                console.log('Current location:', state.currentLocation);
-            },
-            error => {
-                console.error('Error getting location:', error);
-                showNotification('Location access needed for navigation', 'warning');
-            },
-            {
-                enableHighAccuracy: true,
-                timeout: 5000,
-                maximumAge: 0
-            }
-        );
-    }
-}
-
-function startLocationUpdates() {
-    setInterval(() => {
-        if (state.status === 'online' && state.rider && !state.rider.id.startsWith('temp-')) {
-            getCurrentLocation();
-            
-            if (state.currentLocation) {
-                supabaseAPI.update('riders', 
-                    `id=eq.${state.rider.id}`,
-                    {
-                        last_location_lat: state.currentLocation.lat,
-                        last_location_lng: state.currentLocation.lng,
-                        last_location_update: new Date().toISOString()
-                    }
-                ).catch(error => console.error('Error updating location:', error));
-            }
-        }
-    }, 30000);
-}
-
-// ─── Event Listeners ───────────────────────────────────────────────────────
-
-function setupEventListeners() {
-    // Code input formatting
-    if (elements.codeInput) {
-        elements.codeInput.addEventListener('input', (e) => {
-            let value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
-            e.target.value = value;
-        });
-    }
-    
-    if (elements.statusBadge) {
-        elements.statusBadge.addEventListener('click', toggleStatus);
-    }
-}
-
-async function toggleStatus() {
-    state.status = state.status === 'online' ? 'offline' : 'online';
-    
-    if (state.status === 'online') {
-        elements.statusBadge.classList.remove('offline');
-        elements.statusBadge.innerHTML = `
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                <circle cx="12" cy="12" r="4"/>
-            </svg>
-            <span>Online</span>
-        `;
-        startLocationUpdates();
-    } else {
-        elements.statusBadge.classList.add('offline');
-        elements.statusBadge.innerHTML = `
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                <circle cx="12" cy="12" r="4"/>
-            </svg>
-            <span>Offline</span>
-        `;
-    }
-    
-    // Only update database for non-temporary riders
-    if (state.rider && !state.rider.id.startsWith('temp-')) {
-        try {
-            await supabaseAPI.update('riders', 
-                `id=eq.${state.rider.id}`, 
-                { 
-                    status: state.status === 'online' ? 'available' : 'offline',
-                    is_online: state.status === 'online'
-                }
-            );
-        } catch (error) {
-            console.error('Error updating status:', error);
-        }
-    }
-    
-    haptic('light');
-}
-
-// ─── Global Functions (called from HTML) ───────────────────────────────────
-
-window.toggleBreakMode = function() {
-    const isOnBreak = state.status === 'break';
-    state.status = isOnBreak ? 'online' : 'break';
-    
-    elements.statusBadge.className = `status-badge ${state.status === 'break' ? 'offline' : ''}`;
-    elements.statusBadge.innerHTML = `
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            <circle cx="12" cy="12" r="4"/>
-        </svg>
-        <span>${state.status === 'break' ? 'On Break' : 'Online'}</span>
-    `;
-    
-    showNotification(
-        state.status === 'break' ? 'Break started. Take your time!' : 'Welcome back! You\'re online again.',
-        'info'
-    );
-    
-    haptic('medium');
-};
-
-window.viewEarningsDetails = function() {
-    showNotification('Detailed analytics coming soon!', 'info');
-    console.log('Earnings breakdown:', {
-        daily: state.earnings,
-        performance: calculatePerformanceMetrics(),
-        bonus: calculateDailyBonus()
-    });
-    haptic('light');
-};
-
-window.showHotZones = function() {
-    showNotification('High demand in Westlands and CBD areas!', 'info');
-    haptic('light');
-};
-
-window.callSupport = function() {
-    window.location.href = 'tel:+254700123456';
-    haptic('medium');
-};
-
-window.filterRoutes = function(type) {
-    state.currentFilter = type;
-    
-    document.querySelectorAll('.route-tab').forEach(tab => {
-        tab.classList.remove('active');
-    });
-    event.target.classList.add('active');
-    
-    displayRoutes();
-    haptic('light');
-};
-
-window.claimRoute = async function(routeId) {
-    console.log('claimRoute called with ID:', routeId);
-    
-    // Prevent any default behavior
-    if (window.event) {
-        window.event.preventDefault();
-        window.event.stopPropagation();
-    }
-    
-    // Check if already has an active route
-    if (state.claimedRoute) {
-        showNotification('You already have an active route!', 'warning');
-        return;
-    }
-    
-    const route = state.availableRoutes.find(r => r.id === routeId);
-    console.log('Found route:', route);
-    
-    if (!route || route.status !== 'available') {
-        showNotification('This route is not available', 'warning');
-        return;
-    }
-    
-    if (state.isLoading) return;
-    state.isLoading = true;
-    
-    // Show loading notification
-    showNotification('Claiming route...', 'info');
-    
-    try {
-        // Debug log
-        console.log('Claiming route:', route);
-        console.log('Route has parcelDetails:', route.parcelDetails);
-        
-        // The route now includes parcelDetails with full parcel data
-        if (route.parcelDetails && route.parcelDetails.length > 0) {
-            // Create route with sequenced stops
-            state.claimedRoute = {
-                ...route,
-                parcels: route.parcelDetails,
-                stops: EnhancedRouteManager.sequenceStops(route.parcelDetails)
-            };
-            
-            // Use the optimized pickup sequence from metadata
-            if (route.metadata?.pickupSequence) {
-                // Reorder stops according to optimized sequence
-                const optimizedStops = [];
-                const deliveryStops = [];
-                
-                // First add pickups in optimized order
-                route.metadata.pickupSequence.forEach(parcelId => {
-                    const pickupStop = state.claimedRoute.stops.find(s => 
-                        s.parcelId === parcelId && s.type === 'pickup'
-                    );
-                    if (pickupStop) optimizedStops.push(pickupStop);
-                });
-                
-                // Then add all deliveries
-                state.claimedRoute.stops.forEach(stop => {
-                    if (stop.type === 'delivery') {
-                        deliveryStops.push(stop);
-                    }
-                });
-                
-                // Optimize delivery order
-                state.claimedRoute.stops = [...optimizedStops, ...deliveryStops];
+            .reminder-icon {
+                font-size: 28px;
+                flex-shrink: 0;
             }
             
-            // Store in localStorage
-            localStorage.setItem('tuma_active_route', JSON.stringify(state.claimedRoute));
-            
-            // Update UI
-            showActiveRoute();
-            
-            // Show navigation button
-            const navButton = document.getElementById('navButton');
-            if (navButton) navButton.style.display = 'flex';
-            
-            // Mark all routes as unavailable
-            state.availableRoutes.forEach(r => r.status = 'claimed');
-            displayRoutes();
-            
-            const pickupAreas = route.metadata?.pickupAreas?.join(', ') || 'Multiple areas';
-            showNotification(
-                `Route claimed successfully! ${route.pickups} pickup${route.pickups > 1 ? 's' : ''} in ${pickupAreas}`, 
-                'success'
-            );
-            
-            // Update database for non-demo routes
-            if (!route.id.startsWith('demo-') && !state.rider.id.startsWith('temp-')) {
-                try {
-                    for (const parcel of route.parcelDetails) {
-                        await supabaseAPI.update('parcels', 
-                            `id=eq.${parcel.id}`,
-                            { 
-                                rider_id: state.rider.id,
-                                status: 'route_assigned', // Changed from 'assigned' to 'route_assigned'
-                                assigned_at: new Date().toISOString()
-                            }
-                        );
-                    }
-                } catch (dbError) {
-                    console.error('Error updating database:', dbError);
-                    // Continue anyway - route is already claimed locally
-                }
+            .reminder-text {
+                flex: 1;
+                color: white;
             }
             
-            haptic('success');
-        } else {
-            throw new Error('Route has no parcel details');
-        }
-        
-    } catch (error) {
-        console.error('Error claiming route:', error);
-        showNotification('Failed to claim route. Please try again.', 'error');
-        
-        // Clear any partially saved state
-        localStorage.removeItem('tuma_active_route');
-        state.claimedRoute = null;
-    } finally {
-        state.isLoading = false;
-    }
-};
-
-window.verifyCode = async function(type) {
-    const code = elements.codeInput.value.toUpperCase();
-    
-    if (!code || code.length < 6) {
-        showNotification('Please enter a valid code', 'error');
-        return;
-    }
-    
-    if (state.isLoading) return;
-    state.isLoading = true;
-    
-    try {
-        // Find the active stop
-        if (state.claimedRoute && state.claimedRoute.stops) {
-            const activeStop = state.claimedRoute.stops.find(s => 
-                !s.completed && 
-                s.type === type && 
-                s.verificationCode.toUpperCase() === code
-            );
-            
-            if (!activeStop) {
-                showNotification('Invalid code or wrong stop type', 'error');
-                return;
+            .reminder-title {
+                font-size: 16px;
+                font-weight: 700;
+                margin-bottom: 4px;
             }
             
-            // Check if can complete (for deliveries)
-            if (!EnhancedRouteManager.canCompleteStop(activeStop, state.claimedRoute.stops)) {
-                showNotification('Please complete the pickup first', 'warning');
-                return;
+            .reminder-details {
+                font-size: 14px;
+                display: flex;
+                align-items: center;
+                flex-wrap: wrap;
+                gap: 8px;
+                opacity: 0.95;
             }
             
-            // Mark stop as completed
-            activeStop.completed = true;
-            activeStop.timestamp = new Date();
-            
-            // Update parcel status in database (skip for temporary riders)
-            let dbError = null; // Define dbError in outer scope
-            if (!state.rider.id.startsWith('temp-')) {
-                try {
-                    await supabaseAPI.update('parcels',
-                        `id=eq.${activeStop.parcelId}`,
-                        {
-                            status: type === 'pickup' ? 'picked' : 'delivered',
-                            [`${type}_timestamp`]: activeStop.timestamp.toISOString()
-                        }
-                    );
-                } catch (error) {
-                    dbError = error; // Store the error
-                    console.error('Database update error:', error);
-                    
-                    // If it's the agent_notifications trigger error, continue anyway
-                    if (error.message && (
-                        error.message.includes('agent_notifications') ||
-                        error.message.includes('column "title"')
-                    )) {
-                        console.log('Continuing despite agent_notifications error');
-                        showNotification(
-                            type === 'delivery' ? 
-                            'Delivery completed! Database sync pending.' : 
-                            'Pickup completed!', 
-                            'success'
-                        );
-                        // Don't throw - continue with local state update
-                    } else {
-                        // For other errors, still continue but warn
-                        console.error('Unexpected database error:', error);
-                        showNotification(
-                            `${type.charAt(0).toUpperCase() + type.slice(1)} recorded locally. Sync pending.`, 
-                            'warning'
-                        );
-                    }
-                }
+            .reminder-details strong {
+                font-weight: 700;
             }
             
-            // Handle commission for deliveries
-            if (type === 'delivery') {
-                // Check if rider needs to collect payment
-                if (activeStop.amountToCollect > 0) {
-                    // Show payment collection reminder
-                    showNotification(
-                        `Remember to collect KES ${activeStop.amountToCollect.toLocaleString()} from ${activeStop.customerName}`,
-                        'warning'
-                    );
-                }
-                
-                // Find the parcel
-                let deliveryPrice = 0;
-                
-                if (state.claimedRoute.parcels && state.claimedRoute.parcels.length > 0) {
-                    const parcel = state.claimedRoute.parcels.find(p => p.id === activeStop.parcelId);
-                    deliveryPrice = parcel?.price || 500; // Default price if not found
-                } else {
-                    // Default price for routes without parcel data
-                    deliveryPrice = 500;
-                }
-                
-                // Update commission tracker
-                if (state.commissionTracker) {
-                    const commissionResult = await state.commissionTracker.addDeliveryCommission(
-                        activeStop.parcelId,
-                        deliveryPrice
-                    );
-                    
-                    // Update database (skip for temporary riders)
-                    if (!state.rider.id.startsWith('temp-')) {
-                        try {
-                            await supabaseAPI.update('riders',
-                                `id=eq.${state.rider.id}`,
-                                {
-                                    unpaid_commission: commissionResult.totalUnpaid,
-                                    is_commission_blocked: commissionResult.isBlocked
-                                }
-                            );
-                        } catch (riderUpdateError) {
-                            console.error('Error updating rider commission:', riderUpdateError);
-                            // Continue anyway - commission is tracked locally
-                        }
-                    }
-                    
-                    displayCommissionStatus();
-                    
-                    // Check blocking with dev bypass
-                    const devBypass = DEV_CONFIG.isDevelopment && DEV_CONFIG.bypassCommissionBlock;
-                    
-                    if (commissionResult.isBlocked && !devBypass) {
-                        showBlockedOverlay();
-                        return;
-                    } else if (commissionResult.isBlocked && devBypass) {
-                        console.warn('[DEV MODE] Commission block bypassed after delivery');
-                        showNotification(
-                            `DEV MODE: Would be blocked (KES ${commissionResult.totalUnpaid})`,
-                            'warning'
-                        );
-                    } else if (commissionResult.warningShown) {
-                        showNotification(
-                            `Account balance: KES ${commissionResult.totalUnpaid}. Please deposit funds soon.`,
-                            'warning'
-                        );
-                    }
-                }
-                
-                // Update earnings
-                const riderPayout = deliveryPrice * BUSINESS_CONFIG.commission.rider;
-                state.earnings.daily += riderPayout;
-                state.stats.deliveries++;
-                
-                updateEarningsDisplay();
-                updateStatsDisplay();
-                displayIncentiveProgress();
+            .separator {
+                opacity: 0.6;
             }
             
-            // Update stored route
-            localStorage.setItem('tuma_active_route', JSON.stringify(state.claimedRoute));
-            
-            elements.codeInput.value = '';
-            
-            // Show success notification if not already shown
-            if (!dbError || !dbError.message?.includes('agent_notifications')) {
-                showNotification(`${type.charAt(0).toUpperCase() + type.slice(1)} verified successfully!`, 'success');
+            .reminder-close {
+                background: rgba(255, 255, 255, 0.2);
+                border: none;
+                border-radius: 50%;
+                width: 32px;
+                height: 32px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                cursor: pointer;
+                color: white;
+                transition: all 0.2s;
             }
             
-            // Check if route is complete BEFORE updating UI
-            const allComplete = state.claimedRoute.stops.every(s => s.completed);
-            if (allComplete) {
-                // Calculate total collected and earnings
-                const deliveryStops = state.claimedRoute.stops.filter(s => s.type === 'delivery');
-                const totalCollected = deliveryStops.reduce((sum, stop) => sum + (stop.amountToCollect || 0), 0);
-                
-                // Calculate total earnings for the route
-                let totalEarnings = 0;
-                if (state.claimedRoute.total_earnings) {
-                    totalEarnings = state.claimedRoute.total_earnings * BUSINESS_CONFIG.commission.rider;
-                } else if (state.claimedRoute.parcels) {
-                    // Calculate from parcels
-                    totalEarnings = state.claimedRoute.parcels.reduce((sum, p) => 
-                        sum + ((p.price || 500) * BUSINESS_CONFIG.commission.rider), 0
-                    );
-                } else {
-                    // Default earnings
-                    totalEarnings = state.claimedRoute.stops.filter(s => s.type === 'delivery').length * 350;
-                }
-                
-                // Show route completion summary if cash was collected
-                if (totalCollected > 0) {
-                    showRouteCompletionSummary(totalCollected, totalEarnings, deliveryStops.length);
-                }
-                
-                // Store completion data for commission tracking
-                const completionData = {
-                    completed: true,
-                    earnings: Math.round(totalEarnings),
-                    deliveries: deliveryStops.length,
-                    totalCollected: totalCollected,
-                    timestamp: new Date().toISOString(),
-                    parcels: state.claimedRoute.parcels || []
-                };
-                
-                console.log('Storing route completion data:', completionData);
-                localStorage.setItem('tuma_route_completion', JSON.stringify(completionData));
-                
-                // Clear active route state
-                elements.activeDeliverySection.style.display = 'none';
-                state.claimedRoute = null;
-                
-                // Hide navigation button
-                const navButton = document.getElementById('navButton');
-                if (navButton) navButton.style.display = 'none';
-                
-                // Clear stored route
-                localStorage.removeItem('tuma_active_route');
-                
-                // Force update available routes to re-enable them
-                state.availableRoutes.forEach(route => {
-                    route.status = 'available';
-                });
-                
-                showNotification('🎉 Route completed! Great work!', 'success');
-                
-                // Reload available routes
-                await loadAvailableRoutes();
-                
-                // Process the completion data
-                await checkRouteCompletionStatus();
-            } else {
-                // Only update UI if route is not complete
-                showActiveRoute();
-                
-                // Check if entering delivery phase
-                const pickups = state.claimedRoute.stops.filter(s => s.type === 'pickup');
-                const allPickupsComplete = pickups.every(p => p.completed);
-                
-                if (allPickupsComplete && type === 'pickup') {
-                    showNotification('All pickups complete! Starting delivery phase 🚀', 'success');
-                }
+            .reminder-close:hover {
+                background: rgba(255, 255, 255, 0.3);
             }
-        }
-        
-        haptic('success');
-        
-    } catch (error) {
-        console.error('Error verifying code:', error);
-        showNotification('Verification failed. Please try again.', 'error');
-    } finally {
-        state.isLoading = false;
-    }
-};
-
-window.navigateToRoute = function() {
-    if (!state.claimedRoute) {
-        showNotification('Claim a route first to see navigation', 'warning');
-        return;
-    }
-    
-    // Store route data for map page
-    localStorage.setItem('tuma_active_route', JSON.stringify(state.claimedRoute));
-    
-    // Navigate to existing route.html with active flag
-    window.location.href = './route.html?active=true';
-    
-    haptic('light');
-};
-
-// New wallet modal (replaces payment modal) - REFINED VERSION
-window.openWalletModal = function() {
-    const summary = state.commissionTracker.getSummary();
-    
-    const modal = document.createElement('div');
-    modal.className = 'payment-modal';
-    modal.innerHTML = `
-        <div class="payment-content">
-            <h2>Deposit to Wallet</h2>
-            <div class="wallet-balance">
-                <span class="balance-label">Current Balance</span>
-                <span class="balance-amount ${summary.unpaid > 0 ? 'negative' : ''}">
-                    ${summary.unpaid > 0 ? '-' : ''}KES ${Math.abs(summary.unpaid)}
-                </span>
-            </div>
             
-            <div class="deposit-options">
-                <h3>Deposit Options:</h3>
-                
-                <div class="deposit-method">
-                    <div class="method-header">
-                        <span class="method-icon">💵</span>
-                        <span class="method-name">Cash Deposit</span>
-                    </div>
-                    <p class="method-description">
-                        Deposit collected cash at any Tuma agent location
-                    </p>
-                    <button class="method-button" onclick="showAgentLocations()">
-                        Find Agents Near You
-                    </button>
-                </div>
-                
-                <div class="deposit-method">
-                    <div class="method-header">
-                        <span class="method-icon">📱</span>
-                        <span class="method-name">M-Pesa</span>
-                    </div>
-                    <div class="mpesa-instructions">
-                        <ol>
-                            <li>Go to M-Pesa</li>
-                            <li>Select "Lipa na M-Pesa" > "Pay Bill"</li>
-                            <li>Business Number: <strong>247247</strong></li>
-                            <li>Account: <strong>${state.rider.phone}</strong></li>
-                            <li>Amount: <strong>${summary.unpaid}</strong></li>
-                        </ol>
-                    </div>
-                </div>
-            </div>
-            
-            <button class="modal-close" onclick="closeWalletModal()">Close</button>
-        </div>
-    `;
-    
-    document.body.appendChild(modal);
-    
-    // Add payment modal styles if not already present
-    const existingStyle = document.getElementById('payment-modal-styles');
-    if (!existingStyle) {
-        const style = document.createElement('style');
-        style.id = 'payment-modal-styles';
-        style.textContent = `
+            /* Payment modal styles */
             .payment-modal {
                 position: fixed;
                 top: 0;
@@ -2946,433 +3230,97 @@ window.openWalletModal = function() {
                 color: var(--danger);
             }
             
-            .deposit-options {
+            /* Urgent warning styles */
+            .urgent-payment-warning {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0, 0, 0, 0.95);
+                backdrop-filter: blur(20px);
+                z-index: 9998;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 20px;
+                animation: fadeIn 0.3s ease-out;
+            }
+            
+            .warning-content {
+                background: var(--surface-elevated);
+                border-radius: 24px;
+                padding: 32px;
+                max-width: 400px;
+                width: 100%;
+                text-align: center;
+                border: 2px solid var(--warning);
+            }
+            
+            .warning-icon {
+                font-size: 64px;
+                margin-bottom: 20px;
+            }
+            
+            .warning-content h2 {
+                font-size: 28px;
+                margin-bottom: 16px;
+            }
+            
+            .warning-amount {
+                font-size: 24px;
+                font-weight: 700;
+                color: var(--warning);
+                margin-bottom: 12px;
+            }
+            
+            .warning-message {
+                font-size: 16px;
+                color: var(--text-secondary);
                 margin-bottom: 24px;
             }
             
-            .deposit-options h3 {
-                font-size: 16px;
-                margin-bottom: 16px;
-                color: var(--text-secondary);
+            .timer {
+                font-size: 20px;
+                font-weight: 700;
+                color: var(--danger);
+                font-family: monospace;
             }
             
-            .deposit-method {
-                background: var(--surface-high);
-                border-radius: 12px;
-                padding: 16px;
-                margin-bottom: 12px;
-            }
-            
-            .method-header {
-                display: flex;
-                align-items: center;
-                gap: 12px;
-                margin-bottom: 8px;
-            }
-            
-            .method-icon {
-                font-size: 24px;
-            }
-            
-            .method-name {
-                font-size: 18px;
-                font-weight: 600;
-            }
-            
-            .method-description {
-                color: var(--text-secondary);
-                font-size: 14px;
-                margin-bottom: 12px;
-                line-height: 1.5;
-            }
-            
-            .method-button {
-                width: 100%;
-                background: var(--primary);
-                color: white;
-                border: none;
-                border-radius: 8px;
-                padding: 10px;
-                font-size: 14px;
-                font-weight: 600;
-                cursor: pointer;
-            }
-            
-            .mpesa-instructions {
-                background: var(--surface);
-                border-radius: 8px;
-                padding: 12px;
-                margin-top: 12px;
-            }
-            
-            .mpesa-instructions ol {
-                margin: 0;
-                padding-left: 20px;
-                color: var(--text-secondary);
-                font-size: 14px;
-            }
-            
-            .mpesa-instructions li {
-                margin-bottom: 6px;
-            }
-            
-            .mpesa-instructions strong {
-                color: var(--text-primary);
-                font-weight: 600;
-            }
-            
-            .modal-close {
-                width: 100%;
-                background: var(--primary);
-                color: white;
-                border: none;
-                border-radius: 12px;
-                padding: 16px;
-                font-size: 16px;
-                font-weight: 600;
-                cursor: pointer;
-            }
-        `;
-        document.head.appendChild(style);
-    }
-    
-    haptic('light');
-};
-
-window.viewAccountDetails = function() {
-    const summary = state.commissionTracker.getSummary();
-    
-    showNotification(
-        `Wallet Balance: ${summary.unpaid > 0 ? '-' : ''}KES ${Math.abs(summary.unpaid)}`,
-        'info'
-    );
-    
-    console.log('Account details:', {
-        unpaid: summary.unpaid,
-        totalPaid: summary.totalPaid,
-        pendingCount: summary.pendingCount,
-        percentageUsed: summary.percentageUsed,
-        isBlocked: summary.isBlocked
-    });
-    
-    haptic('light');
-};
-
-window.closeWalletModal = function() {
-    const modal = document.querySelector('.payment-modal');
-    if (modal) {
-        modal.remove();
-    }
-};
-
-window.showAgentLocations = function() {
-    showNotification('Opening agent locations...', 'info');
-    // In production, this would show a map or list of nearby agents
-    haptic('light');
-};
-
-window.goBack = function() {
-    // Clear any active route data if needed
-    if (window.location.pathname.includes('route.html')) {
-        // Navigate back to rider dashboard
-        window.location.href = './rider.html';
-    } else {
-        // General back navigation
-        window.history.back();
-    }
-};
-
-// ─── Custom Styles Function ────────────────────────────────────────────────
-
-function addCustomStyles() {
-    const existingStyle = document.getElementById('custom-styles');
-    if (!existingStyle && state.commissionTracker) {
-        const style = document.createElement('style');
-        style.id = 'custom-styles';
-        style.textContent = state.commissionTracker.getCommissionStyles() + `
-            /* Additional styles for route cards */
-            .route-stats {
+            .warning-actions {
                 display: grid;
-                grid-template-columns: repeat(3, 1fr);
                 gap: 12px;
-                margin-bottom: 12px;
-                padding: 12px;
-                background: var(--surface-high);
-                border-radius: 10px;
-                text-align: center;
             }
             
-            .route-stats > div {
-                font-size: 14px;
-                font-weight: 600;
-            }
-            
-            .route-meta {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                margin-bottom: 12px;
-                font-size: 13px;
-                color: var(--text-secondary);
-            }
-            
-            .route-meta .return-trip {
-                color: var(--success);
-                font-weight: 600;
-            }
-            
-            .loading-routes {
-                text-align: center;
-                padding: 60px 20px;
-            }
-            
-            .loading-spinner {
-                width: 40px;
-                height: 40px;
-                border: 3px solid var(--surface-high);
-                border-top-color: var(--primary);
-                border-radius: 50%;
-                margin: 0 auto 20px;
-                animation: spin 1s linear infinite;
-            }
-            
-            @keyframes spin {
-                to { transform: rotate(360deg); }
-            }
-            
-            /* Payment collection styles */
-            .payment-info {
-                background: var(--warning-light, rgba(255, 159, 10, 0.1));
-                border: 2px solid var(--warning);
-                border-radius: 12px;
+            .pay-now-btn {
+                width: 100%;
                 padding: 16px;
-                margin-top: 16px;
+                background: var(--success);
+                color: white;
+                border: none;
+                border-radius: 12px;
+                font-size: 18px;
+                font-weight: 700;
+                cursor: pointer;
             }
             
-            .payment-info.paid {
-                background: var(--success-light, rgba(52, 199, 89, 0.1));
-                border-color: var(--success);
-            }
-            
-            .collect-amount {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                margin-bottom: 8px;
-            }
-            
-            .collect-label {
+            .later-btn {
+                width: 100%;
+                padding: 16px;
+                background: var(--surface-high);
+                color: var(--text-primary);
+                border: none;
+                border-radius: 12px;
                 font-size: 16px;
                 font-weight: 600;
-                color: var(--text-secondary);
-            }
-            
-            .collect-value {
-                font-size: 28px;
-                font-weight: 700;
-                color: var(--warning);
-            }
-            
-            .payment-note,
-            .paid-indicator {
-                display: flex;
-                align-items: center;
-                gap: 8px;
-                font-size: 14px;
-                color: var(--text-secondary);
-            }
-            
-            .note-icon,
-            .paid-icon {
-                font-size: 18px;
-            }
-            
-            .paid-indicator {
-                color: var(--success);
-                font-weight: 600;
-            }
-            
-            /* Active route info styles */
-            .active-route-info {
-                margin-bottom: 16px;
-            }
-            
-            .route-progress-header {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                margin-bottom: 8px;
-                font-size: 14px;
-            }
-            
-            .progress-label {
-                color: var(--text-secondary);
-                font-weight: 600;
-            }
-            
-            .progress-stats {
-                color: var(--text-primary);
-                font-weight: 700;
-            }
-            
-            .route-progress-bar {
-                height: 6px;
-                background: var(--surface-high);
-                border-radius: 3px;
-                overflow: hidden;
-            }
-            
-            .progress-fill {
-                height: 100%;
-                background: var(--primary);
-                border-radius: 3px;
-                transition: width 0.3s ease;
-            }
-            
-            .carrying-indicator {
-                background: var(--primary-light, rgba(0, 122, 255, 0.1));
-                border: 1px solid var(--primary);
-                border-radius: 8px;
-                padding: 8px 12px;
-                display: inline-flex;
-                align-items: center;
-                gap: 8px;
-                font-size: 14px;
-                font-weight: 600;
-                color: var(--primary);
-                margin-bottom: 16px;
-            }
-            
-            .carrying-icon {
-                font-size: 18px;
-            }
-            
-            .next-stop-info {
-                background: var(--surface-high);
-                border-radius: 12px;
-                padding: 16px;
-            }
-            
-            .stop-type-badge {
-                display: inline-flex;
-                align-items: center;
-                gap: 6px;
-                padding: 6px 12px;
-                border-radius: 20px;
-                font-size: 12px;
-                font-weight: 700;
-                text-transform: uppercase;
-                margin-bottom: 12px;
-            }
-            
-            .stop-type-badge.pickup {
-                background: var(--primary-light, rgba(0, 122, 255, 0.1));
-                color: var(--primary);
-            }
-            
-            .stop-type-badge.delivery {
-                background: var(--success-light, rgba(52, 199, 89, 0.1));
-                color: var(--success);
-            }
-            
-            .stop-address {
-                font-size: 18px;
-                font-weight: 700;
-                color: var(--text-primary);
-                margin-bottom: 8px;
-                line-height: 1.3;
-            }
-            
-            .stop-details {
-                display: flex;
-                gap: 16px;
-                font-size: 14px;
-                color: var(--text-secondary);
-            }
-            
-            .stop-details span {
-                display: flex;
-                align-items: center;
-                gap: 4px;
+                cursor: pointer;
             }
         `;
         document.head.appendChild(style);
     }
 }
 
-// ─── Debug and Testing Functions ───────────────────────────────────────────
-
-window.testClustering = async function() {
-    // Fetch some parcels
-    const parcels = await supabaseAPI.query('parcels', {
-        filter: 'status=eq.submitted&rider_id=is.null',
-        limit: 20
-    });
-    
-    console.log('Test parcels:', parcels);
-    
-    // Test clustering
-    const routes = routeClusterer.createOptimizedRoutes(parcels);
-    
-    console.log('Generated routes:', routes);
-    
-    // Analyze quality
-    routes.forEach(route => {
-        console.log(`\nRoute: ${route.name}`);
-        console.log(`Quality Score: ${route.qualityScore}`);
-        console.log(`Pickup Areas: ${route.metadata.pickupAreas.join(', ')}`);
-        console.log(`Delivery Corridors: ${route.metadata.deliveryCorridors.join(', ')}`);
-        console.log(`Distance: ${route.distance}km`);
-        console.log(`Earnings: KES ${route.total_earnings}`);
-        console.log(`Has Return Trip: ${route.metadata.hasReturnTrip}`);
-    });
-};
-
-// ─── Initialize on DOM Ready ───────────────────────────────────────────────
-
-document.addEventListener('DOMContentLoaded', async () => {
-    console.log('✅ rider.js loaded successfully with clustering integration!');
-    
-    // Initialize Telegram WebApp
-    const tg = window.Telegram?.WebApp;
-    const telegramUser = tg?.initDataUnsafe?.user;
-    
-    // Determine rider ID based on environment
-    let riderId;
-    let riderName;
-    
-    if (telegramUser?.id) {
-        // Running in Telegram - use real user
-        riderId = telegramUser.id;
-        riderName = telegramUser.first_name || 'Rider';
-        if (DEV_CONFIG.verboseLogging) {
-            console.log('Using Telegram user:', riderId);
-        }
-    } else if (DEV_CONFIG.isDevelopment && DEV_CONFIG.testRider) {
-        // Development mode - use test rider
-        riderId = DEV_CONFIG.testRider.id;
-        riderName = DEV_CONFIG.testRider.name;
-        if (DEV_CONFIG.verboseLogging) {
-            console.log('Development mode: Using test rider', riderId);
-        }
-    } else {
-        // Fallback - generate temporary ID
-        riderId = `temp-${Date.now()}`;
-        riderName = 'Guest Rider';
-        if (DEV_CONFIG.verboseLogging) {
-            console.log('Generated temporary rider:', riderId);
-        }
-    }
-    
-    // Store the rider ID for use in other functions
-    window.currentRiderId = riderId;
-    
-    // Continue with initialization...
-    await initialize();
-});
-
-// ─── Export for Debugging ──────────────────────────────────────────────────
-
+// Debug and Testing Object
 window.tumaDebug = {
     state,
     supabaseAPI,
@@ -3404,7 +3352,6 @@ window.tumaDebug = {
         displayIncentiveProgress();
     },
     testBonus: (deliveries, amount) => {
-        // Add a test bonus
         state.activeBonuses.push({
             id: 'test-bonus',
             type: 'delivery_target',
@@ -3416,7 +3363,30 @@ window.tumaDebug = {
         });
         displayIncentiveProgress();
     },
-    testClustering,
+    testClustering: async function() {
+        const parcels = await supabaseAPI.query('parcels', {
+            filter: 'status=eq.submitted&rider_id=is.null',
+            limit: 20
+        });
+        
+        console.log('Test parcels:', parcels);
+        
+        if (routeClusterer) {
+            const routes = routeClusterer.createOptimizedRoutes(parcels);
+            
+            console.log('Generated routes:', routes);
+            
+            routes.forEach(route => {
+                console.log(`\nRoute: ${route.name}`);
+                console.log(`Quality Score: ${route.qualityScore}`);
+                console.log(`Pickup Areas: ${route.metadata.pickupAreas.join(', ')}`);
+                console.log(`Delivery Corridors: ${route.metadata.deliveryCorridors.join(', ')}`);
+                console.log(`Distance: ${route.distance}km`);
+                console.log(`Earnings: KES ${route.total_earnings}`);
+                console.log(`Has Return Trip: ${route.metadata.hasReturnTrip}`);
+            });
+        }
+    },
     checkParcelStatus: async () => {
         const allParcels = await supabaseAPI.query('parcels', {
             limit: 100
@@ -3444,9 +3414,7 @@ window.tumaDebug = {
         
         return summary;
     },
-    
     resetParcels: async () => {
-        // Reset some parcels to submitted status for testing
         const parcels = await supabaseAPI.query('parcels', {
             filter: 'status=eq.delivered',
             limit: 10
@@ -3468,7 +3436,6 @@ window.tumaDebug = {
         console.log(`Reset ${parcels.length} parcels to submitted status`);
         window.location.reload();
     },
-    
     clearStaleRoute: () => {
         localStorage.removeItem('tuma_active_route');
         localStorage.removeItem('tuma_route_completion');
@@ -3476,18 +3443,14 @@ window.tumaDebug = {
         console.log('Cleared stored route and completion data');
         window.location.reload();
     },
-    
     syncRouteCompletion: async () => {
-        // Force process any pending route completion
         await checkRouteCompletionStatus();
         
-        // Check if current route is actually complete
         if (state.claimedRoute && state.claimedRoute.stops) {
             const allComplete = state.claimedRoute.stops.every(s => s.completed);
             if (allComplete) {
                 console.log('Current route is complete - clearing');
                 
-                // Calculate earnings
                 let totalEarnings = 0;
                 if (state.claimedRoute.total_earnings) {
                     totalEarnings = state.claimedRoute.total_earnings * BUSINESS_CONFIG.commission.rider;
@@ -3497,7 +3460,6 @@ window.tumaDebug = {
                     );
                 }
                 
-                // Store completion
                 const completionData = {
                     completed: true,
                     earnings: Math.round(totalEarnings),
@@ -3509,17 +3471,12 @@ window.tumaDebug = {
                 localStorage.removeItem('tuma_active_route');
                 state.claimedRoute = null;
                 
-                // Process completion
                 await checkRouteCompletionStatus();
-                
-                // Reload routes
                 await loadAvailableRoutes();
             }
         }
     },
-    
     resetCommission: async () => {
-        // Dev-only function to reset commission
         if (!DEV_CONFIG.isDevelopment) {
             console.error('This function is only available in development mode');
             return;
@@ -3532,7 +3489,6 @@ window.tumaDebug = {
             
             displayCommissionStatus();
             
-            // Remove any blocked overlay
             const blockedOverlay = document.getElementById('commissionBlockedOverlay');
             if (blockedOverlay) {
                 blockedOverlay.remove();
@@ -3542,9 +3498,7 @@ window.tumaDebug = {
             showNotification('DEV: Commission reset', 'success');
         }
     },
-    
     setCommission: (amount) => {
-        // Dev-only function to set commission to specific amount
         if (!DEV_CONFIG.isDevelopment) {
             console.error('This function is only available in development mode');
             return;
@@ -3560,7 +3514,6 @@ window.tumaDebug = {
             showNotification(`DEV: Commission set to KES ${amount}`, 'info');
         }
     },
-    
     analyzeRoutes: () => {
         if (!state.availableRoutes || state.availableRoutes.length === 0) {
             console.log('No routes available');
@@ -3578,7 +3531,6 @@ window.tumaDebug = {
             console.log(`   Areas: ${route.metadata?.pickupAreas?.join(', ') || 'N/A'}`);
         });
     },
-    
     getDevConfig: () => {
         console.log('Development Configuration:', DEV_CONFIG);
         console.log(`Commission bypass active: ${DEV_CONFIG.isDevelopment && DEV_CONFIG.bypassCommissionBlock}`);
@@ -3588,12 +3540,23 @@ window.tumaDebug = {
 
 // Override window.haptic if not already defined
 if (!window.haptic) {
-    window.haptic = haptic;
+    window.haptic = function(type = 'light') {
+        if (window.navigator && window.navigator.vibrate) {
+            switch(type) {
+                case 'light': window.navigator.vibrate(10); break;
+                case 'medium': window.navigator.vibrate(30); break;
+                case 'heavy': window.navigator.vibrate(50); break;
+                case 'success': window.navigator.vibrate([10, 50, 10]); break;
+                default: window.navigator.vibrate(10);
+            }
+        }
+    };
 }
 
 // Make showNotification globally available
 window.showNotification = showNotification;
 
-console.log('✅ rider.js loaded successfully with enhanced clustering support and dev bypass!');
+// Final initialization message
+console.log('✅ Complete enhanced rider.js loaded successfully!');
 console.log('Debug commands available: window.tumaDebug');
 console.log(`Commission bypass: ${DEV_CONFIG.isDevelopment && DEV_CONFIG.bypassCommissionBlock ? 'ACTIVE' : 'INACTIVE'}`);
