@@ -693,6 +693,11 @@ function optimizeRouteStops() {
         showNotification('No route to optimize', 'warning');
         return;
     }
+
+       // Store original ONLY if we haven't already optimized
+    if (!state.originalRouteOrder) {
+        state.originalRouteOrder = [...state.activeRoute.stops];
+    }
     
     const hasCompletedStops = state.activeRoute.stops.some(s => s.completed);
     
@@ -848,6 +853,7 @@ function undoOptimization() {
     
     state.activeRoute.stops = [...state.originalRouteOrder];
     state.activeRoute.isOptimized = false;
+    state.originalRouteOrder = null; // Clear after restoring
     
     updateStopOrderMap();
     localStorage.setItem('tuma_active_route', JSON.stringify(state.activeRoute));
@@ -2281,82 +2287,6 @@ function showSignaturePad(onSign) {
     };
 }
 
-function updateOptimizeButton(isOptimized) {
-    const optimizeBtn = document.getElementById('optimizeBtn');
-    const undoBtn = document.getElementById('undoOptimizeBtn');
-    
-    if (optimizeBtn) {
-        if (isOptimized) {
-            optimizeBtn.innerHTML = `
-                <span class="optimize-icon">✅</span>
-                <span class="optimize-text">Route Optimized</span>
-            `;
-            optimizeBtn.disabled = true;
-            optimizeBtn.classList.add('optimized');
-        } else {
-            optimizeBtn.innerHTML = `
-                <span class="optimize-icon">✨</span>
-                <span class="optimize-text">Optimize Route</span>
-            `;
-            optimizeBtn.disabled = false;
-            optimizeBtn.classList.remove('optimized');
-        }
-    }
-    
-    if (undoBtn) {
-        undoBtn.style.display = isOptimized ? 'flex' : 'none';
-    }
-}
-function showOptimizingAnimation() {
-    const animation = document.createElement('div');
-    animation.id = 'optimizingAnimation';
-    animation.className = 'optimizing-animation';
-    
-    const steps = [
-        '📍 Analyzing stop locations',
-        '🗺️ Detecting route direction',
-        '⚡ Optimizing delivery sequence',
-        '✅ Validating route integrity'
-    ];
-    
-    animation.innerHTML = `
-        <div class="optimizing-content">
-            <div class="optimizing-spinner"></div>
-            <h3 style="color: white; margin-bottom: 10px;">Optimizing Route...</h3>
-            <p style="color: rgba(255, 255, 255, 0.6); margin-bottom: 20px;">
-                Using intelligent geographical flow analysis
-            </p>
-            <div class="optimizing-steps">
-                ${steps.map((step, i) => `
-                    <div class="step ${i === 0 ? 'active' : ''}" data-step="${i}">
-                        ${step}
-                    </div>
-                `).join('')}
-            </div>
-        </div>
-    `;
-    
-    document.body.appendChild(animation);
-    
-    // Animate steps
-    steps.forEach((_, index) => {
-        if (index > 0) {
-            setTimeout(() => {
-                const step = animation.querySelector(`.step[data-step="${index}"]`);
-                if (step) step.classList.add('active');
-            }, 300 * (index + 1));
-        }
-    });
-}
-
-function hideOptimizingAnimation() {
-    const animation = document.getElementById('optimizingAnimation');
-    if (animation) {
-        animation.classList.add('fade-out');
-        setTimeout(() => animation.remove(), 300);
-    }
-}
-
 function showOptimizationResults(savedDistance, savedPercentage) {
     const results = document.createElement('div');
     results.className = 'optimization-results';
@@ -2538,135 +2468,6 @@ function createPhotoPreview(photoData, label) {
         <div class="photo-label">${label}</div>
     `;
     return preview;
-}
-
-function showCameraUI(onCapture) {
-    const cameraModal = document.createElement('div');
-    cameraModal.className = 'camera-modal';
-    cameraModal.style.cssText = `
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: rgba(0, 0, 0, 0.95);
-        z-index: 3500;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-    `;
-    
-    cameraModal.innerHTML = `
-        <div class="camera-container">
-            <video id="cameraVideo" class="camera-video" autoplay></video>
-            <div class="camera-overlay">
-                <div class="camera-frame"></div>
-            </div>
-            <div class="camera-controls">
-                <button class="camera-button" id="captureBtn"></button>
-                <button style="
-                    background: rgba(255, 255, 255, 0.2);
-                    border: none;
-                    border-radius: 50%;
-                    width: 50px;
-                    height: 50px;
-                    color: white;
-                    font-size: 20px;
-                    cursor: pointer;
-                " onclick="this.parentElement.parentElement.parentElement.remove()">✕</button>
-            </div>
-        </div>
-        <p style="color: white; margin-top: 20px; font-size: 14px;">
-            Position the package within the frame
-        </p>
-    `;
-    
-    document.body.appendChild(cameraModal);
-    
-    // Initialize camera
-    const video = document.getElementById('cameraVideo');
-    initializeCamera().then(stream => {
-        video.srcObject = stream;
-        
-        document.getElementById('captureBtn').onclick = () => {
-            const photoData = capturePhoto(video);
-            stream.getTracks().forEach(track => track.stop());
-            cameraModal.remove();
-            onCapture(photoData);
-        };
-    }).catch(err => {
-        console.error('Camera error:', err);
-        showNotification('Camera not available', 'error');
-        cameraModal.remove();
-    });
-}
-
-function showSignaturePad(onSign) {
-    const signatureModal = document.createElement('div');
-    signatureModal.className = 'signature-modal';
-    signatureModal.style.cssText = `
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: rgba(0, 0, 0, 0.95);
-        z-index: 3500;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 20px;
-    `;
-    
-    signatureModal.innerHTML = `
-        <div class="signature-container" style="max-width: 500px; width: 100%;">
-            <h3 style="margin: 0 0 20px 0; color: #333;">Customer Signature</h3>
-            <label class="signature-label">Please ask the customer to sign below:</label>
-            <canvas id="signatureCanvas" class="signature-canvas"></canvas>
-            <div class="signature-controls">
-                <button class="signature-clear" id="clearSignature">Clear</button>
-                <div style="display: flex; gap: 10px;">
-                    <button style="
-                        padding: 10px 20px;
-                        background: #ccc;
-                        border: none;
-                        border-radius: 8px;
-                        cursor: pointer;
-                        font-weight: 600;
-                    " onclick="this.parentElement.parentElement.parentElement.parentElement.remove()">Cancel</button>
-                    <button id="confirmSignature" style="
-                        padding: 10px 20px;
-                        background: linear-gradient(135deg, #34C759, #30D158);
-                        border: none;
-                        border-radius: 8px;
-                        color: white;
-                        cursor: pointer;
-                        font-weight: 600;
-                    ">Confirm Signature</button>
-                </div>
-            </div>
-        </div>
-    `;
-    
-    document.body.appendChild(signatureModal);
-    
-    const canvas = document.getElementById('signatureCanvas');
-    const signaturePad = initializeSignaturePad(canvas);
-    
-    document.getElementById('clearSignature').onclick = () => {
-        signaturePad.clear();
-    };
-    
-    document.getElementById('confirmSignature').onclick = () => {
-        const signatureData = signaturePad.getSignatureData();
-        if (signatureData) {
-            signatureModal.remove();
-            onSign(signatureData);
-        } else {
-            showNotification('Please provide a signature', 'warning');
-        }
-    };
 }
 /**
  * Enhanced Route Navigation Module - Part 5/6
