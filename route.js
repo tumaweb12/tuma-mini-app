@@ -4738,6 +4738,6 @@ window.proceedWithNavigation = proceedWithNavigation;
 window.plotRoute = plotRoute;
 window.stopLocationTracking = stopLocationTracking;
 
-console.log('✅ Enhanced Route.js v5.0.0 loaded successfully');
+console.log('✅ Enhanced Route.js v5.0.1 loaded successfully');
 console.log('Debug utilities available at: window.routeDebug');
 console.log('Enhanced features: Photo capture, Digital signatures, M-Pesa payments');
