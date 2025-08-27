@@ -1,7 +1,7 @@
 /**
  * Enhanced Route Navigation Module - Part 1/6
  * Setup, Configuration, Core API Functions, and Enhanced Verification Features
- * Version: 5.0.1 - Fixed navigation experience with better route optimization
+ * Version: 5.0.0 - Includes Photo Capture, Digital Signatures, M-Pesa Integration
  */
 
 // Fix: Make route optimizer optional - fallback to inline optimization if module not found
@@ -14,72 +14,84 @@ if (typeof RouteOptimizer !== 'undefined') {
 } else {
     // Fallback to simple optimizer
     class FallbackRouteOptimizer {
-        constructor(config) {
-            this.config = config;
-        }
-        
-        optimizeRoute(stops) {
-            if (!stops || stops.length === 0) return stops;
-            
-            // Simple nearest neighbor optimization
-            const optimized = [];
-            const remaining = [...stops];
-            let current = remaining.shift(); // Start with first stop
-            optimized.push(current);
-            
-            while (remaining.length > 0) {
-                let nearest = null;
-                let nearestDistance = Infinity;
-                let nearestIndex = -1;
-                
-                remaining.forEach((stop, index) => {
-                    const dist = this.calculateDistance(current.location, stop.location);
-                    if (dist < nearestDistance) {
-                        nearestDistance = dist;
-                        nearest = stop;
-                        nearestIndex = index;
-                    }
-                });
-                
-                if (nearest) {
-                    optimized.push(nearest);
-                    current = nearest;
-                    remaining.splice(nearestIndex, 1);
-                }
-            }
-            
-            return optimized;
-        }
-        
-        calculateDistance(point1, point2) {
-            const R = 6371;
-            const dLat = (point2.lat - point1.lat) * Math.PI / 180;
-            const dLon = (point2.lng - point1.lng) * Math.PI / 180;
-            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                    Math.cos(point1.lat * Math.PI / 180) * Math.cos(point2.lat * Math.PI / 180) *
-                    Math.sin(dLon/2) * Math.sin(dLon/2);
-            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-            return R * c;
-        }
-        
-        getStatistics() {
-            return {
-                originalDistance: 0,
-                optimizedDistance: 0,
-                savedDistance: 0,
-                savedPercentage: 0,
-                executionTime: 0
-            };
-        }
-        
-        getConfig() {
-            return this.config;
-        }
-        
-        updateConfig(newConfig) {
-            this.config = { ...this.config, ...newConfig };
-        }
+        // ... keep your existing fallback code ...
     }
+    routeOptimizer = new FallbackRouteOptimizer({
+        // ... existing config ...
+    });
+}
+
+// Fallback route optimizer if external module not available
+class FallbackRouteOptimizer {
+    constructor(config) {
+        this.config = config;
+    }
+    
+    optimizeRoute(stops) {
+        if (!stops || stops.length === 0) return stops;
+        
+        // Simple nearest neighbor optimization
+        const optimized = [];
+        const remaining = [...stops];
+        let current = remaining.shift(); // Start with first stop
+        optimized.push(current);
+        
+        while (remaining.length > 0) {
+            let nearest = null;
+            let nearestDistance = Infinity;
+            let nearestIndex = -1;
+            
+            remaining.forEach((stop, index) => {
+                const dist = this.calculateDistance(current.location, stop.location);
+                if (dist < nearestDistance) {
+                    nearestDistance = dist;
+                    nearest = stop;
+                    nearestIndex = index;
+                }
+            });
+            
+            if (nearest) {
+                optimized.push(nearest);
+                current = nearest;
+                remaining.splice(nearestIndex, 1);
+            }
+        }
+        
+        return optimized;
+    }
+    
+    calculateDistance(point1, point2) {
+        const R = 6371;
+        const dLat = (point2.lat - point1.lat) * Math.PI / 180;
+        const dLon = (point2.lng - point1.lng) * Math.PI / 180;
+        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(point1.lat * Math.PI / 180) * Math.cos(point2.lat * Math.PI / 180) *
+                Math.sin(dLon/2) * Math.sin(dLon/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        return R * c;
+    }
+    
+    getStatistics() {
+        return {
+            originalDistance: 0,
+            optimizedDistance: 0,
+            savedDistance: 0,
+            savedPercentage: 0,
+            executionTime: 0
+        };
+    }
+    
+    getConfig() {
+        return this.config;
+    }
+    
+    updateConfig(newConfig) {
+        this.config = { ...this.config, ...newConfig };
+    }
+}
+
+// Initialize route optimizer with fallback
+if (!routeOptimizer) {
     routeOptimizer = new FallbackRouteOptimizer({
         immediateDeliveryRadius: 1.5,
         clusterRadius: 2.0,
@@ -108,8 +120,8 @@ const DEV_CONFIG = {
     },
     verboseLogging: true,
     ignoreRiderNotFound: true,
-    skipPhotoCapture: false,
-    skipSignature: false
+    skipPhotoCapture: false, // Set to true to skip photo requirements in dev
+    skipSignature: false     // Set to true to skip signature requirements in dev
 };
 
 // Enhanced State Management with new verification features
@@ -131,7 +143,6 @@ const state = {
     lastLocationTime: null,
     lastLocationErrorTime: null,
     lastOptimizationCheck: null,
-    lastRouteUpdate: null,
     pickupPhaseCompleted: false,
     isPanelVisible: true,
     isPanelExpanded: false,
@@ -160,16 +171,20 @@ const state = {
     },
     stopOrderMap: {},
     showNumberedMarkers: true,
+    
+    // New: Enhanced verification data storage
     verificationData: {
-        photos: {},
-        signatures: {},
-        timestamps: {},
-        locations: {},
-        mpesaCodes: {}
+        photos: {},        // stopId -> {pickup: imageData, delivery: imageData}
+        signatures: {},    // stopId -> signatureData
+        timestamps: {},    // stopId -> {pickup: timestamp, delivery: timestamp}
+        locations: {},     // stopId -> {pickup: location, delivery: location}
+        mpesaCodes: {}     // stopId -> mpesaTransactionCode
     },
+    
+    // New: Current verification session
     currentVerification: {
         stopId: null,
-        type: null,
+        type: null,       // 'pickup' or 'delivery'
         photoData: null,
         signatureData: null,
         locationData: null,
@@ -285,7 +300,7 @@ async function supabaseInsert(table, data) {
     return await response.json();
 }
 
-// Store verification data in Supabase
+// New: Store verification data in Supabase
 async function storeVerificationData(stopId, verificationType, data) {
     try {
         const stop = state.activeRoute.stops.find(s => s.id === stopId);
@@ -294,12 +309,12 @@ async function storeVerificationData(stopId, verificationType, data) {
         const verificationRecord = {
             parcel_id: stop.parcelId,
             stop_id: stopId,
-            verification_type: verificationType,
+            verification_type: verificationType, // 'pickup' or 'delivery'
             verification_code: data.code,
             photo_url: data.photoUrl || null,
             signature_data: data.signatureData || null,
-            location_lat: data.location?.lat || null,
-            location_lng: data.location?.lng || null,
+            location_lat: data.location?.lat || null,  // Separate latitude column
+            location_lng: data.location?.lng || null,  // Separate longitude column
             location_accuracy: data.location?.accuracy || null,
             mpesa_code: data.mpesaCode || null,
             timestamp: new Date().toISOString(),
@@ -335,6 +350,7 @@ async function storeVerificationData(stopId, verificationType, data) {
         }
     } catch (error) {
         console.error('Error storing verification data:', error);
+        // Continue even if storage fails - don't block delivery
     }
 }
 
@@ -342,6 +358,7 @@ async function storeVerificationData(stopId, verificationType, data) {
 // PHOTO CAPTURE FUNCTIONS WITH DIRECT SUPABASE UPLOAD
 // ============================================================================
 
+// Initialize Supabase client for storage
 const supabase = {
     storage: {
         from: (bucket) => ({
@@ -391,6 +408,7 @@ function initializeCamera() {
             })
             .catch(err => {
                 console.error('Camera initialization failed:', err);
+                // Fallback to any available camera
                 navigator.mediaDevices.getUserMedia({ video: true, audio: false })
                     .then(stream => resolve(stream))
                     .catch(err => reject(err));
@@ -406,6 +424,7 @@ async function captureAndUploadPhoto(videoElement, stopId, verificationType) {
     const ctx = canvas.getContext('2d');
     ctx.drawImage(videoElement, 0, 0);
     
+    // Resize if needed
     if (canvas.width > config.verification.maxPhotoSize) {
         const scale = config.verification.maxPhotoSize / canvas.width;
         const newCanvas = document.createElement('canvas');
@@ -417,12 +436,14 @@ async function captureAndUploadPhoto(videoElement, stopId, verificationType) {
         canvas = newCanvas;
     }
     
+    // Convert canvas to blob and upload directly to Supabase
     return new Promise((resolve) => {
         canvas.toBlob(async (blob) => {
             try {
                 const fileName = `${stopId}_${verificationType}_${Date.now()}.jpg`;
                 const filePath = `delivery-photos/${new Date().toISOString().split('T')[0]}/${fileName}`;
                 
+                // Upload to Supabase Storage
                 const { data, error } = await supabase.storage
                     .from('delivery-verifications')
                     .upload(filePath, blob, {
@@ -432,8 +453,10 @@ async function captureAndUploadPhoto(videoElement, stopId, verificationType) {
                 
                 if (error) {
                     console.error('Upload failed, using base64 fallback:', error);
+                    // Fallback to base64 for offline capability
                     resolve(canvas.toDataURL('image/jpeg', config.verification.photoQuality));
                 } else {
+                    // Return public URL
                     const { data: { publicUrl } } = supabase.storage
                         .from('delivery-verifications')
                         .getPublicUrl(filePath);
@@ -443,12 +466,14 @@ async function captureAndUploadPhoto(videoElement, stopId, verificationType) {
                 }
             } catch (err) {
                 console.error('Photo upload error:', err);
+                // Fallback to base64
                 resolve(canvas.toDataURL('image/jpeg', config.verification.photoQuality));
             }
         }, 'image/jpeg', config.verification.photoQuality);
     });
 }
 
+// Backward compatible function for simple capture
 function capturePhoto(videoElement) {
     const canvas = document.createElement('canvas');
     canvas.width = videoElement.videoWidth;
@@ -457,6 +482,7 @@ function capturePhoto(videoElement) {
     const ctx = canvas.getContext('2d');
     ctx.drawImage(videoElement, 0, 0);
     
+    // Resize if needed
     if (canvas.width > config.verification.maxPhotoSize) {
         const scale = config.verification.maxPhotoSize / canvas.width;
         const newCanvas = document.createElement('canvas');
@@ -478,12 +504,14 @@ function capturePhoto(videoElement) {
 
 async function uploadSignatureToSupabase(signatureData, stopId) {
     try {
+        // Convert base64 to blob
         const base64Response = await fetch(signatureData);
         const blob = await base64Response.blob();
         
         const fileName = `${stopId}_signature_${Date.now()}.png`;
         const filePath = `delivery-signatures/${new Date().toISOString().split('T')[0]}/${fileName}`;
         
+        // Upload to Supabase Storage
         const { data, error } = await supabase.storage
             .from('delivery-verifications')
             .upload(filePath, blob, {
@@ -493,9 +521,10 @@ async function uploadSignatureToSupabase(signatureData, stopId) {
         
         if (error) {
             console.error('Signature upload failed:', error);
-            return signatureData;
+            return signatureData; // Fallback to base64
         }
         
+        // Return public URL
         const { data: { publicUrl } } = supabase.storage
             .from('delivery-verifications')
             .getPublicUrl(filePath);
@@ -504,7 +533,7 @@ async function uploadSignatureToSupabase(signatureData, stopId) {
         return publicUrl;
     } catch (error) {
         console.error('Signature upload error:', error);
-        return signatureData;
+        return signatureData; // Fallback to base64
     }
 }
 
@@ -513,10 +542,12 @@ function initializeSignaturePad(canvas) {
     let isDrawing = false;
     let points = [];
     
+    // Set canvas size
     const rect = canvas.getBoundingClientRect();
     canvas.width = rect.width;
     canvas.height = rect.height;
     
+    // Style setup
     ctx.strokeStyle = '#000';
     ctx.lineWidth = 2;
     ctx.lineCap = 'round';
@@ -550,11 +581,13 @@ function initializeSignaturePad(canvas) {
         return { x, y };
     };
     
+    // Mouse events
     canvas.addEventListener('mousedown', startDrawing);
     canvas.addEventListener('mousemove', draw);
     canvas.addEventListener('mouseup', stopDrawing);
     canvas.addEventListener('mouseout', stopDrawing);
     
+    // Touch events
     canvas.addEventListener('touchstart', (e) => {
         e.preventDefault();
         startDrawing(e);
@@ -577,6 +610,7 @@ function initializeSignaturePad(canvas) {
             if (points.length < config.verification.signatureMinPoints) {
                 return null;
             }
+            // Return the raw canvas data for upload
             return canvas.toDataURL('image/png');
         },
         getPointCount: () => points.length
@@ -589,6 +623,7 @@ function initializeSignaturePad(canvas) {
 
 function promptMpesaPayment(amount, phoneNumber) {
     return new Promise((resolve, reject) => {
+        // Create M-Pesa prompt UI
         const mpesaModal = document.createElement('div');
         mpesaModal.className = 'mpesa-prompt-modal';
         mpesaModal.innerHTML = `
@@ -631,6 +666,7 @@ function promptMpesaPayment(amount, phoneNumber) {
             resolve({ success: false, method: 'cash' });
         };
         
+        // Simulate M-Pesa timeout after 2 minutes
         setTimeout(() => {
             if (document.body.contains(mpesaModal)) {
                 mpesaModal.remove();
@@ -642,7 +678,7 @@ function promptMpesaPayment(amount, phoneNumber) {
 /**
  * Enhanced Route Navigation Module - Part 2/6
  * Route Optimization Functions and Utility Functions
- * Version: 5.0.1
+ * Version: 5.0.0
  */
 
 // ============================================================================
@@ -670,7 +706,7 @@ function optimizeRouteStops() {
         
         // Store original for undo - ONLY IF NOT ALREADY STORED
         if (!state.originalRouteOrder || state.originalRouteOrder.length === 0) {
-            state.originalRouteOrder = JSON.parse(JSON.stringify(state.activeRoute.stops));
+            state.originalRouteOrder = JSON.parse(JSON.stringify(state.activeRoute.stops)); // Deep copy
             console.log('Stored original route for undo:', state.originalRouteOrder);
         }
         
@@ -702,7 +738,7 @@ function optimizeRouteStops() {
                 updateStopOrderMap();
                 localStorage.setItem('tuma_active_route', JSON.stringify({
                     ...state.activeRoute,
-                    originalRouteOrder: state.originalRouteOrder
+                    originalRouteOrder: state.originalRouteOrder // Save original in localStorage
                 }));
                 
                 console.log('Optimization complete:');
@@ -746,7 +782,7 @@ function reoptimizeRemainingStops() {
     // Get only uncompleted stops
     const remainingStops = state.activeRoute.stops.filter(s => !s.completed);
     
-    if (remainingStops.length <= 1) return;
+    if (remainingStops.length <= 1) return; // No need to optimize
     
     console.log('📍 Re-optimizing remaining stops...');
     
@@ -784,7 +820,7 @@ function checkForBetterRoute() {
     if (!state.navigationActive || !config.optimization.autoReoptimize) return;
     
     const remainingStops = state.activeRoute.stops.filter(s => !s.completed);
-    if (remainingStops.length <= 2) return;
+    if (remainingStops.length <= 2) return; // Too few stops to matter
     
     try {
         // Test if re-optimization would save significant distance
@@ -824,11 +860,12 @@ function undoOptimization() {
     state.activeRoute.isOptimized = false;
     
     // DON'T clear originalRouteOrder - keep it for multiple undos
+    // state.originalRouteOrder = null; 
     
     updateStopOrderMap();
     localStorage.setItem('tuma_active_route', JSON.stringify({
         ...state.activeRoute,
-        originalRouteOrder: state.originalRouteOrder
+        originalRouteOrder: state.originalRouteOrder // Keep original in localStorage
     }));
     
     displayRouteInfo();
@@ -861,33 +898,6 @@ window.updateOptimizerSetting = function(setting, value) {
         }
     }
 };
-
-// ============================================================================
-// NEW: Update navigation routing function
-// ============================================================================
-
-function updateNavigationRouting() {
-    if (!state.navigationActive || !state.currentLocation) return;
-    
-    // Redraw route from current position every 30 seconds
-    const now = Date.now();
-    if (!state.lastRouteUpdate || now - state.lastRouteUpdate > 30000) {
-        drawOptimizedRoute();
-        state.lastRouteUpdate = now;
-    }
-    
-    // Update distance to next stop
-    const nextStop = getNextStop();
-    if (nextStop) {
-        const distance = calculateDistance(state.currentLocation, nextStop.location);
-        const navDistance = document.getElementById('navDistance');
-        if (navDistance) {
-            navDistance.textContent = distance < 1 ? 
-                `${Math.round(distance * 1000)}m` : 
-                `${distance.toFixed(1)}km`;
-        }
-    }
-}
 
 // ============================================================================
 // UTILITY FUNCTIONS
@@ -1051,7 +1061,7 @@ function calculateTotalRouteDistance(stops) {
 function calculateDistance(point1, point2) {
     if (!point1 || !point2) return 0;
     
-    const R = 6371;
+    const R = 6371; // Earth's radius in kilometers
     const dLat = (point2.lat - point1.lat) * Math.PI / 180;
     const dLon = (point2.lng - point1.lng) * Math.PI / 180;
     const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
@@ -1110,7 +1120,7 @@ async function handleRouteCompletion() {
         parcels: state.activeRoute.parcels || [],
         optimizationMode: state.routeOptimizationMode,
         distanceSaved: state.optimizationStats.savedDistance,
-        verificationData: state.verificationData
+        verificationData: state.verificationData // Include verification data
     };
     
     console.log('Storing completion data:', completionData);
@@ -1157,30 +1167,11 @@ async function handleRouteCompletion() {
 // Toggle numbered markers
 window.toggleNumberedMarkers = function() {
     state.showNumberedMarkers = !state.showNumberedMarkers;
-    plotRoute();
+    plotRoute(); // Redraw with new marker style
     showNotification(
         state.showNumberedMarkers ? 'Showing route numbers' : 'Showing pickup/delivery labels',
         'info'
     );
-};
-
-// NEW: Toggle cash widget
-window.toggleCashWidget = function() {
-    const widget = document.querySelector('.cash-collection-widget');
-    if (!widget) return;
-    
-    const content = widget.querySelector('.cash-widget-content');
-    const minimizeBtn = widget.querySelector('.minimize-btn');
-    
-    if (content.style.display === 'none') {
-        content.style.display = 'block';
-        minimizeBtn.textContent = '－';
-        widget.style.minWidth = '240px';
-    } else {
-        content.style.display = 'none';
-        minimizeBtn.textContent = '＋';
-        widget.style.minWidth = '120px';
-    }
 };
 
 // Helper function to compress image data for storage
@@ -1209,54 +1200,37 @@ function compressImageData(dataUrl, maxWidth = 800) {
     });
 }
 
-// Main notification function - defined here for use throughout all parts
+// Early definition of showNotification to avoid reference errors
 function showNotification(message, type = 'info') {
-    const notification = document.createElement('div');
-    notification.className = `notification ${type}`;
-    notification.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        background: ${type === 'success' ? 'linear-gradient(135deg, #34C759, #30D158)' : 
-                      type === 'error' ? 'linear-gradient(135deg, #FF3B30, #FF2D55)' : 
-                      type === 'warning' ? 'linear-gradient(135deg, #FF9F0A, #FF6B00)' : 
-                      'linear-gradient(135deg, #1C1C1F, #2C2C2E)'};
-        color: ${type === 'warning' ? '#0A0A0B' : 'white'};
-        padding: 16px 20px;
-        border-radius: 14px;
-        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        z-index: 4000;
-        animation: slideIn 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-        max-width: 380px;
-        font-weight: 600;
-        font-size: 15px;
-        letter-spacing: 0.3px;
-    `;
-    notification.innerHTML = `
-        <span class="notification-icon" style="font-size: 20px;">
-            ${type === 'success' ? '✓' : type === 'error' ? '✗' : type === 'warning' ? '⚠' : 'ℹ'}
-        </span>
-        <span>${message}</span>
-    `;
+    // Simple console fallback if called before full UI is loaded
+    console.log(`[${type.toUpperCase()}] ${message}`);
     
-    document.body.appendChild(notification);
-    
-    setTimeout(() => {
-        notification.style.animation = 'slideOut 0.3s ease-out';
-        setTimeout(() => notification.remove(), 300);
-    }, 3000);
+    // Try to show actual notification if DOM is ready
+    if (document.body) {
+        const notification = document.createElement('div');
+        notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 16px 20px;
+            border-radius: 14px;
+            z-index: 4000;
+            background: ${type === 'success' ? '#34C759' : type === 'error' ? '#FF3B30' : '#FF9F0A'};
+            color: white;
+        `;
+        notification.textContent = message;
+        document.body.appendChild(notification);
+        setTimeout(() => notification.remove(), 3000);
+    }
 }
 /**
  * Enhanced Route Navigation Module - Part 3/6
  * UI Functions, Styles, Display Components, and Enhanced Verification UI
- * Version: 5.0.1 - FIXED CSS SYNTAX ERRORS
+ * Version: 5.0.0
  */
 
 // ============================================================================
-// UI STYLING & INITIALIZATION (Fixed CSS syntax errors)
+// UI STYLING & INITIALIZATION (Enhanced with new verification styles)
 // ============================================================================
 
 function injectNavigationStyles() {
@@ -1306,72 +1280,6 @@ function injectNavigationStyles() {
         @keyframes fadeIn {
             from { opacity: 0; }
             to { opacity: 1; }
-        }
-        
-        @keyframes pulse {
-            0% {
-                transform: scale(1);
-                opacity: 1;
-            }
-            50% {
-                transform: scale(1.5);
-                opacity: 0.5;
-            }
-            100% {
-                transform: scale(2);
-                opacity: 0;
-            }
-        }
-        
-        @keyframes slideIn {
-            from {
-                transform: translateX(100%);
-                opacity: 0;
-            }
-            to {
-                transform: translateX(0);
-                opacity: 1;
-            }
-        }
-        
-        @keyframes slideOut {
-            from {
-                transform: translateX(0);
-                opacity: 1;
-            }
-            to {
-                transform: translateX(100%);
-                opacity: 0;
-            }
-        }
-        
-        @keyframes slideUp {
-            from {
-                transform: translateY(100%);
-            }
-            to {
-                transform: translateY(0);
-            }
-        }
-        
-        @keyframes spin {
-            to { 
-                transform: rotate(360deg); 
-            }
-        }
-        
-        @keyframes popIn {
-            0% {
-                transform: translate(-50%, -50%) scale(0.8);
-                opacity: 0;
-            }
-            50% {
-                transform: translate(-50%, -50%) scale(1.05);
-            }
-            100% {
-                transform: translate(-50%, -50%) scale(1);
-                opacity: 1;
-            }
         }
         
         .verification-steps {
@@ -1588,6 +1496,15 @@ function injectNavigationStyles() {
             animation: slideUp 0.3s ease;
         }
         
+        @keyframes slideUp {
+            from {
+                transform: translateY(100%);
+            }
+            to {
+                transform: translateY(0);
+            }
+        }
+        
         .mpesa-content {
             background: linear-gradient(135deg, #1C1C1F, #2C2C2E);
             border-radius: 24px;
@@ -1712,18 +1629,6 @@ function injectNavigationStyles() {
             transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
             border: 1px solid rgba(255, 255, 255, 0.1);
             font-weight: 500;
-        }
-        
-        .cash-collection-widget.minimized .cash-widget-content {
-            display: none;
-        }
-        
-        .cash-collection-widget.minimized {
-            min-width: 120px !important;
-        }
-        
-        body.navigating .cash-collection-widget {
-            top: 140px;
         }
         
         /* Premium Leaflet popup styles */
@@ -1926,208 +1831,6 @@ function injectNavigationStyles() {
             animation: spin 1s linear infinite;
             margin: 0 auto 20px;
         }
-    `;
-    
-    document.head.appendChild(style);
-}
-        /* Import premium fonts */
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-        
-        * {
-            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', 'Segoe UI', system-ui, sans-serif;
-        }
-        
-        /* Map container styles */
-        .map-container {
-            position: absolute !important;
-            top: 0 !important;
-            left: 0 !important;
-            right: 0 !important;
-            bottom: 0 !important;
-            z-index: 1 !important;
-        }
-        
-        #map {
-            position: absolute !important;
-            top: 0 !important;
-            left: 0 !important;
-            width: 100% !important;
-            height: 100% !important;
-            z-index: 1 !important;
-        }
-        
-        /* Enhanced Verification Modal Styles */
-        .verification-modal-enhanced {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            z-index: 3000;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-            animation: fadeIn 0.3s ease;
-        }
-        
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-        
-        @keyframes pulse {
-            0% {
-                transform: scale(1);
-                opacity: 1 !important;
-            color: #FF453A !important;
-            background: rgba(255, 69, 58, 0.2) !important;
-            transform: rotate(90deg) !important;
-        }
-        
-        /* Verification Progress Bar */
-        .verification-progress {
-            height: 4px;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 2px;
-            overflow: hidden;
-            margin: 20px 0;
-        }
-        
-        .verification-progress-bar {
-            height: 100%;
-            background: linear-gradient(90deg, #9333EA, #7928CA);
-            border-radius: 2px;
-            transition: width 0.3s ease;
-        }
-        
-        /* Photo Grid for Multiple Photos */
-        .photo-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 10px;
-            margin: 20px 0;
-        }
-        
-        .photo-grid-item {
-            position: relative;
-            padding-bottom: 100%;
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 12px;
-            overflow: hidden;
-        }
-        
-        .photo-grid-item img {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-        
-        .photo-grid-item .photo-label {
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            background: linear-gradient(to top, rgba(0, 0, 0, 0.8), transparent);
-            color: white;
-            padding: 10px;
-            font-size: 12px;
-            font-weight: 600;
-        }
-        
-        /* Optimization Button Styles */
-        .optimize-button-container {
-            display: flex;
-            gap: 8px;
-            margin-bottom: 12px;
-            width: 100%;
-        }
-        
-        .optimize-route-btn {
-            flex: 1;
-            background: linear-gradient(135deg, #9333EA, #7928CA);
-            color: white;
-            border: none;
-            border-radius: 16px;
-            padding: 16px 20px;
-            font-size: 15px;
-            font-weight: 600;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-            box-shadow: 0 4px 15px rgba(147, 51, 234, 0.4);
-            letter-spacing: 0.5px;
-        }
-        
-        .optimize-route-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(147, 51, 234, 0.5);
-        }
-        
-        .optimize-route-btn.optimized {
-            background: linear-gradient(135deg, #34C759, #30D158);
-            cursor: default;
-        }
-        
-        .undo-optimize-btn {
-            background: rgba(255, 255, 255, 0.1);
-            color: white;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 16px;
-            padding: 16px 20px;
-            font-size: 15px;
-            font-weight: 600;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            transition: all 0.3s ease;
-        }
-        
-        .undo-optimize-btn:hover {
-            background: rgba(255, 255, 255, 0.15);
-        }
-        
-        /* Optimization Animation */
-        .optimizing-animation {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.9);
-            backdrop-filter: blur(10px);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 5000;
-        }
-        
-        .optimizing-content {
-            background: linear-gradient(135deg, #1C1C1F, #2C2C2E);
-            border-radius: 24px;
-            padding: 40px;
-            text-align: center;
-            box-shadow: 0 25px 80px rgba(0, 0, 0, 0.6);
-            max-width: 400px;
-        }
-        
-        .optimizing-spinner {
-            width: 60px;
-            height: 60px;
-            border: 3px solid rgba(147, 51, 234, 0.3);
-            border-top-color: #9333EA;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 20px;
-        }
         
         @keyframes spin {
             to { transform: rotate(360deg); }
@@ -2135,439 +1838,15 @@ function injectNavigationStyles() {
     `;
     
     document.head.appendChild(style);
-} 1;
-            }
-            50% {
-                transform: scale(1.5);
-                opacity: 0.5;
-            }
-            100% {
-                transform: scale(2);
-                opacity: 0;
-            }
-        }
-        
-        .verification-steps {
-            display: flex;
-            justify-content: space-between;
-            margin: 20px 0;
-            padding: 0 10px;
-        }
-        
-        .verification-step {
-            flex: 1;
-            text-align: center;
-            position: relative;
-        }
-        
-        .verification-step::after {
-            content: '';
-            position: absolute;
-            top: 20px;
-            right: -50%;
-            width: 100%;
-            height: 2px;
-            background: rgba(255, 255, 255, 0.1);
-        }
-        
-        .verification-step:last-child::after {
-            display: none;
-        }
-        
-        .step-circle {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background: rgba(255, 255, 255, 0.1);
-            border: 2px solid rgba(255, 255, 255, 0.2);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto 8px;
-            font-size: 18px;
-            transition: all 0.3s ease;
-        }
-        
-        .verification-step.active .step-circle {
-            background: linear-gradient(135deg, #9333EA, #7928CA);
-            border-color: #9333EA;
-            color: white;
-        }
-        
-        .verification-step.completed .step-circle {
-            background: linear-gradient(135deg, #34C759, #30D158);
-            border-color: #34C759;
-            color: white;
-        }
-        
-        .step-label {
-            font-size: 12px;
-            color: rgba(255, 255, 255, 0.6);
-            font-weight: 600;
-        }
-        
-        .verification-step.active .step-label {
-            color: white;
-        }
-        
-        /* Camera View Styles */
-        .camera-container {
-            position: relative;
-            width: 100%;
-            height: 300px;
-            background: #000;
-            border-radius: 12px;
-            overflow: hidden;
-            margin: 20px 0;
-        }
-        
-        .camera-video {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-        
-        .camera-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            pointer-events: none;
-        }
-        
-        .camera-frame {
-            width: 80%;
-            height: 80%;
-            border: 3px solid rgba(255, 255, 255, 0.5);
-            border-radius: 12px;
-            position: relative;
-        }
-        
-        .camera-frame::before,
-        .camera-frame::after {
-            content: '';
-            position: absolute;
-            width: 30px;
-            height: 30px;
-            border: 3px solid #9333EA;
-        }
-        
-        .camera-frame::before {
-            top: -3px;
-            left: -3px;
-            border-right: none;
-            border-bottom: none;
-        }
-        
-        .camera-frame::after {
-            bottom: -3px;
-            right: -3px;
-            border-left: none;
-            border-top: none;
-        }
-        
-        .camera-controls {
-            position: absolute;
-            bottom: 20px;
-            left: 0;
-            right: 0;
-            display: flex;
-            justify-content: center;
-            gap: 20px;
-        }
-        
-        .camera-button {
-            width: 60px;
-            height: 60px;
-            border-radius: 50%;
-            background: white;
-            border: 4px solid #9333EA;
-            cursor: pointer;
-            transition: transform 0.2s ease;
-        }
-        
-        .camera-button:hover {
-            transform: scale(1.1);
-        }
-        
-        .camera-button:active {
-            transform: scale(0.95);
-        }
-        
-        .photo-preview {
-            width: 100%;
-            height: 200px;
-            object-fit: cover;
-            border-radius: 12px;
-            margin: 10px 0;
-        }
-        
-        /* Signature Pad Styles */
-        .signature-container {
-            background: white;
-            border-radius: 12px;
-            padding: 20px;
-            margin: 20px 0;
-        }
-        
-        .signature-canvas {
-            width: 100%;
-            height: 200px;
-            border: 2px dashed #ccc;
-            border-radius: 8px;
-            cursor: crosshair;
-            touch-action: none;
-        }
-        
-        .signature-label {
-            font-size: 14px;
-            color: #666;
-            margin-bottom: 10px;
-            display: block;
-        }
-        
-        .signature-controls {
-            display: flex;
-            justify-content: space-between;
-            margin-top: 10px;
-        }
-        
-        .signature-clear {
-            padding: 8px 16px;
-            background: #f0f0f0;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-weight: 600;
-        }
-        
-        /* M-Pesa Prompt Styles */
-        .mpesa-prompt-modal {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.9);
-            backdrop-filter: blur(10px);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 4000;
-            animation: slideUp 0.3s ease;
-        }
-        
-        @keyframes slideUp {
-            from {
-                transform: translateY(100%);
-            }
-            to {
-                transform: translateY(0);
-            }
-        }
-        
-        .mpesa-content {
-            background: linear-gradient(135deg, #1C1C1F, #2C2C2E);
-            border-radius: 24px;
-            padding: 30px;
-            max-width: 400px;
-            width: 90%;
-            box-shadow: 0 25px 80px rgba(0, 0, 0, 0.6);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        
-        .mpesa-content h3 {
-            color: white;
-            font-size: 24px;
-            margin-bottom: 20px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        
-        .mpesa-content h3::before {
-            content: '';
-            width: 40px;
-            height: 40px;
-            background: linear-gradient(135deg, #34C759, #30D158);
-            border-radius: 50%;
-            display: inline-block;
-        }
-        
-        .mpesa-amount {
-            font-size: 36px;
-            font-weight: 800;
-            color: #34C759;
-            text-align: center;
-            margin: 20px 0;
-        }
-        
-        .mpesa-instructions {
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 12px;
-            padding: 20px;
-            margin: 20px 0;
-        }
-        
-        .mpesa-instructions ol {
-            margin: 0;
-            padding-left: 20px;
-            color: rgba(255, 255, 255, 0.8);
-        }
-        
-        .mpesa-instructions li {
-            margin: 10px 0;
-        }
-        
-        .mpesa-input {
-            margin: 20px 0;
-        }
-        
-        .mpesa-input label {
-            display: block;
-            color: rgba(255, 255, 255, 0.6);
-            margin-bottom: 10px;
-            font-size: 14px;
-        }
-        
-        .mpesa-input input {
-            width: 100%;
-            padding: 15px;
-            background: rgba(255, 255, 255, 0.05);
-            border: 2px solid rgba(255, 255, 255, 0.2);
-            border-radius: 12px;
-            color: white;
-            font-size: 18px;
-            font-weight: 600;
-            text-align: center;
-            letter-spacing: 2px;
-            text-transform: uppercase;
-        }
-        
-        .mpesa-actions {
-            display: flex;
-            gap: 10px;
-            margin-top: 20px;
-        }
-        
-        .mpesa-actions button {
-            flex: 1;
-            padding: 16px;
-            border: none;
-            border-radius: 12px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: transform 0.2s ease;
-        }
-        
-        .mpesa-actions button:first-child {
-            background: linear-gradient(135deg, #34C759, #30D158);
-            color: white;
-        }
-        
-        .mpesa-actions button:last-child {
-            background: rgba(255, 255, 255, 0.1);
-            color: white;
-        }
-        
-        .mpesa-actions button:hover {
-            transform: translateY(-2px);
-        }
-        
-        /* Cash Collection Widget */
-        .cash-collection-widget {
-            position: fixed;
-            top: 80px;
-            right: 20px;
-            background: linear-gradient(135deg, #0A0A0B 0%, #1C1C1F 100%);
-            backdrop-filter: blur(20px);
-            border-radius: 20px;
-            padding: 20px;
-            min-width: 240px;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5), 0 2px 10px rgba(0, 0, 0, 0.3);
-            z-index: 100;
-            transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            font-weight: 500;
-        }
-        
-        .cash-collection-widget.minimized .cash-widget-content {
-            display: none;
-        }
-        
-        .cash-collection-widget.minimized {
-            min-width: 120px !important;
-        }
-        
-        body.navigating .cash-collection-widget {
-            top: 140px;
-        }
-        
-        /* Premium Leaflet popup styles */
-        .leaflet-popup {
-            margin-bottom: 25px !important;
-        }
-        
-        .leaflet-popup-content-wrapper {
-            background: linear-gradient(145deg, #1A1A1D 0%, #2D2D30 100%) !important;
-            border-radius: 24px !important;
-            box-shadow: 
-                0 20px 60px rgba(0, 0, 0, 0.8),
-                0 10px 20px rgba(0, 0, 0, 0.6),
-                inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
-            border: 1px solid rgba(255, 255, 255, 0.08) !important;
-            overflow: hidden !important;
-            padding: 0 !important;
-            backdrop-filter: blur(10px) !important;
-        }
-        
-        .leaflet-popup-content {
-            margin: 0 !important;
-            width: 340px !important;
-            max-width: 340px !important;
-            color: white !important;
-            padding: 0 !important;
-        }
-        
-        .leaflet-popup-tip-container {
-            display: none !important;
-        }
-        
-        .leaflet-popup-close-button {
-            color: rgba(255, 255, 255, 0.6) !important;
-            font-size: 28px !important;
-            font-weight: 200 !important;
-            padding: 10px 14px !important;
-            right: 10px !important;
-            top: 10px !important;
-            opacity: 0.8 !important;
-            z-index: 100 !important;
-            transition: all 0.2s ease !important;
-            background: rgba(0, 0, 0, 0.3) !important;
-            border-radius: 50% !important;
-            width: 36px !important;
-            height: 36px !important;
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            line-height: 1 !important;
-        }
-        
-        .leaflet-popup-close-button:hover {
-            opacity:
-            /**
+}
+/**
  * Enhanced Route Navigation Module - Part 4/6
  * UI Display Functions and Components
- * Version: 5.0.1
+ * Version: 5.0.0
  */
 
 // ============================================================================
-// UI DISPLAY FUNCTIONS (NO DUPLICATES - Functions here are unique to Part 4)
+// UI DISPLAY FUNCTIONS
 // ============================================================================
 
 function addOptimizeButton() {
@@ -2733,7 +2012,6 @@ function showReoptimizeButton() {
     setTimeout(() => btn.remove(), 10000);
 }
 
-// Fixed showCashCollectionWidget function
 function showCashCollectionWidget() {
     const existingWidget = document.querySelector('.cash-collection-widget');
     if (existingWidget) existingWidget.remove();
@@ -2744,41 +2022,24 @@ function showCashCollectionWidget() {
     const widget = document.createElement('div');
     widget.className = `cash-collection-widget ${hasPending ? 'has-pending' : ''}`;
     widget.innerHTML = `
-        <div class="cash-widget-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-            <div class="cash-widget-title" style="font-size: 14px; font-weight: 600; color: white;">
-                ${hasPending ? '⚡' : '✓'} Cash Collection
-            </div>
-            <button class="minimize-btn" onclick="toggleCashWidget()" style="
-                background: none;
-                border: none;
-                color: white;
-                font-size: 20px;
-                cursor: pointer;
-                padding: 0;
-                width: 24px;
-                height: 24px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-            ">－</button>
+        <div class="cash-widget-title" style="font-size: 14px; font-weight: 600; margin-bottom: 10px; color: white;">
+            ${hasPending ? '⚡' : '✓'} Cash Collection
         </div>
-        <div class="cash-widget-content">
-            <div class="cash-widget-amount" style="font-size: 24px; font-weight: 700; color: #FF9F0A; margin-bottom: 15px;">
-                KES ${pendingAmount.toLocaleString()}
+        <div class="cash-widget-amount" style="font-size: 24px; font-weight: 700; color: #FF9F0A; margin-bottom: 15px;">
+            KES ${pendingAmount.toLocaleString()}
+        </div>
+        <div class="cash-widget-breakdown" style="font-size: 13px; color: rgba(255,255,255,0.7);">
+            <div class="cash-breakdown-item" style="display: flex; justify-content: space-between; padding: 5px 0;">
+                <span>Total Expected</span>
+                <span style="font-weight: 600;">KES ${state.totalCashToCollect.toLocaleString()}</span>
             </div>
-            <div class="cash-widget-breakdown" style="font-size: 13px; color: rgba(255,255,255,0.7);">
-                <div class="cash-breakdown-item" style="display: flex; justify-content: space-between; padding: 5px 0;">
-                    <span>Total Expected</span>
-                    <span style="font-weight: 600;">KES ${state.totalCashToCollect.toLocaleString()}</span>
-                </div>
-                <div class="cash-breakdown-item" style="display: flex; justify-content: space-between; padding: 5px 0;">
-                    <span>✓ Collected</span>
-                    <span style="font-weight: 600; color: #34C759;">KES ${state.totalCashCollected.toLocaleString()}</span>
-                </div>
-                <div class="cash-breakdown-item" style="display: flex; justify-content: space-between; padding: 5px 0; border-top: 1px solid rgba(255,255,255,0.1); margin-top: 5px; padding-top: 10px;">
-                    <span>⏳ Pending</span>
-                    <span style="font-weight: 600; color: #FF9F0A;">KES ${pendingAmount.toLocaleString()}</span>
-                </div>
+            <div class="cash-breakdown-item" style="display: flex; justify-content: space-between; padding: 5px 0;">
+                <span>✓ Collected</span>
+                <span style="font-weight: 600; color: #34C759;">KES ${state.totalCashCollected.toLocaleString()}</span>
+            </div>
+            <div class="cash-breakdown-item" style="display: flex; justify-content: space-between; padding: 5px 0; border-top: 1px solid rgba(255,255,255,0.1); margin-top: 5px; padding-top: 10px;">
+                <span>⏳ Pending</span>
+                <span style="font-weight: 600; color: #FF9F0A;">KES ${pendingAmount.toLocaleString()}</span>
             </div>
         </div>
     `;
@@ -2792,6 +2053,46 @@ function updateCashCollectionWidget() {
     if (widget) {
         showCashCollectionWidget();
     }
+}
+
+function showNotification(message, type = 'info') {
+    const notification = document.createElement('div');
+    notification.className = `notification ${type}`;
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: ${type === 'success' ? 'linear-gradient(135deg, #34C759, #30D158)' : 
+                      type === 'error' ? 'linear-gradient(135deg, #FF3B30, #FF2D55)' : 
+                      type === 'warning' ? 'linear-gradient(135deg, #FF9F0A, #FF6B00)' : 
+                      'linear-gradient(135deg, #1C1C1F, #2C2C2E)'};
+        color: ${type === 'warning' ? '#0A0A0B' : 'white'};
+        padding: 16px 20px;
+        border-radius: 14px;
+        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        z-index: 4000;
+        animation: slideIn 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        max-width: 380px;
+        font-weight: 600;
+        font-size: 15px;
+        letter-spacing: 0.3px;
+    `;
+    notification.innerHTML = `
+        <span class="notification-icon" style="font-size: 20px;">
+            ${type === 'success' ? '✓' : type === 'error' ? '✗' : type === 'warning' ? '⚠' : 'ℹ'}
+        </span>
+        <span>${message}</span>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        notification.style.animation = 'slideOut 0.3s ease-out';
+        setTimeout(() => notification.remove(), 300);
+    }, 3000);
 }
 
 // ============================================================================
@@ -2990,15 +2291,198 @@ function showSignaturePad(onSign) {
                 signatureModal.remove();
                 onSign(signatureData);
             }
-        } else {
+} else {
             showNotification('Please provide a signature', 'warning');
         }
     };
 }
-    /**
+
+function showOptimizationResults(savedDistance, savedPercentage) {
+    const results = document.createElement('div');
+    results.className = 'optimization-results';
+    
+    results.innerHTML = `
+        <div class="results-content">
+            <div class="results-icon">🎉</div>
+            <h2 style="color: white; margin-bottom: 10px;">Route Optimized!</h2>
+            <div class="results-stats">
+                <div class="stat">
+                    <span class="stat-value">${savedDistance.toFixed(1)} km</span>
+                    <span class="stat-label">Distance Saved</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-value">${savedPercentage}%</span>
+                    <span class="stat-label">More Efficient</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-value">${Math.round(savedDistance * 2.5)} min</span>
+                    <span class="stat-label">Time Saved</span>
+                </div>
+            </div>
+            <div class="results-comparison">
+                <div class="comparison-item">
+                    <span class="comparison-label">Original:</span>
+                    <span class="comparison-value">${state.optimizationStats.originalDistance.toFixed(1)} km</span>
+                </div>
+                <div class="comparison-item">
+                    <span class="comparison-label">Optimized:</span>
+                    <span class="comparison-value success">${state.optimizationStats.optimizedDistance.toFixed(1)} km</span>
+                </div>
+            </div>
+            <button class="results-close" onclick="this.parentElement.parentElement.remove()">
+                Got it!
+            </button>
+        </div>
+    `;
+    
+    document.body.appendChild(results);
+    
+    setTimeout(() => {
+        if (results.parentElement) {
+            results.classList.add('fade-out');
+            setTimeout(() => results.remove(), 300);
+        }
+    }, 7000);
+}
+
+function showReoptimizeButton() {
+    const existing = document.querySelector('.reoptimize-float-btn');
+    if (existing) existing.remove();
+    
+    const btn = document.createElement('button');
+    btn.className = 'reoptimize-float-btn';
+    btn.innerHTML = '🔄 Re-optimize Route';
+    btn.onclick = () => {
+        reoptimizeRemainingStops();
+        btn.remove();
+    };
+    
+    document.body.appendChild(btn);
+    setTimeout(() => btn.remove(), 10000);
+}
+
+function showCashCollectionWidget() {
+    const existingWidget = document.querySelector('.cash-collection-widget');
+    if (existingWidget) existingWidget.remove();
+    
+    const pendingAmount = state.totalCashToCollect - state.totalCashCollected;
+    const hasPending = pendingAmount > 0;
+    
+    const widget = document.createElement('div');
+    widget.className = `cash-collection-widget ${hasPending ? 'has-pending' : ''}`;
+    widget.innerHTML = `
+        <div class="cash-widget-title" style="font-size: 14px; font-weight: 600; margin-bottom: 10px; color: white;">
+            ${hasPending ? '⚡' : '✓'} Cash Collection
+        </div>
+        <div class="cash-widget-amount" style="font-size: 24px; font-weight: 700; color: #FF9F0A; margin-bottom: 15px;">
+            KES ${pendingAmount.toLocaleString()}
+        </div>
+        <div class="cash-widget-breakdown" style="font-size: 13px; color: rgba(255,255,255,0.7);">
+            <div class="cash-breakdown-item" style="display: flex; justify-content: space-between; padding: 5px 0;">
+                <span>Total Expected</span>
+                <span style="font-weight: 600;">KES ${state.totalCashToCollect.toLocaleString()}</span>
+            </div>
+            <div class="cash-breakdown-item" style="display: flex; justify-content: space-between; padding: 5px 0;">
+                <span>✓ Collected</span>
+                <span style="font-weight: 600; color: #34C759;">KES ${state.totalCashCollected.toLocaleString()}</span>
+            </div>
+            <div class="cash-breakdown-item" style="display: flex; justify-content: space-between; padding: 5px 0; border-top: 1px solid rgba(255,255,255,0.1); margin-top: 5px; padding-top: 10px;">
+                <span>⏳ Pending</span>
+                <span style="font-weight: 600; color: #FF9F0A;">KES ${pendingAmount.toLocaleString()}</span>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(widget);
+}
+
+function updateCashCollectionWidget() {
+    calculateCashCollection();
+    const widget = document.querySelector('.cash-collection-widget');
+    if (widget) {
+        showCashCollectionWidget();
+    }
+}
+
+function showNotification(message, type = 'info') {
+    const notification = document.createElement('div');
+    notification.className = `notification ${type}`;
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: ${type === 'success' ? 'linear-gradient(135deg, #34C759, #30D158)' : 
+                      type === 'error' ? 'linear-gradient(135deg, #FF3B30, #FF2D55)' : 
+                      type === 'warning' ? 'linear-gradient(135deg, #FF9F0A, #FF6B00)' : 
+                      'linear-gradient(135deg, #1C1C1F, #2C2C2E)'};
+        color: ${type === 'warning' ? '#0A0A0B' : 'white'};
+        padding: 16px 20px;
+        border-radius: 14px;
+        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        z-index: 4000;
+        animation: slideIn 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        max-width: 380px;
+        font-weight: 600;
+        font-size: 15px;
+        letter-spacing: 0.3px;
+    `;
+    notification.innerHTML = `
+        <span class="notification-icon" style="font-size: 20px;">
+            ${type === 'success' ? '✓' : type === 'error' ? '✗' : type === 'warning' ? '⚠' : 'ℹ'}
+        </span>
+        <span>${message}</span>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        notification.style.animation = 'slideOut 0.3s ease-out';
+        setTimeout(() => notification.remove(), 300);
+    }, 3000);
+}
+
+// ============================================================================
+// ENHANCED VERIFICATION UI FUNCTIONS
+// ============================================================================
+
+function showVerificationProgress(currentStep, totalSteps) {
+    const progressBar = document.querySelector('.verification-progress-bar');
+    if (progressBar) {
+        const percentage = (currentStep / totalSteps) * 100;
+        progressBar.style.width = `${percentage}%`;
+    }
+}
+
+function updateVerificationStep(stepNumber, status = 'active') {
+    const steps = document.querySelectorAll('.verification-step');
+    steps.forEach((step, index) => {
+        if (index < stepNumber) {
+            step.classList.remove('active');
+            step.classList.add('completed');
+        } else if (index === stepNumber) {
+            step.classList.add(status);
+        } else {
+            step.classList.remove('active', 'completed');
+        }
+    });
+}
+
+function createPhotoPreview(photoData, label) {
+    const preview = document.createElement('div');
+    preview.className = 'photo-grid-item';
+    preview.innerHTML = `
+        <img src="${photoData}" alt="${label}">
+        <div class="photo-label">${label}</div>
+    `;
+    return preview;
+}
+/**
  * Enhanced Route Navigation Module - Part 5/6
  * Map, Navigation, Location Tracking Functions
- * Version: 5.0.1
+ * Version: 5.0.0
  */
 
 // ============================================================================
@@ -3329,7 +2813,6 @@ function updateCurrentLocation(position) {
     // Update UI elements
     if (state.navigationActive) {
         updateNavigationInfo();
-        updateNavigationRouting(); // NEW: Update navigation routing
     }
     
     updateDynamicHeader();
@@ -3448,13 +2931,12 @@ async function plotRoute() {
     });
 }
 
-// Fixed drawOptimizedRoute function
 async function drawOptimizedRoute() {
     if (!state.activeRoute) return;
     
     const stops = state.activeRoute.stops.filter(s => !s.completed);
-    if (stops.length < 1) {
-        console.log('No stops to route to');
+    if (stops.length < 2) {
+        console.log('Not enough stops to draw route');
         return;
     }
     
@@ -3465,25 +2947,16 @@ async function drawOptimizedRoute() {
         }
         
         let coordinates = [];
-        
-        // ALWAYS start from current location if available and tracking
-        if (state.currentLocation) {
+        if (state.currentLocation && state.navigationActive) {
             coordinates.push([state.currentLocation.lng, state.currentLocation.lat]);
-            console.log('Starting route from current location:', state.currentLocation);
-        } else {
-            // Fall back to first stop
-            coordinates.push([stops[0].location.lng, stops[0].location.lat]);
         }
         
-        // Add remaining stops
-        stops.forEach(stop => {
-            coordinates.push([stop.location.lng, stop.location.lat]);
-        });
+        coordinates = coordinates.concat(stops.map(stop => [stop.location.lng, stop.location.lat]));
         
         const response = await fetch('https://api.openrouteservice.org/v2/directions/driving-car', {
             method: 'POST',
             headers: {
-                'Accept': 'application/json',
+                'Accept': 'application/json, application/geo+json, application/gpx+xml, img/png; charset=utf-8',
                 'Content-Type': 'application/json',
                 'Authorization': OPENROUTE_API_KEY
             },
@@ -3491,14 +2964,19 @@ async function drawOptimizedRoute() {
                 coordinates: coordinates,
                 continue_straight: false,
                 elevation: false,
+                extra_info: [],
                 geometry: true,
-                instructions: true,
+                instructions: false,
                 preference: 'recommended',
                 units: 'km'
             })
         });
         
-        if (!response.ok) throw new Error('Routing API error');
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('OpenRouteService error:', errorText);
+            throw new Error('OpenRouteService API error');
+        }
         
         const data = await response.json();
         
@@ -3506,37 +2984,25 @@ async function drawOptimizedRoute() {
             const route = data.routes[0];
             const decodedCoords = decodePolyline(route.geometry);
             
-            // Remove old route
-            if (state.routePolyline) {
-                state.routePolyline.remove();
-            }
-            
-            // Draw new route
             state.routePolyline = L.polyline(decodedCoords, {
-                color: '#007AFF',
+                color: '#0066FF',
                 weight: 6,
                 opacity: 0.8,
                 smoothFactor: 1
             }).addTo(state.map);
             
-            // Update navigation info
             const distance = (route.summary.distance / 1000).toFixed(1);
             const duration = Math.round(route.summary.duration / 60);
             
-            // Update navigation overlay
-            const navDistance = document.getElementById('navDistance');
-            const navETA = document.getElementById('navETA');
-            
-            if (navDistance) navDistance.textContent = `${distance} km`;
-            if (navETA) navETA.textContent = `${duration} min`;
-            
-            // Store last update time
-            state.lastRouteUpdate = Date.now();
-            
-            return route;
+            if (document.getElementById('totalDistance')) {
+                document.getElementById('totalDistance').textContent = distance;
+            }
+            if (document.getElementById('estimatedTime')) {
+                document.getElementById('estimatedTime').textContent = duration;
+            }
         }
     } catch (error) {
-        console.error('Routing error:', error);
+        console.error('Error getting route:', error);
         drawFallbackRoute(stops);
     }
 }
@@ -3600,42 +3066,17 @@ function decodePolyline(encoded) {
 // MARKER & POPUP CREATION
 // ============================================================================
 
-// Fixed createRiderIcon function
 function createRiderIcon(heading = 0) {
     return L.divIcon({
         className: 'rider-location-marker',
         html: `
-            <div class="rider-marker-wrapper" style="position: relative; width: 60px; height: 60px;">
-                <div class="rider-pulse" style="
-                    position: absolute;
-                    width: 60px;
-                    height: 60px;
-                    background: rgba(0, 122, 255, 0.2);
-                    border-radius: 50%;
-                    animation: pulse 2s infinite;
-                "></div>
-                <div class="rider-marker-container" style="transform: rotate(${heading}deg); position: absolute; width: 60px; height: 60px;">
-                    <div class="rider-direction-cone" style="
-                        position: absolute;
-                        width: 0;
-                        height: 0;
-                        border-left: 15px solid transparent;
-                        border-right: 15px solid transparent;
-                        border-bottom: 30px solid rgba(0, 122, 255, 0.3);
-                        top: -5px;
-                        left: 15px;
-                    "></div>
-                    <div class="rider-dot" style="
-                        position: absolute;
-                        width: 20px;
-                        height: 20px;
-                        background: #007AFF;
-                        border: 3px solid white;
-                        border-radius: 50%;
-                        top: 20px;
-                        left: 20px;
-                        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-                    "></div>
+            <div class="rider-marker-wrapper">
+                <div class="rider-pulse"></div>
+                <div class="rider-marker-container" style="transform: rotate(${heading}deg)">
+                    <div class="rider-direction-cone"></div>
+                    <div class="rider-dot">
+                        <div class="rider-inner-dot"></div>
+                    </div>
                 </div>
             </div>
         `,
@@ -3844,7 +3285,7 @@ window.navigateToStop = function(stopId) {
 /**
  * Enhanced Route Navigation Module - Part 6/6
  * Display, Enhanced Verification with Photos/Signatures, and Completion Functions
- * Version: 5.0.1
+ * Version: 5.0.0
  */
 
 // ============================================================================
@@ -4596,6 +4037,7 @@ window.openEnhancedVerificationModal = function(stopId) {
 
 // Enhanced verification step navigation
 let currentVerificationStep = 1;
+const totalVerificationSteps = 4;
 
 window.nextVerificationStep = function() {
     const stop = state.activeRoute.stops.find(s => s.id === state.currentVerification.stopId);
@@ -5148,7 +4590,7 @@ window.goBack = function() {
 // ============================================================================
 
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log('Enhanced Route.js v5.0.1 initializing...');
+    console.log('Enhanced Route.js v5.0.0 initializing...');
     console.log('New features: Photo capture, Digital signatures, M-Pesa integration');
     
     injectNavigationStyles();
@@ -5166,10 +4608,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (routeData.originalRouteOrder) {
                 state.originalRouteOrder = routeData.originalRouteOrder;
                 console.log('Restored original route from localStorage');
-            } else if (routeData.isOptimized && (!state.originalRouteOrder || state.originalRouteOrder.length === 0)) {
-                console.warn('Route was previously optimized - original order unavailable');
-                state.originalRouteOrder = JSON.parse(JSON.stringify(routeData.stops));
-            }
+            } // <- This closing brace was missing
             
             // Restore verification data if exists
             if (routeData.verificationData) {
@@ -5269,6 +4708,7 @@ window.routeDebug = {
     testSignature: () => startSignatureCapture(),
     testMpesa: () => promptMpesaPayment(1000, '0712345678')
 };
+// ... all your existing code ...
 
 // Export all necessary functions to window for HTML access
 window.optimizeRouteStops = optimizeRouteStops;
@@ -5298,7 +4738,6 @@ window.proceedWithNavigation = proceedWithNavigation;
 window.plotRoute = plotRoute;
 window.stopLocationTracking = stopLocationTracking;
 
-console.log('✅ Enhanced Route.js v5.0.1 loaded successfully');
+console.log('✅ Enhanced Route.js v5.0.0 loaded successfully');
 console.log('Debug utilities available at: window.routeDebug');
 console.log('Enhanced features: Photo capture, Digital signatures, M-Pesa payments');
-console.log('Fixes applied: Rider icon, cash widget, route optimization, navigation routing');
