@@ -1,693 +1,897 @@
 /**
- * Complete Rider Dashboard with Bottom Navigation Support
- * Part 1: Configuration and State Management
+ * Enhanced Route Navigation Module - Part 1/6
+ * Setup, Configuration, Core API Functions, and Enhanced Verification Features
+ * Version: 5.0.1 - Fixed navigation experience with better route optimization
  */
 
+// Fix: Make route optimizer optional - fallback to inline optimization if module not found
+let routeOptimizer;
+
+// Try to use the comprehensive optimizer if available
+if (typeof RouteOptimizer !== 'undefined') {
+    // If loaded as global
+    routeOptimizer = new RouteOptimizer();
+} else {
+    // Fallback to simple optimizer
+    class FallbackRouteOptimizer {
+        constructor(config) {
+            this.config = config;
+        }
+        
+        optimizeRoute(stops) {
+            if (!stops || stops.length === 0) return stops;
+            
+            // Simple nearest neighbor optimization
+            const optimized = [];
+            const remaining = [...stops];
+            let current = remaining.shift(); // Start with first stop
+            optimized.push(current);
+            
+            while (remaining.length > 0) {
+                let nearest = null;
+                let nearestDistance = Infinity;
+                let nearestIndex = -1;
+                
+                remaining.forEach((stop, index) => {
+                    const dist = this.calculateDistance(current.location, stop.location);
+                    if (dist < nearestDistance) {
+                        nearestDistance = dist;
+                        nearest = stop;
+                        nearestIndex = index;
+                    }
+                });
+                
+                if (nearest) {
+                    optimized.push(nearest);
+                    current = nearest;
+                    remaining.splice(nearestIndex, 1);
+                }
+            }
+            
+            return optimized;
+        }
+        
+        calculateDistance(point1, point2) {
+            const R = 6371;
+            const dLat = (point2.lat - point1.lat) * Math.PI / 180;
+            const dLon = (point2.lng - point1.lng) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                    Math.cos(point1.lat * Math.PI / 180) * Math.cos(point2.lat * Math.PI / 180) *
+                    Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+        
+        getStatistics() {
+            return {
+                originalDistance: 0,
+                optimizedDistance: 0,
+                savedDistance: 0,
+                savedPercentage: 0,
+                executionTime: 0
+            };
+        }
+        
+        getConfig() {
+            return this.config;
+        }
+        
+        updateConfig(newConfig) {
+            this.config = { ...this.config, ...newConfig };
+        }
+    }
+    routeOptimizer = new FallbackRouteOptimizer({
+        immediateDeliveryRadius: 1.5,
+        clusterRadius: 2.0,
+        zoneRadius: 3.0,
+        distanceWeight: 1.0,
+        backtrackPenalty: 5.0,
+        directionChangesPenalty: 2.0,
+        clusterBonus: 0.7,
+        enableZoning: true,
+        enableSmartPairing: true,
+        maxLookahead: 3,
+        maxIterations: 1000,
+        convergenceThreshold: 0.01
+    });
+}
+
 // Development Configuration
-
 const DEV_CONFIG = {
-
-    // Set to true when testing locally without Telegram
-
     isDevelopment: window.location.hostname === 'localhost' || 
-
                    window.location.hostname === '127.0.0.1' ||
-
                    window.location.hostname.includes('github.io'),
-
-    
-
-    // Test rider configuration (only used in development)
-
     testRider: {
-
-        id: 'ef5438ef-0cc0-4e35-8d1b-be18dbce7fe4', // Bobby G's test ID
-
+        id: 'ef5438ef-0cc0-4e35-8d1b-be18dbce7fe4',
         name: 'Bobby G',
-
         phone: '0725046880'
-
     },
-
-    
-
-    // Whether to show detailed console logs
-
     verboseLogging: true,
-
-    
-
-    // Whether to ignore API errors for missing riders
-
     ignoreRiderNotFound: true,
-
-    
-
-    // Development-only commission settings
-
-    bypassCommissionBlock: true, // Set to false in production
-
-    commissionWarningsOnly: true // Show warnings but don't block
-
+    skipPhotoCapture: false,
+    skipSignature: false
 };
 
-// Business Configuration
+// Enhanced State Management with new verification features
+const state = {
+    activeRoute: null,
+    currentLocation: null,
+    map: null,
+    markers: [],
+    routePolyline: null,
+    directionsPolyline: null,
+    isTracking: false,
+    currentStopIndex: 0,
+    parcelsInPossession: [],
+    trackingInterval: null,
+    proximityNotified: false,
+    routeControl: null,
+    currentLocationMarker: null,
+    lastLocation: null,
+    lastLocationTime: null,
+    lastLocationErrorTime: null,
+    lastOptimizationCheck: null,
+    lastRouteUpdate: null,
+    pickupPhaseCompleted: false,
+    isPanelVisible: true,
+    isPanelExpanded: false,
+    navigationActive: false,
+    currentSpeed: 0,
+    currentHeading: 0,
+    isFollowingUser: true,
+    lastMapRotation: 0,
+    smoothLocationInterval: null,
+    mapBearing: 0,
+    locationWatchId: null,
+    accuracyCircle: null,
+    radiusCircle: null,
+    totalRouteEarnings: 0,
+    routeCommission: 0,
+    totalCashToCollect: 0,
+    totalCashCollected: 0,
+    paymentsByStop: {},
+    routeOptimizationMode: 'dynamic',
+    originalRouteOrder: null,
+    optimizationStats: {
+        originalDistance: 0,
+        optimizedDistance: 0,
+        savedDistance: 0,
+        savedPercentage: 0
+    },
+    stopOrderMap: {},
+    showNumberedMarkers: true,
+    verificationData: {
+        photos: {},
+        signatures: {},
+        timestamps: {},
+        locations: {},
+        mpesaCodes: {}
+    },
+    currentVerification: {
+        stopId: null,
+        type: null,
+        photoData: null,
+        signatureData: null,
+        locationData: null,
+        startTime: null
+    }
+};
+
+// Configuration
+const config = {
+    headingUp: false,
+    smoothMovement: true,
+    autoZoom: true,
+    mapRotatable: true,
+    optimization: {
+        enableDynamicRouting: true,
+        autoReoptimize: false,
+        reoptimizeThreshold: 2.0
+    },
+    verification: {
+        requirePhoto: true,
+        requireSignature: true,
+        requireLocation: true,
+        photoQuality: 0.8,
+        maxPhotoSize: 2048,
+        signatureMinPoints: 20,
+        mpesaPromptDelay: 500
+    }
+};
+
+// API Configuration
+const OPENROUTE_API_KEY = '5b3ce3597851110001cf624841e48578ffb34c6b96dfe3bbe9b3ad4c';
+const SUPABASE_URL = 'https://btxavqfoirdzwpfrvezp.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ0eGF2cWZvaXJkendwZnJ2ZXpwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE0ODcxMTcsImV4cCI6MjA2NzA2MzExN30.kQKpukFGx-cBl1zZRuXmex02ifkZ751WCUfQPogYutk';
+
+// Business configuration
 const BUSINESS_CONFIG = {
     commission: {
         rider: 0.70,
         platform: 0.30,
         maxUnpaid: 300,
         warningThreshold: 250
-    },
-    routeTypes: {
-        express: { label: 'Express', multiplier: 1.4 },
-        smart: { label: 'Smart', multiplier: 1.0 },
-        eco: { label: 'Eco', multiplier: 0.8 }
-    },
-    incentives: {
-        peak_hours: {
-            morning: { start: 7, end: 10, multiplier: 1.2 },
-            evening: { start: 17, end: 20, multiplier: 1.3 }
+    }
+};
+
+// ============================================================================
+// ENHANCED SUPABASE API FUNCTIONS
+// ============================================================================
+
+async function supabaseQuery(table, options = {}) {
+    const { select = '*', filter = '', order = '', limit } = options;
+    
+    let url = `${SUPABASE_URL}/rest/v1/${table}?select=${select}`;
+    if (filter) url += `&${filter}`;
+    if (order) url += `&order=${order}`;
+    if (limit) url += `&limit=${limit}`;
+    
+    const response = await fetch(url, {
+        headers: {
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+            'Content-Type': 'application/json'
         }
+    });
+    
+    if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`API Error: ${response.status} ${errorText}`);
+        throw new Error(`API Error: ${response.status}`);
+    }
+    
+    return await response.json();
+}
+
+async function supabaseUpdate(table, filter, data) {
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${filter}`, {
+        method: 'PATCH',
+        headers: {
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=representation'
+        },
+        body: JSON.stringify(data)
+    });
+    
+    if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`Update Error: ${response.status} ${errorText}`);
+        throw new Error(`Update Error: ${response.status}`);
+    }
+    
+    return await response.json();
+}
+
+async function supabaseInsert(table, data) {
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+        method: 'POST',
+        headers: {
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=representation'
+        },
+        body: JSON.stringify(data)
+    });
+    
+    if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`Insert Error: ${response.status} ${errorText}`);
+        throw new Error(`Insert Error: ${response.status}`);
+    }
+    
+    return await response.json();
+}
+
+// Store verification data in Supabase
+async function storeVerificationData(stopId, verificationType, data) {
+    try {
+        const stop = state.activeRoute.stops.find(s => s.id === stopId);
+        if (!stop) return;
+        
+        const verificationRecord = {
+            parcel_id: stop.parcelId,
+            stop_id: stopId,
+            verification_type: verificationType,
+            verification_code: data.code,
+            photo_url: data.photoUrl || null,
+            signature_data: data.signatureData || null,
+            location_lat: data.location?.lat || null,
+            location_lng: data.location?.lng || null,
+            location_accuracy: data.location?.accuracy || null,
+            mpesa_code: data.mpesaCode || null,
+            timestamp: new Date().toISOString(),
+            rider_id: DEV_CONFIG.testRider.id
+        };
+        
+        await supabaseInsert('delivery_verifications', verificationRecord);
+        console.log('Verification data stored successfully');
+        
+        // Update parcel status
+        if (verificationType === 'delivery') {
+            await supabaseUpdate('parcels', 
+                `id=eq.${stop.parcelId}`,
+                {
+                    status: 'delivered',
+                    delivery_timestamp: new Date().toISOString(),
+                    delivery_verified: true,
+                    has_signature: data.signatureData ? true : false,
+                    has_photo: data.photoUrl ? true : false,
+                    payment_status: data.mpesaCode ? 'paid' : (data.cashCollected ? 'collected' : 'pending')
+                }
+            );
+        } else if (verificationType === 'pickup') {
+            await supabaseUpdate('parcels',
+                `id=eq.${stop.parcelId}`,
+                {
+                    status: 'in_transit',
+                    pickup_timestamp: new Date().toISOString(),
+                    pickup_verified: true,
+                    has_pickup_photo: data.photoUrl ? true : false
+                }
+            );
+        }
+    } catch (error) {
+        console.error('Error storing verification data:', error);
+    }
+}
+
+// ============================================================================
+// PHOTO CAPTURE FUNCTIONS WITH DIRECT SUPABASE UPLOAD
+// ============================================================================
+
+const supabase = {
+    storage: {
+        from: (bucket) => ({
+            upload: async (path, file, options) => {
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                const response = await fetch(`${SUPABASE_URL}/storage/v1/object/${bucket}/${path}`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                        'x-upsert': options.upsert ? 'true' : 'false'
+                    },
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    const error = await response.text();
+                    return { data: null, error };
+                }
+                
+                return { data: await response.json(), error: null };
+            },
+            getPublicUrl: (path) => ({
+                data: {
+                    publicUrl: `${SUPABASE_URL}/storage/v1/object/public/${bucket}/${path}`
+                }
+            })
+        })
     }
 };
 
-// Supabase Configuration
-const SUPABASE_URL = 'https://btxavqfoirdzwpfrvezp.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ0eGF2cWZvaXJkendwZnJ2ZXpwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE0ODcxMTcsImV4cCI6MjA2NzA2MzExN30.kQKpukFGx-cBl1zZRuXmex02ifkZ751WCUfQPogYutk';
+function initializeCamera() {
+    return new Promise((resolve, reject) => {
+        const constraints = {
+            video: {
+                facingMode: 'environment',
+                width: { ideal: 1920 },
+                height: { ideal: 1080 }
+            },
+            audio: false
+        };
+        
+        navigator.mediaDevices.getUserMedia(constraints)
+            .then(stream => {
+                resolve(stream);
+            })
+            .catch(err => {
+                console.error('Camera initialization failed:', err);
+                navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+                    .then(stream => resolve(stream))
+                    .catch(err => reject(err));
+            });
+    });
+}
 
-// Initialize clustering instance
-const routeClusterer = typeof TumaRouteClustering !== 'undefined' ? new TumaRouteClustering({
-    maxRouteDistance: 25,
-    minClusterScore: 50,
-    maxPickupRadius: {
-        express: 2,
-        smart: 3,
-        eco: 4
+async function captureAndUploadPhoto(videoElement, stopId, verificationType) {
+    const canvas = document.createElement('canvas');
+    canvas.width = videoElement.videoWidth;
+    canvas.height = videoElement.videoHeight;
+    
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(videoElement, 0, 0);
+    
+    if (canvas.width > config.verification.maxPhotoSize) {
+        const scale = config.verification.maxPhotoSize / canvas.width;
+        const newCanvas = document.createElement('canvas');
+        newCanvas.width = config.verification.maxPhotoSize;
+        newCanvas.height = canvas.height * scale;
+        
+        const newCtx = newCanvas.getContext('2d');
+        newCtx.drawImage(canvas, 0, 0, newCanvas.width, newCanvas.height);
+        canvas = newCanvas;
     }
-}) : null;
+    
+    return new Promise((resolve) => {
+        canvas.toBlob(async (blob) => {
+            try {
+                const fileName = `${stopId}_${verificationType}_${Date.now()}.jpg`;
+                const filePath = `delivery-photos/${new Date().toISOString().split('T')[0]}/${fileName}`;
+                
+                const { data, error } = await supabase.storage
+                    .from('delivery-verifications')
+                    .upload(filePath, blob, {
+                        contentType: 'image/jpeg',
+                        upsert: false
+                    });
+                
+                if (error) {
+                    console.error('Upload failed, using base64 fallback:', error);
+                    resolve(canvas.toDataURL('image/jpeg', config.verification.photoQuality));
+                } else {
+                    const { data: { publicUrl } } = supabase.storage
+                        .from('delivery-verifications')
+                        .getPublicUrl(filePath);
+                    
+                    console.log('Photo uploaded successfully:', publicUrl);
+                    resolve(publicUrl);
+                }
+            } catch (err) {
+                console.error('Photo upload error:', err);
+                resolve(canvas.toDataURL('image/jpeg', config.verification.photoQuality));
+            }
+        }, 'image/jpeg', config.verification.photoQuality);
+    });
+}
 
-// Global State Management
-const state = {
-    rider: null,
-    status: 'online',
-    earnings: {
-        daily: 0,
-        weekly: 0,
-        monthly: 0
-    },
-    stats: {
-        deliveries: 0,
-        distance: 0,
-        rating: 5.0,
-        acceptRate: 95
-    },
-    activeDelivery: null,
-    claimedRoute: null,
-    availableRoutes: [],
-    currentFilter: 'all',
-    isLoading: false,
-    commissionTracker: null,
-    currentLocation: null,
-    mapInitialized: false,
-    parcelsInPossession: [],
-    activeBonuses: [],
-    transactions: [],
-    notifications: []
-};
+function capturePhoto(videoElement) {
+    const canvas = document.createElement('canvas');
+    canvas.width = videoElement.videoWidth;
+    canvas.height = videoElement.videoHeight;
+    
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(videoElement, 0, 0);
+    
+    if (canvas.width > config.verification.maxPhotoSize) {
+        const scale = config.verification.maxPhotoSize / canvas.width;
+        const newCanvas = document.createElement('canvas');
+        newCanvas.width = config.verification.maxPhotoSize;
+        newCanvas.height = canvas.height * scale;
+        
+        const newCtx = newCanvas.getContext('2d');
+        newCtx.drawImage(canvas, 0, 0, newCanvas.width, newCanvas.height);
+        
+        return newCanvas.toDataURL('image/jpeg', config.verification.photoQuality);
+    }
+    
+    return canvas.toDataURL('image/jpeg', config.verification.photoQuality);
+}
 
-// DOM Elements Cache
-let elements = {};
+// ============================================================================
+// DIGITAL SIGNATURE FUNCTIONS WITH DIRECT SUPABASE UPLOAD
+// ============================================================================
 
-function initializeElements() {
-    elements = {
-        // Status elements
-        statusBadge: document.getElementById('statusBadge'),
-        statusText: document.getElementById('statusText'),
+async function uploadSignatureToSupabase(signatureData, stopId) {
+    try {
+        const base64Response = await fetch(signatureData);
+        const blob = await base64Response.blob();
         
-        // Dashboard stats
-        todayEarnings: document.getElementById('todayEarnings'),
-        todayDeliveries: document.getElementById('todayDeliveries'),
-        todayDistance: document.getElementById('todayDistance'),
-        earningsTrend: document.getElementById('earningsTrend'),
+        const fileName = `${stopId}_signature_${Date.now()}.png`;
+        const filePath = `delivery-signatures/${new Date().toISOString().split('T')[0]}/${fileName}`;
         
-        // Earnings elements
-        dailyEarnings: document.getElementById('dailyEarnings'),
-        weeklyEarnings: document.getElementById('weeklyEarnings'),
-        monthlyEarnings: document.getElementById('monthlyEarnings'),
-        weeklyTotal: document.getElementById('weeklyTotal'),
+        const { data, error } = await supabase.storage
+            .from('delivery-verifications')
+            .upload(filePath, blob, {
+                contentType: 'image/png',
+                upsert: false
+            });
         
-        // Stats elements
-        totalDeliveries: document.getElementById('totalDeliveries'),
-        totalDistance: document.getElementById('totalDistance'),
-        riderRating: document.getElementById('riderRating'),
-        acceptRate: document.getElementById('acceptRate'),
+        if (error) {
+            console.error('Signature upload failed:', error);
+            return signatureData;
+        }
         
-        // Rider info
-        riderName: document.getElementById('riderName'),
-        profileName: document.getElementById('profileName'),
-        profilePhone: document.getElementById('profilePhone'),
-        profileInitial: document.getElementById('profileInitial'),
-        profileRating: document.getElementById('profileRating'),
+        const { data: { publicUrl } } = supabase.storage
+            .from('delivery-verifications')
+            .getPublicUrl(filePath);
         
-        // Active route elements
-        activeRouteSection: document.getElementById('activeRouteSection'),
-        completedStops: document.getElementById('completedStops'),
-        totalStops: document.getElementById('totalStops'),
-        routeProgress: document.getElementById('routeProgress'),
-        stopType: document.getElementById('stopType'),
-        stopAddress: document.getElementById('stopAddress'),
-        stopCode: document.getElementById('stopCode'),
-        stopCustomer: document.getElementById('stopCustomer'),
+        console.log('Signature uploaded successfully:', publicUrl);
+        return publicUrl;
+    } catch (error) {
+        console.error('Signature upload error:', error);
+        return signatureData;
+    }
+}
+
+function initializeSignaturePad(canvas) {
+    const ctx = canvas.getContext('2d');
+    let isDrawing = false;
+    let points = [];
+    
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width;
+    canvas.height = rect.height;
+    
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    
+    const startDrawing = (e) => {
+        isDrawing = true;
+        const point = getPoint(e, canvas);
+        points.push(point);
+        ctx.beginPath();
+        ctx.moveTo(point.x, point.y);
+    };
+    
+    const draw = (e) => {
+        if (!isDrawing) return;
         
-        // Route list
-        routeList: document.getElementById('routeList'),
-        noRoutesState: document.getElementById('noRoutesState'),
-        
-        // Navigation badges
-        routesBadge: document.getElementById('routesBadge'),
-        walletBadge: document.getElementById('walletBadge'),
-        notificationBadge: document.getElementById('notificationBadge'),
-        
-        // Commission elements
-        commissionAlert: document.getElementById('commissionAlert'),
-        commissionDebt: document.getElementById('commissionDebt'),
-        walletCommissionDebt: document.getElementById('walletCommissionDebt'),
-        commissionDebtCard: document.getElementById('commissionDebtCard'),
-        
-        // Wallet elements
-        mpesaBalance: document.getElementById('mpesaBalance'),
-        cashBalance: document.getElementById('cashBalance'),
-        cashCard: document.getElementById('cashCard'),
-        transactionList: document.getElementById('transactionList'),
-        
-        // Earnings page elements
-        earningsDailyPage: document.getElementById('earningsDailyPage'),
-        earningsWeeklyPage: document.getElementById('earningsWeeklyPage'),
-        earningsMonthlyPage: document.getElementById('earningsMonthlyPage'),
-        earningsBreakdown: document.getElementById('earningsBreakdown'),
-        
-        // Profile elements
-        infoName: document.getElementById('infoName'),
-        infoPhone: document.getElementById('infoPhone'),
-        infoEmail: document.getElementById('infoEmail'),
-        infoID: document.getElementById('infoID'),
-        vehicleType: document.getElementById('vehicleType'),
-        vehicleReg: document.getElementById('vehicleReg'),
-        vehicleModel: document.getElementById('vehicleModel'),
-        statDeliveries: document.getElementById('statDeliveries'),
-        statDistance: document.getElementById('statDistance'),
-        statJoined: document.getElementById('statJoined'),
-        
-        // FAB
-        fab: document.getElementById('fab'),
-        fabIcon: document.getElementById('fabIcon'),
-        
-        // Main content
-        mainContent: document.getElementById('mainContent')
+        const point = getPoint(e, canvas);
+        points.push(point);
+        ctx.lineTo(point.x, point.y);
+        ctx.stroke();
+    };
+    
+    const stopDrawing = () => {
+        isDrawing = false;
+    };
+    
+    const getPoint = (e, canvas) => {
+        const rect = canvas.getBoundingClientRect();
+        const x = (e.clientX || e.touches[0].clientX) - rect.left;
+        const y = (e.clientY || e.touches[0].clientY) - rect.top;
+        return { x, y };
+    };
+    
+    canvas.addEventListener('mousedown', startDrawing);
+    canvas.addEventListener('mousemove', draw);
+    canvas.addEventListener('mouseup', stopDrawing);
+    canvas.addEventListener('mouseout', stopDrawing);
+    
+    canvas.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        startDrawing(e);
+    });
+    canvas.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        draw(e);
+    });
+    canvas.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        stopDrawing();
+    });
+    
+    return {
+        clear: () => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            points = [];
+        },
+        getSignatureData: async () => {
+            if (points.length < config.verification.signatureMinPoints) {
+                return null;
+            }
+            return canvas.toDataURL('image/png');
+        },
+        getPointCount: () => points.length
     };
 }
 
-// Commission Tracking Class
-class CommissionTracker {
-    constructor(config) {
-        this.config = config;
-        this.state = {
-            unpaidCommission: 0,
-            totalPaid: 0,
-            pendingDeliveries: [],
-            isBlocked: false,
-            lastPayment: null
-        };
-    }
+// ============================================================================
+// M-PESA INTEGRATION FUNCTIONS
+// ============================================================================
 
-    async initialize(riderId, api) {
-        try {
-            if (riderId.startsWith('temp-')) {
-                console.log('Using default commission values for temporary rider');
-                return;
-            }
-            
-            const riders = await api.query('riders', {
-                filter: `id=eq.${riderId}`,
-                limit: 1
-            });
-            
-            if (riders.length > 0) {
-                const rider = riders[0];
-                this.state.unpaidCommission = rider.unpaid_commission || 0;
-                this.state.totalPaid = rider.total_commission_paid || 0;
-                this.state.isBlocked = rider.is_commission_blocked || false;
-                this.state.lastPayment = rider.last_commission_payment;
-            }
-        } catch (error) {
-            if (error.message.includes('400') && DEV_CONFIG.ignoreRiderNotFound) {
-                console.log('Commission tracker API error (expected in dev mode)');
-            } else {
-                console.error('Error initializing commission tracker:', error);
-            }
-        }
-    }
-
-    async addDeliveryCommission(parcelId, deliveryPrice) {
-        const commission = deliveryPrice * this.config.platform;
-        this.state.unpaidCommission += commission;
-        this.state.pendingDeliveries.push({
-            parcelId,
-            commission,
-            timestamp: new Date()
-        });
-
-        const result = {
-            totalUnpaid: Math.round(this.state.unpaidCommission),
-            warningShown: false,
-            isBlocked: false
-        };
-
-        const shouldBlock = this.state.unpaidCommission >= this.config.maxUnpaid;
-        const devBypass = DEV_CONFIG.isDevelopment && DEV_CONFIG.bypassCommissionBlock;
-
-        if (shouldBlock && !devBypass) {
-            this.state.isBlocked = true;
-            result.isBlocked = true;
-        } else if (shouldBlock && devBypass) {
-            console.warn(`[DEV MODE] Commission block bypassed. Amount: KES ${Math.round(this.state.unpaidCommission)}`);
-            result.warningShown = true;
-        } else if (this.state.unpaidCommission >= this.config.warningThreshold) {
-            result.warningShown = true;
-        }
-
-        return result;
-    }
-
-    getSummary() {
-        return {
-            unpaid: Math.round(this.state.unpaidCommission),
-            totalPaid: Math.round(this.state.totalPaid),
-            pendingCount: this.state.pendingDeliveries.length,
-            isBlocked: this.state.isBlocked,
-            percentageUsed: Math.round((this.state.unpaidCommission / this.config.maxUnpaid) * 100)
-        };
-    }
-
-    createCommissionUI() {
-        const summary = this.getSummary();
-        const percentage = Math.min(summary.percentageUsed, 100);
-        const isWarning = percentage >= 83;
-        const isBlocked = percentage >= 100 && !(DEV_CONFIG.isDevelopment && DEV_CONFIG.bypassCommissionBlock);
-        
-        const devModeIndicator = (DEV_CONFIG.isDevelopment && DEV_CONFIG.bypassCommissionBlock && percentage >= 100) ? 
-            '<span class="dev-mode-badge">DEV MODE</span>' : '';
-
-        return {
-            statusBar: `
-                <div class="commission-status ${isWarning ? 'warning' : ''} ${isBlocked ? 'blocked' : ''}">
-                    <div class="commission-header">
-                        <span class="commission-title">Account Balance ${devModeIndicator}</span>
-                        <span class="commission-amount">KES ${summary.unpaid} due</span>
-                    </div>
-                    <div class="commission-progress">
-                        <div class="commission-progress-bar" style="width: ${percentage}%"></div>
-                    </div>
-                    <div class="commission-actions">
-                        <button type="button" class="commission-pay-button" onclick="openWalletModal()">
-                            Deposit Funds
-                        </button>
-                        <button type="button" class="commission-details-button" onclick="viewAccountDetails()">
-                            View Details
-                        </button>
-                    </div>
+function promptMpesaPayment(amount, phoneNumber) {
+    return new Promise((resolve, reject) => {
+        const mpesaModal = document.createElement('div');
+        mpesaModal.className = 'mpesa-prompt-modal';
+        mpesaModal.innerHTML = `
+            <div class="mpesa-content">
+                <h3>M-Pesa Payment</h3>
+                <p>Request sent to ${phoneNumber}</p>
+                <p class="amount">KES ${amount.toLocaleString()}</p>
+                <div class="mpesa-instructions">
+                    <ol>
+                        <li>Check your phone for M-Pesa prompt</li>
+                        <li>Enter your M-Pesa PIN</li>
+                        <li>Wait for confirmation</li>
+                    </ol>
                 </div>
-            `,
-            warningMessage: isWarning && !isBlocked ? `
-                <div class="commission-warning">
-                    <span class="warning-icon">⚠️</span>
-                    <span>Account balance low. Please deposit funds to continue accepting deliveries.</span>
+                <div class="mpesa-input">
+                    <label>Or enter M-Pesa code manually:</label>
+                    <input type="text" id="mpesaCode" placeholder="e.g. QDA3R8K2XY" maxlength="10">
                 </div>
-            ` : null,
-            blockedMessage: isBlocked ? `
-                <div class="commission-blocked-overlay">
-                    <div class="blocked-content">
-                        <div class="blocked-icon">⏸️</div>
-                        <h2>Account Paused</h2>
-                        <p>Please deposit funds to continue accepting deliveries</p>
-                        <p class="blocked-amount">Minimum Deposit: KES ${summary.unpaid}</p>
-                        <button class="pay-now-button" onclick="openWalletModal()">
-                            Deposit Now
-                        </button>
-                        <p class="blocked-help">Need help? Contact support at 0700123456</p>
-                    </div>
+                <div class="mpesa-actions">
+                    <button onclick="confirmMpesaPayment()">Confirm Payment</button>
+                    <button onclick="skipMpesaPayment()">Pay Cash Instead</button>
                 </div>
-            ` : null
-        };
-    }
-
-    getCommissionStyles() {
-        return `
-            .commission-status {
-                background: var(--surface-elevated);
-                border-radius: 14px;
-                padding: 16px;
-                margin: 0 20px 20px;
-                border: 1px solid var(--border);
-                transition: all 0.3s;
-            }
-            
-            .commission-status.warning {
-                border-color: var(--warning);
-                background: rgba(255, 159, 10, 0.1);
-            }
-            
-            .commission-status.blocked {
-                border-color: var(--danger);
-                background: rgba(255, 59, 48, 0.1);
-            }
-            
-            .commission-header {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                margin-bottom: 12px;
-            }
-            
-            .commission-title {
-                font-size: 14px;
-                font-weight: 600;
-                color: var(--text-secondary);
-            }
-            
-            .commission-amount {
-                font-size: 16px;
-                font-weight: 700;
-                color: var(--text-primary);
-            }
-            
-            .commission-progress {
-                height: 8px;
-                background: var(--surface-high);
-                border-radius: 4px;
-                overflow: hidden;
-                margin-bottom: 12px;
-            }
-            
-            .commission-progress-bar {
-                height: 100%;
-                background: var(--primary);
-                border-radius: 4px;
-                transition: width 0.3s ease;
-            }
-            
-            .commission-status.warning .commission-progress-bar {
-                background: var(--warning);
-            }
-            
-            .commission-status.blocked .commission-progress-bar {
-                background: var(--danger);
-            }
+            </div>
         `;
-    }
-}
-
-// Enhanced Route Manager
-const EnhancedRouteManager = {
-    sequenceStops(parcels) {
-        const pickups = [];
-        const deliveries = [];
         
-        parcels.forEach(parcel => {
-            let pickupLocation, deliveryLocation;
-            
-            if (parcel.pickup_location && typeof parcel.pickup_location === 'object') {
-                pickupLocation = parcel.pickup_location;
-                deliveryLocation = parcel.delivery_location;
-            } else if (parcel.pickup_location && typeof parcel.pickup_location === 'string') {
-                try {
-                    pickupLocation = JSON.parse(parcel.pickup_location);
-                    deliveryLocation = JSON.parse(parcel.delivery_location);
-                } catch (e) {
-                    console.error('Error parsing location:', e);
-                }
-            } else if (parcel.pickup_lat && parcel.pickup_lng) {
-                pickupLocation = {
-                    lat: parcel.pickup_lat,
-                    lng: parcel.pickup_lng,
-                    address: parcel.pickup_address || 'Pickup location'
-                };
-                deliveryLocation = {
-                    lat: parcel.delivery_lat,
-                    lng: parcel.delivery_lng,
-                    address: parcel.delivery_address || 'Delivery location'
-                };
+        document.body.appendChild(mpesaModal);
+        
+        window.confirmMpesaPayment = () => {
+            const code = document.getElementById('mpesaCode').value;
+            if (code && code.length >= 6) {
+                mpesaModal.remove();
+                resolve({ success: true, code: code });
             } else {
-                pickupLocation = { lat: -1.2921, lng: 36.8219, address: 'Pickup location' };
-                deliveryLocation = { lat: -1.2921, lng: 36.8219, address: 'Delivery location' };
+                showNotification('Please enter a valid M-Pesa code', 'warning');
             }
-            
-            pickups.push({
-                id: `${parcel.id}-pickup`,
-                parcelId: parcel.id,
-                type: 'pickup',
-                address: pickupLocation.address || parcel.pickup_address || 'Pickup location',
-                location: {
-                    lat: parseFloat(pickupLocation.lat) || -1.2921,
-                    lng: parseFloat(pickupLocation.lng) || 36.8219
-                },
-                parcelCode: parcel.parcel_code,
-                verificationCode: parcel.pickup_code,
-                customerName: parcel.sender_name || 'Sender',
-                customerPhone: parcel.sender_phone || '',
-                specialInstructions: parcel.pickup_instructions,
-                completed: false,
-                timestamp: null
-            });
-            
-            deliveries.push({
-                id: `${parcel.id}-delivery`,
-                parcelId: parcel.id,
-                type: 'delivery',
-                address: deliveryLocation.address || parcel.delivery_address || 'Delivery location',
-                location: {
-                    lat: parseFloat(deliveryLocation.lat) || -1.2921,
-                    lng: parseFloat(deliveryLocation.lng) || 36.8219
-                },
-                parcelCode: parcel.parcel_code,
-                verificationCode: parcel.delivery_code,
-                customerName: parcel.recipient_name || 'Recipient',
-                customerPhone: parcel.recipient_phone || '',
-                specialInstructions: parcel.delivery_instructions,
-                completed: false,
-                timestamp: null,
-                dependsOn: `${parcel.id}-pickup`,
-                paymentMethod: parcel.payment_method || 'cash',
-                paymentStatus: parcel.payment_status || 'pending',
-                amountToCollect: parcel.payment_status === 'pending' ? (parcel.price || 500) : 0
-            });
-        });
+        };
         
-        const optimizedPickups = this.optimizeStopOrder(pickups);
-        const optimizedDeliveries = this.optimizeStopOrder(deliveries);
+        window.skipMpesaPayment = () => {
+            mpesaModal.remove();
+            resolve({ success: false, method: 'cash' });
+        };
         
-        return [...optimizedPickups, ...optimizedDeliveries];
-    },
-    
-    optimizeStopOrder(stops) {
-        if (stops.length <= 1) return stops;
-        
-        const optimized = [stops[0]];
-        const remaining = stops.slice(1);
-        
-        while (remaining.length > 0) {
-            const lastStop = optimized[optimized.length - 1];
-            let nearestIndex = 0;
-            let nearestDistance = Infinity;
-            
-            remaining.forEach((stop, index) => {
-                const distance = calculateDistance(lastStop.location, stop.location);
-                if (distance < nearestDistance) {
-                    nearestDistance = distance;
-                    nearestIndex = index;
-                }
-            });
-            
-            optimized.push(remaining.splice(nearestIndex, 1)[0]);
-        }
-        
-        return optimized;
-    },
-    
-    canCompleteStop(stop, allStops) {
-        if (stop.type === 'delivery' && stop.dependsOn) {
-            const pickupStop = allStops.find(s => s.id === stop.dependsOn);
-            return pickupStop && pickupStop.completed;
-        }
-        return true;
-    },
-    
-    getParcelsInPossession(stops) {
-        const inPossession = [];
-        
-        stops.forEach(stop => {
-            if (stop.type === 'pickup' && stop.completed) {
-                const deliveryStop = stops.find(s => 
-                    s.type === 'delivery' && s.parcelId === stop.parcelId
-                );
-                
-                if (deliveryStop && !deliveryStop.completed) {
-                    inPossession.push({
-                        parcelId: stop.parcelId,
-                        parcelCode: stop.parcelCode,
-                        pickupTime: stop.timestamp,
-                        destination: deliveryStop.address
-                    });
-                }
+        setTimeout(() => {
+            if (document.body.contains(mpesaModal)) {
+                mpesaModal.remove();
+                resolve({ success: false, timeout: true });
             }
-        });
-        
-        return inPossession;
-    }
-};
+        }, 120000);
+    });
+}
 /**
- * Part 2: API Functions, Display Functions, and UI Management
+ * Enhanced Route Navigation Module - Part 2/6
+ * Route Optimization Functions and Utility Functions
+ * Version: 5.0.1
  */
 
-// Supabase API Functions
-const supabaseAPI = {
-    async query(table, options = {}) {
-        const { select = '*', filter = '', order = '', limit } = options;
+// ============================================================================
+// ROUTE OPTIMIZATION FUNCTIONS (Fixed to work with or without external module)
+// ============================================================================
+
+/**
+ * Main route optimization function - works with both external and fallback optimizer
+ */
+function optimizeRouteStops() {
+    if (!state.activeRoute || !state.activeRoute.stops) {
+        showNotification('No route to optimize', 'warning');
+        return;
+    }
+    
+    const hasCompletedStops = state.activeRoute.stops.some(s => s.completed);
+    
+    if (hasCompletedStops) {
+        // Only optimize remaining stops
+        reoptimizeRemainingStops();
+        showNotification('Remaining stops optimized!', 'success');
+    } else {
+        // Full route optimization
+        console.log('Starting full route optimization...');
         
-// Only skip API calls for temp- IDs, not for Bobby G's real ID
-if (filter && filter.includes('temp-')) {
-    console.log('Skipping API call for temporary rider');
-    return [];
+        // Store original for undo - ONLY IF NOT ALREADY STORED
+        if (!state.originalRouteOrder || state.originalRouteOrder.length === 0) {
+            state.originalRouteOrder = JSON.parse(JSON.stringify(state.activeRoute.stops));
+            console.log('Stored original route for undo:', state.originalRouteOrder);
+        }
+        
+        const originalDistance = calculateTotalRouteDistance(state.activeRoute.stops);
+        
+        showOptimizingAnimation();
+        
+        setTimeout(() => {
+            try {
+                // Use the route optimizer (either external or fallback)
+                const optimizedStops = routeOptimizer.optimizeRoute(state.activeRoute.stops);
+                
+                // Calculate statistics
+                const optimizedDistance = calculateTotalRouteDistance(optimizedStops);
+                const savedDistance = originalDistance - optimizedDistance;
+                const savedPercentage = Math.round((savedDistance / originalDistance) * 100);
+                
+                // Update state
+                state.activeRoute.stops = optimizedStops;
+                state.activeRoute.isOptimized = true;
+                state.optimizationStats = {
+                    originalDistance: originalDistance,
+                    optimizedDistance: optimizedDistance,
+                    savedDistance: savedDistance,
+                    savedPercentage: savedPercentage
+                };
+                
+                // Update UI
+                updateStopOrderMap();
+                localStorage.setItem('tuma_active_route', JSON.stringify({
+                    ...state.activeRoute,
+                    originalRouteOrder: state.originalRouteOrder
+                }));
+                
+                console.log('Optimization complete:');
+                console.log(`Original distance: ${state.optimizationStats.originalDistance.toFixed(1)}km`);
+                console.log(`Optimized distance: ${state.optimizationStats.optimizedDistance.toFixed(1)}km`);
+                console.log(`Saved: ${state.optimizationStats.savedDistance.toFixed(1)}km (${state.optimizationStats.savedPercentage}%)`);
+                
+                console.log('\nOptimized route order:');
+                optimizedStops.forEach((stop, index) => {
+                    console.log(`${index + 1}. ${stop.type.toUpperCase()} - ${stop.address} (${stop.parcelCode})`);
+                });
+                
+                displayRouteInfo();
+                plotRoute();
+                drawOptimizedRoute();
+                
+                hideOptimizingAnimation();
+                
+                if (state.optimizationStats.savedDistance > 0.1) {
+                    showOptimizationResults(state.optimizationStats.savedDistance, state.optimizationStats.savedPercentage);
+                } else {
+                    showNotification('Route optimized for efficient delivery sequence', 'success');
+                }
+                
+                updateOptimizeButton(true);
+            } catch (error) {
+                console.error('Optimization error:', error);
+                hideOptimizingAnimation();
+                showNotification('Optimization failed - using original route', 'error');
+            }
+        }, 1500);
+    }
 }
-// Bobby G's ID (ef5438ef-0cc0-4e35-8d1b-be18dbce7fe4) will pass through
-        
-        let url = `${SUPABASE_URL}/rest/v1/${table}?select=${select}`;
-        if (filter) url += `&${filter}`;
-        if (order) url += `&order=${order}`;
-        if (limit) url += `&limit=${limit}`;
-        
-        const response = await fetch(url, {
-            headers: {
-                'apikey': SUPABASE_ANON_KEY,
-                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-                'Content-Type': 'application/json'
-            }
-        });
-        
-        if (!response.ok) {
-            if (DEV_CONFIG.isDevelopment && DEV_CONFIG.ignoreRiderNotFound) {
-                console.log(`API Error (ignored in dev): ${response.status}`);
-                return [];
-            }
-            throw new Error(`API Error: ${response.status} ${response.statusText}`);
-        }
-        
-        return await response.json();
-    },
+
+/**
+ * Real-time route re-optimization for remaining stops
+ */
+function reoptimizeRemainingStops() {
+    if (!state.activeRoute || !state.activeRoute.stops) return;
     
-    async insert(table, data) {
-        if (data.rider_id && data.rider_id.includes('temp-')) {
-            console.log('Skipping insert for temporary rider');
-            return [data];
-        }
-        
-        const response = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
-            method: 'POST',
-            headers: {
-                'apikey': SUPABASE_ANON_KEY,
-                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-                'Content-Type': 'application/json',
-                'Prefer': 'return=representation'
-            },
-            body: JSON.stringify(data)
-        });
-        
-        if (!response.ok) {
-            const error = await response.text();
-            throw new Error(`Insert Error: ${response.status} ${error}`);
-        }
-        
-        return await response.json();
-    },
+    // Get only uncompleted stops
+    const remainingStops = state.activeRoute.stops.filter(s => !s.completed);
     
-    async update(table, filter, data) {
-        if (filter && filter.includes('temp-')) {
-            console.log('Skipping update for temporary rider');
-            return [data];
+    if (remainingStops.length <= 1) return;
+    
+    console.log('📍 Re-optimizing remaining stops...');
+    
+    try {
+        // Re-optimize remaining stops
+        const reoptimized = routeOptimizer.optimizeRoute(remainingStops);
+        
+        // Calculate savings
+        const originalDistance = calculateTotalRouteDistance(remainingStops);
+        const optimizedDistance = calculateTotalRouteDistance(reoptimized);
+        const savedDistance = originalDistance - optimizedDistance;
+        
+        console.log(`Re-optimization saved: ${savedDistance.toFixed(1)}km`);
+        
+        // Update the route with completed + reoptimized stops
+        const completedStops = state.activeRoute.stops.filter(s => s.completed);
+        state.activeRoute.stops = [...completedStops, ...reoptimized];
+        
+        // Update UI
+        updateStopOrderMap();
+        displayRouteInfo();
+        plotRoute();
+        drawOptimizedRoute();
+        
+        console.log('Route re-optimized in real-time');
+    } catch (error) {
+        console.error('Re-optimization failed:', error);
+    }
+}
+
+/**
+ * Check if re-optimization would provide significant savings
+ */
+function checkForBetterRoute() {
+    if (!state.navigationActive || !config.optimization.autoReoptimize) return;
+    
+    const remainingStops = state.activeRoute.stops.filter(s => !s.completed);
+    if (remainingStops.length <= 2) return;
+    
+    try {
+        // Test if re-optimization would save significant distance
+        const currentOrderDistance = calculateTotalRouteDistance(remainingStops);
+        const testOptimized = routeOptimizer.optimizeRoute(remainingStops);
+        const optimizedDistance = calculateTotalRouteDistance(testOptimized);
+        const savings = currentOrderDistance - optimizedDistance;
+        
+        // If we can save more than threshold km, suggest re-optimization
+        if (savings > config.optimization.reoptimizeThreshold) {
+            showNotification(
+                `Route optimization available - Save ${savings.toFixed(1)}km! Tap to optimize.`,
+                'info'
+            );
+            
+            // Show a button to re-optimize
+            showReoptimizeButton();
         }
+    } catch (error) {
+        console.error('Route check failed:', error);
+    }
+}
+
+/**
+ * Undo the last optimization
+ */
+function undoOptimization() {
+    console.log('Undo called. Original route:', state.originalRouteOrder);
+    
+    if (!state.originalRouteOrder || state.originalRouteOrder.length === 0) {
+        showNotification('No original route to restore', 'warning');
+        return;
+    }
+    
+    // Deep copy to restore
+    state.activeRoute.stops = JSON.parse(JSON.stringify(state.originalRouteOrder));
+    state.activeRoute.isOptimized = false;
+    
+    // DON'T clear originalRouteOrder - keep it for multiple undos
+    
+    updateStopOrderMap();
+    localStorage.setItem('tuma_active_route', JSON.stringify({
+        ...state.activeRoute,
+        originalRouteOrder: state.originalRouteOrder
+    }));
+    
+    displayRouteInfo();
+    plotRoute();
+    drawOptimizedRoute();
+    
+    updateOptimizeButton(false);
+    showNotification('Route restored to original order', 'info');
+    
+    // Clear optimization stats
+    state.optimizationStats = {
+        originalDistance: 0,
+        optimizedDistance: 0,
+        savedDistance: 0,
+        savedPercentage: 0
+    };
+}
+
+/**
+ * Update optimizer configuration
+ */
+window.updateOptimizerSetting = function(setting, value) {
+    if (routeOptimizer && routeOptimizer.updateConfig) {
+        routeOptimizer.updateConfig({ [setting]: parseFloat(value) });
+        console.log(`Optimizer setting updated: ${setting} = ${value}`);
         
-        const response = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${filter}`, {
-            method: 'PATCH',
-            headers: {
-                'apikey': SUPABASE_ANON_KEY,
-                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-                'Content-Type': 'application/json',
-                'Prefer': 'return=representation'
-            },
-            body: JSON.stringify(data)
-        });
-        
-        if (!response.ok) {
-            const error = await response.text();
-            throw new Error(`Update Error: ${response.status} ${error}`);
+        // Optionally re-optimize current route with new settings
+        if (state.activeRoute && !state.activeRoute.stops.some(s => s.completed)) {
+            optimizeRouteStops();
         }
-        
-        return await response.json();
     }
 };
 
-// Notification System
-function showNotification(message, type = 'info') {
-    const notification = document.createElement('div');
-    notification.className = `notification ${type}`;
-    notification.textContent = message;
-    notification.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        background: ${type === 'error' ? '#ff3b30' : type === 'warning' ? '#FF9F0A' : '#34c759'};
-        color: ${type === 'warning' ? 'black' : 'white'};
-        padding: 12px 20px;
-        border-radius: 8px;
-        z-index: 3000;
-        font-weight: 600;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-        max-width: 350px;
-        animation: slideIn 0.3s ease-out;
-    `;
+// ============================================================================
+// NEW: Update navigation routing function
+// ============================================================================
+
+function updateNavigationRouting() {
+    if (!state.navigationActive || !state.currentLocation) return;
     
-    document.body.appendChild(notification);
+    // Redraw route from current position every 30 seconds
+    const now = Date.now();
+    if (!state.lastRouteUpdate || now - state.lastRouteUpdate > 30000) {
+        drawOptimizedRoute();
+        state.lastRouteUpdate = now;
+    }
     
-    setTimeout(() => {
-        notification.style.animation = 'slideOut 0.3s ease-out';
-        setTimeout(() => notification.remove(), 300);
-    }, type === 'error' ? 5000 : 3000);
+    // Update distance to next stop
+    const nextStop = getNextStop();
+    if (nextStop) {
+        const distance = calculateDistance(state.currentLocation, nextStop.location);
+        const navDistance = document.getElementById('navDistance');
+        if (navDistance) {
+            navDistance.textContent = distance < 1 ? 
+                `${Math.round(distance * 1000)}m` : 
+                `${distance.toFixed(1)}km`;
+        }
+    }
 }
 
-// Helper Functions
-function formatPhone(phone) {
-    return phone.replace(/\D/g, '').slice(0, 10);
-}
-
-function calculateDistance(point1, point2) {
-    const R = 6371;
-    const dLat = (point2.lat - point1.lat) * Math.PI / 180;
-    const dLon = (point2.lng - point1.lng) * Math.PI / 180;
-    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-            Math.cos(point1.lat * Math.PI / 180) * Math.cos(point2.lat * Math.PI / 180) *
-            Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    return R * c;
-}
-
-function formatTimeAgo(timestamp) {
-    if (!timestamp) return '';
-    const minutes = Math.floor((Date.now() - new Date(timestamp)) / 60000);
-    if (minutes < 60) return `${minutes} min ago`;
-    const hours = Math.floor(minutes / 60);
-    return `${hours} hour${hours > 1 ? 's' : ''} ago`;
-}
+// ============================================================================
+// UTILITY FUNCTIONS
+// ============================================================================
 
 function parsePrice(priceValue) {
     if (typeof priceValue === 'number') return priceValue;
@@ -698,514 +902,4193 @@ function parsePrice(priceValue) {
     return 0;
 }
 
-// Enhanced Features Functions
-function isPeakHour() {
-    const hour = new Date().getHours();
-    const { morning, evening } = BUSINESS_CONFIG.incentives.peak_hours;
-    
-    if (hour >= morning.start && hour < morning.end) {
-        return { isPeak: true, multiplier: morning.multiplier, type: 'morning' };
-    } else if (hour >= evening.start && hour < evening.end) {
-        return { isPeak: true, multiplier: evening.multiplier, type: 'evening' };
+function getPaymentInfoForStop(stop) {
+    if (!state.activeRoute) {
+        return {
+            amount: 0,
+            method: 'unknown',
+            status: 'unknown',
+            needsCollection: false
+        };
     }
     
-    return { isPeak: false, multiplier: 1, type: 'normal' };
-}
-
-async function loadActiveBonuses() {
-    try {
-        if (!state.rider || state.rider.id.startsWith('temp-')) {
-            state.activeBonuses = [];
-            return;
-        }
-        
-        const bonuses = await supabaseAPI.query('rider_bonuses', {
-            filter: `rider_id=eq.${state.rider.id}&is_active=eq.true&expires_at=gt.${new Date().toISOString()}`,
-            order: 'created_at.desc'
-        });
-        
-        state.activeBonuses = bonuses;
-        
-        const globalBonuses = await supabaseAPI.query('global_bonuses', {
-            filter: `is_active=eq.true&expires_at=gt.${new Date().toISOString()}`,
-            order: 'created_at.desc'
-        });
-        
-        state.activeBonuses = [...state.activeBonuses, ...globalBonuses];
-        
-    } catch (error) {
-        console.error('Error loading bonuses:', error);
-        state.activeBonuses = [];
+    let parcel = null;
+    if (state.activeRoute.parcels && state.activeRoute.parcels.length > 0) {
+        parcel = state.activeRoute.parcels.find(p => 
+            p.id === stop.parcelId || 
+            p.parcel_code === stop.parcelCode ||
+            p.code === stop.parcelCode
+        );
     }
+    
+    if (!parcel && stop.paymentInfo) {
+        return {
+            amount: parsePrice(stop.paymentInfo.amount || 0),
+            method: stop.paymentInfo.method || 'cash',
+            status: stop.paymentInfo.status || 'pending',
+            needsCollection: stop.type === 'delivery' && 
+                           (stop.paymentInfo.method || 'cash') === 'cash' && 
+                           (stop.paymentInfo.status || 'pending') === 'pending'
+        };
+    }
+    
+    if (!parcel) {
+        return {
+            amount: 0,
+            method: 'unknown',
+            status: 'unknown',
+            needsCollection: false
+        };
+    }
+    
+    const amount = parsePrice(parcel.price || parcel.total_price || parcel.amount || 0);
+    const method = parcel.payment_method || parcel.paymentMethod || 'cash';
+    const status = parcel.payment_status || parcel.paymentStatus || 'pending';
+    
+    return {
+        amount: amount,
+        method: method,
+        status: status,
+        needsCollection: stop.type === 'delivery' && method === 'cash' && status === 'pending'
+    };
 }
 
-function calculateDailyBonus() {
-    const deliveries = state.stats.deliveries;
-    let applicableBonuses = [];
+function calculateCashCollection() {
+    state.totalCashToCollect = 0;
+    state.totalCashCollected = 0;
     
-    state.activeBonuses.forEach(bonus => {
-        if (bonus.type === 'delivery_target' && deliveries >= bonus.target_deliveries) {
-            applicableBonuses.push(bonus);
+    if (!state.activeRoute || !state.activeRoute.stops) return;
+    
+    state.activeRoute.stops.forEach(stop => {
+        if (stop.type === 'delivery') {
+            const paymentInfo = getPaymentInfoForStop(stop);
+            
+            if (paymentInfo.needsCollection) {
+                state.totalCashToCollect += paymentInfo.amount;
+                
+                if (stop.completed) {
+                    state.totalCashCollected += paymentInfo.amount;
+                    state.paymentsByStop[stop.id] = {
+                        amount: paymentInfo.amount,
+                        collected: true,
+                        timestamp: stop.timestamp
+                    };
+                } else {
+                    state.paymentsByStop[stop.id] = {
+                        amount: paymentInfo.amount,
+                        collected: false
+                    };
+                }
+            }
         }
     });
     
-    applicableBonuses.sort((a, b) => b.bonus_amount - a.bonus_amount);
-    
-    return {
-        currentBonus: applicableBonuses[0] || null,
-        nextBonus: state.activeBonuses.find(b => 
-            b.type === 'delivery_target' && 
-            b.target_deliveries > deliveries
-        ) || null,
-        deliveries
-    };
+    console.log('Cash collection calculated:', {
+        total: state.totalCashToCollect,
+        collected: state.totalCashCollected,
+        pending: state.totalCashToCollect - state.totalCashCollected
+    });
 }
 
-function displayIncentiveProgress() {
-    const { currentBonus, nextBonus, deliveries } = calculateDailyBonus();
-    const peakStatus = isPeakHour();
+function calculateRouteFinancials() {
+    if (!state.activeRoute) return;
     
-    if (state.activeBonuses.length === 0 && !peakStatus.isPeak) {
-        return;
-    }
+    state.totalRouteEarnings = 0;
+    state.routeCommission = 0;
     
-    const incentiveHTML = `
-        <div class="incentive-widget">
-            ${peakStatus.isPeak ? `
-                <div class="peak-hour-banner">
-                    <span class="peak-icon">🔥</span>
-                    <span>Peak Hours Active! ${((peakStatus.multiplier - 1) * 100).toFixed(0)}% bonus on all deliveries</span>
-                </div>
-            ` : ''}
+    if (state.activeRoute.parcels && state.activeRoute.parcels.length > 0) {
+        state.activeRoute.parcels.forEach(parcel => {
+            const price = parsePrice(parcel.price || parcel.total_price || 500);
+            const riderPayout = price * BUSINESS_CONFIG.commission.rider;
+            const commission = price * BUSINESS_CONFIG.commission.platform;
             
-            ${nextBonus ? `
-                <div class="daily-bonus-progress">
-                    <h3 class="bonus-title">${nextBonus.title || 'Daily Bonus Progress'}</h3>
-                    <div class="progress-container">
-                        <div class="progress-bar">
-                            <div class="progress-fill" style="width: ${(deliveries / nextBonus.target_deliveries * 100)}%"></div>
-                        </div>
-                        <div class="progress-text">
-                            <span>${deliveries}/${nextBonus.target_deliveries} deliveries</span>
-                            <span class="bonus-amount">KES ${nextBonus.bonus_amount}</span>
-                        </div>
-                    </div>
-                    <p class="progress-message">Complete ${nextBonus.target_deliveries - deliveries} more for bonus!</p>
-                </div>
-            ` : currentBonus ? `
-                <div class="daily-bonus-progress">
-                    <p class="max-bonus-reached">🎉 Bonus achieved! KES ${currentBonus.bonus_amount}</p>
-                </div>
-            ` : ''}
-        </div>
-    `;
-    
-    const earningsSection = document.querySelector('.earnings-grid')?.parentElement;
-    if (earningsSection && !document.querySelector('.incentive-widget')) {
-        earningsSection.insertAdjacentHTML('afterend', `<div class="form-section">${incentiveHTML}</div>`);
-    }
-}
-
-function calculatePerformanceMetrics() {
-    const today = new Date();
-    const startTime = new Date(today.setHours(6, 0, 0, 0));
-    const hoursWorked = Math.max((Date.now() - startTime) / (1000 * 60 * 60), 1);
-    
-    return {
-        deliveriesPerHour: (state.stats.deliveries / hoursWorked).toFixed(1),
-        earningsPerKm: state.stats.distance > 0 ? (state.earnings.daily / state.stats.distance).toFixed(0) : 0,
-        averageDeliveryTime: 23,
-        acceptanceRate: 85
-    };
-}
-
-function displayPerformanceMetrics() {
-    const metrics = calculatePerformanceMetrics();
-    
-    const metricsHTML = `
-        <div class="performance-metrics">
-            <h2 class="section-title">Today's Performance</h2>
-            <div class="metrics-grid">
-                <div class="metric-card">
-                    <div class="metric-icon">⚡</div>
-                    <div class="metric-value">${metrics.deliveriesPerHour}</div>
-                    <div class="metric-label">Deliveries/Hour</div>
-                </div>
-                <div class="metric-card">
-                    <div class="metric-icon">💰</div>
-                    <div class="metric-value">KES ${metrics.earningsPerKm}</div>
-                    <div class="metric-label">Per KM</div>
-                </div>
-                <div class="metric-card">
-                    <div class="metric-icon">⏱️</div>
-                    <div class="metric-value">${metrics.averageDeliveryTime} min</div>
-                    <div class="metric-label">Avg Time</div>
-                </div>
-                <div class="metric-card">
-                    <div class="metric-icon">✅</div>
-                    <div class="metric-value">${metrics.acceptanceRate}%</div>
-                    <div class="metric-label">Accept Rate</div>
-                </div>
-            </div>
-        </div>
-    `;
-    
-    const statsRow = document.querySelector('.stats-row')?.parentElement;
-    if (statsRow && !document.querySelector('.performance-metrics')) {
-        statsRow.insertAdjacentHTML('afterend', metricsHTML);
-    }
-}
-
-function addQuickActions() {
-    const quickActionsHTML = `
-        <div class="quick-actions">
-            <button class="quick-action" onclick="toggleBreakMode()">
-                <span class="action-icon">☕</span>
-                <span class="action-label">Break</span>
-            </button>
-            <button class="quick-action" onclick="viewEarningsDetails()">
-                <span class="action-icon">📊</span>
-                <span class="action-label">Analytics</span>
-            </button>
-            <button class="quick-action" onclick="showHotZones()">
-                <span class="action-icon">🔥</span>
-                <span class="action-label">Hot Zones</span>
-            </button>
-            <button class="quick-action" onclick="callSupport()">
-                <span class="action-icon">📞</span>
-                <span class="action-label">Support</span>
-            </button>
-        </div>
-    `;
-    
-    const header = document.querySelector('.header');
-    if (header && !document.querySelector('.quick-actions')) {
-        header.insertAdjacentHTML('afterend', quickActionsHTML);
-    }
-}
-
-// Display Update Functions
-function updateEarningsDisplay() {
-    // Dashboard page elements
-    if (elements.todayEarnings) elements.todayEarnings.textContent = Math.round(state.earnings.daily).toLocaleString();
-    if (elements.dailyEarnings) elements.dailyEarnings.textContent = Math.round(state.earnings.daily).toLocaleString();
-    if (elements.weeklyEarnings) elements.weeklyEarnings.textContent = Math.round(state.earnings.weekly).toLocaleString();
-    if (elements.monthlyEarnings) elements.monthlyEarnings.textContent = Math.round(state.earnings.monthly).toLocaleString();
-    if (elements.weeklyTotal) elements.weeklyTotal.textContent = Math.round(state.earnings.weekly).toLocaleString();
-    
-    // Earnings page elements
-    if (elements.earningsDailyPage) elements.earningsDailyPage.textContent = Math.round(state.earnings.daily).toLocaleString();
-    if (elements.earningsWeeklyPage) elements.earningsWeeklyPage.textContent = Math.round(state.earnings.weekly).toLocaleString();
-    if (elements.earningsMonthlyPage) elements.earningsMonthlyPage.textContent = Math.round(state.earnings.monthly).toLocaleString();
-    
-    // Update earnings trend
-    if (elements.earningsTrend) {
-        const trend = Math.random() > 0.5 ? '↑' : '↓';
-        const percentage = Math.floor(Math.random() * 20) + 1;
-        elements.earningsTrend.textContent = `${trend} ${percentage}%`;
-        elements.earningsTrend.className = trend === '↑' ? 'stat-trend up' : 'stat-trend down';
-    }
-}
-
-function updateStatsDisplay() {
-    // Dashboard stats
-    if (elements.todayDeliveries) elements.todayDeliveries.textContent = state.stats.deliveries;
-    if (elements.todayDistance) elements.todayDistance.textContent = state.stats.distance;
-    
-    // General stats
-    if (elements.totalDeliveries) elements.totalDeliveries.textContent = state.stats.deliveries;
-    if (elements.totalDistance) elements.totalDistance.textContent = state.stats.distance;
-    if (elements.riderRating) elements.riderRating.textContent = state.stats.rating.toFixed(1);
-    if (elements.acceptRate) elements.acceptRate.textContent = state.stats.acceptRate;
-    
-    // Profile stats
-    if (elements.statDeliveries) elements.statDeliveries.textContent = state.stats.deliveries;
-    if (elements.statDistance) elements.statDistance.textContent = `${state.stats.distance} km`;
-    if (elements.profileRating) elements.profileRating.textContent = state.stats.rating.toFixed(1);
-}
-
-function updateProfileDisplay() {
-    if (!state.rider) return;
-    
-    // Update profile name and phone
-    if (elements.profileName) elements.profileName.textContent = state.rider.rider_name || 'Rider Name';
-    if (elements.profilePhone) elements.profilePhone.textContent = state.rider.phone || '+254700000000';
-    if (elements.profileInitial) elements.profileInitial.textContent = (state.rider.rider_name || 'R')[0].toUpperCase();
-    
-    // Update info fields
-    if (elements.infoName) elements.infoName.textContent = state.rider.rider_name || '-';
-    if (elements.infoPhone) elements.infoPhone.textContent = state.rider.phone || '-';
-    if (elements.infoEmail) elements.infoEmail.textContent = state.rider.email || '-';
-    if (elements.infoID) elements.infoID.textContent = state.rider.national_id || '-';
-    
-    // Update vehicle details
-    if (elements.vehicleType) elements.vehicleType.textContent = state.rider.vehicle_type || 'Motorcycle';
-    if (elements.vehicleReg) elements.vehicleReg.textContent = state.rider.vehicle_registration || 'KXX 123X';
-    if (elements.vehicleModel) elements.vehicleModel.textContent = state.rider.vehicle_model || '-';
-    
-    // Update join date
-    if (elements.statJoined) {
-        const joinDate = state.rider.created_at ? new Date(state.rider.created_at).toLocaleDateString() : '-';
-        elements.statJoined.textContent = joinDate;
-    }
-}
-
-function updateWalletDisplay() {
-    // Update M-Pesa balance
-    if (elements.mpesaBalance) {
-        const balance = state.rider?.mpesa_balance || 0;
-        elements.mpesaBalance.textContent = Math.round(balance).toLocaleString();
+            state.totalRouteEarnings += riderPayout;
+            state.routeCommission += commission;
+        });
+    } else if (state.activeRoute.total_earnings) {
+        const totalPrice = parsePrice(state.activeRoute.total_earnings);
+        state.totalRouteEarnings = totalPrice * BUSINESS_CONFIG.commission.rider;
+        state.routeCommission = totalPrice * BUSINESS_CONFIG.commission.platform;
+    } else {
+        const deliveryCount = state.activeRoute.stops?.filter(s => s.type === 'delivery').length || 0;
+        state.totalRouteEarnings = deliveryCount * 350;
+        state.routeCommission = deliveryCount * 150;
     }
     
-    // Update cash balance
-    if (elements.cashBalance) {
-        const cashBalance = state.rider?.cash_balance || 0;
-        elements.cashBalance.textContent = Math.round(cashBalance).toLocaleString();
-    }
-    
-    // Update commission debt card
-    if (window.commissionOffsetManager) {
-        const debt = window.commissionOffsetManager.commissionDebt;
-        if (debt > 0) {
-            if (elements.commissionDebtCard) elements.commissionDebtCard.style.display = 'block';
-            if (elements.walletCommissionDebt) elements.walletCommissionDebt.textContent = Math.round(debt).toLocaleString();
-            if (elements.walletBadge) elements.walletBadge.style.display = 'block';
-        } else {
-            if (elements.commissionDebtCard) elements.commissionDebtCard.style.display = 'none';
-            if (elements.walletBadge) elements.walletBadge.style.display = 'none';
-        }
-    }
-    
-    // Load recent transactions
-    loadTransactions();
+    console.log('Route financials calculated:', {
+        earnings: state.totalRouteEarnings,
+        commission: state.routeCommission
+    });
 }
 
-async function loadTransactions() {
+function updateStopOrderMap() {
+    state.stopOrderMap = {};
+    if (!state.activeRoute || !state.activeRoute.stops) return;
+    
+    state.activeRoute.stops.forEach((stop, index) => {
+        state.stopOrderMap[stop.id] = index + 1;
+    });
+    
+    console.log('Stop order map updated:', state.stopOrderMap);
+}
+
+function calculateTotalRouteDistance(stops) {
+    if (!stops || stops.length === 0) return 0;
+    
+    let totalDistance = 0;
+    let currentPos = state.currentLocation 
+        ? { lat: state.currentLocation.lat, lng: state.currentLocation.lng }
+        : stops[0].location;
+    
+    stops.forEach(stop => {
+        totalDistance += calculateDistance(currentPos, stop.location);
+        currentPos = stop.location;
+    });
+    
+    return totalDistance;
+}
+
+function calculateDistance(point1, point2) {
+    if (!point1 || !point2) return 0;
+    
+    const R = 6371;
+    const dLat = (point2.lat - point1.lat) * Math.PI / 180;
+    const dLon = (point2.lng - point1.lng) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+            Math.cos(point1.lat * Math.PI / 180) * Math.cos(point2.lat * Math.PI / 180) *
+            Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+}
+
+function calculateBearing(start, end) {
+    const dLng = (end.lng - start.lng) * Math.PI / 180;
+    const lat1 = start.lat * Math.PI / 180;
+    const lat2 = end.lat * Math.PI / 180;
+    
+    const y = Math.sin(dLng) * Math.cos(lat2);
+    const x = Math.cos(lat1) * Math.sin(lat2) - 
+              Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLng);
+    
+    const bearing = Math.atan2(y, x) * 180 / Math.PI;
+    return (bearing + 360) % 360;
+}
+
+async function syncRouteData() {
+    if (!state.activeRoute) return;
+    
     try {
-        // Create sample transactions for display
-        const transactions = [
-            {
-                type: 'earnings',
-                description: 'Delivery completed',
-                amount: 350,
-                timestamp: new Date(Date.now() - 3600000),
-                icon: '💰'
-            },
-            {
-                type: 'withdrawal',
-                description: 'M-Pesa withdrawal',
-                amount: -1000,
-                timestamp: new Date(Date.now() - 7200000),
-                icon: '📱'
-            },
-            {
-                type: 'commission',
-                description: 'Commission deducted',
-                amount: -150,
-                timestamp: new Date(Date.now() - 10800000),
-                icon: '💳'
-            }
-        ];
+        // Save verification data to local storage
+        const routeData = {
+            ...state.activeRoute,
+            verificationData: state.verificationData
+        };
+        localStorage.setItem('tuma_active_route', JSON.stringify(routeData));
         
-        // Add commission offset transactions if any
-        if (window.commissionOffsetManager) {
-            const offsetTransactions = window.commissionOffsetManager.getOffsetTransactions();
-            transactions.push(...offsetTransactions);
-        }
-        
-        // Sort by timestamp
-        transactions.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-        
-        // Display transactions
-        if (elements.transactionList) {
-            elements.transactionList.innerHTML = transactions.slice(0, 10).map(tx => `
-                <div class="transaction-item">
-                    <span class="transaction-icon">${tx.icon}</span>
-                    <div class="transaction-info">
-                        <div class="transaction-desc">${tx.description}</div>
-                        <div class="transaction-time">${formatTimeAgo(tx.timestamp)}</div>
-                    </div>
-                    <div class="transaction-amount ${tx.amount > 0 ? 'positive' : tx.type === 'commission' ? 'offset' : 'negative'}">
-                        ${tx.amount > 0 ? '+' : ''}KES ${Math.abs(tx.amount).toLocaleString()}
-                    </div>
-                </div>
-            `).join('');
-        }
-        
-        // Display in earnings breakdown
-        if (elements.earningsBreakdown) {
-            const todayTransactions = transactions.filter(tx => {
-                const today = new Date();
-                today.setHours(0, 0, 0, 0);
-                return new Date(tx.timestamp) >= today;
-            });
-            
-            if (todayTransactions.length > 0) {
-                elements.earningsBreakdown.innerHTML = todayTransactions.map(tx => `
-                    <div class="transaction-item">
-                        <span class="transaction-icon">${tx.icon}</span>
-                        <div class="transaction-info">
-                            <div class="transaction-desc">${tx.description}</div>
-                            <div class="transaction-time">${formatTimeAgo(tx.timestamp)}</div>
-                        </div>
-                        <div class="transaction-amount ${tx.amount > 0 ? 'positive' : 'negative'}">
-                            ${tx.amount > 0 ? '+' : ''}KES ${Math.abs(tx.amount).toLocaleString()}
-                        </div>
-                    </div>
-                `).join('');
-            } else {
-                elements.earningsBreakdown.innerHTML = `
-                    <div class="empty-state">
-                        <p>No transactions today yet</p>
-                    </div>
-                `;
-            }
+        if (state.activeRoute.stops && state.activeRoute.stops.every(s => s.completed)) {
+            await handleRouteCompletion();
         }
     } catch (error) {
-        console.error('Error loading transactions:', error);
+        console.error('Error syncing route data:', error);
     }
 }
 
-// Route Display Function
-function displayRoutes() {
-    const filteredRoutes = state.currentFilter === 'all' 
-        ? state.availableRoutes 
-        : state.availableRoutes.filter(r => r.type === state.currentFilter);
+async function handleRouteCompletion() {
+    console.log('Handling route completion...');
     
-    if (!elements.routeList) return;
+    const deliveryCount = state.activeRoute.stops.filter(s => s.type === 'delivery').length;
     
-    const hasActiveRoute = state.claimedRoute !== null;
+    const completionData = {
+        completed: true,
+        earnings: Math.round(state.totalRouteEarnings),
+        commission: Math.round(state.routeCommission),
+        cashCollected: Math.round(state.totalCashCollected),
+        deliveries: deliveryCount,
+        stops: state.activeRoute.stops.length,
+        timestamp: new Date().toISOString(),
+        routeId: state.activeRoute.id,
+        parcels: state.activeRoute.parcels || [],
+        optimizationMode: state.routeOptimizationMode,
+        distanceSaved: state.optimizationStats.savedDistance,
+        verificationData: state.verificationData
+    };
     
-    // Update routes badge
-    if (elements.routesBadge) {
-        const availableCount = filteredRoutes.filter(r => r.status === 'available').length;
-        if (availableCount > 0 && !hasActiveRoute) {
-            elements.routesBadge.textContent = availableCount;
-            elements.routesBadge.style.display = 'block';
-        } else {
-            elements.routesBadge.style.display = 'none';
+    console.log('Storing completion data:', completionData);
+    
+    localStorage.setItem('tuma_route_completion', JSON.stringify(completionData));
+    localStorage.removeItem('tuma_active_route');
+    
+    if (!state.activeRoute.id?.startsWith('demo-')) {
+        try {
+            // Update all parcels as delivered
+            for (const parcel of (state.activeRoute.parcels || [])) {
+                const stop = state.activeRoute.stops.find(s => 
+                    s.parcelId === parcel.id || s.parcelCode === parcel.parcel_code
+                );
+                
+                const verificationData = state.verificationData[stop?.id];
+                
+                await supabaseUpdate('parcels',
+                    `id=eq.${parcel.id}`,
+                    {
+                        status: 'delivered',
+                        delivery_timestamp: new Date().toISOString(),
+                        payment_status: parcel.payment_method === 'cash' ? 'collected' : parcel.payment_status,
+                        delivery_verified: true,
+                        has_signature: verificationData?.signatures ? true : false,
+                        has_photo: verificationData?.photos?.delivery ? true : false
+                    }
+                );
+            }
+            
+            // Store verification records
+            for (const stopId in state.verificationData) {
+                const data = state.verificationData[stopId];
+                if (data.photos || data.signatures) {
+                    await storeVerificationData(stopId, 'delivery', data);
+                }
+            }
+        } catch (error) {
+            console.error('Error updating parcel status:', error);
         }
     }
+}
+
+// Toggle numbered markers
+window.toggleNumberedMarkers = function() {
+    state.showNumberedMarkers = !state.showNumberedMarkers;
+    plotRoute();
+    showNotification(
+        state.showNumberedMarkers ? 'Showing route numbers' : 'Showing pickup/delivery labels',
+        'info'
+    );
+};
+
+// NEW: Toggle cash widget
+window.toggleCashWidget = function() {
+    const widget = document.querySelector('.cash-collection-widget');
+    if (!widget) return;
     
-    if (filteredRoutes.length === 0) {
-        elements.routeList.innerHTML = '';
-        if (elements.noRoutesState) elements.noRoutesState.style.display = 'block';
-        return;
+    const content = widget.querySelector('.cash-widget-content');
+    const minimizeBtn = widget.querySelector('.minimize-btn');
+    
+    if (content.style.display === 'none') {
+        content.style.display = 'block';
+        minimizeBtn.textContent = '－';
+        widget.style.minWidth = '240px';
+    } else {
+        content.style.display = 'none';
+        minimizeBtn.textContent = '＋';
+        widget.style.minWidth = '120px';
     }
+};
+
+// Helper function to compress image data for storage
+function compressImageData(dataUrl, maxWidth = 800) {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = function() {
+            const canvas = document.createElement('canvas');
+            let width = img.width;
+            let height = img.height;
+            
+            if (width > maxWidth) {
+                height = (maxWidth / width) * height;
+                width = maxWidth;
+            }
+            
+            canvas.width = width;
+            canvas.height = height;
+            
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+            
+            resolve(canvas.toDataURL('image/jpeg', 0.7));
+        };
+        img.src = dataUrl;
+    });
+}
+
+// Main notification function - defined here for use throughout all parts
+function showNotification(message, type = 'info') {
+    const notification = document.createElement('div');
+    notification.className = `notification ${type}`;
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: ${type === 'success' ? 'linear-gradient(135deg, #34C759, #30D158)' : 
+                      type === 'error' ? 'linear-gradient(135deg, #FF3B30, #FF2D55)' : 
+                      type === 'warning' ? 'linear-gradient(135deg, #FF9F0A, #FF6B00)' : 
+                      'linear-gradient(135deg, #1C1C1F, #2C2C2E)'};
+        color: ${type === 'warning' ? '#0A0A0B' : 'white'};
+        padding: 16px 20px;
+        border-radius: 14px;
+        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        z-index: 4000;
+        animation: slideIn 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        max-width: 380px;
+        font-weight: 600;
+        font-size: 15px;
+        letter-spacing: 0.3px;
+    `;
+    notification.innerHTML = `
+        <span class="notification-icon" style="font-size: 20px;">
+            ${type === 'success' ? '✓' : type === 'error' ? '✗' : type === 'warning' ? '⚠' : 'ℹ'}
+        </span>
+        <span>${message}</span>
+    `;
     
-    if (elements.noRoutesState) elements.noRoutesState.style.display = 'none';
+    document.body.appendChild(notification);
     
-    elements.routeList.innerHTML = filteredRoutes.map(route => {
-        const riderEarnings = Math.round(route.total_earnings * BUSINESS_CONFIG.commission.rider);
-        const routeIcon = route.type === 'express' ? '⚡' : route.type === 'eco' ? '🌿' : '📦';
+    setTimeout(() => {
+        notification.style.animation = 'slideOut 0.3s ease-out';
+        setTimeout(() => notification.remove(), 300);
+    }, 3000);
+}
+/**
+ * Enhanced Route Navigation Module - Part 3/6
+ * UI Functions, Styles, Display Components, and Enhanced Verification UI
+ * Version: 5.0.1 - FIXED CSS SYNTAX ERRORS
+ */
+
+// ============================================================================
+// UI STYLING & INITIALIZATION (Fixed CSS syntax errors)
+// ============================================================================
+
+function injectNavigationStyles() {
+    const style = document.createElement('style');
+    style.textContent = `
+        /* Import premium fonts */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
         
-        // Check if commission offset applies
-        let offsetMessage = '';
-        if (window.commissionOffsetManager && window.commissionOffsetManager.commissionDebt > 0) {
-            const offsetResult = window.commissionOffsetManager.calculateOffset(riderEarnings);
-            if (offsetResult.offset > 0) {
-                offsetMessage = `
-                    <div class="route-commission-offset">
-                        <span class="offset-icon">💳</span>
-                        <span>KES ${offsetResult.offset} commission will be deducted</span>
-                    </div>
-                `;
+        * {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', 'Segoe UI', system-ui, sans-serif;
+        }
+        
+        /* Map container styles */
+        .map-container {
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            z-index: 1 !important;
+        }
+        
+        #map {
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            z-index: 1 !important;
+        }
+        
+        /* Enhanced Verification Modal Styles */
+        .verification-modal-enhanced {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 3000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            animation: fadeIn 0.3s ease;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        @keyframes pulse {
+            0% {
+                transform: scale(1);
+                opacity: 1;
+            }
+            50% {
+                transform: scale(1.5);
+                opacity: 0.5;
+            }
+            100% {
+                transform: scale(2);
+                opacity: 0;
             }
         }
         
-        return `
-            <div class="route-card ${route.status !== 'available' || hasActiveRoute ? 'claimed' : ''}" 
-                 ${route.status === 'available' && !hasActiveRoute ? `onclick="claimRoute('${route.id}')"` : ''}>
-                <div class="route-header">
-                    <div class="route-name">${route.name}</div>
-                    <div class="route-type ${route.type}">${route.type.toUpperCase()}</div>
-                </div>
-                
-                <div class="route-stats">
-                    <div class="route-stat">
-                        <div class="route-stat-value">${route.pickups}</div>
-                        <div class="route-stat-label">Stops</div>
-                    </div>
-                    <div class="route-stat">
-                        <div class="route-stat-value">${route.distance}</div>
-                        <div class="route-stat-label">KM</div>
-                    </div>
-                    <div class="route-stat">
-                        <div class="route-stat-value">KES ${riderEarnings.toLocaleString()}</div>
-                        <div class="route-stat-label">Earnings</div>
-                    </div>
-                </div>
-                
-                ${offsetMessage}
-                
-                <button type="button" class="claim-button" 
-                        ${route.status !== 'available' || hasActiveRoute ? 'disabled' : ''}
-                        onclick="event.stopPropagation(); ${route.status === 'available' && !hasActiveRoute ? `claimRoute('${route.id}')` : ''}">
-                    ${hasActiveRoute ? 'Route Active' : 
-                      route.status === 'available' ? 'Claim Route' : 'Already Claimed'}
-                </button>
-            </div>
-        `;
-    }).join('');
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        
+        @keyframes slideOut {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+        }
+        
+        @keyframes slideUp {
+            from {
+                transform: translateY(100%);
+            }
+            to {
+                transform: translateY(0);
+            }
+        }
+        
+        @keyframes spin {
+            to { 
+                transform: rotate(360deg); 
+            }
+        }
+        
+        @keyframes popIn {
+            0% {
+                transform: translate(-50%, -50%) scale(0.8);
+                opacity: 0;
+            }
+            50% {
+                transform: translate(-50%, -50%) scale(1.05);
+            }
+            100% {
+                transform: translate(-50%, -50%) scale(1);
+                opacity: 1;
+            }
+        }
+        
+        .verification-steps {
+            display: flex;
+            justify-content: space-between;
+            margin: 20px 0;
+            padding: 0 10px;
+        }
+        
+        .verification-step {
+            flex: 1;
+            text-align: center;
+            position: relative;
+        }
+        
+        .verification-step::after {
+            content: '';
+            position: absolute;
+            top: 20px;
+            right: -50%;
+            width: 100%;
+            height: 2px;
+            background: rgba(255, 255, 255, 0.1);
+        }
+        
+        .verification-step:last-child::after {
+            display: none;
+        }
+        
+        .step-circle {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 8px;
+            font-size: 18px;
+            transition: all 0.3s ease;
+        }
+        
+        .verification-step.active .step-circle {
+            background: linear-gradient(135deg, #9333EA, #7928CA);
+            border-color: #9333EA;
+            color: white;
+        }
+        
+        .verification-step.completed .step-circle {
+            background: linear-gradient(135deg, #34C759, #30D158);
+            border-color: #34C759;
+            color: white;
+        }
+        
+        .step-label {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.6);
+            font-weight: 600;
+        }
+        
+        .verification-step.active .step-label {
+            color: white;
+        }
+        
+        /* Camera View Styles */
+        .camera-container {
+            position: relative;
+            width: 100%;
+            height: 300px;
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            margin: 20px 0;
+        }
+        
+        .camera-video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .camera-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+        }
+        
+        .camera-frame {
+            width: 80%;
+            height: 80%;
+            border: 3px solid rgba(255, 255, 255, 0.5);
+            border-radius: 12px;
+            position: relative;
+        }
+        
+        .camera-frame::before,
+        .camera-frame::after {
+            content: '';
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            border: 3px solid #9333EA;
+        }
+        
+        .camera-frame::before {
+            top: -3px;
+            left: -3px;
+            border-right: none;
+            border-bottom: none;
+        }
+        
+        .camera-frame::after {
+            bottom: -3px;
+            right: -3px;
+            border-left: none;
+            border-top: none;
+        }
+        
+        .camera-controls {
+            position: absolute;
+            bottom: 20px;
+            left: 0;
+            right: 0;
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+        }
+        
+        .camera-button {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: white;
+            border: 4px solid #9333EA;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+        
+        .camera-button:hover {
+            transform: scale(1.1);
+        }
+        
+        .camera-button:active {
+            transform: scale(0.95);
+        }
+        
+        .photo-preview {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+            border-radius: 12px;
+            margin: 10px 0;
+        }
+        
+        /* Signature Pad Styles */
+        .signature-container {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .signature-canvas {
+            width: 100%;
+            height: 200px;
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            cursor: crosshair;
+            touch-action: none;
+        }
+        
+        .signature-label {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 10px;
+            display: block;
+        }
+        
+        .signature-controls {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 10px;
+        }
+        
+        .signature-clear {
+            padding: 8px 16px;
+            background: #f0f0f0;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        
+        /* M-Pesa Prompt Styles */
+        .mpesa-prompt-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.9);
+            backdrop-filter: blur(10px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 4000;
+            animation: slideUp 0.3s ease;
+        }
+        
+        .mpesa-content {
+            background: linear-gradient(135deg, #1C1C1F, #2C2C2E);
+            border-radius: 24px;
+            padding: 30px;
+            max-width: 400px;
+            width: 90%;
+            box-shadow: 0 25px 80px rgba(0, 0, 0, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .mpesa-content h3 {
+            color: white;
+            font-size: 24px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .mpesa-content h3::before {
+            content: '';
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #34C759, #30D158);
+            border-radius: 50%;
+            display: inline-block;
+        }
+        
+        .mpesa-amount {
+            font-size: 36px;
+            font-weight: 800;
+            color: #34C759;
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        .mpesa-instructions {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .mpesa-instructions ol {
+            margin: 0;
+            padding-left: 20px;
+            color: rgba(255, 255, 255, 0.8);
+        }
+        
+        .mpesa-instructions li {
+            margin: 10px 0;
+        }
+        
+        .mpesa-input {
+            margin: 20px 0;
+        }
+        
+        .mpesa-input label {
+            display: block;
+            color: rgba(255, 255, 255, 0.6);
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+        
+        .mpesa-input input {
+            width: 100%;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            color: white;
+            font-size: 18px;
+            font-weight: 600;
+            text-align: center;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+        
+        .mpesa-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        .mpesa-actions button {
+            flex: 1;
+            padding: 16px;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+        
+        .mpesa-actions button:first-child {
+            background: linear-gradient(135deg, #34C759, #30D158);
+            color: white;
+        }
+        
+        .mpesa-actions button:last-child {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+        }
+        
+        .mpesa-actions button:hover {
+            transform: translateY(-2px);
+        }
+        
+        /* Cash Collection Widget */
+        .cash-collection-widget {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            background: linear-gradient(135deg, #0A0A0B 0%, #1C1C1F 100%);
+            backdrop-filter: blur(20px);
+            border-radius: 20px;
+            padding: 20px;
+            min-width: 240px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5), 0 2px 10px rgba(0, 0, 0, 0.3);
+            z-index: 100;
+            transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            font-weight: 500;
+        }
+        
+        .cash-collection-widget.minimized .cash-widget-content {
+            display: none;
+        }
+        
+        .cash-collection-widget.minimized {
+            min-width: 120px !important;
+        }
+        
+        body.navigating .cash-collection-widget {
+            top: 140px;
+        }
+        
+        /* Premium Leaflet popup styles */
+        .leaflet-popup {
+            margin-bottom: 25px !important;
+        }
+        
+        .leaflet-popup-content-wrapper {
+            background: linear-gradient(145deg, #1A1A1D 0%, #2D2D30 100%) !important;
+            border-radius: 24px !important;
+            box-shadow: 
+                0 20px 60px rgba(0, 0, 0, 0.8),
+                0 10px 20px rgba(0, 0, 0, 0.6),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+            border: 1px solid rgba(255, 255, 255, 0.08) !important;
+            overflow: hidden !important;
+            padding: 0 !important;
+            backdrop-filter: blur(10px) !important;
+        }
+        
+        .leaflet-popup-content {
+            margin: 0 !important;
+            width: 340px !important;
+            max-width: 340px !important;
+            color: white !important;
+            padding: 0 !important;
+        }
+        
+        .leaflet-popup-tip-container {
+            display: none !important;
+        }
+        
+        .leaflet-popup-close-button {
+            color: rgba(255, 255, 255, 0.6) !important;
+            font-size: 28px !important;
+            font-weight: 200 !important;
+            padding: 10px 14px !important;
+            right: 10px !important;
+            top: 10px !important;
+            opacity: 0.8 !important;
+            z-index: 100 !important;
+            transition: all 0.2s ease !important;
+            background: rgba(0, 0, 0, 0.3) !important;
+            border-radius: 50% !important;
+            width: 36px !important;
+            height: 36px !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            line-height: 1 !important;
+        }
+        
+        .leaflet-popup-close-button:hover {
+            opacity: 1 !important;
+            color: #FF453A !important;
+            background: rgba(255, 69, 58, 0.2) !important;
+            transform: rotate(90deg) !important;
+        }
+        
+        /* Verification Progress Bar */
+        .verification-progress {
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+            overflow: hidden;
+            margin: 20px 0;
+        }
+        
+        .verification-progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #9333EA, #7928CA);
+            border-radius: 2px;
+            transition: width 0.3s ease;
+        }
+        
+        /* Photo Grid for Multiple Photos */
+        .photo-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin: 20px 0;
+        }
+        
+        .photo-grid-item {
+            position: relative;
+            padding-bottom: 100%;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        
+        .photo-grid-item img {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .photo-grid-item .photo-label {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(to top, rgba(0, 0, 0, 0.8), transparent);
+            color: white;
+            padding: 10px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        /* Optimization Button Styles */
+        .optimize-button-container {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+            width: 100%;
+        }
+        
+        .optimize-route-btn {
+            flex: 1;
+            background: linear-gradient(135deg, #9333EA, #7928CA);
+            color: white;
+            border: none;
+            border-radius: 16px;
+            padding: 16px 20px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            box-shadow: 0 4px 15px rgba(147, 51, 234, 0.4);
+            letter-spacing: 0.5px;
+        }
+        
+        .optimize-route-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(147, 51, 234, 0.5);
+        }
+        
+        .optimize-route-btn.optimized {
+            background: linear-gradient(135deg, #34C759, #30D158);
+            cursor: default;
+        }
+        
+        .undo-optimize-btn {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 16px;
+            padding: 16px 20px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all 0.3s ease;
+        }
+        
+        .undo-optimize-btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+        
+        /* Optimization Animation */
+        .optimizing-animation {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.9);
+            backdrop-filter: blur(10px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 5000;
+        }
+        
+        .optimizing-content {
+            background: linear-gradient(135deg, #1C1C1F, #2C2C2E);
+            border-radius: 24px;
+            padding: 40px;
+            text-align: center;
+            box-shadow: 0 25px 80px rgba(0, 0, 0, 0.6);
+            max-width: 400px;
+        }
+        
+        .optimizing-spinner {
+            width: 60px;
+            height: 60px;
+            border: 3px solid rgba(147, 51, 234, 0.3);
+            border-top-color: #9333EA;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+    `;
+    
+    document.head.appendChild(style);
 }
-/**
- * Part 3: Route Management, Active Delivery, and Location Functions
+        /* Import premium fonts */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+        
+        * {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', 'Segoe UI', system-ui, sans-serif;
+        }
+        
+        /* Map container styles */
+        .map-container {
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            z-index: 1 !important;
+        }
+        
+        #map {
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            z-index: 1 !important;
+        }
+        
+        /* Enhanced Verification Modal Styles */
+        .verification-modal-enhanced {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 3000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            animation: fadeIn 0.3s ease;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        @keyframes pulse {
+            0% {
+                transform: scale(1);
+                opacity: 1 !important;
+            color: #FF453A !important;
+            background: rgba(255, 69, 58, 0.2) !important;
+            transform: rotate(90deg) !important;
+        }
+        
+        /* Verification Progress Bar */
+        .verification-progress {
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+            overflow: hidden;
+            margin: 20px 0;
+        }
+        
+        .verification-progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #9333EA, #7928CA);
+            border-radius: 2px;
+            transition: width 0.3s ease;
+        }
+        
+        /* Photo Grid for Multiple Photos */
+        .photo-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin: 20px 0;
+        }
+        
+        .photo-grid-item {
+            position: relative;
+            padding-bottom: 100%;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        
+        .photo-grid-item img {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .photo-grid-item .photo-label {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(to top, rgba(0, 0, 0, 0.8), transparent);
+            color: white;
+            padding: 10px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        /* Optimization Button Styles */
+        .optimize-button-container {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+            width: 100%;
+        }
+        
+        .optimize-route-btn {
+            flex: 1;
+            background: linear-gradient(135deg, #9333EA, #7928CA);
+            color: white;
+            border: none;
+            border-radius: 16px;
+            padding: 16px 20px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            box-shadow: 0 4px 15px rgba(147, 51, 234, 0.4);
+            letter-spacing: 0.5px;
+        }
+        
+        .optimize-route-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(147, 51, 234, 0.5);
+        }
+        
+        .optimize-route-btn.optimized {
+            background: linear-gradient(135deg, #34C759, #30D158);
+            cursor: default;
+        }
+        
+        .undo-optimize-btn {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 16px;
+            padding: 16px 20px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all 0.3s ease;
+        }
+        
+        .undo-optimize-btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+        
+        /* Optimization Animation */
+        .optimizing-animation {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.9);
+            backdrop-filter: blur(10px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 5000;
+        }
+        
+        .optimizing-content {
+            background: linear-gradient(135deg, #1C1C1F, #2C2C2E);
+            border-radius: 24px;
+            padding: 40px;
+            text-align: center;
+            box-shadow: 0 25px 80px rgba(0, 0, 0, 0.6);
+            max-width: 400px;
+        }
+        
+        .optimizing-spinner {
+            width: 60px;
+            height: 60px;
+            border: 3px solid rgba(147, 51, 234, 0.3);
+            border-top-color: #9333EA;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    `;
+    
+    document.head.appendChild(style);
+} 1;
+            }
+            50% {
+                transform: scale(1.5);
+                opacity: 0.5;
+            }
+            100% {
+                transform: scale(2);
+                opacity: 0;
+            }
+        }
+        
+        .verification-steps {
+            display: flex;
+            justify-content: space-between;
+            margin: 20px 0;
+            padding: 0 10px;
+        }
+        
+        .verification-step {
+            flex: 1;
+            text-align: center;
+            position: relative;
+        }
+        
+        .verification-step::after {
+            content: '';
+            position: absolute;
+            top: 20px;
+            right: -50%;
+            width: 100%;
+            height: 2px;
+            background: rgba(255, 255, 255, 0.1);
+        }
+        
+        .verification-step:last-child::after {
+            display: none;
+        }
+        
+        .step-circle {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 8px;
+            font-size: 18px;
+            transition: all 0.3s ease;
+        }
+        
+        .verification-step.active .step-circle {
+            background: linear-gradient(135deg, #9333EA, #7928CA);
+            border-color: #9333EA;
+            color: white;
+        }
+        
+        .verification-step.completed .step-circle {
+            background: linear-gradient(135deg, #34C759, #30D158);
+            border-color: #34C759;
+            color: white;
+        }
+        
+        .step-label {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.6);
+            font-weight: 600;
+        }
+        
+        .verification-step.active .step-label {
+            color: white;
+        }
+        
+        /* Camera View Styles */
+        .camera-container {
+            position: relative;
+            width: 100%;
+            height: 300px;
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            margin: 20px 0;
+        }
+        
+        .camera-video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .camera-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+        }
+        
+        .camera-frame {
+            width: 80%;
+            height: 80%;
+            border: 3px solid rgba(255, 255, 255, 0.5);
+            border-radius: 12px;
+            position: relative;
+        }
+        
+        .camera-frame::before,
+        .camera-frame::after {
+            content: '';
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            border: 3px solid #9333EA;
+        }
+        
+        .camera-frame::before {
+            top: -3px;
+            left: -3px;
+            border-right: none;
+            border-bottom: none;
+        }
+        
+        .camera-frame::after {
+            bottom: -3px;
+            right: -3px;
+            border-left: none;
+            border-top: none;
+        }
+        
+        .camera-controls {
+            position: absolute;
+            bottom: 20px;
+            left: 0;
+            right: 0;
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+        }
+        
+        .camera-button {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: white;
+            border: 4px solid #9333EA;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+        
+        .camera-button:hover {
+            transform: scale(1.1);
+        }
+        
+        .camera-button:active {
+            transform: scale(0.95);
+        }
+        
+        .photo-preview {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+            border-radius: 12px;
+            margin: 10px 0;
+        }
+        
+        /* Signature Pad Styles */
+        .signature-container {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .signature-canvas {
+            width: 100%;
+            height: 200px;
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            cursor: crosshair;
+            touch-action: none;
+        }
+        
+        .signature-label {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 10px;
+            display: block;
+        }
+        
+        .signature-controls {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 10px;
+        }
+        
+        .signature-clear {
+            padding: 8px 16px;
+            background: #f0f0f0;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        
+        /* M-Pesa Prompt Styles */
+        .mpesa-prompt-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.9);
+            backdrop-filter: blur(10px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 4000;
+            animation: slideUp 0.3s ease;
+        }
+        
+        @keyframes slideUp {
+            from {
+                transform: translateY(100%);
+            }
+            to {
+                transform: translateY(0);
+            }
+        }
+        
+        .mpesa-content {
+            background: linear-gradient(135deg, #1C1C1F, #2C2C2E);
+            border-radius: 24px;
+            padding: 30px;
+            max-width: 400px;
+            width: 90%;
+            box-shadow: 0 25px 80px rgba(0, 0, 0, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .mpesa-content h3 {
+            color: white;
+            font-size: 24px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .mpesa-content h3::before {
+            content: '';
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #34C759, #30D158);
+            border-radius: 50%;
+            display: inline-block;
+        }
+        
+        .mpesa-amount {
+            font-size: 36px;
+            font-weight: 800;
+            color: #34C759;
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        .mpesa-instructions {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .mpesa-instructions ol {
+            margin: 0;
+            padding-left: 20px;
+            color: rgba(255, 255, 255, 0.8);
+        }
+        
+        .mpesa-instructions li {
+            margin: 10px 0;
+        }
+        
+        .mpesa-input {
+            margin: 20px 0;
+        }
+        
+        .mpesa-input label {
+            display: block;
+            color: rgba(255, 255, 255, 0.6);
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+        
+        .mpesa-input input {
+            width: 100%;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            color: white;
+            font-size: 18px;
+            font-weight: 600;
+            text-align: center;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+        
+        .mpesa-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        .mpesa-actions button {
+            flex: 1;
+            padding: 16px;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+        
+        .mpesa-actions button:first-child {
+            background: linear-gradient(135deg, #34C759, #30D158);
+            color: white;
+        }
+        
+        .mpesa-actions button:last-child {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+        }
+        
+        .mpesa-actions button:hover {
+            transform: translateY(-2px);
+        }
+        
+        /* Cash Collection Widget */
+        .cash-collection-widget {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            background: linear-gradient(135deg, #0A0A0B 0%, #1C1C1F 100%);
+            backdrop-filter: blur(20px);
+            border-radius: 20px;
+            padding: 20px;
+            min-width: 240px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5), 0 2px 10px rgba(0, 0, 0, 0.3);
+            z-index: 100;
+            transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            font-weight: 500;
+        }
+        
+        .cash-collection-widget.minimized .cash-widget-content {
+            display: none;
+        }
+        
+        .cash-collection-widget.minimized {
+            min-width: 120px !important;
+        }
+        
+        body.navigating .cash-collection-widget {
+            top: 140px;
+        }
+        
+        /* Premium Leaflet popup styles */
+        .leaflet-popup {
+            margin-bottom: 25px !important;
+        }
+        
+        .leaflet-popup-content-wrapper {
+            background: linear-gradient(145deg, #1A1A1D 0%, #2D2D30 100%) !important;
+            border-radius: 24px !important;
+            box-shadow: 
+                0 20px 60px rgba(0, 0, 0, 0.8),
+                0 10px 20px rgba(0, 0, 0, 0.6),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+            border: 1px solid rgba(255, 255, 255, 0.08) !important;
+            overflow: hidden !important;
+            padding: 0 !important;
+            backdrop-filter: blur(10px) !important;
+        }
+        
+        .leaflet-popup-content {
+            margin: 0 !important;
+            width: 340px !important;
+            max-width: 340px !important;
+            color: white !important;
+            padding: 0 !important;
+        }
+        
+        .leaflet-popup-tip-container {
+            display: none !important;
+        }
+        
+        .leaflet-popup-close-button {
+            color: rgba(255, 255, 255, 0.6) !important;
+            font-size: 28px !important;
+            font-weight: 200 !important;
+            padding: 10px 14px !important;
+            right: 10px !important;
+            top: 10px !important;
+            opacity: 0.8 !important;
+            z-index: 100 !important;
+            transition: all 0.2s ease !important;
+            background: rgba(0, 0, 0, 0.3) !important;
+            border-radius: 50% !important;
+            width: 36px !important;
+            height: 36px !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            line-height: 1 !important;
+        }
+        
+        .leaflet-popup-close-button:hover {
+            opacity:
+            /**
+ * Enhanced Route Navigation Module - Part 4/6
+ * UI Display Functions and Components
+ * Version: 5.0.1
  */
 
-// Show Active Route
-function showActiveRoute() {
-    if (!state.claimedRoute) return;
+// ============================================================================
+// UI DISPLAY FUNCTIONS (NO DUPLICATES - Functions here are unique to Part 4)
+// ============================================================================
+
+function addOptimizeButton() {
+    if (document.getElementById('optimizeBtn')) return;
     
-    const allComplete = state.claimedRoute.stops && state.claimedRoute.stops.every(s => s.completed);
-    if (allComplete) {
-        console.log('All stops completed - route should be cleared');
-        state.claimedRoute = null;
-        localStorage.removeItem('tuma_active_route');
-        
-        if (elements.activeRouteSection) {
-            elements.activeRouteSection.style.display = 'none';
+    const navControls = document.getElementById('navControls');
+    if (!navControls) return;
+    
+    const optimizeContainer = document.createElement('div');
+    optimizeContainer.className = 'optimize-button-container';
+    optimizeContainer.innerHTML = `
+        <button id="optimizeBtn" class="optimize-route-btn" onclick="optimizeRouteStops()">
+            <span class="optimize-icon">✨</span>
+            <span class="optimize-text">Optimize Route</span>
+        </button>
+        <button id="undoOptimizeBtn" class="undo-optimize-btn" onclick="undoOptimization()" style="display: none;">
+            <span class="undo-icon">↩️</span>
+            <span>Undo</span>
+        </button>
+    `;
+    
+    navControls.insertBefore(optimizeContainer, navControls.firstChild);
+}
+
+function updateOptimizeButton(isOptimized) {
+    const optimizeBtn = document.getElementById('optimizeBtn');
+    const undoBtn = document.getElementById('undoOptimizeBtn');
+    
+    if (optimizeBtn) {
+        if (isOptimized) {
+            optimizeBtn.innerHTML = `
+                <span class="optimize-icon">✅</span>
+                <span class="optimize-text">Route Optimized</span>
+            `;
+            optimizeBtn.disabled = true;
+            optimizeBtn.classList.add('optimized');
+        } else {
+            optimizeBtn.innerHTML = `
+                <span class="optimize-icon">✨</span>
+                <span class="optimize-text">Optimize Route</span>
+            `;
+            optimizeBtn.disabled = false;
+            optimizeBtn.classList.remove('optimized');
         }
+    }
+    
+    if (undoBtn) {
+        undoBtn.style.display = isOptimized ? 'flex' : 'none';
+    }
+}
+
+function showOptimizingAnimation() {
+    const animation = document.createElement('div');
+    animation.id = 'optimizingAnimation';
+    animation.className = 'optimizing-animation';
+    
+    const steps = [
+        '📍 Analyzing stop locations',
+        '🗺️ Detecting route direction',
+        '⚡ Optimizing delivery sequence',
+        '✅ Validating route integrity'
+    ];
+    
+    animation.innerHTML = `
+        <div class="optimizing-content">
+            <div class="optimizing-spinner"></div>
+            <h3 style="color: white; margin-bottom: 10px;">Optimizing Route...</h3>
+            <p style="color: rgba(255, 255, 255, 0.6); margin-bottom: 20px;">
+                Using intelligent geographical flow analysis
+            </p>
+            <div class="optimizing-steps">
+                ${steps.map((step, i) => `
+                    <div class="step ${i === 0 ? 'active' : ''}" data-step="${i}">
+                        ${step}
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(animation);
+    
+    // Animate steps
+    steps.forEach((_, index) => {
+        if (index > 0) {
+            setTimeout(() => {
+                const step = animation.querySelector(`.step[data-step="${index}"]`);
+                if (step) step.classList.add('active');
+            }, 300 * (index + 1));
+        }
+    });
+}
+
+function hideOptimizingAnimation() {
+    const animation = document.getElementById('optimizingAnimation');
+    if (animation) {
+        animation.classList.add('fade-out');
+        setTimeout(() => animation.remove(), 300);
+    }
+}
+
+function showOptimizationResults(savedDistance, savedPercentage) {
+    const results = document.createElement('div');
+    results.className = 'optimization-results';
+    
+    results.innerHTML = `
+        <div class="results-content">
+            <div class="results-icon">🎉</div>
+            <h2 style="color: white; margin-bottom: 10px;">Route Optimized!</h2>
+            <div class="results-stats">
+                <div class="stat">
+                    <span class="stat-value">${savedDistance.toFixed(1)} km</span>
+                    <span class="stat-label">Distance Saved</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-value">${savedPercentage}%</span>
+                    <span class="stat-label">More Efficient</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-value">${Math.round(savedDistance * 2.5)} min</span>
+                    <span class="stat-label">Time Saved</span>
+                </div>
+            </div>
+            <div class="results-comparison">
+                <div class="comparison-item">
+                    <span class="comparison-label">Original:</span>
+                    <span class="comparison-value">${state.optimizationStats.originalDistance.toFixed(1)} km</span>
+                </div>
+                <div class="comparison-item">
+                    <span class="comparison-label">Optimized:</span>
+                    <span class="comparison-value success">${state.optimizationStats.optimizedDistance.toFixed(1)} km</span>
+                </div>
+            </div>
+            <button class="results-close" onclick="this.parentElement.parentElement.remove()">
+                Got it!
+            </button>
+        </div>
+    `;
+    
+    document.body.appendChild(results);
+    
+    setTimeout(() => {
+        if (results.parentElement) {
+            results.classList.add('fade-out');
+            setTimeout(() => results.remove(), 300);
+        }
+    }, 7000);
+}
+
+function showReoptimizeButton() {
+    const existing = document.querySelector('.reoptimize-float-btn');
+    if (existing) existing.remove();
+    
+    const btn = document.createElement('button');
+    btn.className = 'reoptimize-float-btn';
+    btn.innerHTML = '🔄 Re-optimize Route';
+    btn.onclick = () => {
+        reoptimizeRemainingStops();
+        btn.remove();
+    };
+    
+    document.body.appendChild(btn);
+    setTimeout(() => btn.remove(), 10000);
+}
+
+// Fixed showCashCollectionWidget function
+function showCashCollectionWidget() {
+    const existingWidget = document.querySelector('.cash-collection-widget');
+    if (existingWidget) existingWidget.remove();
+    
+    const pendingAmount = state.totalCashToCollect - state.totalCashCollected;
+    const hasPending = pendingAmount > 0;
+    
+    const widget = document.createElement('div');
+    widget.className = `cash-collection-widget ${hasPending ? 'has-pending' : ''}`;
+    widget.innerHTML = `
+        <div class="cash-widget-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <div class="cash-widget-title" style="font-size: 14px; font-weight: 600; color: white;">
+                ${hasPending ? '⚡' : '✓'} Cash Collection
+            </div>
+            <button class="minimize-btn" onclick="toggleCashWidget()" style="
+                background: none;
+                border: none;
+                color: white;
+                font-size: 20px;
+                cursor: pointer;
+                padding: 0;
+                width: 24px;
+                height: 24px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            ">－</button>
+        </div>
+        <div class="cash-widget-content">
+            <div class="cash-widget-amount" style="font-size: 24px; font-weight: 700; color: #FF9F0A; margin-bottom: 15px;">
+                KES ${pendingAmount.toLocaleString()}
+            </div>
+            <div class="cash-widget-breakdown" style="font-size: 13px; color: rgba(255,255,255,0.7);">
+                <div class="cash-breakdown-item" style="display: flex; justify-content: space-between; padding: 5px 0;">
+                    <span>Total Expected</span>
+                    <span style="font-weight: 600;">KES ${state.totalCashToCollect.toLocaleString()}</span>
+                </div>
+                <div class="cash-breakdown-item" style="display: flex; justify-content: space-between; padding: 5px 0;">
+                    <span>✓ Collected</span>
+                    <span style="font-weight: 600; color: #34C759;">KES ${state.totalCashCollected.toLocaleString()}</span>
+                </div>
+                <div class="cash-breakdown-item" style="display: flex; justify-content: space-between; padding: 5px 0; border-top: 1px solid rgba(255,255,255,0.1); margin-top: 5px; padding-top: 10px;">
+                    <span>⏳ Pending</span>
+                    <span style="font-weight: 600; color: #FF9F0A;">KES ${pendingAmount.toLocaleString()}</span>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(widget);
+}
+
+function updateCashCollectionWidget() {
+    calculateCashCollection();
+    const widget = document.querySelector('.cash-collection-widget');
+    if (widget) {
+        showCashCollectionWidget();
+    }
+}
+
+// ============================================================================
+// ENHANCED VERIFICATION UI FUNCTIONS
+// ============================================================================
+
+function showVerificationProgress(currentStep, totalSteps) {
+    const progressBar = document.querySelector('.verification-progress-bar');
+    if (progressBar) {
+        const percentage = (currentStep / totalSteps) * 100;
+        progressBar.style.width = `${percentage}%`;
+    }
+}
+
+function updateVerificationStep(stepNumber, status = 'active') {
+    const steps = document.querySelectorAll('.verification-step');
+    steps.forEach((step, index) => {
+        if (index < stepNumber) {
+            step.classList.remove('active');
+            step.classList.add('completed');
+        } else if (index === stepNumber) {
+            step.classList.add(status);
+        } else {
+            step.classList.remove('active', 'completed');
+        }
+    });
+}
+
+function createPhotoPreview(photoData, label) {
+    const preview = document.createElement('div');
+    preview.className = 'photo-grid-item';
+    preview.innerHTML = `
+        <img src="${photoData}" alt="${label}">
+        <div class="photo-label">${label}</div>
+    `;
+    return preview;
+}
+
+function showCameraUI(onCapture) {
+    const cameraModal = document.createElement('div');
+    cameraModal.className = 'camera-modal';
+    cameraModal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.95);
+        z-index: 3500;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+    `;
+    
+    cameraModal.innerHTML = `
+        <div class="camera-container">
+            <video id="cameraVideo" class="camera-video" autoplay></video>
+            <div class="camera-overlay">
+                <div class="camera-frame"></div>
+            </div>
+            <div class="camera-controls">
+                <button class="camera-button" id="captureBtn"></button>
+                <button style="
+                    background: rgba(255, 255, 255, 0.2);
+                    border: none;
+                    border-radius: 50%;
+                    width: 50px;
+                    height: 50px;
+                    color: white;
+                    font-size: 20px;
+                    cursor: pointer;
+                " onclick="this.parentElement.parentElement.parentElement.remove()">✕</button>
+            </div>
+        </div>
+        <p style="color: white; margin-top: 20px; font-size: 14px;">
+            Position the package within the frame
+        </p>
+    `;
+    
+    document.body.appendChild(cameraModal);
+    
+    // Initialize camera
+    const video = document.getElementById('cameraVideo');
+    initializeCamera().then(stream => {
+        video.srcObject = stream;
+        
+        document.getElementById('captureBtn').onclick = async () => {
+            // Show loading state
+            const captureBtn = document.getElementById('captureBtn');
+            captureBtn.disabled = true;
+            captureBtn.style.opacity = '0.5';
+            
+            try {
+                // Capture and upload directly to Supabase
+                const photoUrl = await captureAndUploadPhoto(
+                    video, 
+                    state.currentVerification.stopId,
+                    state.currentVerification.type
+                );
+                
+                stream.getTracks().forEach(track => track.stop());
+                cameraModal.remove();
+                onCapture(photoUrl);
+            } catch (err) {
+                console.error('Photo capture/upload failed:', err);
+                // Fallback to base64
+                const photoData = capturePhoto(video);
+                stream.getTracks().forEach(track => track.stop());
+                cameraModal.remove();
+                onCapture(photoData);
+            }
+        };
+    }).catch(err => {
+        console.error('Camera error:', err);
+        showNotification('Camera not available', 'error');
+        cameraModal.remove();
+    });
+}
+
+function showSignaturePad(onSign) {
+    const signatureModal = document.createElement('div');
+    signatureModal.className = 'signature-modal';
+    signatureModal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.95);
+        z-index: 3500;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+    `;
+    
+    signatureModal.innerHTML = `
+        <div class="signature-container" style="max-width: 500px; width: 100%;">
+            <h3 style="margin: 0 0 20px 0; color: #333;">Customer Signature</h3>
+            <label class="signature-label">Please ask the customer to sign below:</label>
+            <canvas id="signatureCanvas" class="signature-canvas"></canvas>
+            <div class="signature-controls">
+                <button class="signature-clear" id="clearSignature">Clear</button>
+                <div style="display: flex; gap: 10px;">
+                    <button style="
+                        padding: 10px 20px;
+                        background: #ccc;
+                        border: none;
+                        border-radius: 8px;
+                        cursor: pointer;
+                        font-weight: 600;
+                    " onclick="this.parentElement.parentElement.parentElement.parentElement.remove()">Cancel</button>
+                    <button id="confirmSignature" style="
+                        padding: 10px 20px;
+                        background: linear-gradient(135deg, #34C759, #30D158);
+                        border: none;
+                        border-radius: 8px;
+                        color: white;
+                        cursor: pointer;
+                        font-weight: 600;
+                    ">Confirm Signature</button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(signatureModal);
+    
+    const canvas = document.getElementById('signatureCanvas');
+    const signaturePad = initializeSignaturePad(canvas);
+    
+    document.getElementById('clearSignature').onclick = () => {
+        signaturePad.clear();
+    };
+    
+    document.getElementById('confirmSignature').onclick = async () => {
+        const signatureData = await signaturePad.getSignatureData();
+        if (signatureData) {
+            // Show loading state
+            const confirmBtn = document.getElementById('confirmSignature');
+            confirmBtn.disabled = true;
+            confirmBtn.textContent = 'Uploading...';
+            
+            try {
+                // Upload signature to Supabase
+                const signatureUrl = await uploadSignatureToSupabase(
+                    signatureData,
+                    state.currentVerification.stopId
+                );
+                signatureModal.remove();
+                onSign(signatureUrl);
+            } catch (err) {
+                console.error('Signature upload failed:', err);
+                // Fallback to base64
+                signatureModal.remove();
+                onSign(signatureData);
+            }
+        } else {
+            showNotification('Please provide a signature', 'warning');
+        }
+    };
+}
+    /**
+ * Enhanced Route Navigation Module - Part 5/6
+ * Map, Navigation, Location Tracking Functions
+ * Version: 5.0.1
+ */
+
+// ============================================================================
+// MAP INITIALIZATION & MANAGEMENT
+// ============================================================================
+
+async function initializeMap() {
+    console.log('Initializing map...');
+    
+    const mapContainer = document.getElementById('map');
+    if (!mapContainer) {
+        console.error('Map container not found!');
         return;
     }
     
-    const activeStops = state.claimedRoute.stops.filter(s => !s.completed);
-    if (activeStops.length === 0) return;
+    mapContainer.style.width = '100%';
+    mapContainer.style.height = '100%';
     
-    const nextStop = activeStops[0];
-    const completedCount = state.claimedRoute.stops.filter(s => s.completed).length;
-    const totalCount = state.claimedRoute.stops.length;
+    let centerLat = -1.2921;
+    let centerLng = 36.8219;
     
-    // Show the active route section
-    if (elements.activeRouteSection) {
-        elements.activeRouteSection.style.display = 'block';
+    if (state.activeRoute && state.activeRoute.stops && state.activeRoute.stops.length > 0) {
+        const bounds = calculateBounds(state.activeRoute.stops);
+        centerLat = (bounds.north + bounds.south) / 2;
+        centerLng = (bounds.east + bounds.west) / 2;
     }
     
-    // Update progress
-    if (elements.completedStops) elements.completedStops.textContent = completedCount;
-    if (elements.totalStops) elements.totalStops.textContent = totalCount;
-    if (elements.routeProgress) {
-        elements.routeProgress.style.width = `${(completedCount / totalCount * 100)}%`;
+    state.map = L.map('map', {
+        center: [centerLat, centerLng],
+        zoom: 17,
+        zoomControl: false,
+        rotate: true,
+        bearing: 0,
+        touchRotate: true,
+        shiftKeyRotate: true,
+        rotateControl: {
+            closeOnZeroBearing: false,
+            position: 'topleft'
+        },
+        attributionControl: false
+    });
+    
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+        maxZoom: 19,
+        subdomains: 'abcd'
+    }).addTo(state.map);
+    
+    L.control.zoom({
+        position: 'bottomleft'
+    }).addTo(state.map);
+    
+    L.control.scale({
+        position: 'bottomleft',
+        imperial: false
+    }).addTo(state.map);
+    
+    if (L.Browser.touch && state.map.touchRotate) {
+        state.map.touchRotate.enable();
     }
     
-    // Update stop info
-    if (elements.stopType) {
-        elements.stopType.textContent = nextStop.type === 'pickup' ? '📦 PICKUP' : '📍 DELIVERY';
-        elements.stopType.className = `stop-type ${nextStop.type}`;
-    }
-    if (elements.stopAddress) elements.stopAddress.textContent = getLocationName(nextStop.address);
-    if (elements.stopCode) elements.stopCode.textContent = nextStop.parcelCode;
-    if (elements.stopCustomer) elements.stopCustomer.textContent = nextStop.customerName;
+    setTimeout(() => {
+        state.map.invalidateSize();
+    }, 100);
+    
+    console.log('Map initialized');
 }
 
-function getLocationName(address) {
-    if (!address || address === 'Pickup location' || address === 'Delivery location') {
-        return address;
+// ============================================================================
+// LOCATION TRACKING FUNCTIONS
+// ============================================================================
+
+function startLocationTracking() {
+    if (!navigator.geolocation) {
+        showNotification('Location services not available', 'warning');
+        return;
     }
     
+    console.log('Starting location tracking...');
+    
+    const geoOptions = {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0
+    };
+    
+    // Get initial position
+    navigator.geolocation.getCurrentPosition(
+        position => {
+            console.log('Initial position obtained');
+            updateCurrentLocation(position);
+            state.isTracking = true;
+            
+            // Store location for verification
+            state.currentVerification.locationData = {
+                lat: position.coords.latitude,
+                lng: position.coords.longitude,
+                accuracy: position.coords.accuracy,
+                timestamp: new Date().toISOString()
+            };
+            
+            // Center map on location
+            if (state.map && state.currentLocation) {
+                state.map.setView([state.currentLocation.lat, state.currentLocation.lng], 17, {
+                    animate: true
+                });
+            }
+            
+            // Check for better route with new location
+            if (config.optimization.autoReoptimize) {
+                checkForBetterRoute();
+            }
+            
+            showNotification('Location tracking started', 'success');
+        },
+        error => {
+            console.error('Location error:', error);
+            let errorMessage = 'Unable to get location';
+            
+            switch(error.code) {
+                case error.PERMISSION_DENIED:
+                    errorMessage = 'Please enable location permissions';
+                    break;
+                case error.POSITION_UNAVAILABLE:
+                    errorMessage = 'Location information unavailable';
+                    break;
+                case error.TIMEOUT:
+                    errorMessage = 'Location request timed out';
+                    break;
+            }
+            
+            showNotification(errorMessage, 'error');
+            
+            // Use fallback location (Nairobi center)
+            state.currentLocation = { lat: -1.2921, lng: 36.8219 };
+            if (state.map) {
+                state.map.setView([state.currentLocation.lat, state.currentLocation.lng], 13);
+            }
+        },
+        geoOptions
+    );
+    
+    // Watch position for continuous updates
+    if (state.locationWatchId) {
+        navigator.geolocation.clearWatch(state.locationWatchId);
+    }
+    
+    state.locationWatchId = navigator.geolocation.watchPosition(
+        position => {
+            updateCurrentLocation(position);
+            
+            // Update verification location data
+            if (state.currentVerification.stopId) {
+                state.currentVerification.locationData = {
+                    lat: position.coords.latitude,
+                    lng: position.coords.longitude,
+                    accuracy: position.coords.accuracy,
+                    timestamp: new Date().toISOString()
+                };
+            }
+            
+            // Periodic optimization check
+            if (state.navigationActive && config.optimization.autoReoptimize) {
+                if (!state.lastOptimizationCheck || 
+                    Date.now() - state.lastOptimizationCheck > 300000) { // Every 5 minutes
+                    checkForBetterRoute();
+                    state.lastOptimizationCheck = Date.now();
+                }
+            }
+        },
+        error => {
+            console.error('Location update error:', error);
+            
+            if (Date.now() - (state.lastLocationErrorTime || 0) > 30000) {
+                state.lastLocationErrorTime = Date.now();
+                showNotification('Location update failed - using last known position', 'warning');
+            }
+        },
+        {
+            enableHighAccuracy: true,
+            timeout: 5000,
+            maximumAge: 0
+        }
+    );
+    
+    // Backup interval for location updates
+    if (state.trackingInterval) {
+        clearInterval(state.trackingInterval);
+    }
+    
+    state.trackingInterval = setInterval(() => {
+        if (navigator.geolocation && state.isTracking) {
+            navigator.geolocation.getCurrentPosition(
+                position => updateCurrentLocation(position),
+                error => console.log('Interval location update failed:', error),
+                { enableHighAccuracy: true, timeout: 5000, maximumAge: 5000 }
+            );
+        }
+    }, 10000); // Update every 10 seconds
+}
+
+function stopLocationTracking() {
+    console.log('Stopping location tracking...');
+    
+    if (state.locationWatchId) {
+        navigator.geolocation.clearWatch(state.locationWatchId);
+        state.locationWatchId = null;
+    }
+    
+    if (state.trackingInterval) {
+        clearInterval(state.trackingInterval);
+        state.trackingInterval = null;
+    }
+    
+    state.isTracking = false;
+    
+    // Remove location marker from map
+    if (state.currentLocationMarker) {
+        state.currentLocationMarker.remove();
+        state.currentLocationMarker = null;
+    }
+    
+    if (state.accuracyCircle) {
+        state.accuracyCircle.remove();
+        state.accuracyCircle = null;
+    }
+    
+    showNotification('Location tracking stopped', 'info');
+}
+
+function updateCurrentLocation(position) {
+    const newLocation = {
+        lat: position.coords.latitude,
+        lng: position.coords.longitude,
+        accuracy: position.coords.accuracy
+    };
+    
+    // Skip update if location hasn't changed significantly
+    if (state.currentLocation) {
+        const distance = calculateDistance(state.currentLocation, newLocation);
+        if (distance < 0.005) return; // Less than 5 meters
+    }
+    
+    state.currentLocation = newLocation;
+    
+    // Update heading
+    if (position.coords.heading !== null && position.coords.heading !== undefined) {
+        state.currentHeading = position.coords.heading;
+    } else if (state.lastLocation) {
+        state.currentHeading = calculateBearing(state.lastLocation, state.currentLocation);
+    }
+    
+    // Update speed
+    if (position.coords.speed !== null) {
+        state.currentSpeed = Math.round(position.coords.speed * 3.6); // Convert m/s to km/h
+    }
+    
+    // Update map marker
+    if (state.map) {
+        // Create or update location marker
+        if (!state.currentLocationMarker) {
+            const riderIcon = createRiderIcon(state.currentHeading);
+            state.currentLocationMarker = L.marker(
+                [state.currentLocation.lat, state.currentLocation.lng],
+                { 
+                    icon: riderIcon,
+                    zIndexOffset: 2000,
+                    interactive: false
+                }
+            ).addTo(state.map);
+            
+            state.currentLocationMarker.bindPopup(`
+                <div style="text-align: center; padding: 10px;">
+                    <strong>Your Location</strong><br>
+                    <span style="font-size: 12px; color: #666;">
+                        Speed: ${state.currentSpeed} km/h<br>
+                        Accuracy: ±${Math.round(position.coords.accuracy)}m
+                    </span>
+                </div>
+            `);
+        } else {
+            state.currentLocationMarker.setLatLng([state.currentLocation.lat, state.currentLocation.lng]);
+            const riderIcon = createRiderIcon(state.currentHeading);
+            state.currentLocationMarker.setIcon(riderIcon);
+        }
+        
+        // Update accuracy circle
+        if (position.coords.accuracy) {
+            if (state.accuracyCircle) {
+                state.accuracyCircle.setLatLng([state.currentLocation.lat, state.currentLocation.lng]);
+                state.accuracyCircle.setRadius(position.coords.accuracy);
+            } else {
+                state.accuracyCircle = L.circle([state.currentLocation.lat, state.currentLocation.lng], {
+                    radius: position.coords.accuracy,
+                    color: '#007AFF',
+                    fillColor: '#007AFF',
+                    fillOpacity: 0.1,
+                    weight: 1,
+                    opacity: 0.3,
+                    interactive: false
+                }).addTo(state.map);
+            }
+        }
+        
+        // Auto-pan to location if following
+        if (state.navigationActive && state.isFollowingUser) {
+            state.map.panTo([state.currentLocation.lat, state.currentLocation.lng], {
+                animate: true,
+                duration: 1,
+                noMoveStart: true
+            });
+            
+            // Auto-zoom based on speed
+            const targetZoom = calculateZoomFromSpeed(state.currentSpeed);
+            const currentZoom = state.map.getZoom();
+            if (Math.abs(currentZoom - targetZoom) > 0.5) {
+                state.map.setZoom(targetZoom, {
+                    animate: true,
+                    duration: 1
+                });
+            }
+        }
+    }
+    
+    // Update last location
+    state.lastLocation = state.currentLocation;
+    state.lastLocationTime = Date.now();
+    
+    // Update UI elements
+    if (state.navigationActive) {
+        updateNavigationInfo();
+        updateNavigationRouting(); // NEW: Update navigation routing
+    }
+    
+    updateDynamicHeader();
+    
+    // Check proximity to stops
+    checkStopProximity();
+    
+    console.log('Location updated:', {
+        lat: newLocation.lat.toFixed(6),
+        lng: newLocation.lng.toFixed(6),
+        accuracy: `±${Math.round(newLocation.accuracy)}m`,
+        heading: Math.round(state.currentHeading) + '°',
+        speed: state.currentSpeed + ' km/h'
+    });
+}
+
+function checkStopProximity() {
+    if (!state.currentLocation || !state.activeRoute) return;
+    
+    const nextStop = getNextStop();
+    if (!nextStop) return;
+    
+    const distance = calculateDistance(
+        state.currentLocation,
+        nextStop.location
+    );
+    
+    // Alert when within 100 meters
+    if (distance < 0.1 && !state.proximityNotified) {
+        state.proximityNotified = true;
+        
+        const paymentInfo = getPaymentInfoForStop(nextStop);
+        
+        let message = `Approaching ${nextStop.type} location - ${Math.round(distance * 1000)}m away`;
+        
+        if (nextStop.type === 'delivery' && paymentInfo.needsCollection) {
+            message = `💰 Approaching delivery - Remember to collect KES ${paymentInfo.amount.toLocaleString()}`;
+        }
+        
+        showNotification(message, 'warning');
+        
+        // Play sound if available
+        if ('Audio' in window) {
+            try {
+                const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBStz0Oy9nzUIHGGz7+OZURE');
+                audio.play().catch(e => console.log('Could not play notification sound'));
+            } catch (e) {
+                console.log('Audio not supported');
+            }
+        }
+        
+        // Reset notification after 5 minutes
+        setTimeout(() => {
+            state.proximityNotified = false;
+        }, 300000);
+    }
+}
+
+// ============================================================================
+// MAP PLOTTING & ROUTE DISPLAY
+// ============================================================================
+
+async function plotRoute() {
+    if (!state.map || !state.activeRoute || !state.activeRoute.stops) return;
+    
+    // Update the stop order map FIRST
+    updateStopOrderMap();
+    
+    // Clear existing markers
+    state.markers.forEach(marker => marker.remove());
+    state.markers = [];
+    if (state.routePolyline) {
+        state.routePolyline.remove();
+        state.routePolyline = null;
+    }
+    
+    if (state.radiusCircle) {
+        state.radiusCircle.remove();
+        state.radiusCircle = null;
+    }
+    
+    const bounds = L.latLngBounds();
+    
+    // Add markers for each stop
+    state.activeRoute.stops.forEach((stop, index) => {
+        const marker = L.marker([stop.location.lat, stop.location.lng], {
+            icon: createLeafletIcon(stop),
+            zIndexOffset: isNextStop(stop) ? 1000 : index
+        })
+        .addTo(state.map)
+        .bindPopup(createStopPopup(stop), {
+            maxWidth: 340,
+            className: 'enhanced-popup',
+            autoPan: true,
+            autoPanPadding: [20, 20],
+            autoClose: true,
+            closeOnClick: true
+        });
+        
+        marker.on('click', function() {
+            this.openPopup();
+        });
+        
+        state.markers.push(marker);
+        bounds.extend([stop.location.lat, stop.location.lng]);
+    });
+    
+    // Add current location if available
+    if (state.currentLocation) {
+        bounds.extend([state.currentLocation.lat, state.currentLocation.lng]);
+    }
+    
+    state.map.fitBounds(bounds, { 
+        padding: [60, 60],
+        maxZoom: 16
+    });
+}
+
+// Fixed drawOptimizedRoute function
+async function drawOptimizedRoute() {
+    if (!state.activeRoute) return;
+    
+    const stops = state.activeRoute.stops.filter(s => !s.completed);
+    if (stops.length < 1) {
+        console.log('No stops to route to');
+        return;
+    }
+    
+    try {
+        if (state.routePolyline) {
+            state.routePolyline.remove();
+            state.routePolyline = null;
+        }
+        
+        let coordinates = [];
+        
+        // ALWAYS start from current location if available and tracking
+        if (state.currentLocation) {
+            coordinates.push([state.currentLocation.lng, state.currentLocation.lat]);
+            console.log('Starting route from current location:', state.currentLocation);
+        } else {
+            // Fall back to first stop
+            coordinates.push([stops[0].location.lng, stops[0].location.lat]);
+        }
+        
+        // Add remaining stops
+        stops.forEach(stop => {
+            coordinates.push([stop.location.lng, stop.location.lat]);
+        });
+        
+        const response = await fetch('https://api.openrouteservice.org/v2/directions/driving-car', {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+                'Authorization': OPENROUTE_API_KEY
+            },
+            body: JSON.stringify({
+                coordinates: coordinates,
+                continue_straight: false,
+                elevation: false,
+                geometry: true,
+                instructions: true,
+                preference: 'recommended',
+                units: 'km'
+            })
+        });
+        
+        if (!response.ok) throw new Error('Routing API error');
+        
+        const data = await response.json();
+        
+        if (data.routes && data.routes.length > 0) {
+            const route = data.routes[0];
+            const decodedCoords = decodePolyline(route.geometry);
+            
+            // Remove old route
+            if (state.routePolyline) {
+                state.routePolyline.remove();
+            }
+            
+            // Draw new route
+            state.routePolyline = L.polyline(decodedCoords, {
+                color: '#007AFF',
+                weight: 6,
+                opacity: 0.8,
+                smoothFactor: 1
+            }).addTo(state.map);
+            
+            // Update navigation info
+            const distance = (route.summary.distance / 1000).toFixed(1);
+            const duration = Math.round(route.summary.duration / 60);
+            
+            // Update navigation overlay
+            const navDistance = document.getElementById('navDistance');
+            const navETA = document.getElementById('navETA');
+            
+            if (navDistance) navDistance.textContent = `${distance} km`;
+            if (navETA) navETA.textContent = `${duration} min`;
+            
+            // Store last update time
+            state.lastRouteUpdate = Date.now();
+            
+            return route;
+        }
+    } catch (error) {
+        console.error('Routing error:', error);
+        drawFallbackRoute(stops);
+    }
+}
+
+function drawFallbackRoute(stops) {
+    console.log('Drawing fallback route');
+    const coords = stops.map(stop => [stop.location.lat, stop.location.lng]);
+    
+    if (state.currentLocation && state.navigationActive) {
+        coords.unshift([state.currentLocation.lat, state.currentLocation.lng]);
+    }
+    
+    state.routePolyline = L.polyline(coords, {
+        color: '#0066FF',
+        weight: 4,
+        opacity: 0.6,
+        dashArray: '10, 10',
+        smoothFactor: 1
+    }).addTo(state.map);
+}
+
+function decodePolyline(encoded) {
+    const poly = [];
+    let index = 0;
+    let lat = 0;
+    let lng = 0;
+
+    while (index < encoded.length) {
+        let b;
+        let shift = 0;
+        let result = 0;
+        
+        do {
+            b = encoded.charCodeAt(index++) - 63;
+            result |= (b & 0x1f) << shift;
+            shift += 5;
+        } while (b >= 0x20);
+        
+        const dlat = ((result & 1) ? ~(result >> 1) : (result >> 1));
+        lat += dlat;
+
+        shift = 0;
+        result = 0;
+        
+        do {
+            b = encoded.charCodeAt(index++) - 63;
+            result |= (b & 0x1f) << shift;
+            shift += 5;
+        } while (b >= 0x20);
+        
+        const dlng = ((result & 1) ? ~(result >> 1) : (result >> 1));
+        lng += dlng;
+
+        poly.push([lat / 1E5, lng / 1E5]);
+    }
+
+    return poly;
+}
+
+// ============================================================================
+// MARKER & POPUP CREATION
+// ============================================================================
+
+// Fixed createRiderIcon function
+function createRiderIcon(heading = 0) {
+    return L.divIcon({
+        className: 'rider-location-marker',
+        html: `
+            <div class="rider-marker-wrapper" style="position: relative; width: 60px; height: 60px;">
+                <div class="rider-pulse" style="
+                    position: absolute;
+                    width: 60px;
+                    height: 60px;
+                    background: rgba(0, 122, 255, 0.2);
+                    border-radius: 50%;
+                    animation: pulse 2s infinite;
+                "></div>
+                <div class="rider-marker-container" style="transform: rotate(${heading}deg); position: absolute; width: 60px; height: 60px;">
+                    <div class="rider-direction-cone" style="
+                        position: absolute;
+                        width: 0;
+                        height: 0;
+                        border-left: 15px solid transparent;
+                        border-right: 15px solid transparent;
+                        border-bottom: 30px solid rgba(0, 122, 255, 0.3);
+                        top: -5px;
+                        left: 15px;
+                    "></div>
+                    <div class="rider-dot" style="
+                        position: absolute;
+                        width: 20px;
+                        height: 20px;
+                        background: #007AFF;
+                        border: 3px solid white;
+                        border-radius: 50%;
+                        top: 20px;
+                        left: 20px;
+                        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+                    "></div>
+                </div>
+            </div>
+        `,
+        iconSize: [60, 60],
+        iconAnchor: [30, 30]
+    });
+}
+
+function createLeafletIcon(stop) {
+    const isCompleted = stop.completed;
+    const isActive = isNextStop(stop);
+    const type = stop.type;
+    
+    // Get the order number from the map
+    const orderNumber = state.stopOrderMap[stop.id] || '';
+    
+    // Show order number if route is optimized and numbered markers are enabled
+    const showOrderNumber = state.activeRoute?.isOptimized && 
+                           orderNumber && 
+                           state.showNumberedMarkers !== false;
+    
+    const bgColor = isCompleted ? '#2C2C2E' : type === 'pickup' ? '#FF9F0A' : '#007AFF';
+    const borderColor = isCompleted ? '#48484A' : '#FFFFFF';
+    const symbol = isCompleted ? '✓' : showOrderNumber ? orderNumber : (type === 'pickup' ? 'P' : 'D');
+    
+    // Different sizes for number vs letter
+    const fontSize = showOrderNumber ? '17px' : '20px';
+    const markerSize = showOrderNumber ? '46px' : '44px';
+    
+    return L.divIcon({
+        className: 'custom-marker',
+        html: `
+            <div class="stop-marker-wrapper ${isCompleted ? 'completed' : ''} ${isActive ? 'active' : ''}">
+                <div class="stop-marker ${type}" style="
+                    background: ${bgColor};
+                    width: ${markerSize};
+                    height: ${markerSize};
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    box-shadow: 0 6px 16px rgba(0,0,0,0.6);
+                    border: 3px solid ${borderColor};
+                    position: relative;
+                    transition: all 0.3s ease;
+                ">
+                    <span style="
+                        color: ${isCompleted ? '#8E8E93' : 'white'};
+                        font-weight: 800;
+                        font-size: ${fontSize};
+                        text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+                    ">${symbol}</span>
+                    ${isActive ? '<div class="marker-pulse"></div>' : ''}
+                </div>
+                <div class="marker-label" style="
+                    position: absolute;
+                    bottom: -24px;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    background: rgba(28, 28, 31, 0.95);
+                    color: white;
+                    padding: 3px 10px;
+                    border-radius: 10px;
+                    font-size: 11px;
+                    font-weight: 600;
+                    white-space: nowrap;
+                    pointer-events: none;
+                    backdrop-filter: blur(10px);
+                    border: 1px solid rgba(255, 255, 255, 0.1);
+                ">${type === 'pickup' ? 'Pickup' : 'Delivery'}</div>
+            </div>
+        `,
+        iconSize: [parseInt(markerSize) + 20, 80],
+        iconAnchor: [(parseInt(markerSize) + 20) / 2, 60],
+        popupAnchor: [0, -60]
+    });
+}
+
+// Helper functions
+function calculateBounds(stops) {
+    let north = -90, south = 90, east = -180, west = 180;
+    
+    stops.forEach(stop => {
+        if (stop.location) {
+            north = Math.max(north, stop.location.lat);
+            south = Math.min(south, stop.location.lat);
+            east = Math.max(east, stop.location.lng);
+            west = Math.min(west, stop.location.lng);
+        }
+    });
+    
+    return { north, south, east, west };
+}
+
+function calculateZoomFromSpeed(speed) {
+    if (speed > 60) return 15;
+    if (speed > 40) return 16;
+    if (speed > 20) return 17;
+    if (speed > 5) return 18;
+    return 18;
+}
+
+function waitForLeaflet() {
+    return new Promise((resolve) => {
+        if (window.L) {
+            resolve();
+        } else {
+            const checkInterval = setInterval(() => {
+                if (window.L) {
+                    clearInterval(checkInterval);
+                    resolve();
+                }
+            }, 100);
+        }
+    });
+}
+
+// Navigation control functions
+window.centerOnLocation = function() {
+    if (state.currentLocation && state.map) {
+        state.map.setView([state.currentLocation.lat, state.currentLocation.lng], 17, {
+            animate: true,
+            duration: 1
+        });
+        
+        // Flash the location marker
+        if (state.currentLocationMarker) {
+            const marker = state.currentLocationMarker.getElement();
+            if (marker) {
+                marker.style.animation = 'none';
+                setTimeout(() => {
+                    marker.style.animation = '';
+                }, 100);
+            }
+        }
+        
+        showNotification('Centered on your location', 'info');
+    } else {
+        showNotification('Getting your location...', 'info');
+        startLocationTracking();
+    }
+};
+
+window.toggleLocationTracking = function() {
+    if (state.isTracking) {
+        stopLocationTracking();
+    } else {
+        startLocationTracking();
+    }
+};
+
+window.startNavigation = function() {
+    const nextStop = getNextStop();
+    if (!nextStop) {
+        showNotification('No stops to navigate to', 'warning');
+        return;
+    }
+    
+    if (!state.routePolyline) {
+        showNotification('Optimizing route...', 'info');
+        drawOptimizedRoute().then(() => {
+            proceedWithNavigation(nextStop);
+        });
+    } else {
+        proceedWithNavigation(nextStop);
+    }
+};
+
+function proceedWithNavigation(nextStop) {
+    startContinuousTracking();
+    state.navigationActive = true;
+    showNotification(`Navigating to ${nextStop.type} at ${nextStop.address}`, 'info');
+}
+
+function startContinuousTracking() {
+    if (state.trackingInterval) {
+        clearInterval(state.trackingInterval);
+    }
+    
+    state.trackingInterval = setInterval(() => {
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                position => {
+                    updateCurrentLocation(position);
+                    checkStopProximity();
+                },
+                error => console.error('Tracking error:', error),
+                { enableHighAccuracy: true, maximumAge: 5000 }
+            );
+        }
+    }, 5000);
+}
+
+window.navigateToStop = function(stopId) {
+    const stop = state.activeRoute.stops.find(s => s.id === stopId);
+    if (!stop) return;
+    
+    state.navigationActive = true;
+    showNotification(`Navigating to ${stop.type} location`, 'info');
+    
+    // Center map on stop
+    if (state.map) {
+        state.map.setView([stop.location.lat, stop.location.lng], 16);
+    }
+};
+/**
+ * Enhanced Route Navigation Module - Part 6/6
+ * Display, Enhanced Verification with Photos/Signatures, and Completion Functions
+ * Version: 5.0.1
+ */
+
+// ============================================================================
+// ROUTE DISPLAY FUNCTIONS
+// ============================================================================
+
+function displayRouteInfo() {
+    if (!state.activeRoute) return;
+    
+    const routeType = document.getElementById('routeType');
+    if (routeType) {
+        const nextStop = getNextStop();
+        if (nextStop) {
+            routeType.className = `route-badge verify-btn ${nextStop.type}`;
+            routeType.innerHTML = `
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                </svg>
+                <span>Verify ${nextStop.type === 'pickup' ? 'Pickup' : 'Delivery'}</span>
+            `;
+            routeType.onclick = () => openQuickVerification();
+        } else {
+            routeType.className = 'route-badge completed';
+            routeType.innerHTML = 'Route Complete';
+            routeType.onclick = null;
+        }
+    }
+    
+    updateRouteStats();
+    displayStops();
+}
+
+function displayStops() {
+    const stopsList = document.getElementById('stopsList');
+    if (!stopsList || !state.activeRoute) return;
+    
+    updateParcelsInPossession();
+    
+    let html = '';
+    
+    // Add route efficiency badge if optimized
+    if (state.activeRoute.isOptimized) {
+        html += `
+            <div class="route-header" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+                <h3 style="margin: 0; color: white;">Optimized Route</h3>
+                ${state.optimizationStats.savedDistance > 0 ? `
+                    <span style="
+                        background: linear-gradient(135deg, #9333EA, #7928CA);
+                        color: white;
+                        padding: 6px 12px;
+                        border-radius: 20px;
+                        font-size: 12px;
+                        font-weight: 600;
+                    ">
+                        Saved ${state.optimizationStats.savedDistance.toFixed(1)}km
+                    </span>
+                ` : ''}
+            </div>
+        `;
+    }
+    
+    if (state.parcelsInPossession.length > 0) {
+        html += createParcelsInPossessionWidget();
+    }
+    
+    // Display all stops in current order
+    html += `<div class="stops-container">`;
+    state.activeRoute.stops.forEach((stop, index) => {
+        const orderNumber = state.stopOrderMap[stop.id] || (index + 1);
+        html += createStopCard(stop, orderNumber, stop.type);
+    });
+    html += `</div>`;
+    
+    stopsList.innerHTML = html;
+}
+
+function createParcelsInPossessionWidget() {
+    return `
+        <div class="parcels-possession-widget" style="
+            background: linear-gradient(135deg, rgba(255, 159, 10, 0.15), rgba(255, 107, 0, 0.1));
+            border: 1px solid rgba(255, 159, 10, 0.3);
+            border-radius: 16px;
+            padding: 18px;
+            margin-bottom: 20px;
+        ">
+            <div class="carrying-banner" style="display: flex; align-items: center; gap: 8px; margin-bottom: 14px;">
+                <span class="carrying-icon">📦</span>
+                <span style="font-weight: 700; color: white; font-size: 15px;">
+                    Carrying ${state.parcelsInPossession.length} parcel${state.parcelsInPossession.length > 1 ? 's' : ''}
+                </span>
+            </div>
+            <div class="parcel-cards" style="display: flex; flex-direction: column; gap: 10px;">
+                ${state.parcelsInPossession.map(parcel => {
+                    const deliveryStop = state.activeRoute.stops.find(s => 
+                        s.type === 'delivery' && (s.parcelId === parcel.parcelId || s.parcelCode === parcel.parcelCode)
+                    );
+                    const paymentInfo = deliveryStop ? getPaymentInfoForStop(deliveryStop) : null;
+                    
+                    return `
+                        <div class="parcel-card" style="
+                            background: rgba(255, 255, 255, 0.05);
+                            border-radius: 12px;
+                            padding: 14px;
+                            border-left: 3px solid #FF9F0A;
+                        ">
+                            <div style="font-weight: 700; margin-bottom: 4px; color: white; font-size: 15px;">
+                                ${parcel.parcelCode}
+                            </div>
+                            <div style="font-size: 14px; color: rgba(255, 255, 255, 0.6); margin-bottom: 4px;">
+                                ${parcel.destination}
+                            </div>
+                            <div style="font-size: 12px; color: rgba(255, 255, 255, 0.4);">
+                                Picked up ${formatTimeAgo(parcel.pickupTime)}
+                            </div>
+                            ${paymentInfo && paymentInfo.needsCollection ? `
+                                <div style="margin-top: 8px; font-size: 14px; font-weight: 700; color: #FF9F0A;">
+                                    💰 Collect: KES ${paymentInfo.amount.toLocaleString()}
+                                </div>
+                            ` : ''}
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        </div>
+    `;
+}
+
+function updateParcelsInPossession() {
+    state.parcelsInPossession = [];
+    
+    if (!state.activeRoute || !state.activeRoute.stops) return;
+    
+    state.activeRoute.stops.forEach(stop => {
+        if (stop.type === 'pickup' && stop.completed) {
+            const deliveryStop = state.activeRoute.stops.find(s => 
+                s.type === 'delivery' && 
+                (s.parcelId === stop.parcelId || s.parcelCode === stop.parcelCode)
+            );
+            
+            if (deliveryStop && !deliveryStop.completed) {
+                state.parcelsInPossession.push({
+                    parcelId: stop.parcelId,
+                    parcelCode: stop.parcelCode,
+                    pickupTime: stop.timestamp,
+                    destination: deliveryStop.address
+                });
+            }
+        }
+    });
+}
+
+function createStopCard(stop, number, type) {
+    const isActive = isNextStop(stop);
+    const canInteract = !stop.completed && canCompleteStop(stop);
+    const paymentInfo = getPaymentInfoForStop(stop);
+    const hasVerificationData = state.verificationData.photos[stop.id] || state.verificationData.signatures[stop.id];
+    
+    // Different fields for pickup vs delivery
+    let customerName, customerPhone;
+    if (type === 'pickup') {
+        customerName = stop.vendor_name || stop.vendorName || stop.sender_name || stop.customerName || 'Vendor';
+        customerPhone = stop.vendor_phone || stop.vendorPhone || stop.sender_phone || stop.customerPhone || '';
+    } else {
+        customerName = stop.recipient_name || stop.recipientName || stop.customer_name || stop.customerName || 'Recipient';
+        customerPhone = stop.recipient_phone || stop.recipientPhone || stop.customer_phone || stop.customerPhone || '';
+    }
+    
+    const address = stop.address || stop.location_address || 'Address not available';
+    const parcelCode = stop.parcelCode || stop.parcel_code || stop.code || 'N/A';
+    const instructions = stop.specialInstructions || stop.special_instructions || stop.instructions || '';
+    
+    return `
+        <div class="stop-card ${stop.completed ? 'completed' : ''} ${isActive ? 'active' : ''}" 
+             onclick="${canInteract ? `selectStop('${stop.id}')` : ''}"
+             data-stop-id="${stop.id}"
+             style="
+                 background: ${stop.completed ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.05)'};
+                 border: 1px solid ${stop.completed ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.1)'};
+                 border-radius: 16px;
+                 padding: 16px;
+                 margin-bottom: 12px;
+                 cursor: ${canInteract ? 'pointer' : 'default'};
+                 transition: all 0.3s ease;
+                 ${isActive ? 'border-color: #9333EA; box-shadow: 0 0 20px rgba(147, 51, 234, 0.3);' : ''}
+             ">
+            <div style="display: flex; gap: 16px;">
+                <div class="stop-number-badge" style="
+                    width: 44px;
+                    height: 44px;
+                    background: ${stop.completed ? '#2C2C2E' : type === 'pickup' ? '#FF9F0A' : '#007AFF'};
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-weight: 800;
+                    font-size: 18px;
+                    color: ${stop.completed ? '#8E8E93' : 'white'};
+                    flex-shrink: 0;
+                ">
+                    ${stop.completed ? '✓' : number}
+                </div>
+                <div style="flex: 1;">
+                    <h3 style="margin: 0 0 8px 0; font-size: 16px; color: white; font-weight: 600;">
+                        ${address}
+                    </h3>
+                    <div style="display: flex; flex-direction: column; gap: 6px; font-size: 14px;">
+                        <div style="color: rgba(255,255,255,0.7);">
+                            <span>👤 ${customerName}</span>
+                            ${customerPhone ? ` • ${customerPhone}` : ''}
+                        </div>
+                        <div style="color: rgba(255,255,255,0.6);">
+                            📋 Code: ${parcelCode}
+                        </div>
+                        ${instructions ? `
+                            <div style="color: rgba(255,255,255,0.6); font-style: italic;">
+                                💬 ${instructions}
+                            </div>
+                        ` : ''}
+                    </div>
+                    
+                    ${type === 'delivery' && paymentInfo.needsCollection ? `
+                        <div style="
+                            margin-top: 10px;
+                            padding: 8px 12px;
+                            background: ${stop.completed ? 'rgba(52, 199, 89, 0.1)' : 'rgba(255, 159, 10, 0.15)'};
+                            border: 1px solid ${stop.completed ? 'rgba(52, 199, 89, 0.3)' : 'rgba(255, 159, 10, 0.3)'};
+                            border-radius: 8px;
+                            font-weight: 600;
+                            color: ${stop.completed ? '#34C759' : '#FF9F0A'};
+                        ">
+                            💵 ${stop.completed ? 'Collected' : 'COLLECT'}: KES ${paymentInfo.amount.toLocaleString()}
+                        </div>
+                    ` : type === 'delivery' && paymentInfo.method === 'online' ? `
+                        <div style="
+                            margin-top: 10px;
+                            padding: 8px 12px;
+                            background: rgba(52, 199, 89, 0.1);
+                            border: 1px solid rgba(52, 199, 89, 0.3);
+                            border-radius: 8px;
+                            color: #34C759;
+                            font-weight: 600;
+                        ">
+                            ✅ Already Paid Online
+                        </div>
+                    ` : ''}
+                    
+                    ${stop.completed ? `
+                        <div style="margin-top: 10px; color: #34C759; font-size: 13px; font-weight: 600;">
+                            ✓ Completed ${formatTimeAgo(stop.timestamp)}
+                            ${hasVerificationData ? `
+                                <span style="margin-left: 10px; color: #9333EA;">
+                                    📷 ✍️ Verified
+                                </span>
+                            ` : ''}
+                        </div>
+                    ` : isActive ? `
+                        <div style="margin-top: 10px; color: #9333EA; font-size: 13px; font-weight: 600;">
+                            → Current Stop
+                        </div>
+                    ` : ''}
+                </div>
+                ${!stop.completed && canInteract ? `
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                        <button onclick="event.stopPropagation(); navigateToStop('${stop.id}')" style="
+                            background: rgba(255,255,255,0.1);
+                            border: none;
+                            border-radius: 10px;
+                            width: 40px;
+                            height: 40px;
+                            cursor: pointer;
+                            font-size: 20px;
+                        ">🧭</button>
+                        ${customerPhone ? `
+                            <a href="tel:${customerPhone}" onclick="event.stopPropagation();" style="
+                                background: rgba(255,255,255,0.1);
+                                border: none;
+                                border-radius: 10px;
+                                width: 40px;
+                                height: 40px;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                text-decoration: none;
+                                font-size: 20px;
+                            ">📞</a>
+                        ` : ''}
+                    </div>
+                ` : ''}
+            </div>
+        </div>
+    `;
+}
+
+function createStopPopup(stop) {
+    const type = stop.type;
+    const paymentInfo = getPaymentInfoForStop(stop);
+    const orderNumber = state.stopOrderMap[stop.id] || '';
+    const showOrderNumber = state.activeRoute?.isOptimized && orderNumber;
+    
+    // Different fields for pickup vs delivery
+    let customerName, customerPhone;
+    if (type === 'pickup') {
+        customerName = stop.vendor_name || stop.vendorName || stop.sender_name || stop.customerName || 'Vendor';
+        customerPhone = stop.vendor_phone || stop.vendorPhone || stop.sender_phone || stop.customerPhone || '';
+    } else {
+        customerName = stop.recipient_name || stop.recipientName || stop.customer_name || stop.customerName || 'Recipient';
+        customerPhone = stop.recipient_phone || stop.recipientPhone || stop.customer_phone || stop.customerPhone || '';
+    }
+    
+    const address = stop.address || stop.location_address || 'Address not available';
+    const parcelCode = stop.parcelCode || stop.parcel_code || stop.code || 'N/A';
+    const instructions = stop.specialInstructions || stop.special_instructions || stop.instructions || '';
+    
+    return `
+        <div class="stop-popup">
+            <div class="popup-header ${type}" style="
+                padding: 18px 22px;
+                margin: 0;
+                font-weight: 700;
+                font-size: 14px;
+                letter-spacing: 1px;
+                text-transform: uppercase;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                background: ${type === 'pickup' ? 'linear-gradient(135deg, #FF9F0A 0%, #FF6000 100%)' : 'linear-gradient(135deg, #007AFF 0%, #0051D5 100%)'};
+                color: ${type === 'pickup' ? '#000000' : 'white'};
+            ">
+                ${showOrderNumber ? `
+                    <div style="
+                        position: absolute;
+                        left: 20px;
+                        top: 50%;
+                        transform: translateY(-50%);
+                        width: 36px;
+                        height: 36px;
+                        background: rgba(0, 0, 0, 0.25);
+                        border-radius: 50%;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        font-size: 18px;
+                        font-weight: 800;
+                        border: 2px solid rgba(255, 255, 255, 0.3);
+                    ">${orderNumber}</div>
+                    <span style="margin-left: 50px;">${type.toUpperCase()}</span>
+                ` : `<span>${type.toUpperCase()}</span>`}
+                <span style="
+                    background: rgba(0, 0, 0, 0.2);
+                    padding: 5px 12px;
+                    border-radius: 20px;
+                    font-size: 12px;
+                    font-weight: 700;
+                    letter-spacing: 0.5px;
+                ">${parcelCode}</span>
+            </div>
+            <div class="popup-body" style="padding: 22px; background: transparent;">
+                <h3 style="margin: 0 0 18px 0; font-size: 18px; font-weight: 600; color: white;">${address}</h3>
+                <div class="popup-info" style="display: flex; flex-direction: column; gap: 14px;">
+                    <div class="info-row" style="display: flex; align-items: flex-start; gap: 12px; padding: 10px; background: rgba(255, 255, 255, 0.03); border-radius: 10px;">
+                        <span class="info-icon" style="width: 24px; font-size: 18px;">👤</span>
+                        <span style="color: rgba(255, 255, 255, 0.9);">${customerName}</span>
+                    </div>
+                    ${customerPhone ? `
+                        <div class="info-row" style="display: flex; align-items: flex-start; gap: 12px; padding: 10px; background: rgba(255, 255, 255, 0.03); border-radius: 10px;">
+                            <span class="info-icon" style="width: 24px; font-size: 18px;">📞</span>
+                            <a href="tel:${customerPhone}" style="color: #007AFF; text-decoration: none; font-weight: 600;">${customerPhone}</a>
+                        </div>
+                    ` : ''}
+                    ${instructions ? `
+                        <div class="info-row instructions" style="display: flex; align-items: flex-start; gap: 12px; padding: 10px; background: rgba(147, 51, 234, 0.1); border: 1px solid rgba(147, 51, 234, 0.2); border-radius: 10px;">
+                            <span class="info-icon" style="width: 24px; font-size: 18px;">💬</span>
+                            <span style="color: rgba(255, 255, 255, 0.9);">${instructions}</span>
+                        </div>
+                    ` : ''}
+                    ${paymentInfo.needsCollection ? `
+                        <div class="info-row payment" style="display: flex; align-items: flex-start; gap: 12px; padding: 14px; background: linear-gradient(135deg, rgba(255, 159, 10, 0.15), rgba(255, 107, 0, 0.1)); border: 1px solid rgba(255, 159, 10, 0.3); border-radius: 10px; margin-top: 12px;">
+                            <span class="info-icon" style="width: 24px; font-size: 18px;">💰</span>
+                            <span style="font-weight: 700; color: #FF9F0A;">
+                                Collect: KES ${paymentInfo.amount.toLocaleString()}
+                            </span>
+                        </div>
+                    ` : paymentInfo.method === 'online' ? `
+                        <div class="info-row payment" style="display: flex; align-items: flex-start; gap: 12px; padding: 14px; background: rgba(52, 199, 89, 0.1); border: 1px solid rgba(52, 199, 89, 0.3); border-radius: 10px;">
+                            <span class="info-icon" style="width: 24px; font-size: 18px;">✅</span>
+                            <span style="color: #34C759; font-weight: 600;">Already Paid Online</span>
+                        </div>
+                    ` : ''}
+                </div>
+                ${!stop.completed && canCompleteStop(stop) ? `
+                    <div class="popup-actions" style="display: flex; gap: 10px; margin-top: 22px; padding-top: 22px; border-top: 1px solid rgba(255, 255, 255, 0.08);">
+                        <button onclick="openEnhancedVerificationModal('${stop.id}')" style="
+                            flex: 1;
+                            padding: 14px 18px;
+                            border: none;
+                            border-radius: 14px;
+                            font-size: 14px;
+                            font-weight: 600;
+                            cursor: pointer;
+                            background: linear-gradient(135deg, #34C759, #30D158);
+                            color: white;
+                            box-shadow: 0 4px 12px rgba(52, 199, 89, 0.3);
+                        ">
+                            <span>✓ Verify ${stop.type}</span>
+                        </button>
+                        <button onclick="navigateToStop('${stop.id}')" style="
+                            padding: 14px 18px;
+                            border: none;
+                            border-radius: 14px;
+                            font-size: 14px;
+                            font-weight: 600;
+                            cursor: pointer;
+                            background: rgba(255, 255, 255, 0.08);
+                            color: white;
+                            border: 1px solid rgba(255, 255, 255, 0.15);
+                        ">
+                            <span>🧭 Navigate</span>
+                        </button>
+                    </div>
+                ` : stop.completed ? `
+                    <div style="margin-top: 18px; padding: 14px; background: linear-gradient(135deg, rgba(52, 199, 89, 0.15), rgba(48, 209, 88, 0.1)); border: 1px solid rgba(52, 199, 89, 0.3); border-radius: 14px; text-align: center; color: #34C759; font-weight: 600; font-size: 14px;">
+                        <span>✓ Completed ${formatTimeAgo(stop.timestamp)}</span>
+                    </div>
+                ` : ''}
+            </div>
+        </div>
+    `;
+}
+
+// ============================================================================
+// ENHANCED VERIFICATION & COMPLETION FUNCTIONS
+// ============================================================================
+
+window.openQuickVerification = function() {
+    const nextStop = getNextStop();
+    if (nextStop) {
+        openEnhancedVerificationModal(nextStop.id);
+    }
+};
+
+window.openEnhancedVerificationModal = function(stopId) {
+    const stop = state.activeRoute.stops.find(s => s.id === stopId);
+    if (!stop || stop.completed) return;
+    
+    const paymentInfo = getPaymentInfoForStop(stop);
+    
+    // Initialize verification session
+    state.currentVerification = {
+        stopId: stopId,
+        type: stop.type,
+        photoData: null,
+        signatureData: null,
+        locationData: state.currentLocation,
+        startTime: new Date()
+    };
+    
+    const modal = document.createElement('div');
+    modal.className = 'verification-modal-enhanced';
+    modal.id = 'verificationModal';
+    
+    modal.innerHTML = `
+        <div class="modal-overlay" onclick="closeVerificationModal()" style="
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(10, 10, 11, 0.9);
+            backdrop-filter: blur(20px);
+        "></div>
+        <div class="modal-content" style="
+            position: relative;
+            background: linear-gradient(135deg, #1C1C1F, #2C2C2E);
+            border-radius: 24px;
+            max-width: 480px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+            z-index: 1;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 25px 80px rgba(0, 0, 0, 0.6);
+        ">
+            <!-- Verification Steps -->
+            <div class="verification-steps">
+                <div class="verification-step active" data-step="1">
+                    <div class="step-circle">📸</div>
+                    <div class="step-label">Photo</div>
+                </div>
+                <div class="verification-step" data-step="2">
+                    <div class="step-circle">🔑</div>
+                    <div class="step-label">Code</div>
+                </div>
+                ${stop.type === 'delivery' ? `
+                    <div class="verification-step" data-step="3">
+                        <div class="step-circle">✍️</div>
+                        <div class="step-label">Signature</div>
+                    </div>
+                    <div class="verification-step" data-step="4">
+                        <div class="step-circle">💰</div>
+                        <div class="step-label">Payment</div>
+                    </div>
+                ` : ''}
+            </div>
+            
+            <!-- Progress Bar -->
+            <div class="verification-progress">
+                <div class="verification-progress-bar" style="width: 25%;"></div>
+            </div>
+            
+            <!-- Modal Header -->
+            <div class="modal-header" style="
+                padding: 20px 24px;
+                background: ${stop.type === 'pickup' ? 'linear-gradient(135deg, #FF9F0A, #FF6B00)' : 'linear-gradient(135deg, #34C759, #30D158)'};
+                color: ${stop.type === 'pickup' ? '#0A0A0B' : 'white'};
+                display: flex;
+                align-items: center;
+                gap: 12px;
+            ">
+                <span style="font-size: 24px;">${stop.type === 'pickup' ? '📦' : '📍'}</span>
+                <h2 style="margin: 0; font-size: 20px; font-weight: 700;">
+                    Enhanced ${stop.type === 'pickup' ? 'Pickup' : 'Delivery'} Verification
+                </h2>
+            </div>
+            
+            <!-- Modal Body -->
+            <div class="modal-body" style="padding: 24px;">
+                <!-- Step 1: Photo Capture -->
+                <div id="step1" class="verification-step-content">
+                    <h3 style="color: white; margin-bottom: 16px;">Step 1: Capture Package Photo</h3>
+                    <p style="color: rgba(255, 255, 255, 0.6); margin-bottom: 20px;">
+                        Take a clear photo of the package ${stop.type === 'pickup' ? 'being picked up' : 'at delivery location'}
+                    </p>
+                    <div id="photoContainer">
+                        <button onclick="startPhotoCapture()" style="
+                            width: 100%;
+                            padding: 18px;
+                            background: linear-gradient(135deg, #9333EA, #7928CA);
+                            border: none;
+                            border-radius: 14px;
+                            color: white;
+                            font-size: 16px;
+                            font-weight: 600;
+                            cursor: pointer;
+                        ">
+                            📸 Take Photo
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Step 2: Verification Code -->
+                <div id="step2" class="verification-step-content" style="display: none;">
+                    <h3 style="color: white; margin-bottom: 16px;">Step 2: Verification Code</h3>
+                    <div class="stop-summary" style="margin-bottom: 20px;">
+                        <div style="display: flex; flex-direction: column; gap: 10px;">
+                            <div style="display: flex; gap: 12px; font-size: 15px;">
+                                <span style="color: rgba(255, 255, 255, 0.5); min-width: 90px;">Location:</span>
+                                <span style="color: white; font-weight: 600;">${stop.address}</span>
+                            </div>
+                            <div style="display: flex; gap: 12px; font-size: 15px;">
+                                <span style="color: rgba(255, 255, 255, 0.5); min-width: 90px;">Customer:</span>
+                                <span style="color: white; font-weight: 600;">
+                                    ${stop.customerName || stop.vendor_name || stop.recipient_name || 'N/A'}
+                                </span>
+                            </div>
+                            <div style="display: flex; gap: 12px; font-size: 15px;">
+                                <span style="color: rgba(255, 255, 255, 0.5); min-width: 90px;">Parcel:</span>
+                                <span style="color: white; font-weight: 600;">${stop.parcelCode || 'N/A'}</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <label style="font-weight: 600; font-size: 15px; color: white; display: block; margin-bottom: 12px;">
+                        Enter ${stop.type} verification code:
+                    </label>
+                    <input type="text" 
+                           id="verificationCode" 
+                           placeholder="XXX-XXXX"
+                           maxlength="8"
+                           autocomplete="off"
+                           style="
+                               width: 100%;
+                               background: rgba(255, 255, 255, 0.05);
+                               border: 2px solid rgba(255, 255, 255, 0.2);
+                               border-radius: 14px;
+                               padding: 18px;
+                               font-size: 26px;
+                               font-weight: 700;
+                               text-align: center;
+                               color: white;
+                               letter-spacing: 5px;
+                               text-transform: uppercase;
+                               outline: none;
+                               transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+                               margin: 12px 0;
+                           ">
+                    <p style="font-size: 13px; color: rgba(255, 255, 255, 0.5); text-align: center; margin-top: 8px;">
+                        Ask the ${stop.type === 'pickup' ? 'sender' : 'recipient'} for their code
+                    </p>
+                </div>
+                
+                ${stop.type === 'delivery' ? `
+                    <!-- Step 3: Digital Signature -->
+                    <div id="step3" class="verification-step-content" style="display: none;">
+                        <h3 style="color: white; margin-bottom: 16px;">Step 3: Customer Signature</h3>
+                        <p style="color: rgba(255, 255, 255, 0.6); margin-bottom: 20px;">
+                            Please ask the recipient to sign below
+                        </p>
+                        <div id="signatureContainer">
+                            <button onclick="startSignatureCapture()" style="
+                                width: 100%;
+                                padding: 18px;
+                                background: linear-gradient(135deg, #9333EA, #7928CA);
+                                border: none;
+                                border-radius: 14px;
+                                color: white;
+                                font-size: 16px;
+                                font-weight: 600;
+                                cursor: pointer;
+                            ">
+                                ✍️ Collect Signature
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Step 4: Payment -->
+                    <div id="step4" class="verification-step-content" style="display: none;">
+                        <h3 style="color: white; margin-bottom: 16px;">Step 4: Payment Collection</h3>
+                        ${paymentInfo.needsCollection ? `
+                            <div style="
+                                padding: 20px;
+                                background: linear-gradient(135deg, rgba(255, 159, 10, 0.15), rgba(255, 107, 0, 0.1));
+                                border: 1px solid rgba(255, 159, 10, 0.3);
+                                border-radius: 14px;
+                                margin-bottom: 20px;
+                            ">
+                                <div style="text-align: center;">
+                                    <div style="font-size: 14px; color: rgba(255, 255, 255, 0.7); margin-bottom: 8px;">
+                                        Amount to Collect
+                                    </div>
+                                    <div style="font-size: 32px; font-weight: 800; color: #FF9F0A;">
+                                        KES ${paymentInfo.amount.toLocaleString()}
+                                    </div>
+                                </div>
+                            </div>
+                            <div style="display: flex; flex-direction: column; gap: 12px;">
+                                <button onclick="promptMpesaPaymentForStop('${stop.id}')" style="
+                                    padding: 18px;
+                                    background: linear-gradient(135deg, #34C759, #30D158);
+                                    border: none;
+                                    border-radius: 14px;
+                                    color: white;
+                                    font-size: 16px;
+                                    font-weight: 600;
+                                    cursor: pointer;
+                                ">
+                                    📱 M-Pesa Payment
+                                </button>
+                                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 14px; background: rgba(255, 255, 255, 0.05); border-radius: 12px;">
+                                    <input type="checkbox" id="cashCollected" style="width: 22px; height: 22px; cursor: pointer;">
+                                    <span style="font-size: 15px; color: white; font-weight: 600;">
+                                        I have collected KES ${paymentInfo.amount.toLocaleString()} cash
+                                    </span>
+                                </label>
+                            </div>
+                        ` : `
+                            <div style="
+                                padding: 20px;
+                                background: rgba(52, 199, 89, 0.1);
+                                border: 1px solid rgba(52, 199, 89, 0.3);
+                                border-radius: 14px;
+                                text-align: center;
+                            ">
+                                <span style="font-size: 24px;">✅</span>
+                                <p style="color: #34C759; font-weight: 600; margin-top: 10px;">
+                                    Payment already received online
+                                </p>
+                            </div>
+                        `}
+                    </div>
+                ` : ''}
+                
+                <!-- Navigation Buttons -->
+                <div class="modal-actions" style="display: flex; gap: 12px; margin-top: 24px;">
+                    <button id="prevBtn" onclick="previousVerificationStep()" style="
+                        padding: 18px 24px;
+                        border: none;
+                        border-radius: 14px;
+                        font-size: 16px;
+                        font-weight: 600;
+                        cursor: pointer;
+                        background: rgba(255, 255, 255, 0.1);
+                        color: white;
+                        display: none;
+                    ">
+                        ← Back
+                    </button>
+                    <button id="nextBtn" onclick="nextVerificationStep()" style="
+                        flex: 1;
+                        padding: 18px;
+                        border: none;
+                        border-radius: 14px;
+                        font-size: 16px;
+                        font-weight: 700;
+                        cursor: pointer;
+                        background: linear-gradient(135deg, #0066FF, #0052CC);
+                        color: white;
+                        display: none;
+                    ">
+                        Continue →
+                    </button>
+                    <button id="completeBtn" onclick="completeEnhancedVerification('${stop.id}')" style="
+                        flex: 1;
+                        padding: 18px;
+                        border: none;
+                        border-radius: 14px;
+                        font-size: 16px;
+                        font-weight: 700;
+                        cursor: pointer;
+                        background: linear-gradient(135deg, #34C759, #30D158);
+                        color: white;
+                        display: none;
+                    ">
+                        ✓ Complete Verification
+                    </button>
+                    <button onclick="closeVerificationModal()" style="
+                        padding: 18px 24px;
+                        border: none;
+                        border-radius: 14px;
+                        font-size: 16px;
+                        font-weight: 600;
+                        cursor: pointer;
+                        background: rgba(255, 255, 255, 0.1);
+                        color: white;
+                    ">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Initialize first step
+    setTimeout(() => {
+        updateVerificationStep(0, 'active');
+    }, 100);
+};
+
+// Enhanced verification step navigation
+let currentVerificationStep = 1;
+
+window.nextVerificationStep = function() {
+    const stop = state.activeRoute.stops.find(s => s.id === state.currentVerification.stopId);
+    const maxSteps = stop.type === 'delivery' ? 4 : 2;
+    
+    if (currentVerificationStep < maxSteps) {
+        // Hide current step
+        document.getElementById(`step${currentVerificationStep}`).style.display = 'none';
+        currentVerificationStep++;
+        // Show next step
+        document.getElementById(`step${currentVerificationStep}`).style.display = 'block';
+        
+        updateVerificationStep(currentVerificationStep - 1, 'completed');
+        showVerificationProgress(currentVerificationStep, maxSteps);
+        
+        // Update buttons
+        document.getElementById('prevBtn').style.display = 'block';
+        if (currentVerificationStep === maxSteps) {
+            document.getElementById('nextBtn').style.display = 'none';
+            document.getElementById('completeBtn').style.display = 'block';
+        }
+        
+        // Focus on code input if on step 2
+        if (currentVerificationStep === 2) {
+            document.getElementById('verificationCode').focus();
+        }
+    }
+};
+
+window.previousVerificationStep = function() {
+    if (currentVerificationStep > 1) {
+        // Hide current step
+        document.getElementById(`step${currentVerificationStep}`).style.display = 'none';
+        currentVerificationStep--;
+        // Show previous step
+        document.getElementById(`step${currentVerificationStep}`).style.display = 'block';
+        
+        updateVerificationStep(currentVerificationStep - 1, 'active');
+        const stop = state.activeRoute.stops.find(s => s.id === state.currentVerification.stopId);
+        const maxSteps = stop.type === 'delivery' ? 4 : 2;
+        showVerificationProgress(currentVerificationStep, maxSteps);
+        
+        // Update buttons
+        if (currentVerificationStep === 1) {
+            document.getElementById('prevBtn').style.display = 'none';
+        }
+        document.getElementById('nextBtn').style.display = 'block';
+        document.getElementById('completeBtn').style.display = 'none';
+    }
+};
+
+window.startPhotoCapture = function() {
+    showCameraUI((photoData) => {
+        state.currentVerification.photoData = photoData;
+        
+        // Update UI to show captured photo
+        const container = document.getElementById('photoContainer');
+        container.innerHTML = `
+            <img src="${photoData}" class="photo-preview" alt="Package photo">
+            <button onclick="startPhotoCapture()" style="
+                width: 100%;
+                margin-top: 10px;
+                padding: 12px;
+                background: rgba(255, 255, 255, 0.1);
+                border: none;
+                border-radius: 10px;
+                color: white;
+                font-size: 14px;
+                font-weight: 600;
+                cursor: pointer;
+            ">
+                Retake Photo
+            </button>
+        `;
+        
+        // Enable next button
+        document.getElementById('nextBtn').style.display = 'block';
+    });
+};
+
+window.startSignatureCapture = function() {
+    showSignaturePad((signatureData) => {
+        state.currentVerification.signatureData = signatureData;
+        
+        // Update UI to show captured signature
+        const container = document.getElementById('signatureContainer');
+        container.innerHTML = `
+            <img src="${signatureData}" style="
+                width: 100%;
+                height: 150px;
+                object-fit: contain;
+                background: white;
+                border-radius: 12px;
+                padding: 10px;
+            " alt="Customer signature">
+            <button onclick="startSignatureCapture()" style="
+                width: 100%;
+                margin-top: 10px;
+                padding: 12px;
+                background: rgba(255, 255, 255, 0.1);
+                border: none;
+                border-radius: 10px;
+                color: white;
+                font-size: 14px;
+                font-weight: 600;
+                cursor: pointer;
+            ">
+                Redo Signature
+            </button>
+        `;
+        
+        // Enable next button
+        document.getElementById('nextBtn').style.display = 'block';
+    });
+};
+
+window.promptMpesaPaymentForStop = async function(stopId) {
+    const stop = state.activeRoute.stops.find(s => s.id === stopId);
+    const paymentInfo = getPaymentInfoForStop(stop);
+    const customerPhone = stop.recipient_phone || stop.customer_phone || '';
+    
+    const result = await promptMpesaPayment(paymentInfo.amount, customerPhone);
+    
+    if (result.success) {
+        state.currentVerification.mpesaCode = result.code;
+        state.verificationData.mpesaCodes[stopId] = result.code;
+        
+        showNotification('M-Pesa payment confirmed', 'success');
+        
+        // Update UI
+        const checkbox = document.getElementById('cashCollected');
+        if (checkbox) {
+            checkbox.checked = true;
+            checkbox.disabled = true;
+        }
+    } else if (result.method === 'cash') {
+        showNotification('Please collect cash payment', 'info');
+    }
+};
+
+window.completeEnhancedVerification = async function(stopId) {
+    const stop = state.activeRoute.stops.find(s => s.id === stopId);
+    if (!stop) return;
+    
+    const codeInput = document.getElementById('verificationCode');
+    const code = codeInput?.value?.toUpperCase().replace(/[^A-Z0-9]/g, '') || '';
+    const paymentInfo = getPaymentInfoForStop(stop);
+    
+    // Validate verification code
+    const isValidCode = DEV_CONFIG.isDevelopment ? 
+        code.length >= 6 : 
+        code === stop.verificationCode?.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    
+    if (!isValidCode) {
+        showNotification('Invalid verification code', 'error');
+        return;
+    }
+    
+    // Validate photo (if required)
+    if (config.verification.requirePhoto && !DEV_CONFIG.skipPhotoCapture && !state.currentVerification.photoData) {
+        showNotification('Please capture a photo of the package', 'warning');
+        return;
+    }
+    
+    // Validate signature for deliveries (if required)
+    if (stop.type === 'delivery' && config.verification.requireSignature && 
+        !DEV_CONFIG.skipSignature && !state.currentVerification.signatureData) {
+        showNotification('Please collect customer signature', 'warning');
+        return;
+    }
+    
+    // Validate payment for deliveries
+    if (stop.type === 'delivery' && paymentInfo.needsCollection) {
+        const paymentCheckbox = document.getElementById('cashCollected');
+        if (!paymentCheckbox?.checked && !state.currentVerification.mpesaCode) {
+            showNotification('Please confirm payment collection', 'warning');
+            return;
+        }
+    }
+    
+    // Store verification data
+    state.verificationData.photos[stopId] = {
+        [stop.type]: state.currentVerification.photoData
+    };
+    state.verificationData.signatures[stopId] = state.currentVerification.signatureData;
+    state.verificationData.timestamps[stopId] = {
+        [stop.type]: new Date().toISOString()
+    };
+    state.verificationData.locations[stopId] = {
+        [stop.type]: state.currentVerification.locationData
+    };
+    
+    // Mark stop as completed
+    stop.completed = true;
+    stop.timestamp = new Date();
+    stop.verificationCode = code;
+    
+    // Handle payment tracking
+    if (stop.type === 'delivery' && paymentInfo.needsCollection) {
+        state.paymentsByStop[stopId] = {
+            collected: true,
+            amount: paymentInfo.amount,
+            timestamp: stop.timestamp,
+            method: state.currentVerification.mpesaCode ? 'mpesa' : 'cash',
+            mpesaCode: state.currentVerification.mpesaCode
+        };
+        updateCashCollectionWidget();
+    }
+    
+    // Store verification data in Supabase
+    await storeVerificationData(stopId, stop.type, {
+        code: code,
+        photoUrl: state.currentVerification.photoData,
+        signatureData: state.currentVerification.signatureData,
+        location: state.currentVerification.locationData,
+        mpesaCode: state.currentVerification.mpesaCode,
+        cashCollected: paymentInfo.needsCollection
+    });
+    
+    // Sync route data
+    await syncRouteData();
+    
+    // Close modal
+    closeVerificationModal();
+    
+    // Show success animation
+    showSuccessAnimation(stop.type);
+    
+    // Update UI
+    displayRouteInfo();
+    plotRoute();
+    drawOptimizedRoute();
+    
+    // Check if route is complete
+    if (state.activeRoute.stops.every(s => s.completed)) {
+        await completeRoute();
+    }
+    
+    // Reset verification step counter
+    currentVerificationStep = 1;
+};
+
+window.closeVerificationModal = function() {
+    const modal = document.querySelector('.verification-modal-enhanced');
+    if (modal) {
+        modal.classList.add('closing');
+        setTimeout(() => modal.remove(), 300);
+    }
+    currentVerificationStep = 1;
+    
+    // Clear current verification session
+    state.currentVerification = {
+        stopId: null,
+        type: null,
+        photoData: null,
+        signatureData: null,
+        locationData: null,
+        startTime: null
+    };
+};
+
+function showSuccessAnimation(type) {
+    const animation = document.createElement('div');
+    animation.className = 'success-animation';
+    animation.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: linear-gradient(135deg, #1C1C1F, #2C2C2E);
+        border-radius: 24px;
+        padding: 48px;
+        text-align: center;
+        z-index: 3000;
+        box-shadow: 0 25px 80px rgba(0, 0, 0, 0.6);
+        animation: popIn 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+    `;
+    animation.innerHTML = `
+        <div style="
+            width: 84px;
+            height: 84px;
+            background: linear-gradient(135deg, #34C759, #30D158);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 24px;
+            font-size: 48px;
+            color: white;
+            box-shadow: 0 8px 30px rgba(52, 199, 89, 0.4);
+        ">✓</div>
+        <div style="
+            font-size: 26px;
+            font-weight: 800;
+            color: white;
+            letter-spacing: -0.5px;
+        ">${type === 'pickup' ? 'Pickup' : 'Delivery'} Verified!</div>
+        <div style="
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.6);
+            margin-top: 10px;
+        ">
+            📷 Photo captured • ✍️ Signature collected
+        </div>
+    `;
+    
+    document.body.appendChild(animation);
+    setTimeout(() => animation.remove(), 2500);
+}
+
+async function completeRoute() {
+    console.log('Completing route with enhanced verification data...');
+    
+    await handleRouteCompletion();
+    
+    const animation = document.createElement('div');
+    animation.className = 'route-complete-animation';
+    animation.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: linear-gradient(135deg, #1C1C1F, #2C2C2E);
+        border-radius: 24px;
+        padding: 48px;
+        text-align: center;
+        z-index: 3000;
+        box-shadow: 0 25px 80px rgba(0, 0, 0, 0.6);
+        animation: popIn 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        max-width: 420px;
+    `;
+    animation.innerHTML = `
+        <div class="route-complete-content">
+            <div style="font-size: 72px; margin-bottom: 24px;">🏆</div>
+            <h1 style="font-size: 32px; font-weight: 800; margin-bottom: 14px; letter-spacing: -1px; color: white;">
+                Route Complete!
+            </h1>
+            <p style="font-size: 16px; color: rgba(255, 255, 255, 0.6); margin-bottom: 28px; font-weight: 500;">
+                All deliveries verified and completed successfully.
+            </p>
+            <div style="display: flex; justify-content: center; gap: 40px; margin-bottom: 36px;">
+                <div style="text-align: center;">
+                    <span style="display: block; font-size: 36px; font-weight: 800; color: #9333EA; margin-bottom: 6px;">
+                        ${state.activeRoute.stops.length}
+                    </span>
+                    <span style="font-size: 13px; color: rgba(255, 255, 255, 0.5); text-transform: uppercase;">
+                        Stops
+                    </span>
+                </div>
+                <div style="text-align: center;">
+                    <span style="display: block; font-size: 36px; font-weight: 800; color: #9333EA; margin-bottom: 6px;">
+                        KES ${Math.round(state.totalRouteEarnings)}
+                    </span>
+                    <span style="font-size: 13px; color: rgba(255, 255, 255, 0.5); text-transform: uppercase;">
+                        Earned
+                    </span>
+                </div>
+            </div>
+            ${state.optimizationStats.savedDistance > 0 ? `
+                <div style="margin-bottom: 24px; padding: 14px; background: rgba(147, 51, 234, 0.1); border-radius: 12px;">
+                    <p style="margin: 0; color: #9333EA; font-weight: 600;">
+                        Route optimization saved ${state.optimizationStats.savedDistance.toFixed(1)}km (${state.optimizationStats.savedPercentage}%)
+                    </p>
+                </div>
+            ` : ''}
+            <button onclick="finishRoute()" style="
+                width: 100%;
+                background: linear-gradient(135deg, #9333EA, #7928CA);
+                color: white;
+                border: none;
+                border-radius: 16px;
+                padding: 18px;
+                font-size: 17px;
+                font-weight: 700;
+                cursor: pointer;
+            ">
+                Back to Dashboard
+            </button>
+        </div>
+    `;
+    
+    document.body.appendChild(animation);
+}
+
+window.finishRoute = function() {
+    window.location.href = './rider.html';
+};
+
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
+
+function getNextStop() {
+    if (!state.activeRoute || !state.activeRoute.stops) return null;
+    return state.activeRoute.stops.find(stop => !stop.completed);
+}
+
+function getCurrentStop() {
+    if (!state.activeRoute) return null;
+    
+    const completedStops = state.activeRoute.stops.filter(s => s.completed);
+    if (completedStops.length === 0) return null;
+    
+    return completedStops[completedStops.length - 1];
+}
+
+function isNextStop(stop) {
+    const nextStop = getNextStop();
+    return nextStop && nextStop.id === stop.id;
+}
+
+function canCompleteStop(stop) {
+    if (stop.type === 'pickup') return true;
+    return canCompleteDelivery(stop);
+}
+
+function canCompleteDelivery(deliveryStop) {
+    if (!state.activeRoute || !state.activeRoute.stops) return false;
+    
+    const pickupStop = state.activeRoute.stops.find(s => 
+        s.type === 'pickup' && 
+        (s.parcelId === deliveryStop.parcelId || s.parcelCode === deliveryStop.parcelCode)
+    );
+    
+    return pickupStop && pickupStop.completed;
+}
+
+function formatTimeAgo(timestamp) {
+    if (!timestamp) return '';
+    const minutes = Math.floor((Date.now() - new Date(timestamp)) / 60000);
+    if (minutes < 60) return `${minutes} min ago`;
+    const hours = Math.floor(minutes / 60);
+    return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+}
+
+function updateRouteStats() {
+    const remainingStops = state.activeRoute.stops.filter(s => !s.completed).length;
+    
+    let totalDistance = 0;
+    if (state.activeRoute.distance) {
+        totalDistance = parseFloat(state.activeRoute.distance);
+    } else if (state.activeRoute.total_distance) {
+        totalDistance = parseFloat(state.activeRoute.total_distance);
+    } else {
+        totalDistance = calculateTotalRouteDistance(state.activeRoute.stops);
+    }
+    
+    const estimatedTime = Math.round(totalDistance * 2.5 + remainingStops * 5);
+    
+    const remainingEl = document.getElementById('remainingStops');
+    const distanceEl = document.getElementById('totalDistance');
+    const timeEl = document.getElementById('estimatedTime');
+    
+    if (remainingEl) remainingEl.textContent = remainingStops;
+    if (distanceEl) distanceEl.textContent = totalDistance.toFixed(1);
+    if (timeEl) timeEl.textContent = estimatedTime;
+}
+
+function updateDynamicHeader() {
+    const routeTitle = document.getElementById('routeTitle');
+    if (!routeTitle || !state.activeRoute) return;
+    
+    const nextStop = getNextStop();
+    const currentStop = getCurrentStop();
+    
+    if (!nextStop) {
+        routeTitle.textContent = 'Route Complete';
+        return;
+    }
+    
+    let headerText = '';
+    
+    if (currentStop && state.currentLocation) {
+        headerText = `Your Location → ${getStopShortName(nextStop)}`;
+    } else if (currentStop) {
+        headerText = `${getStopShortName(currentStop)} → ${getStopShortName(nextStop)}`;
+    } else {
+        const firstStop = state.activeRoute.stops[0];
+        headerText = `Starting → ${getStopShortName(firstStop)}`;
+    }
+    
+    routeTitle.textContent = headerText;
+}
+
+function getStopShortName(stop) {
+    if (!stop) return '';
+    
+    const address = stop.address;
     const patterns = [
         /^([^,]+),/,
-        /^(.+?)(?:\s+Road|\s+Street|\s+Avenue|\s+Drive)/i,
-        /^(.+?)(?:\s+Mall|\s+Centre|\s+Center|\s+Plaza)/i
+        /^(.+?)(?:\s+Road|\s+Street|\s+Avenue|\s+Drive|\s+Centre|\s+Center)/i
     ];
     
     for (const pattern of patterns) {
@@ -1215,2384 +5098,207 @@ function getLocationName(address) {
         }
     }
     
-    return address.split(',')[0].trim();
+    return address.length > 20 ? address.substring(0, 20) + '...' : address;
 }
 
-// Create Routes Functions
-function createRoutes(parcels) {
-    console.log(`Creating routes from ${parcels.length} parcels using advanced clustering...`);
-    
-    try {
-        if (routeClusterer) {
-            const routes = routeClusterer.createOptimizedRoutes(parcels);
-            
-            console.log(`Created ${routes.length} optimized routes:`);
-            routes.forEach(route => {
-                console.log(`- ${route.name}: ${route.pickups} parcels, ${route.distance}km, ` +
-                           `KES ${route.total_earnings} (Score: ${route.qualityScore})`);
-            });
-            
-            return routes.length > 0 ? routes : createDemoRoutes();
-        } else {
-            return createDemoRoutes();
-        }
-    } catch (error) {
-        console.error('Error creating routes:', error);
-        return createDemoRoutes();
-    }
+function updateNavigationInfo() {
+    // Called during navigation to update real-time info
 }
 
-function createDemoRoutes() {
-    console.log('Creating demo routes for testing...');
-    const demoTotalEarnings = [2500, 1714, 3429];
-    
-    return [
-        {
-            id: 'demo-route-001',
-            name: 'Sarit Centre → Village Market',
-            type: 'smart',
-            deliveries: 5,
-            pickups: 5,
-            distance: 12,
-            total_earnings: demoTotalEarnings[0],
-            status: 'available',
-            parcels: [],
-            qualityScore: 75,
-            estimatedTime: 45,
-            metadata: {
-                pickupAreas: ['Westlands'],
-                deliveryCorridors: ['north'],
-                hasReturnTrip: false
-            }
-        },
-        {
-            id: 'demo-route-002',
-            name: 'CBD → Eastlands Express',
-            type: 'express',
-            deliveries: 1,
-            pickups: 1,
-            distance: 8,
-            total_earnings: demoTotalEarnings[1],
-            status: 'available',
-            parcels: [],
-            qualityScore: 82,
-            estimatedTime: 25,
-            metadata: {
-                pickupAreas: ['CBD'],
-                deliveryCorridors: ['east'],
-                hasReturnTrip: false
-            }
-        },
-        {
-            id: 'demo-route-003',
-            name: 'Karen Local',
-            type: 'eco',
-            deliveries: 8,
-            pickups: 8,
-            distance: 25,
-            total_earnings: demoTotalEarnings[2],
-            status: 'available',
-            parcels: [],
-            qualityScore: 68,
-            estimatedTime: 90,
-            metadata: {
-                pickupAreas: ['Karen'],
-                deliveryCorridors: ['south'],
-                hasReturnTrip: true
-            }
-        }
-    ];
-}
-
-// Load Available Routes
-async function loadAvailableRoutes() {
-    try {
-        console.log('Loading available routes...');
+function initializeOptimizeButton() {
+    setTimeout(() => {
+        addOptimizeButton();
         
-        if (elements.routeList) {
-            elements.routeList.innerHTML = `
-                <div class="skeleton skeleton-card"></div>
-                <div class="skeleton skeleton-card"></div>
-                <div class="skeleton skeleton-card"></div>
-            `;
+        if (state.activeRoute && state.activeRoute.isOptimized) {
+            updateOptimizeButton(true);
         }
+    }, 500);
+}
+
+// ============================================================================
+// WINDOW FUNCTIONS
+// ============================================================================
+
+window.selectStop = function(stopId) {
+    const stop = state.activeRoute.stops.find(s => s.id === stopId);
+    if (!stop || stop.completed) return;
+    
+    if (state.map) {
+        state.map.setView([stop.location.lat, stop.location.lng], 16);
         
-        const unclaimedParcels = await supabaseAPI.query('parcels', {
-            filter: 'status=eq.submitted&rider_id=is.null',
-            limit: 1000,
-            order: 'created_at.asc'
+        const marker = state.markers.find(m => {
+            const latLng = m.getLatLng();
+            return latLng.lat === stop.location.lat && latLng.lng === stop.location.lng;
         });
         
-        console.log(`Found ${unclaimedParcels.length} unclaimed parcels`);
-        
-        if (unclaimedParcels.length === 0) {
-            state.availableRoutes = createDemoRoutes();
-        } else {
-            state.availableRoutes = createRoutes(unclaimedParcels);
-            console.log(`Created ${state.availableRoutes.length} routes from ${unclaimedParcels.length} parcels`);
+        if (marker) {
+            marker.openPopup();
         }
-        
-        displayRoutes();
-        
-    } catch (error) {
-        console.error('Error loading routes:', error);
-        state.availableRoutes = createDemoRoutes();
-        displayRoutes();
     }
-}
+};
 
-// Check Active Deliveries
-async function checkActiveDeliveries() {
+window.goBack = function() {
+    if (confirm('Are you sure you want to exit navigation?')) {
+        window.location.href = './rider.html';
+    }
+};
+
+// ============================================================================
+// INITIALIZATION
+// ============================================================================
+
+document.addEventListener('DOMContentLoaded', async () => {
+    console.log('Enhanced Route.js v5.0.1 initializing...');
+    console.log('New features: Photo capture, Digital signatures, M-Pesa integration');
+    
+    injectNavigationStyles();
+    
+    await waitForLeaflet();
+    
     try {
         const storedRoute = localStorage.getItem('tuma_active_route');
+        
         if (storedRoute) {
-            try {
-                const route = JSON.parse(storedRoute);
-                console.log('Found stored route:', route);
-                
-                const allStopsCompleted = route.stops && route.stops.every(s => s.completed);
-                
-                if (allStopsCompleted) {
-                    console.log('All stops completed - clearing route');
-                    localStorage.removeItem('tuma_active_route');
-                    state.claimedRoute = null;
-                    
-                    if (elements.activeRouteSection) {
-                        elements.activeRouteSection.style.display = 'none';
-                    }
-                    return;
-                }
-                
-                state.claimedRoute = route;
-                
-                if (state.availableRoutes) {
-                    state.availableRoutes.forEach(r => {
-                        r.status = 'claimed';
-                    });
-                }
-                
-                showActiveRoute();
-                displayRoutes();
-                return;
-            } catch (error) {
-                console.error('Error parsing stored route:', error);
-                localStorage.removeItem('tuma_active_route');
-                state.claimedRoute = null;
-            }
-        }
-        
-        if (!state.rider || state.rider.id.startsWith('temp-')) {
-            console.log('No active route for temporary rider');
-            state.claimedRoute = null;
-            return;
-        }
-        
-        const activeParcels = await supabaseAPI.query('parcels', {
-            filter: `rider_id=eq.${state.rider.id}&status=in.(route_assigned,picked,in_transit)`,
-            order: 'created_at.asc'
-        });
-        
-        if (activeParcels.length > 0) {
-            state.claimedRoute = {
-                parcels: activeParcels,
-                stops: EnhancedRouteManager.sequenceStops(activeParcels)
-            };
+            const routeData = JSON.parse(storedRoute);
+            state.activeRoute = routeData;
             
-            showActiveRoute();
-        } else {
-            console.log('No active parcels found');
-            state.claimedRoute = null;
-        }
-        
-    } catch (error) {
-        console.error('Error checking active deliveries:', error);
-        state.claimedRoute = null;
-    }
-}
-
-// Claim Route Function
-window.claimRoute = async function(routeId) {
-    console.log('claimRoute called with ID:', routeId);
-    
-    if (window.event) {
-        window.event.preventDefault();
-        window.event.stopPropagation();
-    }
-    
-    if (state.claimedRoute) {
-        showNotification('You already have an active route!', 'warning');
-        return;
-    }
-    
-    const route = state.availableRoutes.find(r => r.id === routeId);
-    console.log('Found route:', route);
-    
-    if (!route || route.status !== 'available') {
-        showNotification('This route is not available', 'warning');
-        return;
-    }
-    
-    if (state.isLoading) return;
-    state.isLoading = true;
-    
-    showNotification('Claiming route...', 'info');
-    
-    try {
-        if (route.parcelDetails && route.parcelDetails.length > 0) {
-            state.claimedRoute = {
-                ...route,
-                parcels: route.parcelDetails,
-                stops: EnhancedRouteManager.sequenceStops(route.parcelDetails)
-            };
-            
-            if (route.metadata?.pickupSequence) {
-                const optimizedStops = [];
-                const deliveryStops = [];
-                
-                route.metadata.pickupSequence.forEach(parcelId => {
-                    const pickupStop = state.claimedRoute.stops.find(s => 
-                        s.parcelId === parcelId && s.type === 'pickup'
-                    );
-                    if (pickupStop) optimizedStops.push(pickupStop);
-                });
-                
-                state.claimedRoute.stops.forEach(stop => {
-                    if (stop.type === 'delivery') {
-                        deliveryStops.push(stop);
-                    }
-                });
-                
-                state.claimedRoute.stops = [...optimizedStops, ...deliveryStops];
+            // Restore original route order if it was saved
+            if (routeData.originalRouteOrder) {
+                state.originalRouteOrder = routeData.originalRouteOrder;
+                console.log('Restored original route from localStorage');
+            } else if (routeData.isOptimized && (!state.originalRouteOrder || state.originalRouteOrder.length === 0)) {
+                console.warn('Route was previously optimized - original order unavailable');
+                state.originalRouteOrder = JSON.parse(JSON.stringify(routeData.stops));
             }
             
-            localStorage.setItem('tuma_active_route', JSON.stringify(state.claimedRoute));
-            
-            showActiveRoute();
-            
-            state.availableRoutes.forEach(r => r.status = 'claimed');
-            displayRoutes();
-            
-            const pickupAreas = route.metadata?.pickupAreas?.join(', ') || 'Multiple areas';
-            showNotification(
-                `Route claimed successfully! ${route.pickups} pickup${route.pickups > 1 ? 's' : ''} in ${pickupAreas}`, 
-                'success'
-            );
-            
-            if (!route.id.startsWith('demo-') && !state.rider.id.startsWith('temp-')) {
-                try {
-                    for (const parcel of route.parcelDetails) {
-                        await supabaseAPI.update('parcels', 
-                            `id=eq.${parcel.id}`,
-                            { 
-                                rider_id: state.rider.id,
-                                status: 'route_assigned',
-                                assigned_at: new Date().toISOString()
-                            }
-                        );
-                    }
-                } catch (dbError) {
-                    console.error('Error updating database:', dbError);
-                }
+            // Restore verification data if exists
+            if (routeData.verificationData) {
+                state.verificationData = routeData.verificationData;
             }
             
-            if (window.haptic) window.haptic('success');
-        } else {
-            // For demo routes without parcel details
-            state.claimedRoute = {
-                ...route,
-                parcels: [],
-                stops: []
-            };
-            
-            localStorage.setItem('tuma_active_route', JSON.stringify(state.claimedRoute));
-            showActiveRoute();
-            
-            state.availableRoutes.forEach(r => r.status = 'claimed');
-            displayRoutes();
-            
-            showNotification('Demo route claimed successfully!', 'success');
-            if (window.haptic) window.haptic('success');
-        }
-        
-    } catch (error) {
-        console.error('Error claiming route:', error);
-        showNotification('Failed to claim route. Please try again.', 'error');
-        
-        localStorage.removeItem('tuma_active_route');
-        state.claimedRoute = null;
-    } finally {
-        state.isLoading = false;
-    }
-};
-
-// Navigate to Route
-window.navigateToRoute = function() {
-    if (!state.claimedRoute) {
-        showNotification('Claim a route first to see navigation', 'warning');
-        return;
-    }
-    
-    localStorage.setItem('tuma_active_route', JSON.stringify(state.claimedRoute));
-    window.location.href = './route.html?active=true';
-    
-    if (window.haptic) window.haptic('light');
-};
-
-// Location Functions
-function getCurrentLocation() {
-    if ("geolocation" in navigator) {
-        navigator.geolocation.getCurrentPosition(
-            position => {
-                state.currentLocation = {
-                    lat: position.coords.latitude,
-                    lng: position.coords.longitude
-                };
-                console.log('Current location:', state.currentLocation);
-            },
-            error => {
-                console.error('Error getting location:', error);
-                showNotification('Location access needed for navigation', 'warning');
-            },
-            {
-                enableHighAccuracy: true,
-                timeout: 5000,
-                maximumAge: 0
-            }
-        );
-    }
-}
-
-function startLocationUpdates() {
-    setInterval(() => {
-        if (state.status === 'online' && state.rider && !state.rider.id.startsWith('temp-')) {
-            getCurrentLocation();
-            
-            if (state.currentLocation) {
-                supabaseAPI.update('riders', 
-                    `id=eq.${state.rider.id}`,
-                    {
-                        last_location_lat: state.currentLocation.lat,
-                        last_location_lng: state.currentLocation.lng,
-                        last_location_update: new Date().toISOString()
-                    }
-                ).catch(error => console.error('Error updating location:', error));
-            }
-        }
-    }, 30000);
-}
-
-// Quick Verify Function
-window.quickVerify = function() {
-    const modal = document.createElement('div');
-    modal.className = 'modal-overlay';
-    modal.innerHTML = `
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2 class="modal-title">Quick Verify</h2>
-                <button class="modal-close" onclick="closeModal(this)">×</button>
-            </div>
-            <div style="padding: 20px 0;">
-                <input type="text" id="quickCode" placeholder="Enter code (XXX-XXXX)" 
-                       style="width: 100%; padding: 16px; background: var(--surface-high); 
-                              border: 2px solid var(--border); border-radius: 12px; 
-                              color: white; font-size: 20px; text-align: center; 
-                              letter-spacing: 2px; text-transform: uppercase;">
-                
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 20px;">
-                    <button class="claim-button" style="background: var(--warning); color: black;" 
-                            onclick="quickVerifyCode('pickup')">
-                        📦 Pickup
-                    </button>
-                    <button class="claim-button" style="background: var(--success);" 
-                            onclick="quickVerifyCode('delivery')">
-                        📍 Delivery
-                    </button>
-                </div>
-            </div>
-        </div>
-    `;
-    document.body.appendChild(modal);
-    
-    setTimeout(() => {
-        document.getElementById('quickCode').focus();
-    }, 100);
-};
-
-window.quickVerifyCode = async function(type) {
-    const code = document.getElementById('quickCode').value;
-    if (!code) {
-        showNotification('Please enter a code', 'error');
-        return;
-    }
-    
-    closeModal(document.querySelector('.modal-overlay'));
-    
-    // Process verification using the main verify function
-    await verifyStopCode(type, code);
-};
-
-// Close Modal Helper
-window.closeModal = function(element) {
-    const modal = element.closest('.modal-overlay');
-    if (modal) {
-        modal.remove();
-    }
-};
-/**
- * Part 4: Verification System, Data Loading, and Quick Actions
- */
-
-// Verify Stop Code Function
-async function verifyStopCode(type, code) {
-    if (!code || code.length < 6) {
-        showNotification('Please enter a valid code', 'error');
-        return;
-    }
-    
-    if (state.isLoading) return;
-    state.isLoading = true;
-    
-    try {
-        if (state.claimedRoute && state.claimedRoute.stops) {
-            const activeStop = state.claimedRoute.stops.find(s => 
-                !s.completed && 
-                s.type === type && 
-                s.verificationCode && s.verificationCode.toUpperCase() === code.toUpperCase()
-            );
-            
-            if (!activeStop) {
-                showNotification('Invalid code or wrong stop type', 'error');
-                return;
-            }
-            
-            if (!EnhancedRouteManager.canCompleteStop(activeStop, state.claimedRoute.stops)) {
-                showNotification('Please complete the pickup first', 'warning');
-                return;
-            }
-            
-            activeStop.completed = true;
-            activeStop.timestamp = new Date();
-            
-            let dbError = null;
-            if (!state.rider.id.startsWith('temp-')) {
-                try {
-                    await supabaseAPI.update('parcels',
-                        `id=eq.${activeStop.parcelId}`,
-                        {
-                            status: type === 'pickup' ? 'picked' : 'delivered',
-                            [`${type}_timestamp`]: activeStop.timestamp.toISOString()
-                        }
-                    );
-                } catch (error) {
-                    dbError = error;
-                    console.error('Database update error:', error);
-                    
-                    if (error.message && (
-                        error.message.includes('agent_notifications') ||
-                        error.message.includes('column "title"')
-                    )) {
-                        console.log('Continuing despite agent_notifications error');
-                        showNotification(
-                            type === 'delivery' ? 
-                            'Delivery completed! Database sync pending.' : 
-                            'Pickup completed!', 
-                            'success'
-                        );
-                    } else {
-                        console.error('Unexpected database error:', error);
-                        showNotification(
-                            `${type.charAt(0).toUpperCase() + type.slice(1)} recorded locally. Sync pending.`, 
-                            'warning'
-                        );
-                    }
-                }
-            }
-            
-            if (type === 'delivery') {
-                if (activeStop.amountToCollect > 0) {
-                    showNotification(
-                        `Remember to collect KES ${activeStop.amountToCollect.toLocaleString()} from ${activeStop.customerName}`,
-                        'warning'
-                    );
-                }
-                
-                let deliveryPrice = 0;
-                if (state.claimedRoute.parcels && state.claimedRoute.parcels.length > 0) {
-                    const parcel = state.claimedRoute.parcels.find(p => p.id === activeStop.parcelId);
-                    deliveryPrice = parcel?.price || 500;
-                } else {
-                    deliveryPrice = 500;
-                }
-                
-                // Update commission if commission offset manager exists
-                if (window.commissionOffsetManager) {
-                    const offsetResult = window.commissionOffsetManager.applyOffset(
-                        activeStop.parcelId,
-                        deliveryPrice * BUSINESS_CONFIG.commission.rider
-                    );
-                }
-                
-                const riderPayout = deliveryPrice * BUSINESS_CONFIG.commission.rider;
-                state.earnings.daily += riderPayout;
-                state.stats.deliveries++;
-                
-                updateEarningsDisplay();
-                updateStatsDisplay();
-            }
-            
-            localStorage.setItem('tuma_active_route', JSON.stringify(state.claimedRoute));
-            
-            if (!dbError || !dbError.message?.includes('agent_notifications')) {
-                showNotification(`${type.charAt(0).toUpperCase() + type.slice(1)} verified successfully!`, 'success');
-            }
-            
-            const allComplete = state.claimedRoute.stops.every(s => s.completed);
-            if (allComplete) {
-                const deliveryStops = state.claimedRoute.stops.filter(s => s.type === 'delivery');
-                const totalCollected = deliveryStops.reduce((sum, stop) => sum + (stop.amountToCollect || 0), 0);
-                
-                let totalEarnings = 0;
-                if (state.claimedRoute.total_earnings) {
-                    totalEarnings = state.claimedRoute.total_earnings * BUSINESS_CONFIG.commission.rider;
-                } else if (state.claimedRoute.parcels) {
-                    totalEarnings = state.claimedRoute.parcels.reduce((sum, p) => 
-                        sum + ((p.price || 500) * BUSINESS_CONFIG.commission.rider), 0
-                    );
-                } else {
-                    totalEarnings = state.claimedRoute.stops.filter(s => s.type === 'delivery').length * 350;
-                }
-                
-                if (totalCollected > 0) {
-                    showRouteCompletionSummary(totalCollected, totalEarnings, deliveryStops.length);
-                }
-                
-                const completionData = {
-                    completed: true,
-                    earnings: Math.round(totalEarnings),
-                    deliveries: deliveryStops.length,
-                    totalCollected: totalCollected,
-                    timestamp: new Date().toISOString(),
-                    parcels: state.claimedRoute.parcels || []
-                };
-                
-                console.log('Storing route completion data:', completionData);
-                localStorage.setItem('tuma_route_completion', JSON.stringify(completionData));
-                
-                if (elements.activeRouteSection) elements.activeRouteSection.style.display = 'none';
-                state.claimedRoute = null;
-                
-                localStorage.removeItem('tuma_active_route');
-                
-                state.availableRoutes.forEach(route => {
-                    route.status = 'available';
-                });
-                
-                showNotification('Route completed! Great work!', 'success');
-                
-                await loadAvailableRoutes();
-                await checkRouteCompletionStatus();
-            } else {
-                showActiveRoute();
-                
-                const pickups = state.claimedRoute.stops.filter(s => s.type === 'pickup');
-                const allPickupsComplete = pickups.every(p => p.completed);
-                
-                if (allPickupsComplete && type === 'pickup') {
-                    showNotification('All pickups complete! Starting delivery phase', 'success');
-                }
-            }
-        }
-        
-        if (window.haptic) window.haptic('success');
-        
-    } catch (error) {
-        console.error('Error verifying code:', error);
-        showNotification('Verification failed. Please try again.', 'error');
-    } finally {
-        state.isLoading = false;
-    }
-}
-
-// Load Earnings
-async function loadEarnings() {
-    try {
-        if (!state.rider) return;
-        
-        if (state.rider.id.startsWith('temp-')) {
-            console.log('Using default earnings for temporary rider');
-            state.earnings = {
-                daily: 0,
-                weekly: 0,
-                monthly: 0
-            };
-            updateEarningsDisplay();
-            return;
-        }
-        
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        
-        const weekStart = new Date(today);
-        weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-        
-        const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-        
-        const dailyParcels = await supabaseAPI.query('parcels', {
-            filter: `rider_id=eq.${state.rider.id}&status=eq.delivered&delivery_timestamp=gte.${today.toISOString()}`,
-            select: 'rider_payout'
-        });
-        
-        const weeklyParcels = await supabaseAPI.query('parcels', {
-            filter: `rider_id=eq.${state.rider.id}&status=eq.delivered&delivery_timestamp=gte.${weekStart.toISOString()}`,
-            select: 'rider_payout'
-        });
-        
-        const monthlyParcels = await supabaseAPI.query('parcels', {
-            filter: `rider_id=eq.${state.rider.id}&status=eq.delivered&delivery_timestamp=gte.${monthStart.toISOString()}`,
-            select: 'rider_payout'
-        });
-        
-        state.earnings = {
-            daily: dailyParcels.reduce((sum, p) => sum + (p.rider_payout || 0), 0),
-            weekly: weeklyParcels.reduce((sum, p) => sum + (p.rider_payout || 0), 0),
-            monthly: monthlyParcels.reduce((sum, p) => sum + (p.rider_payout || 0), 0)
-        };
-        
-        updateEarningsDisplay();
-        
-    } catch (error) {
-        if (error.message.includes('400') && DEV_CONFIG.ignoreRiderNotFound) {
-            console.log('Earnings API error (expected in dev mode)');
-            state.earnings = {
-                daily: 0,
-                weekly: 0,
-                monthly: 0
-            };
-            updateEarningsDisplay();
-        } else {
-            console.error('Error loading earnings:', error);
-        }
-    }
-}
-
-// Load Stats
-async function loadStats() {
-    try {
-        if (!state.rider) {
-            state.stats = { deliveries: 0, distance: 0, rating: 5.0, acceptRate: 95 };
-            updateStatsDisplay();
-            return;
-        }
-        
-        if (state.rider.id.startsWith('temp-')) {
-            state.stats = { deliveries: 0, distance: 0, rating: 5.0, acceptRate: 95 };
-            updateStatsDisplay();
-            return;
-        }
-        
-        state.stats = {
-            deliveries: state.rider.completed_deliveries || 0,
-            distance: Math.round(state.rider.total_distance || 0),
-            rating: state.rider.rating || 5.0,
-            acceptRate: state.rider.acceptance_rate || 95
-        };
-        
-        updateStatsDisplay();
-        
-    } catch (error) {
-        console.error('Error loading stats:', error);
-    }
-}
-
-// Check Route Completion Status
-async function checkRouteCompletionStatus() {
-    const completionData = localStorage.getItem('tuma_route_completion');
-    if (!completionData) return;
-    
-    try {
-        const data = JSON.parse(completionData);
-        localStorage.removeItem('tuma_route_completion');
-        
-        console.log('Processing route completion:', data);
-        
-        if (document.readyState !== 'complete') {
-            await new Promise(resolve => {
-                window.addEventListener('load', resolve);
+            console.log('Route loaded:', state.activeRoute);
+            console.log('Verification features enabled:', {
+                photos: config.verification.requirePhoto,
+                signatures: config.verification.requireSignature,
+                location: config.verification.requireLocation,
+                mpesa: true
             });
-        }
-        
-        if (data.completed) {
-            /**
- * Part 5: Initialization, Authentication, Event Handlers, and Global Functions
- */
-
-            let totalCashCollected = 0;
             
-            if (data.parcels && data.parcels.length > 0) {
-                data.parcels.forEach(parcel => {
-                    if (parcel.payment_status === 'pending' || !parcel.payment_status) {
-                        totalCashCollected += parsePrice(parcel.price || parcel.total_price || 500);
-                    }
-                });
-            } else {
-                totalCashCollected = data.deliveries * 500;
+            updateStopOrderMap();
+            calculateRouteFinancials();
+            calculateCashCollection();
+            
+            await initializeMap();
+            
+            displayRouteInfo();
+            updateDynamicHeader();
+            
+            await plotRoute();
+            await drawOptimizedRoute();
+            
+            // Show UI elements
+            const routePanel = document.getElementById('routePanel');
+            const navControls = document.getElementById('navControls');
+            const emptyState = document.getElementById('emptyState');
+            
+            if (routePanel) {
+                routePanel.style.display = 'block';
+                state.isPanelVisible = true;
             }
             
-            if (totalCashCollected > 0) {
-                showRouteCompletionSummary(totalCashCollected, data.earnings, data.deliveries);
-                setTimeout(() => {
-                    showCashCollectionReminder(totalCashCollected);
-                }, 1000);
+            if (navControls) {
+                navControls.style.display = 'flex';
             }
             
-            state.earnings.daily += data.earnings;
-            state.stats.deliveries += data.deliveries;
+            if (emptyState) {
+                emptyState.style.display = 'none';
+            }
             
-            updateEarningsDisplay();
-            updateStatsDisplay();
+            initializeOptimizeButton();
             
-            state.claimedRoute = null;
-            localStorage.removeItem('tuma_active_route');
+            if (state.totalCashToCollect > 0) {
+                showCashCollectionWidget();
+            }
             
-            showNotification(`Route completed! Earned KES ${data.earnings}`, 'success');
+            startLocationTracking();
+            
+            console.log('Enhanced route initialization complete');
+        } else {
+            console.log('No active route found');
+            
+            const routePanel = document.getElementById('routePanel');
+            const navControls = document.getElementById('navControls');
+            const emptyState = document.getElementById('emptyState');
+            
+            if (routePanel) routePanel.style.display = 'none';
+            if (navControls) navControls.style.display = 'none';
+            if (emptyState) emptyState.style.display = 'block';
         }
     } catch (error) {
-        console.error('Error processing route completion:', error);
-    }
-}
-
-// Show Route Completion Summary
-function showRouteCompletionSummary(totalCollected, riderEarnings, deliveryCount) {
-    const summary = document.createElement('div');
-    summary.className = 'route-completion-summary';
-    summary.innerHTML = `
-        <div class="summary-content">
-            <div class="summary-icon">🎉</div>
-            <h2>Route Completed!</h2>
-            
-            <div class="summary-stats">
-                <div class="stat-item">
-                    <span class="stat-label">Deliveries Completed</span>
-                    <span class="stat-value">${deliveryCount}</span>
-                </div>
-                
-                <div class="stat-item highlight-green">
-                    <span class="stat-label">Total Cash Collected</span>
-                    <span class="stat-value cash">KES ${totalCollected.toLocaleString()}</span>
-                </div>
-                
-                <div class="stat-item earnings">
-                    <span class="stat-label">Your Earnings</span>
-                    <span class="stat-value">KES ${Math.round(totalCollected * 0.7).toLocaleString()}</span>
-                </div>
-            </div>
-            
-            <div class="cash-instruction">
-                <div class="instruction-icon">💳</div>
-                <div class="instruction-text">
-                    <p>Please deposit the collected cash to your Tuma wallet within 24 hours</p>
-                </div>
-            </div>
-            
-            <button class="continue-btn" onclick="closeCompletionSummary()">
-                Continue
-            </button>
-        </div>
-    `;
-    
-    document.body.appendChild(summary);
-}
-
-window.closeCompletionSummary = function() {
-    const summary = document.querySelector('.route-completion-summary');
-    if (summary) {
-        summary.remove();
-    }
-};
-
-// Show Cash Collection Reminder
-function showCashCollectionReminder(totalCashCollected) {
-    if (document.getElementById('cashCollectionReminder')) {
-        return;
-    }
-    
-    const reminderBanner = document.createElement('div');
-    reminderBanner.id = 'cashCollectionReminder';
-    reminderBanner.className = 'cash-collection-reminder';
-    reminderBanner.style.opacity = '0';
-    reminderBanner.innerHTML = `
-        <div class="reminder-content">
-            <div class="reminder-icon">💰</div>
-            <div class="reminder-text">
-                <div class="reminder-title">Cash Collection Active</div>
-                <div class="reminder-details">
-                    <span>Collected: <strong>KES ${totalCashCollected.toLocaleString()}</strong></span>
-                    <span class="separator">•</span>
-                    <span>Deposit to wallet within 24 hours</span>
-                </div>
-            </div>
-            <button class="reminder-close" onclick="dismissCashReminder()">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-                </svg>
-            </button>
-        </div>
-    `;
-    
-    document.body.insertBefore(reminderBanner, document.body.firstChild);
-    
-    setTimeout(() => {
-        reminderBanner.style.opacity = '1';
-        reminderBanner.style.transition = 'opacity 0.3s ease-in';
-    }, 100);
-    
-    document.body.classList.add('has-cash-reminder');
-}
-
-window.dismissCashReminder = function() {
-    const reminder = document.getElementById('cashCollectionReminder');
-    if (reminder) {
-        reminder.style.transform = 'translateY(-100%)';
-        document.body.classList.remove('has-cash-reminder');
-        setTimeout(() => reminder.remove(), 300);
-    }
-};
-
-// Authentication Functions
-async function checkAuthAndLoadRider() {
-    if (window.Telegram?.WebApp) {
-        const tg = window.Telegram.WebApp;
-        tg.ready();
-        tg.expand();
+        console.error('Error initializing route:', error);
         
-        const user = tg.initDataUnsafe.user;
-        if (user?.phone_number) {
-            const phone = formatPhone(user.phone_number);
-            return await loadRiderByPhone(phone);
+        const emptyState = document.getElementById('emptyState');
+        if (emptyState) {
+            emptyState.style.display = 'block';
         }
     }
-    
-    const storedPhone = localStorage.getItem('tuma_rider_phone');
-    if (storedPhone) {
-        return await loadRiderByPhone(storedPhone);
-    }
-    
-    return false;
-}
-
-async function loadRiderByPhone(phone) {
-    try {
-        const riders = await supabaseAPI.query('riders', {
-            filter: `phone=eq.${phone}`,
-            limit: 1
-        });
-        
-        if (riders.length > 0) {
-            state.rider = riders[0];
-            
-            if (state.rider.verification_status !== 'verified') {
-                showNotification('Your account is pending verification. Please contact support.', 'warning');
-            }
-            
-            if (state.rider.status === 'suspended' || state.rider.status === 'terminated') {
-                showNotification('Your account has been suspended. Please contact support.', 'error');
-                return false;
-            }
-            
-            return true;
-        }
-    } catch (error) {
-        console.error('Error loading rider:', error);
-    }
-    
-    return false;
-}
-
-async function createTemporaryRider() {
-    // Use Bobby G's real ID in development, temp ID in production
-    const tempId = DEV_CONFIG.isDevelopment && DEV_CONFIG.testRider ? 
-        DEV_CONFIG.testRider.id :  // Uses 'ef5438ef-0cc0-4e35-8d1b-be18dbce7fe4' in dev
-        'temp-' + Date.now();      // Only uses temp- in production
-    
-    state.rider = {
-        id: tempId,
-        rider_name: DEV_CONFIG.isDevelopment && DEV_CONFIG.testRider ? 
-            DEV_CONFIG.testRider.name : 
-            'Test Rider',
-        phone: DEV_CONFIG.isDevelopment && DEV_CONFIG.testRider ? 
-            DEV_CONFIG.testRider.phone : 
-            '0700000000',
-        status: 'active',
-        total_deliveries: 0,
-        completed_deliveries: 0,
-        total_distance: 0,
-        rating: 5.0,
-        unpaid_commission: 0,
-        verification_status: 'verified'
-    };
-    
-    console.log('Created rider:', state.rider.id);
-    // In dev mode this should log: 'Created rider: ef5438ef-0cc0-4e35-8d1b-be18dbce7fe4'
-}
-
-// Main Initialization
-async function initialize() {
-    console.log('Initializing rider dashboard...');
-    
-    const storedRoute = localStorage.getItem('tuma_active_route');
-    if (storedRoute) {
-        try {
-            const route = JSON.parse(storedRoute);
-            const routeAge = Date.now() - new Date(route.created_at || 0).getTime();
-            if (routeAge > 24 * 60 * 60 * 1000) {
-                console.log('Clearing stale route data');
-                localStorage.removeItem('tuma_active_route');
-            }
-        } catch (e) {
-            console.error('Error parsing stored route:', e);
-            localStorage.removeItem('tuma_active_route');
-        }
-    }
-    
-    initializeElements();
-    
-    window.state = state;
-    
-    // Initialize commission tracker
-    state.commissionTracker = new CommissionTracker(BUSINESS_CONFIG.commission);
-    
-    const authenticated = await checkAuthAndLoadRider();
-    
-    if (!authenticated) {
-        await createTemporaryRider();
-    }
-    
-    if (elements.riderName && state.rider) {
-        elements.riderName.textContent = state.rider.rider_name || 'Rider';
-    }
-    
-    // Initialize commission tracker with rider data
-    if (state.rider && state.commissionTracker) {
-        try {
-            await state.commissionTracker.initialize(state.rider.id, supabaseAPI);
-            displayCommissionStatus();
-            
-            const devBypass = DEV_CONFIG.isDevelopment && DEV_CONFIG.bypassCommissionBlock;
-            
-            if (state.commissionTracker.state.isBlocked && !devBypass) {
-                showBlockedOverlay();
-                return;
-            } else if (state.commissionTracker.state.isBlocked && devBypass) {
-                console.warn('[DEV MODE] Commission block bypassed on initialization');
-                showNotification('DEV MODE: Commission block bypassed', 'warning');
-            }
-        } catch (error) {
-            console.error('Error initializing commission tracker:', error);
-        }
-    }
-    
-    // Initialize commission offset manager if exists
-    if (window.commissionOffsetManager && state.rider) {
-        await window.commissionOffsetManager.load();
-    }
-    
-    await checkRouteCompletionStatus();
-    
-    getCurrentLocation();
-    
-    setupEventListeners();
-    await loadEarnings();
-    await loadStats();
-    await loadActiveBonuses();
-    await loadAvailableRoutes();
-    await checkActiveDeliveries();
-    
-    // Add custom styles
-    addCustomStyles();
-    
-    // Add enhanced features
-    displayIncentiveProgress();
-    displayPerformanceMetrics();
-    addQuickActions();
-    
-    updateProfileDisplay();
-    updateWalletDisplay();
-    
-    if (state.status === 'online') {
-        startLocationUpdates();
-    }
-    
-    console.log('Rider dashboard initialized successfully');
-}
-
-// Event Listeners
-function setupEventListeners() {
-    // Status toggle is handled by inline onclick
-    
-    // No additional event listeners needed as most are handled inline
-}
-
-// Global Functions (called from HTML)
-window.toggleStatus = function() {
-    const statusBadge = document.getElementById('statusBadge');
-    const statusText = document.getElementById('statusText');
-    
-    if (statusText.textContent === 'Online') {
-        statusText.textContent = 'Offline';
-        statusBadge.classList.add('offline');
-        state.status = 'offline';
-    } else if (statusText.textContent === 'Offline') {
-        statusText.textContent = 'Online';
-        statusBadge.classList.remove('offline');
-        statusBadge.classList.remove('busy');
-        state.status = 'online';
-    }
-    
-    if (window.haptic) window.haptic('light');
-};
-
-window.scanQRCode = function() {
-    showNotification('QR Scanner will open camera (coming soon)', 'info');
-};
-
-window.callSupport = function() {
-    window.location.href = 'tel:+254700123456';
-};
-
-window.viewHotspots = function() {
-    showNotification('High demand areas: Westlands, CBD, Kilimani', 'info');
-};
-
-window.toggleBreak = function() {
-    const statusBadge = document.getElementById('statusBadge');
-    const statusText = document.getElementById('statusText');
-    
-    if (statusText.textContent === 'Online') {
-        statusText.textContent = 'On Break';
-        statusBadge.classList.add('busy');
-        showNotification('Break started. Take your time!', 'info');
-    } else {
-        statusText.textContent = 'Online';
-        statusBadge.classList.remove('busy');
-        showNotification('Welcome back! You\'re online again.', 'info');
-    }
-};
-
-window.showNotifications = function() {
-    showNotification('No new notifications', 'info');
-};
-
-window.showSettings = function() {
-    window.switchPage('profile');
-};
-
-window.showSupport = function() {
-    window.location.href = 'tel:+254700123456';
-};
-
-window.logout = function() {
-    if (confirm('Are you sure you want to logout?')) {
-        localStorage.clear();
-        window.location.href = './index.html';
-    }
-};
-
-window.showCommissionDetails = function() {
-    if (window.commissionOffsetManager) {
-        const debt = window.commissionOffsetManager.commissionDebt;
-        showNotification(`Commission balance: KES ${Math.round(debt)}`, 'info');
-    }
-};
-
-window.showWithdrawalModal = function() {
-    // Implemented in bottom nav version
-    showNotification('Withdrawal feature coming soon', 'info');
-};
-
-window.showPaymentInstructions = function() {
-    const cashBalance = elements.cashBalance?.textContent || '0';
-    showNotification(`Deposit KES ${cashBalance} via M-Pesa to 247247`, 'info');
-};
-
-window.processWithdrawal = function() {
-    showNotification('Withdrawal processing...', 'info');
-};
-
-window.showEarningsDetails = function() {
-    window.switchPage('earnings');
-};
-
-window.searchRoutes = function() {
-    showNotification('Search feature coming soon', 'info');
-};
-
-window.handleFAB = function() {
-    const page = window.appState?.currentPage || 'dashboard';
-    
-    switch(page) {
-        case 'dashboard':
-            if (state.claimedRoute) {
-                window.navigateToRoute();
-            } else {
-                window.switchPage('routes');
-            }
-            break;
-        case 'routes':
-            window.searchRoutes();
-            break;
-        case 'earnings':
-            window.showEarningsDetails();
-            break;
-        case 'wallet':
-            window.showPaymentInstructions();
-            break;
-        default:
-            break;
-    }
-};
-
-// Haptic feedback
-window.haptic = function(type = 'light') {
-    if (window.navigator && window.navigator.vibrate) {
-        switch(type) {
-            case 'light': window.navigator.vibrate(10); break;
-            case 'medium': window.navigator.vibrate(30); break;
-            case 'heavy': window.navigator.vibrate(50); break;
-            case 'success': window.navigator.vibrate([10, 50, 10]); break;
-            default: window.navigator.vibrate(10);
-        }
-    }
-};
-
-// Make functions globally available
-window.showNotification = showNotification;
-
-// DOM Ready
-document.addEventListener('DOMContentLoaded', async () => {
-    console.log('✅ Enhanced rider.js loaded successfully!');
-    
-    const tg = window.Telegram?.WebApp;
-    const telegramUser = tg?.initDataUnsafe?.user;
-    
-    let riderId;
-    let riderName;
-    
-    if (telegramUser?.id) {
-        riderId = telegramUser.id;
-        riderName = telegramUser.first_name || 'Rider';
-        if (DEV_CONFIG.verboseLogging) {
-            console.log('Using Telegram user:', riderId);
-        }
-    } else if (DEV_CONFIG.isDevelopment && DEV_CONFIG.testRider) {
-        riderId = DEV_CONFIG.testRider.id;
-        riderName = DEV_CONFIG.testRider.name;
-        if (DEV_CONFIG.verboseLogging) {
-            console.log('Development mode: Using test rider', riderId);
-        }
-    } else {
-        riderId = `temp-${Date.now()}`;
-        riderName = 'Guest Rider';
-        if (DEV_CONFIG.verboseLogging) {
-            console.log('Generated temporary rider:', riderId);
-        }
-    }
-    
-    window.currentRiderId = riderId;
-    
-    await initialize();
 });
 
-console.log('✅ rider.js loaded successfully with bottom navigation support!');
-console.log('Debug commands available: window.state');
-/**
- * Part 6: Wallet Functions, Payment Modals, and Commission Display
- */
-
-// Display Commission Status
-function displayCommissionStatus() {
-    if (!state.commissionTracker) return;
-    
-    const ui = state.commissionTracker.createCommissionUI();
-    
-    const existingContainer = document.getElementById('commissionContainer');
-    if (existingContainer) {
-        existingContainer.remove();
-    }
-    
-    const commissionContainer = document.createElement('div');
-    commissionContainer.id = 'commissionContainer';
-    commissionContainer.innerHTML = ui.statusBar;
-    
-    const heroSection = document.querySelector('.hero-section');
-    if (heroSection && heroSection.parentNode) {
-        heroSection.parentNode.insertBefore(commissionContainer, heroSection.nextSibling);
-    }
-    
-    if (ui.warningMessage) {
-        const warningDiv = document.createElement('div');
-        warningDiv.innerHTML = ui.warningMessage;
-        commissionContainer.appendChild(warningDiv.firstChild);
-    }
-}
-
-function showBlockedOverlay() {
-    if (!state.commissionTracker) return;
-    
-    const ui = state.commissionTracker.createCommissionUI();
-    
-    const existingOverlay = document.getElementById('commissionBlockedOverlay');
-    if (existingOverlay) {
-        existingOverlay.remove();
-    }
-    
-    const overlay = document.createElement('div');
-    overlay.id = 'commissionBlockedOverlay';
-    overlay.innerHTML = ui.blockedMessage;
-    document.body.appendChild(overlay);
-}
-
-// Show Urgent Payment Warning
-function showUrgentPaymentWarning() {
-    const warning = document.createElement('div');
-    warning.className = 'urgent-payment-warning';
-    warning.innerHTML = `
-        <div class="warning-content">
-            <div class="warning-icon">⚠️</div>
-            <h2>Deposit Required</h2>
-            <p class="warning-amount">Account Balance: -KES ${state.commissionTracker.state.unpaidCommission}</p>
-            <p class="warning-message">You have <span class="timer">60:00</span> to deposit funds or your account will be paused</p>
-            <div class="warning-actions">
-                <button class="pay-now-btn" onclick="openWalletModal()">
-                    Deposit Now
-                </button>
-                <button class="later-btn" onclick="dismissWarning()">
-                    Later
-                </button>
-            </div>
-        </div>
-    `;
-    
-    document.body.appendChild(warning);
-    
-    let timeLeft = 3600;
-    const timerElement = warning.querySelector('.timer');
-    
-    const countdown = setInterval(() => {
-        timeLeft--;
-        const minutes = Math.floor(timeLeft / 60);
-        const seconds = timeLeft % 60;
-        timerElement.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-        
-        if (timeLeft <= 0) {
-            clearInterval(countdown);
-            warning.remove();
-            
-            if (!(DEV_CONFIG.isDevelopment && DEV_CONFIG.bypassCommissionBlock)) {
-                showBlockedOverlay();
-            } else {
-                console.warn('[DEV MODE] Timer expired but blocking bypassed');
-                showNotification('DEV MODE: Would be blocked now', 'warning');
-            }
-        }
-    }, 1000);
-    
-    window.commissionCountdown = countdown;
-}
-
-window.dismissWarning = function() {
-    document.querySelector('.urgent-payment-warning')?.remove();
-};
-
-// Enhanced Withdrawal Modal
-window.showWithdrawalModal = function() {
-    const mpesaBalance = parseFloat(elements.mpesaBalance?.textContent || '0');
-    const modal = document.createElement('div');
-    modal.className = 'modal-overlay';
-    modal.innerHTML = `
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2 class="modal-title">Withdraw Funds</h2>
-                <button class="modal-close" onclick="closeModal(this)">×</button>
-            </div>
-            <div style="background: var(--surface-high); padding: 16px; border-radius: 12px; 
-                        text-align: center; margin-bottom: 20px;">
-                <p style="font-size: 14px; color: var(--text-secondary); margin-bottom: 8px;">Available Balance</p>
-                <p style="font-size: 28px; font-weight: 700; color: var(--primary);">KES ${mpesaBalance}</p>
-            </div>
-            
-            <div>
-                <label style="display: block; margin-bottom: 8px; font-weight: 600;">Amount to Withdraw</label>
-                <input type="number" id="withdrawAmount" placeholder="Enter amount" max="${mpesaBalance}" 
-                       style="width: 100%; padding: 16px; background: var(--surface-high); 
-                              border: 2px solid var(--border); border-radius: 12px; 
-                              color: white; font-size: 18px; margin-bottom: 16px;">
-                
-                <div id="feeCalculator" style="display: none; background: var(--surface-high); 
-                                               padding: 16px; border-radius: 12px; margin-bottom: 16px;">
-                    <div style="display: flex; justify-content: space-between; padding: 8px 0;">
-                        <span>Withdrawal Amount:</span>
-                        <span id="withdrawalAmount">KES 0</span>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; padding: 8px 0;">
-                        <span>M-Pesa Fee:</span>
-                        <span id="mpesaFee">KES 0</span>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; padding: 8px 0; 
-                                border-top: 1px solid var(--border); margin-top: 8px; 
-                                padding-top: 12px; font-weight: 600;">
-                        <span>Total Deduction:</span>
-                        <span id="totalDeduction">KES 0</span>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; padding: 8px 0;">
-                        <span>You'll Receive:</span>
-                        <span id="amountReceived" style="color: var(--success); font-weight: 700;">KES 0</span>
-                    </div>
-                </div>
-                
-                <div style="background: rgba(255, 159, 10, 0.1); border: 1px solid var(--warning); 
-                            border-radius: 8px; padding: 12px; margin-bottom: 16px;">
-                    <p style="font-size: 13px; line-height: 1.5;">
-                        ⚠️ M-Pesa transaction fees apply and will be deducted from your wallet balance
-                    </p>
-                </div>
-                
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-                    <button class="claim-button" style="background: var(--surface-high);" 
-                            onclick="closeModal(this)">Cancel</button>
-                    <button class="claim-button" onclick="processWithdrawal()">Withdraw</button>
-                </div>
-            </div>
-        </div>
-    `;
-    
-    document.body.appendChild(modal);
-    
-    document.getElementById('withdrawAmount').addEventListener('input', function(e) {
-        const amount = parseFloat(e.target.value) || 0;
-        if (amount > 0) {
-            const fee = calculateMpesaFee(amount);
-            const total = amount + fee;
-            
-            document.getElementById('feeCalculator').style.display = 'block';
-            document.getElementById('withdrawalAmount').textContent = 'KES ' + amount;
-            document.getElementById('mpesaFee').textContent = 'KES ' + fee;
-            document.getElementById('totalDeduction').textContent = 'KES ' + total;
-            document.getElementById('amountReceived').textContent = 'KES ' + amount;
-        } else {
-            document.getElementById('feeCalculator').style.display = 'none';
-        }
-    });
-};
-
-// Calculate M-Pesa Fees
-function calculateMpesaFee(amount) {
-    const fees = [
-        { min: 0, max: 49, fee: 0 },
-        { min: 50, max: 100, fee: 7 },
-        { min: 101, max: 500, fee: 13 },
-        { min: 501, max: 1000, fee: 23 },
-        { min: 1001, max: 1500, fee: 33 },
-        { min: 1501, max: 2500, fee: 53 },
-        { min: 2501, max: 3500, fee: 58 },
-        { min: 3501, max: 5000, fee: 68 },
-        { min: 5001, max: 7500, fee: 78 },
-        { min: 7501, max: 10000, fee: 88 },
-        { min: 10001, max: 15000, fee: 98 },
-        { min: 15001, max: 20000, fee: 108 },
-        { min: 20001, max: 250000, fee: 108 }
-    ];
-    
-    for (const tier of fees) {
-        if (amount >= tier.min && amount <= tier.max) {
-            return tier.fee;
-        }
-    }
-    return 108;
-}
-
-// Process Withdrawal
-window.processWithdrawal = function() {
-    const amount = parseFloat(document.getElementById('withdrawAmount').value);
-    
-    if (!amount || amount <= 0) {
-        showNotification('Please enter a valid amount', 'error');
-        return;
-    }
-    
-    showNotification('Withdrawal of KES ' + amount + ' initiated. You will receive an M-Pesa notification shortly.', 'success');
-    closeModal(document.querySelector('.modal-overlay'));
-};
-
-// Enhanced Wallet Modal with Commission
-window.openWalletModal = function() {
-    const summary = state.commissionTracker ? state.commissionTracker.getSummary() : { unpaid: 0 };
-    
-    const modal = document.createElement('div');
-    modal.className = 'payment-modal';
-    modal.innerHTML = `
-        <div class="payment-content">
-            <h2>Deposit to Wallet</h2>
-            <div class="wallet-balance">
-                <span class="balance-label">Current Balance</span>
-                <span class="balance-amount ${summary.unpaid > 0 ? 'negative' : ''}">
-                    ${summary.unpaid > 0 ? '-' : ''}KES ${Math.abs(summary.unpaid)}
-                </span>
-            </div>
-            
-            <div class="deposit-options">
-                <h3>Deposit Options:</h3>
-                
-                <div class="deposit-method">
-                    <div class="method-header">
-                        <span class="method-icon">💵</span>
-                        <span class="method-name">Cash Deposit</span>
-                    </div>
-                    <p class="method-description">
-                        Deposit collected cash at any Tuma agent location
-                    </p>
-                    <button class="method-button" onclick="showAgentLocations()">
-                        Find Agents Near You
-                    </button>
-                </div>
-                
-                <div class="deposit-method">
-                    <div class="method-header">
-                        <span class="method-icon">📱</span>
-                        <span class="method-name">M-Pesa</span>
-                    </div>
-                    <div class="mpesa-instructions">
-                        <ol>
-                            <li>Go to M-Pesa</li>
-                            <li>Select "Lipa na M-Pesa" > "Pay Bill"</li>
-                            <li>Business Number: <strong>247247</strong></li>
-                            <li>Account: <strong>${state.rider?.phone || 'Your Phone'}</strong></li>
-                            <li>Amount: <strong>${summary.unpaid}</strong></li>
-                        </ol>
-                    </div>
-                </div>
-            </div>
-            
-            <button class="modal-close" onclick="closeWalletModal()">Close</button>
-        </div>
-    `;
-    
-    document.body.appendChild(modal);
-    
-    if (window.haptic) window.haptic('light');
-};
-
-window.viewAccountDetails = function() {
-    const summary = state.commissionTracker ? state.commissionTracker.getSummary() : { unpaid: 0 };
-    
-    const modal = document.createElement('div');
-    modal.className = 'modal-overlay';
-    modal.innerHTML = `
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2 class="modal-title">Account Details</h2>
-                <button class="modal-close" onclick="closeModal(this)">×</button>
-            </div>
-            <div style="padding: 20px 0;">
-                <div style="background: var(--surface-high); border-radius: 12px; padding: 16px; margin-bottom: 16px;">
-                    <h3 style="font-size: 14px; color: var(--text-secondary); margin-bottom: 8px;">Wallet Balance</h3>
-                    <p style="font-size: 28px; font-weight: 700; color: ${summary.unpaid > 0 ? 'var(--danger)' : 'var(--success)'};">
-                        ${summary.unpaid > 0 ? '-' : ''}KES ${Math.abs(summary.unpaid)}
-                    </p>
-                </div>
-                
-                <div style="display: grid; gap: 12px;">
-                    <div style="display: flex; justify-content: space-between; padding: 12px; background: var(--surface-high); border-radius: 8px;">
-                        <span>Total Paid</span>
-                        <span>KES ${summary.totalPaid}</span>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; padding: 12px; background: var(--surface-high); border-radius: 8px;">
-                        <span>Pending Deliveries</span>
-                        <span>${summary.pendingCount}</span>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; padding: 12px; background: var(--surface-high); border-radius: 8px;">
-                        <span>Account Usage</span>
-                        <span>${summary.percentageUsed}%</span>
-                    </div>
-                </div>
-                
-                <button class="claim-button" style="margin-top: 20px;" onclick="closeModal(this)">
-                    Close
-                </button>
-            </div>
-        </div>
-    `;
-    
-    document.body.appendChild(modal);
-    if (window.haptic) window.haptic('light');
-};
-
-window.closeWalletModal = function() {
-    const modal = document.querySelector('.payment-modal');
-    if (modal) {
-        modal.remove();
-    }
-};
-
-window.showAgentLocations = function() {
-    showNotification('Opening agent locations...', 'info');
-    if (window.haptic) window.haptic('light');
-};
-
-// Enhanced Payment Instructions Modal
-window.showPaymentInstructions = function() {
-    const cashBalance = elements.cashBalance?.textContent || '0';
-    const modal = document.createElement('div');
-    modal.className = 'modal-overlay';
-    modal.innerHTML = `
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2 class="modal-title">Pay Commission</h2>
-                <button class="modal-close" onclick="closeModal(this)">×</button>
-            </div>
-            <div style="padding: 20px 0;">
-                <h3 style="margin-bottom: 16px; font-size: 16px;">M-Pesa Paybill Instructions:</h3>
-                <ol style="padding-left: 20px; line-height: 2; color: var(--text-secondary);">
-                    <li>Go to M-Pesa on your phone</li>
-                    <li>Select "Lipa na M-Pesa"</li>
-                    <li>Select "Pay Bill"</li>
-                    <li>Enter Business Number: <strong style="color: var(--primary);">247247</strong></li>
-                    <li>Enter Account Number: <strong style="color: var(--primary);">${state.rider?.rider_name || 'Your Name'}</strong></li>
-                    <li>Enter Amount: <strong style="color: var(--primary);">KES ${cashBalance}</strong></li>
-                    <li>Enter your M-Pesa PIN</li>
-                    <li>Confirm the transaction</li>
-                </ol>
-                <div style="background: rgba(255, 159, 10, 0.1); border: 1px solid var(--warning); 
-                            border-radius: 8px; padding: 12px; margin-top: 16px;">
-                    <p style="font-size: 13px; line-height: 1.5;">
-                        ⚠️ <strong>Important:</strong> Use your exact name as registered with Tuma as the account number
-                    </p>
-                </div>
-            </div>
-            <button class="claim-button" onclick="closeModal(this)">
-                Got it
-            </button>
-        </div>
-    `;
-    document.body.appendChild(modal);
-};
-
-// Enhanced Commission Details Modal  
-window.showCommissionDetails = function() {
-    const debt = window.commissionOffsetManager ? window.commissionOffsetManager.commissionDebt : 0;
-    const modal = document.createElement('div');
-    modal.className = 'modal-overlay';
-    modal.innerHTML = `
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2 class="modal-title">Commission Details</h2>
-                <button class="modal-close" onclick="closeModal(this)">×</button>
-            </div>
-            <div style="padding: 20px 0;">
-                <div style="background: var(--surface-high); border-radius: 12px; padding: 16px; margin-bottom: 16px;">
-                    <h3 style="font-size: 14px; color: var(--text-secondary); margin-bottom: 8px;">Outstanding Commission</h3>
-                    <p style="font-size: 28px; font-weight: 700; color: var(--warning);">
-                        KES ${Math.round(debt)}
-                    </p>
-                </div>
-                
-                <div style="background: rgba(0, 122, 255, 0.1); border: 1px solid var(--primary); 
-                            border-radius: 8px; padding: 12px; margin-bottom: 16px;">
-                    <p style="font-size: 14px; line-height: 1.5;">
-                        <strong>How it works:</strong><br>
-                        When you complete deliveries, we'll automatically deduct any outstanding commission 
-                        from your earnings before adding the balance to your wallet.
-                    </p>
-                </div>
-                
-                <div style="margin-top: 20px;">
-                    <h4 style="font-size: 14px; margin-bottom: 12px;">Example:</h4>
-                    <div style="background: var(--surface-high); border-radius: 8px; padding: 12px; 
-                                font-size: 13px; line-height: 1.8;">
-                        <div>Next delivery earnings: KES 500</div>
-                        <div>Commission owed: KES ${Math.round(debt)}</div>
-                        <div style="border-top: 1px solid var(--border); margin: 8px 0; padding-top: 8px;">
-                            You'll receive: KES ${Math.max(0, 500 - Math.round(debt))}
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <button class="claim-button" onclick="closeModal(this)">
-                Understood
-            </button>
-        </div>
-    `;
-    document.body.appendChild(modal);
-};
-/**
- * Part 7: Additional Global Functions, Custom Styles, and Debug Utilities
- */
-
-// Additional Global Functions
-window.toggleBreakMode = function() {
-    const isOnBreak = state.status === 'break';
-    state.status = isOnBreak ? 'online' : 'break';
-    
-    if (elements.statusBadge) {
-        elements.statusBadge.className = `status-badge ${state.status === 'break' ? 'offline' : ''}`;
-        elements.statusBadge.innerHTML = `
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                <circle cx="12" cy="12" r="4"/>
-            </svg>
-            <span>${state.status === 'break' ? 'On Break' : 'Online'}</span>
-        `;
-    }
-    
-    showNotification(
-        state.status === 'break' ? 'Break started. Take your time!' : 'Welcome back! You\'re online again.',
-        'info'
-    );
-    
-    if (window.haptic) window.haptic('medium');
-};
-
-window.viewEarningsDetails = function() {
-    showNotification('Detailed analytics coming soon!', 'info');
-    console.log('Earnings breakdown:', {
-        daily: state.earnings,
-        performance: calculatePerformanceMetrics(),
-        bonus: calculateDailyBonus()
-    });
-    if (window.haptic) window.haptic('light');
-};
-
-window.showHotZones = function() {
-    showNotification('High demand in Westlands and CBD areas!', 'info');
-    if (window.haptic) window.haptic('light');
-};
-
-window.filterRoutes = function(type) {
-    state.currentFilter = type;
-    
-    document.querySelectorAll('.route-tab').forEach(tab => {
-        tab.classList.remove('active');
-    });
-    event.target.classList.add('active');
-    
-    displayRoutes();
-    if (window.haptic) window.haptic('light');
-};
-
-// Verify Code (Full Implementation)
-window.verifyCode = async function(type) {
-    const codeInput = document.getElementById('codeInput');
-    if (!codeInput) {
-        console.error('Code input element not found');
-        return;
-    }
-    
-    const code = codeInput.value.toUpperCase();
-    await verifyStopCode(type, code);
-    codeInput.value = '';
-};
-
-// Add Custom Styles
-function addCustomStyles() {
-    const existingStyle = document.getElementById('custom-styles');
-    if (!existingStyle && state.commissionTracker) {
-        const style = document.createElement('style');
-        style.id = 'custom-styles';
-        style.textContent = state.commissionTracker.getCommissionStyles() + `
-            /* Additional custom styles */
-            .route-stats {
-                display: grid;
-                grid-template-columns: repeat(3, 1fr);
-                gap: 12px;
-                margin-bottom: 12px;
-                padding: 12px;
-                background: var(--surface-high);
-                border-radius: 10px;
-                text-align: center;
-            }
-            
-            .route-stats > div {
-                font-size: 14px;
-                font-weight: 600;
-            }
-            
-            .route-meta {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                margin-bottom: 12px;
-                font-size: 13px;
-                color: var(--text-secondary);
-            }
-            
-            .route-meta .return-trip {
-                color: var(--success);
-                font-weight: 600;
-            }
-            
-            .loading-routes {
-                text-align: center;
-                padding: 60px 20px;
-            }
-            
-            .loading-spinner {
-                width: 40px;
-                height: 40px;
-                border: 3px solid var(--surface-high);
-                border-top-color: var(--primary);
-                border-radius: 50%;
-                margin: 0 auto 20px;
-                animation: spin 1s linear infinite;
-            }
-            
-            @keyframes spin {
-                to { transform: rotate(360deg); }
-            }
-            
-            @keyframes slideIn {
-                from { transform: translateX(100%); opacity: 0; }
-                to { transform: translateX(0); opacity: 1; }
-            }
-            
-            @keyframes slideOut {
-                from { transform: translateX(0); opacity: 1; }
-                to { transform: translateX(100%); opacity: 0; }
-            }
-            
-            /* Payment collection styles */
-            .payment-info {
-                background: var(--warning-light, rgba(255, 159, 10, 0.1));
-                border: 2px solid var(--warning);
-                border-radius: 12px;
-                padding: 16px;
-                margin-top: 16px;
-            }
-            
-            .payment-info.paid {
-                background: var(--success-light, rgba(52, 199, 89, 0.1));
-                border-color: var(--success);
-            }
-            
-            .collect-amount {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                margin-bottom: 8px;
-            }
-            
-            .collect-label {
-                font-size: 16px;
-                font-weight: 600;
-                color: var(--text-secondary);
-            }
-            
-            .collect-value {
-                font-size: 28px;
-                font-weight: 700;
-                color: var(--warning);
-            }
-            
-            .payment-note,
-            .paid-indicator {
-                display: flex;
-                align-items: center;
-                gap: 8px;
-                font-size: 14px;
-                color: var(--text-secondary);
-            }
-            
-            .note-icon,
-            .paid-icon {
-                font-size: 18px;
-            }
-            
-            .paid-indicator {
-                color: var(--success);
-                font-weight: 600;
-            }
-            
-            /* Completion summary styles */
-            .route-completion-summary {
-                position: fixed;
-                top: 0;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                background: rgba(0, 0, 0, 0.95);
-                backdrop-filter: blur(20px);
-                z-index: 10001;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                padding: 20px;
-                animation: fadeIn 0.3s ease-out;
-            }
-            
-            @keyframes fadeIn {
-                from { opacity: 0; }
-                to { opacity: 1; }
-            }
-            
-            .summary-content {
-                background: var(--surface-elevated);
-                border-radius: 24px;
-                padding: 32px;
-                max-width: 400px;
-                width: 100%;
-                text-align: center;
-            }
-            
-            .summary-icon {
-                font-size: 64px;
-                margin-bottom: 20px;
-            }
-            
-            .summary-content h2 {
-                font-size: 28px;
-                font-weight: 700;
-                margin-bottom: 24px;
-                color: var(--text-primary);
-            }
-            
-            .summary-stats {
-                display: grid;
-                gap: 12px;
-                margin-bottom: 24px;
-            }
-            
-            .stat-item {
-                background: var(--surface-high);
-                border-radius: 12px;
-                padding: 16px;
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-            }
-            
-            .stat-item.highlight-green {
-                background: rgba(52, 199, 89, 0.1);
-                border: 2px solid var(--success);
-            }
-            
-            .stat-item.earnings {
-                background: rgba(0, 122, 255, 0.1);
-                border: 1px solid var(--primary);
-            }
-            
-            .stat-label {
-                font-size: 16px;
-                color: var(--text-secondary);
-            }
-            
-            .stat-value {
-                font-size: 24px;
-                font-weight: 700;
-                color: var(--text-primary);
-            }
-            
-            .stat-value.cash {
-                color: var(--success);
-            }
-            
-            .cash-instruction {
-                background: var(--surface-high);
-                border-radius: 12px;
-                padding: 16px;
-                margin-bottom: 24px;
-                display: flex;
-                gap: 12px;
-                align-items: center;
-            }
-            
-            .instruction-icon {
-                font-size: 24px;
-                flex-shrink: 0;
-            }
-            
-            .instruction-text p {
-                font-size: 14px;
-                color: var(--text-secondary);
-                margin: 0;
-                text-align: left;
-                line-height: 1.5;
-            }
-            
-            .continue-btn {
-                width: 100%;
-                background: var(--primary);
-                color: white;
-                border: none;
-                border-radius: 12px;
-                padding: 16px;
-                font-size: 18px;
-                font-weight: 700;
-                cursor: pointer;
-                transition: opacity 0.2s;
-            }
-            
-            .continue-btn:hover {
-                opacity: 0.9;
-            }
-            
-            /* Cash reminder styles */
-            .cash-collection-reminder {
-                background: linear-gradient(135deg, #007AFF, #0051D5);
-                padding: 16px 20px;
-                margin: 0;
-                box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
-                position: fixed;
-                top: 0;
-                left: 0;
-                right: 0;
-                z-index: 1000;
-                transform: translateY(0);
-                transition: transform 0.3s ease-out;
-            }
-            
-            body.has-cash-reminder {
-                padding-top: 72px;
-                transition: padding-top 0.3s ease-out;
-            }
-            
-            .reminder-content {
-                display: flex;
-                align-items: center;
-                gap: 16px;
-                max-width: 1200px;
-                margin: 0 auto;
-            }
-            
-            .reminder-icon {
-                font-size: 28px;
-                flex-shrink: 0;
-            }
-            
-            .reminder-text {
-                flex: 1;
-                color: white;
-            }
-            
-            .reminder-title {
-                font-size: 16px;
-                font-weight: 700;
-                margin-bottom: 4px;
-            }
-            
-            .reminder-details {
-                font-size: 14px;
-                display: flex;
-                align-items: center;
-                flex-wrap: wrap;
-                gap: 8px;
-                opacity: 0.95;
-            }
-            
-            .reminder-details strong {
-                font-weight: 700;
-            }
-            
-            .separator {
-                opacity: 0.6;
-            }
-            
-            .reminder-close {
-                background: rgba(255, 255, 255, 0.2);
-                border: none;
-                border-radius: 50%;
-                width: 32px;
-                height: 32px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                cursor: pointer;
-                color: white;
-                transition: all 0.2s;
-            }
-            
-            .reminder-close:hover {
-                background: rgba(255, 255, 255, 0.3);
-            }
-            
-            /* Payment modal styles */
-            .payment-modal {
-                position: fixed;
-                top: 0;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                background: rgba(0, 0, 0, 0.9);
-                backdrop-filter: blur(10px);
-                z-index: 10000;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                padding: 20px;
-            }
-            
-            .payment-content {
-                background: var(--surface-elevated);
-                border-radius: 20px;
-                padding: 32px 24px;
-                max-width: 400px;
-                width: 100%;
-            }
-            
-            .payment-content h2 {
-                font-size: 24px;
-                font-weight: 700;
-                margin-bottom: 16px;
-            }
-            
-            .wallet-balance {
-                background: var(--surface-high);
-                border-radius: 12px;
-                padding: 20px;
-                margin-bottom: 24px;
-                text-align: center;
-            }
-            
-            .balance-label {
-                display: block;
-                font-size: 14px;
-                color: var(--text-secondary);
-                margin-bottom: 8px;
-            }
-            
-            .balance-amount {
-                font-size: 32px;
-                font-weight: 700;
-                color: var(--success);
-            }
-            
-            .balance-amount.negative {
-                color: var(--danger);
-            }
-            
-            /* Urgent warning styles */
-            .urgent-payment-warning {
-                position: fixed;
-                top: 0;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                background: rgba(0, 0, 0, 0.95);
-                backdrop-filter: blur(20px);
-                z-index: 9998;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                padding: 20px;
-                animation: fadeIn 0.3s ease-out;
-            }
-            
-            .warning-content {
-                background: var(--surface-elevated);
-                border-radius: 24px;
-                padding: 32px;
-                max-width: 400px;
-                width: 100%;
-                text-align: center;
-                border: 2px solid var(--warning);
-            }
-            
-            .warning-icon {
-                font-size: 64px;
-                margin-bottom: 20px;
-            }
-            
-            .warning-content h2 {
-                font-size: 28px;
-                margin-bottom: 16px;
-            }
-            
-            .warning-amount {
-                font-size: 24px;
-                font-weight: 700;
-                color: var(--warning);
-                margin-bottom: 12px;
-            }
-            
-            .warning-message {
-                font-size: 16px;
-                color: var(--text-secondary);
-                margin-bottom: 24px;
-            }
-            
-            .timer {
-                font-size: 20px;
-                font-weight: 700;
-                color: var(--danger);
-                font-family: monospace;
-            }
-            
-            .warning-actions {
-                display: grid;
-                gap: 12px;
-            }
-            
-            .pay-now-btn {
-                width: 100%;
-                padding: 16px;
-                background: var(--success);
-                color: white;
-                border: none;
-                border-radius: 12px;
-                font-size: 18px;
-                font-weight: 700;
-                cursor: pointer;
-            }
-            
-            .later-btn {
-                width: 100%;
-                padding: 16px;
-                background: var(--surface-high);
-                color: var(--text-primary);
-                border: none;
-                border-radius: 12px;
-                font-size: 16px;
-                font-weight: 600;
-                cursor: pointer;
-            }
-        `;
-        document.head.appendChild(style);
-    }
-}
-
-// Debug and Testing Object
-window.tumaDebug = {
+// Debug utilities
+window.routeDebug = {
     state,
-    supabaseAPI,
-    routeClusterer,
-    checkParcels: async () => {
-        const parcels = await supabaseAPI.query('parcels', {
-            filter: 'status=eq.submitted&rider_id=is.null',
-            limit: 10
-        });
-        console.log('Available parcels:', parcels);
-        return parcels;
-    },
-    checkAllParcels: async () => {
-        const parcels = await supabaseAPI.query('parcels', {
-            limit: 20
-        });
-        console.log('All parcels:', parcels);
-        console.log('Statuses:', parcels.map(p => ({ id: p.id, status: p.status, rider_id: p.rider_id, customer_choice: p.customer_choice })));
-        return parcels;
-    },
-    resetAuth: () => {
-        localStorage.removeItem('tuma_rider_phone');
-        localStorage.removeItem('tuma_active_route');
-        window.location.reload();
-    },
-    loadBonuses: async () => {
-        await loadActiveBonuses();
-        console.log('Active bonuses:', state.activeBonuses);
-        displayIncentiveProgress();
-    },
-    testBonus: (deliveries, amount) => {
-        state.activeBonuses.push({
-            id: 'test-bonus',
-            type: 'delivery_target',
-            title: 'Test Bonus',
-            target_deliveries: deliveries,
-            bonus_amount: amount,
-            is_active: true,
-            expires_at: new Date(Date.now() + 86400000).toISOString()
-        });
-        displayIncentiveProgress();
-    },
-    testClustering: async function() {
-        const parcels = await supabaseAPI.query('parcels', {
-            filter: 'status=eq.submitted&rider_id=is.null',
-            limit: 20
-        });
-        
-        console.log('Test parcels:', parcels);
-        
-        if (routeClusterer) {
-            const routes = routeClusterer.createOptimizedRoutes(parcels);
-            
-            console.log('Generated routes:', routes);
-            
-            routes.forEach(route => {
-                console.log(`\nRoute: ${route.name}`);
-                console.log(`Quality Score: ${route.qualityScore}`);
-                console.log(`Pickup Areas: ${route.metadata.pickupAreas.join(', ')}`);
-                console.log(`Delivery Corridors: ${route.metadata.deliveryCorridors.join(', ')}`);
-                console.log(`Distance: ${route.distance}km`);
-                console.log(`Earnings: KES ${route.total_earnings}`);
-                console.log(`Has Return Trip: ${route.metadata.hasReturnTrip}`);
-            });
-        }
-    },
-    checkParcelStatus: async () => {
-        const allParcels = await supabaseAPI.query('parcels', {
-            limit: 100
-        });
-        
-        const summary = {
-            total: allParcels.length,
-            byStatus: {},
-            byType: {},
-            withRider: 0,
-            withoutRider: 0
-        };
-        
-        allParcels.forEach(p => {
-            summary.byStatus[p.status] = (summary.byStatus[p.status] || 0) + 1;
-            summary.byType[p.customer_choice || 'unknown'] = (summary.byType[p.customer_choice || 'unknown'] || 0) + 1;
-            if (p.rider_id) summary.withRider++;
-            else summary.withoutRider++;
-        });
-        
-        console.log('Parcel Summary:', summary);
-        console.log('Available for clustering:', allParcels.filter(p => 
-            p.status === 'submitted' && !p.rider_id
-        ));
-        
-        return summary;
-    },
-    resetParcels: async () => {
-        const parcels = await supabaseAPI.query('parcels', {
-            filter: 'status=eq.delivered',
-            limit: 10
-        });
-        
-        for (const parcel of parcels) {
-            await supabaseAPI.update('parcels', 
-                `id=eq.${parcel.id}`,
-                { 
-                    status: 'submitted',
-                    rider_id: null,
-                    assigned_at: null,
-                    pickup_timestamp: null,
-                    delivery_timestamp: null
-                }
-            );
-        }
-        
-        console.log(`Reset ${parcels.length} parcels to submitted status`);
-        window.location.reload();
-    },
-    clearStaleRoute: () => {
-        localStorage.removeItem('tuma_active_route');
-        localStorage.removeItem('tuma_route_completion');
-        state.claimedRoute = null;
-        console.log('Cleared stored route and completion data');
-        window.location.reload();
-    },
-    syncRouteCompletion: async () => {
-        await checkRouteCompletionStatus();
-        
-        if (state.claimedRoute && state.claimedRoute.stops) {
-            const allComplete = state.claimedRoute.stops.every(s => s.completed);
-            if (allComplete) {
-                console.log('Current route is complete - clearing');
-                
-                let totalEarnings = 0;
-                if (state.claimedRoute.total_earnings) {
-                    totalEarnings = state.claimedRoute.total_earnings * BUSINESS_CONFIG.commission.rider;
-                } else if (state.claimedRoute.parcels) {
-                    totalEarnings = state.claimedRoute.parcels.reduce((sum, p) => 
-                        sum + ((p.price || 500) * BUSINESS_CONFIG.commission.rider), 0
-                    );
-                }
-                
-                const completionData = {
-                    completed: true,
-                    earnings: Math.round(totalEarnings),
-                    deliveries: state.claimedRoute.stops.filter(s => s.type === 'delivery').length,
-                    timestamp: new Date().toISOString()
-                };
-                
-                localStorage.setItem('tuma_route_completion', JSON.stringify(completionData));
-                localStorage.removeItem('tuma_active_route');
-                state.claimedRoute = null;
-                
-                await checkRouteCompletionStatus();
-                await loadAvailableRoutes();
-            }
-        }
-    },
-    resetCommission: async () => {
-        if (!DEV_CONFIG.isDevelopment) {
-            console.error('This function is only available in development mode');
+    config,
+    optimizer: routeOptimizer,
+    testOptimization: () => {
+        if (!state.activeRoute) {
+            console.log('No route loaded');
             return;
         }
         
-        if (state.commissionTracker) {
-            state.commissionTracker.state.unpaidCommission = 0;
-            state.commissionTracker.state.isBlocked = false;
-            state.commissionTracker.state.pendingDeliveries = [];
-            
-            displayCommissionStatus();
-            
-            const blockedOverlay = document.getElementById('commissionBlockedOverlay');
-            if (blockedOverlay) {
-                blockedOverlay.remove();
-            }
-            
-            console.log('Commission reset to 0');
-            showNotification('DEV: Commission reset', 'success');
-        }
-    },
-    setCommission: (amount) => {
-        if (!DEV_CONFIG.isDevelopment) {
-            console.error('This function is only available in development mode');
-            return;
-        }
+        const result = routeOptimizer.optimizeRoute(state.activeRoute.stops);
+        const stats = routeOptimizer.getStatistics ? routeOptimizer.getStatistics() : {};
         
-        if (state.commissionTracker) {
-            state.commissionTracker.state.unpaidCommission = amount;
-            state.commissionTracker.state.isBlocked = amount >= BUSINESS_CONFIG.commission.maxUnpaid;
-            
-            displayCommissionStatus();
-            
-            console.log(`Commission set to KES ${amount}`);
-            showNotification(`DEV: Commission set to KES ${amount}`, 'info');
-        }
+        console.log('Optimization result:', result);
+        console.log('Statistics:', stats);
+        return { optimizedRoute: result, statistics: stats };
     },
-    analyzeRoutes: () => {
-        if (!state.availableRoutes || state.availableRoutes.length === 0) {
-            console.log('No routes available');
-            return;
-        }
-        
-        console.log('Available Routes Analysis:');
-        state.availableRoutes.forEach((route, index) => {
-            console.log(`\n${index + 1}. ${route.name}`);
-            console.log(`   Type: ${route.type}`);
-            console.log(`   Parcels: ${route.pickups}`);
-            console.log(`   Distance: ${route.distance}km`);
-            console.log(`   Earnings: KES ${Math.round(route.total_earnings * 0.7)}`);
-            console.log(`   Quality: ${route.qualityScore}`);
-            console.log(`   Areas: ${route.metadata?.pickupAreas?.join(', ') || 'N/A'}`);
-        });
-    },
-    getDevConfig: () => {
-        console.log('Development Configuration:', DEV_CONFIG);
-        console.log(`Commission bypass active: ${DEV_CONFIG.isDevelopment && DEV_CONFIG.bypassCommissionBlock}`);
-        return DEV_CONFIG;
-    }
+    getOptimizerConfig: () => routeOptimizer.getConfig ? routeOptimizer.getConfig() : {},
+    updateOptimizerConfig: (newConfig) => routeOptimizer.updateConfig ? routeOptimizer.updateConfig(newConfig) : null,
+    verificationData: state.verificationData,
+    testCamera: () => startPhotoCapture(),
+    testSignature: () => startSignatureCapture(),
+    testMpesa: () => promptMpesaPayment(1000, '0712345678')
 };
 
-// Override window.haptic if not already defined
-if (!window.haptic) {
-    window.haptic = function(type = 'light') {
-        if (window.navigator && window.navigator.vibrate) {
-            switch(type) {
-                case 'light': window.navigator.vibrate(10); break;
-                case 'medium': window.navigator.vibrate(30); break;
-                case 'heavy': window.navigator.vibrate(50); break;
-                case 'success': window.navigator.vibrate([10, 50, 10]); break;
-                default: window.navigator.vibrate(10);
-            }
-        }
-    };
-}
+// Export all necessary functions to window for HTML access
+window.optimizeRouteStops = optimizeRouteStops;
+window.undoOptimization = undoOptimization;
+window.toggleNumberedMarkers = toggleNumberedMarkers;
+window.updateOptimizerSetting = updateOptimizerSetting;
+window.selectStop = selectStop;
+window.goBack = goBack;
+window.centerOnLocation = centerOnLocation;
+window.toggleLocationTracking = toggleLocationTracking;
+window.startNavigation = startNavigation;
+window.navigateToStop = navigateToStop;
+window.openQuickVerification = openQuickVerification;
+window.openEnhancedVerificationModal = openEnhancedVerificationModal;
+window.closeVerificationModal = closeVerificationModal;
+window.completeEnhancedVerification = completeEnhancedVerification;
+window.nextVerificationStep = nextVerificationStep;
+window.previousVerificationStep = previousVerificationStep;
+window.startPhotoCapture = startPhotoCapture;
+window.startSignatureCapture = startSignatureCapture;
+window.promptMpesaPaymentForStop = promptMpesaPaymentForStop;
+window.finishRoute = finishRoute;
 
-// Make showNotification globally available
-window.showNotification = showNotification;
+// Export helper functions for debugging
+window.getNextStop = getNextStop;
+window.proceedWithNavigation = proceedWithNavigation;
+window.plotRoute = plotRoute;
+window.stopLocationTracking = stopLocationTracking;
 
-// Final initialization message
-console.log('✅ Complete enhanced rider.js loaded successfully!');
-console.log('Debug commands available: window.tumaDebug');
-console.log(`Commission bypass: ${DEV_CONFIG.isDevelopment && DEV_CONFIG.bypassCommissionBlock ? 'ACTIVE' : 'INACTIVE'}`);
+console.log('✅ Enhanced Route.js v5.0.1 loaded successfully');
+console.log('Debug utilities available at: window.routeDebug');
+console.log('Enhanced features: Photo capture, Digital signatures, M-Pesa payments');
+console.log('Fixes applied: Rider icon, cash widget, route optimization, navigation routing');
