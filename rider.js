@@ -2,13 +2,6 @@
  * Complete Rider Dashboard with Bottom Navigation Support
  * Part 1: Configuration and State Management
  */
-(function() {
-    // Guard against double execution
-    if (window.RIDER_JS_LOADED) {
-        console.log('rider.js already loaded, skipping...');
-        return;
-    }
-    window.RIDER_JS_LOADED = true;
 
 // Development Configuration
 const DEV_CONFIG = {
