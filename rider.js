@@ -4,51 +4,28 @@
  */
 
 // Development Configuration
-
 const DEV_CONFIG = {
-
     // Set to true when testing locally without Telegram
-
     isDevelopment: window.location.hostname === 'localhost' || 
-
                    window.location.hostname === '127.0.0.1' ||
-
                    window.location.hostname.includes('github.io'),
-
     
-
     // Test rider configuration (only used in development)
-
     testRider: {
-
         id: 'ef5438ef-0cc0-4e35-8d1b-be18dbce7fe4', // Bobby G's test ID
-
         name: 'Bobby G',
-
         phone: '0725046880'
-
     },
-
     
-
     // Whether to show detailed console logs
-
     verboseLogging: true,
-
     
-
     // Whether to ignore API errors for missing riders
-
     ignoreRiderNotFound: true,
-
     
-
     // Development-only commission settings
-
     bypassCommissionBlock: true, // Set to false in production
-
     commissionWarningsOnly: true // Show warnings but don't block
-
 };
 
 // Business Configuration
@@ -555,12 +532,12 @@ const supabaseAPI = {
     async query(table, options = {}) {
         const { select = '*', filter = '', order = '', limit } = options;
         
-// Only skip API calls for temp- IDs, not for Bobby G's real ID
-if (filter && filter.includes('temp-')) {
-    console.log('Skipping API call for temporary rider');
-    return [];
-}
-// Bobby G's ID (ef5438ef-0cc0-4e35-8d1b-be18dbce7fe4) will pass through
+        // Only skip API calls for temp- IDs, not for Bobby G's real ID
+        if (filter && filter.includes('temp-')) {
+            console.log('Skipping API call for temporary rider');
+            return [];
+        }
+        // Bobby G's ID (ef5438ef-0cc0-4e35-8d1b-be18dbce7fe4) will pass through
         
         let url = `${SUPABASE_URL}/rest/v1/${table}?select=${select}`;
         if (filter) url += `&${filter}`;
@@ -939,8 +916,8 @@ function updateProfileDisplay() {
     if (elements.infoID) elements.infoID.textContent = state.rider.national_id || '-';
     
     // Update vehicle details
-    if (elements.vehicleType) elements.vehicleType.textContent = state.rider.vehicle_type || 'Motorcycle';
-    if (elements.vehicleReg) elements.vehicleReg.textContent = state.rider.vehicle_registration || 'KXX 123X';
+    if (elements.vehicleType) elements.vehicleType.textContent = state.rider.vehicle_type || state.rider.vehicle_make || 'Motorcycle';
+    if (elements.vehicleReg) elements.vehicleReg.textContent = state.rider.motorcycle_plate || state.rider.vehicle_registration || 'KXX 123X';
     if (elements.vehicleModel) elements.vehicleModel.textContent = state.rider.vehicle_model || '-';
     
     // Update join date
@@ -1149,7 +1126,7 @@ function displayRoutes() {
     }).join('');
 }
 /**
- * Part 3: Route Management, Active Delivery, and Location Functions
+ * Part 3: Route Management, Active Delivery, Location Functions, and Authentication
  */
 
 // Show Active Route
@@ -1410,7 +1387,7 @@ async function checkActiveDeliveries() {
     }
 }
 
-// Claim Route Function
+// Claim Route Function - COMPLETE VERSION
 window.claimRoute = async function(routeId) {
     console.log('claimRoute called with ID:', routeId);
     
@@ -1638,11 +1615,8 @@ window.closeModal = function(element) {
         modal.remove();
     }
 };
-/**
- * Part 4: Verification System, Data Loading, and Quick Actions
- */
 
-// Verify Stop Code Function
+// Verify Stop Code Function - COMPLETE VERSION
 async function verifyStopCode(type, code) {
     if (!code || code.length < 6) {
         showNotification('Please enter a valid code', 'error');
@@ -1893,7 +1867,7 @@ async function loadStats() {
         state.stats = {
             deliveries: state.rider.completed_deliveries || 0,
             distance: Math.round(state.rider.total_distance || 0),
-            rating: state.rider.rating || 5.0,
+            rating: parseFloat(state.rider.rating) || 5.0,
             acceptRate: state.rider.acceptance_rate || 95
         };
         
@@ -1922,10 +1896,6 @@ async function checkRouteCompletionStatus() {
         }
         
         if (data.completed) {
-            /**
- * Part 5: Initialization, Authentication, Event Handlers, and Global Functions
- */
-
             let totalCashCollected = 0;
             
             if (data.parcels && data.parcels.length > 0) {
@@ -2058,8 +2028,16 @@ window.dismissCashReminder = function() {
     }
 };
 
-// Authentication Functions
+// FIXED AUTHENTICATION FUNCTIONS WITH BOBBY G OVERRIDE
+
+// Check Auth and Load Rider - FIXED TO USE BOBBY G IN DEV
 async function checkAuthAndLoadRider() {
+    // Development override - always load Bobby G
+    if (DEV_CONFIG.isDevelopment && DEV_CONFIG.testRider) {
+        console.log('Development mode: Loading Bobby G directly');
+        return await loadRiderByPhone(DEV_CONFIG.testRider.phone);
+    }
+    
     if (window.Telegram?.WebApp) {
         const tg = window.Telegram.WebApp;
         tg.ready();
@@ -2080,18 +2058,28 @@ async function checkAuthAndLoadRider() {
     return false;
 }
 
+// Load Rider By Phone - FIXED TO USE BOBBY G'S PHONE IN DEV
 async function loadRiderByPhone(phone) {
     try {
+        // In development, always use Bobby G's phone
+        const phoneToUse = DEV_CONFIG.isDevelopment && DEV_CONFIG.testRider ? 
+            DEV_CONFIG.testRider.phone : phone;
+        
         const riders = await supabaseAPI.query('riders', {
-            filter: `phone=eq.${phone}`,
+            filter: `phone=eq.${phoneToUse}`,
             limit: 1
         });
         
         if (riders.length > 0) {
             state.rider = riders[0];
+            console.log('Loaded rider:', state.rider.rider_name, 'ID:', state.rider.id);
             
             if (state.rider.verification_status !== 'verified') {
-                showNotification('Your account is pending verification. Please contact support.', 'warning');
+                console.warn('Account pending verification');
+                // Don't block Bobby G in dev mode
+                if (!DEV_CONFIG.isDevelopment) {
+                    showNotification('Your account is pending verification. Please contact support.', 'warning');
+                }
             }
             
             if (state.rider.status === 'suspended' || state.rider.status === 'terminated') {
@@ -2108,20 +2096,13 @@ async function loadRiderByPhone(phone) {
     return false;
 }
 
+// Create Temporary Rider - SIMPLIFIED
 async function createTemporaryRider() {
-    // Use Bobby G's real ID in development, temp ID in production
-    const tempId = DEV_CONFIG.isDevelopment && DEV_CONFIG.testRider ? 
-        DEV_CONFIG.testRider.id :  // Uses 'ef5438ef-0cc0-4e35-8d1b-be18dbce7fe4' in dev
-        'temp-' + Date.now();      // Only uses temp- in production
-    
+    // Always use temp ID since Bobby G is loaded through loadRiderByPhone
     state.rider = {
-        id: tempId,
-        rider_name: DEV_CONFIG.isDevelopment && DEV_CONFIG.testRider ? 
-            DEV_CONFIG.testRider.name : 
-            'Test Rider',
-        phone: DEV_CONFIG.isDevelopment && DEV_CONFIG.testRider ? 
-            DEV_CONFIG.testRider.phone : 
-            '0700000000',
+        id: 'temp-' + Date.now(),
+        rider_name: 'Test Rider',
+        phone: '0700000000',
         status: 'active',
         total_deliveries: 0,
         completed_deliveries: 0,
@@ -2131,9 +2112,11 @@ async function createTemporaryRider() {
         verification_status: 'verified'
     };
     
-    console.log('Created rider:', state.rider.id);
-    // In dev mode this should log: 'Created rider: ef5438ef-0cc0-4e35-8d1b-be18dbce7fe4'
+    console.log('Created temporary rider:', state.rider.id);
 }
+/**
+ * Part 4: Main Initialization, Event Handlers, Global Functions, and Utilities
+ */
 
 // Main Initialization
 async function initialize() {
@@ -2164,6 +2147,7 @@ async function initialize() {
     const authenticated = await checkAuthAndLoadRider();
     
     if (!authenticated) {
+        console.log('Authentication failed, creating temporary rider');
         await createTemporaryRider();
     }
     
@@ -2364,469 +2348,6 @@ window.haptic = function(type = 'light') {
     }
 };
 
-// Make functions globally available
-window.showNotification = showNotification;
-
-// DOM Ready
-document.addEventListener('DOMContentLoaded', async () => {
-    console.log('✅ Enhanced rider.js loaded successfully!');
-    
-    const tg = window.Telegram?.WebApp;
-    const telegramUser = tg?.initDataUnsafe?.user;
-    
-    let riderId;
-    let riderName;
-    
-    if (telegramUser?.id) {
-        riderId = telegramUser.id;
-        riderName = telegramUser.first_name || 'Rider';
-        if (DEV_CONFIG.verboseLogging) {
-            console.log('Using Telegram user:', riderId);
-        }
-    } else if (DEV_CONFIG.isDevelopment && DEV_CONFIG.testRider) {
-        riderId = DEV_CONFIG.testRider.id;
-        riderName = DEV_CONFIG.testRider.name;
-        if (DEV_CONFIG.verboseLogging) {
-            console.log('Development mode: Using test rider', riderId);
-        }
-    } else {
-        riderId = `temp-${Date.now()}`;
-        riderName = 'Guest Rider';
-        if (DEV_CONFIG.verboseLogging) {
-            console.log('Generated temporary rider:', riderId);
-        }
-    }
-    
-    window.currentRiderId = riderId;
-    
-    await initialize();
-});
-
-console.log('✅ rider.js loaded successfully with bottom navigation support!');
-console.log('Debug commands available: window.state');
-/**
- * Part 6: Wallet Functions, Payment Modals, and Commission Display
- */
-
-// Display Commission Status
-function displayCommissionStatus() {
-    if (!state.commissionTracker) return;
-    
-    const ui = state.commissionTracker.createCommissionUI();
-    
-    const existingContainer = document.getElementById('commissionContainer');
-    if (existingContainer) {
-        existingContainer.remove();
-    }
-    
-    const commissionContainer = document.createElement('div');
-    commissionContainer.id = 'commissionContainer';
-    commissionContainer.innerHTML = ui.statusBar;
-    
-    const heroSection = document.querySelector('.hero-section');
-    if (heroSection && heroSection.parentNode) {
-        heroSection.parentNode.insertBefore(commissionContainer, heroSection.nextSibling);
-    }
-    
-    if (ui.warningMessage) {
-        const warningDiv = document.createElement('div');
-        warningDiv.innerHTML = ui.warningMessage;
-        commissionContainer.appendChild(warningDiv.firstChild);
-    }
-}
-
-function showBlockedOverlay() {
-    if (!state.commissionTracker) return;
-    
-    const ui = state.commissionTracker.createCommissionUI();
-    
-    const existingOverlay = document.getElementById('commissionBlockedOverlay');
-    if (existingOverlay) {
-        existingOverlay.remove();
-    }
-    
-    const overlay = document.createElement('div');
-    overlay.id = 'commissionBlockedOverlay';
-    overlay.innerHTML = ui.blockedMessage;
-    document.body.appendChild(overlay);
-}
-
-// Show Urgent Payment Warning
-function showUrgentPaymentWarning() {
-    const warning = document.createElement('div');
-    warning.className = 'urgent-payment-warning';
-    warning.innerHTML = `
-        <div class="warning-content">
-            <div class="warning-icon">⚠️</div>
-            <h2>Deposit Required</h2>
-            <p class="warning-amount">Account Balance: -KES ${state.commissionTracker.state.unpaidCommission}</p>
-            <p class="warning-message">You have <span class="timer">60:00</span> to deposit funds or your account will be paused</p>
-            <div class="warning-actions">
-                <button class="pay-now-btn" onclick="openWalletModal()">
-                    Deposit Now
-                </button>
-                <button class="later-btn" onclick="dismissWarning()">
-                    Later
-                </button>
-            </div>
-        </div>
-    `;
-    
-    document.body.appendChild(warning);
-    
-    let timeLeft = 3600;
-    const timerElement = warning.querySelector('.timer');
-    
-    const countdown = setInterval(() => {
-        timeLeft--;
-        const minutes = Math.floor(timeLeft / 60);
-        const seconds = timeLeft % 60;
-        timerElement.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-        
-        if (timeLeft <= 0) {
-            clearInterval(countdown);
-            warning.remove();
-            
-            if (!(DEV_CONFIG.isDevelopment && DEV_CONFIG.bypassCommissionBlock)) {
-                showBlockedOverlay();
-            } else {
-                console.warn('[DEV MODE] Timer expired but blocking bypassed');
-                showNotification('DEV MODE: Would be blocked now', 'warning');
-            }
-        }
-    }, 1000);
-    
-    window.commissionCountdown = countdown;
-}
-
-window.dismissWarning = function() {
-    document.querySelector('.urgent-payment-warning')?.remove();
-};
-
-// Enhanced Withdrawal Modal
-window.showWithdrawalModal = function() {
-    const mpesaBalance = parseFloat(elements.mpesaBalance?.textContent || '0');
-    const modal = document.createElement('div');
-    modal.className = 'modal-overlay';
-    modal.innerHTML = `
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2 class="modal-title">Withdraw Funds</h2>
-                <button class="modal-close" onclick="closeModal(this)">×</button>
-            </div>
-            <div style="background: var(--surface-high); padding: 16px; border-radius: 12px; 
-                        text-align: center; margin-bottom: 20px;">
-                <p style="font-size: 14px; color: var(--text-secondary); margin-bottom: 8px;">Available Balance</p>
-                <p style="font-size: 28px; font-weight: 700; color: var(--primary);">KES ${mpesaBalance}</p>
-            </div>
-            
-            <div>
-                <label style="display: block; margin-bottom: 8px; font-weight: 600;">Amount to Withdraw</label>
-                <input type="number" id="withdrawAmount" placeholder="Enter amount" max="${mpesaBalance}" 
-                       style="width: 100%; padding: 16px; background: var(--surface-high); 
-                              border: 2px solid var(--border); border-radius: 12px; 
-                              color: white; font-size: 18px; margin-bottom: 16px;">
-                
-                <div id="feeCalculator" style="display: none; background: var(--surface-high); 
-                                               padding: 16px; border-radius: 12px; margin-bottom: 16px;">
-                    <div style="display: flex; justify-content: space-between; padding: 8px 0;">
-                        <span>Withdrawal Amount:</span>
-                        <span id="withdrawalAmount">KES 0</span>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; padding: 8px 0;">
-                        <span>M-Pesa Fee:</span>
-                        <span id="mpesaFee">KES 0</span>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; padding: 8px 0; 
-                                border-top: 1px solid var(--border); margin-top: 8px; 
-                                padding-top: 12px; font-weight: 600;">
-                        <span>Total Deduction:</span>
-                        <span id="totalDeduction">KES 0</span>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; padding: 8px 0;">
-                        <span>You'll Receive:</span>
-                        <span id="amountReceived" style="color: var(--success); font-weight: 700;">KES 0</span>
-                    </div>
-                </div>
-                
-                <div style="background: rgba(255, 159, 10, 0.1); border: 1px solid var(--warning); 
-                            border-radius: 8px; padding: 12px; margin-bottom: 16px;">
-                    <p style="font-size: 13px; line-height: 1.5;">
-                        ⚠️ M-Pesa transaction fees apply and will be deducted from your wallet balance
-                    </p>
-                </div>
-                
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-                    <button class="claim-button" style="background: var(--surface-high);" 
-                            onclick="closeModal(this)">Cancel</button>
-                    <button class="claim-button" onclick="processWithdrawal()">Withdraw</button>
-                </div>
-            </div>
-        </div>
-    `;
-    
-    document.body.appendChild(modal);
-    
-    document.getElementById('withdrawAmount').addEventListener('input', function(e) {
-        const amount = parseFloat(e.target.value) || 0;
-        if (amount > 0) {
-            const fee = calculateMpesaFee(amount);
-            const total = amount + fee;
-            
-            document.getElementById('feeCalculator').style.display = 'block';
-            document.getElementById('withdrawalAmount').textContent = 'KES ' + amount;
-            document.getElementById('mpesaFee').textContent = 'KES ' + fee;
-            document.getElementById('totalDeduction').textContent = 'KES ' + total;
-            document.getElementById('amountReceived').textContent = 'KES ' + amount;
-        } else {
-            document.getElementById('feeCalculator').style.display = 'none';
-        }
-    });
-};
-
-// Calculate M-Pesa Fees
-function calculateMpesaFee(amount) {
-    const fees = [
-        { min: 0, max: 49, fee: 0 },
-        { min: 50, max: 100, fee: 7 },
-        { min: 101, max: 500, fee: 13 },
-        { min: 501, max: 1000, fee: 23 },
-        { min: 1001, max: 1500, fee: 33 },
-        { min: 1501, max: 2500, fee: 53 },
-        { min: 2501, max: 3500, fee: 58 },
-        { min: 3501, max: 5000, fee: 68 },
-        { min: 5001, max: 7500, fee: 78 },
-        { min: 7501, max: 10000, fee: 88 },
-        { min: 10001, max: 15000, fee: 98 },
-        { min: 15001, max: 20000, fee: 108 },
-        { min: 20001, max: 250000, fee: 108 }
-    ];
-    
-    for (const tier of fees) {
-        if (amount >= tier.min && amount <= tier.max) {
-            return tier.fee;
-        }
-    }
-    return 108;
-}
-
-// Process Withdrawal
-window.processWithdrawal = function() {
-    const amount = parseFloat(document.getElementById('withdrawAmount').value);
-    
-    if (!amount || amount <= 0) {
-        showNotification('Please enter a valid amount', 'error');
-        return;
-    }
-    
-    showNotification('Withdrawal of KES ' + amount + ' initiated. You will receive an M-Pesa notification shortly.', 'success');
-    closeModal(document.querySelector('.modal-overlay'));
-};
-
-// Enhanced Wallet Modal with Commission
-window.openWalletModal = function() {
-    const summary = state.commissionTracker ? state.commissionTracker.getSummary() : { unpaid: 0 };
-    
-    const modal = document.createElement('div');
-    modal.className = 'payment-modal';
-    modal.innerHTML = `
-        <div class="payment-content">
-            <h2>Deposit to Wallet</h2>
-            <div class="wallet-balance">
-                <span class="balance-label">Current Balance</span>
-                <span class="balance-amount ${summary.unpaid > 0 ? 'negative' : ''}">
-                    ${summary.unpaid > 0 ? '-' : ''}KES ${Math.abs(summary.unpaid)}
-                </span>
-            </div>
-            
-            <div class="deposit-options">
-                <h3>Deposit Options:</h3>
-                
-                <div class="deposit-method">
-                    <div class="method-header">
-                        <span class="method-icon">💵</span>
-                        <span class="method-name">Cash Deposit</span>
-                    </div>
-                    <p class="method-description">
-                        Deposit collected cash at any Tuma agent location
-                    </p>
-                    <button class="method-button" onclick="showAgentLocations()">
-                        Find Agents Near You
-                    </button>
-                </div>
-                
-                <div class="deposit-method">
-                    <div class="method-header">
-                        <span class="method-icon">📱</span>
-                        <span class="method-name">M-Pesa</span>
-                    </div>
-                    <div class="mpesa-instructions">
-                        <ol>
-                            <li>Go to M-Pesa</li>
-                            <li>Select "Lipa na M-Pesa" > "Pay Bill"</li>
-                            <li>Business Number: <strong>247247</strong></li>
-                            <li>Account: <strong>${state.rider?.phone || 'Your Phone'}</strong></li>
-                            <li>Amount: <strong>${summary.unpaid}</strong></li>
-                        </ol>
-                    </div>
-                </div>
-            </div>
-            
-            <button class="modal-close" onclick="closeWalletModal()">Close</button>
-        </div>
-    `;
-    
-    document.body.appendChild(modal);
-    
-    if (window.haptic) window.haptic('light');
-};
-
-window.viewAccountDetails = function() {
-    const summary = state.commissionTracker ? state.commissionTracker.getSummary() : { unpaid: 0 };
-    
-    const modal = document.createElement('div');
-    modal.className = 'modal-overlay';
-    modal.innerHTML = `
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2 class="modal-title">Account Details</h2>
-                <button class="modal-close" onclick="closeModal(this)">×</button>
-            </div>
-            <div style="padding: 20px 0;">
-                <div style="background: var(--surface-high); border-radius: 12px; padding: 16px; margin-bottom: 16px;">
-                    <h3 style="font-size: 14px; color: var(--text-secondary); margin-bottom: 8px;">Wallet Balance</h3>
-                    <p style="font-size: 28px; font-weight: 700; color: ${summary.unpaid > 0 ? 'var(--danger)' : 'var(--success)'};">
-                        ${summary.unpaid > 0 ? '-' : ''}KES ${Math.abs(summary.unpaid)}
-                    </p>
-                </div>
-                
-                <div style="display: grid; gap: 12px;">
-                    <div style="display: flex; justify-content: space-between; padding: 12px; background: var(--surface-high); border-radius: 8px;">
-                        <span>Total Paid</span>
-                        <span>KES ${summary.totalPaid}</span>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; padding: 12px; background: var(--surface-high); border-radius: 8px;">
-                        <span>Pending Deliveries</span>
-                        <span>${summary.pendingCount}</span>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; padding: 12px; background: var(--surface-high); border-radius: 8px;">
-                        <span>Account Usage</span>
-                        <span>${summary.percentageUsed}%</span>
-                    </div>
-                </div>
-                
-                <button class="claim-button" style="margin-top: 20px;" onclick="closeModal(this)">
-                    Close
-                </button>
-            </div>
-        </div>
-    `;
-    
-    document.body.appendChild(modal);
-    if (window.haptic) window.haptic('light');
-};
-
-window.closeWalletModal = function() {
-    const modal = document.querySelector('.payment-modal');
-    if (modal) {
-        modal.remove();
-    }
-};
-
-window.showAgentLocations = function() {
-    showNotification('Opening agent locations...', 'info');
-    if (window.haptic) window.haptic('light');
-};
-
-// Enhanced Payment Instructions Modal
-window.showPaymentInstructions = function() {
-    const cashBalance = elements.cashBalance?.textContent || '0';
-    const modal = document.createElement('div');
-    modal.className = 'modal-overlay';
-    modal.innerHTML = `
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2 class="modal-title">Pay Commission</h2>
-                <button class="modal-close" onclick="closeModal(this)">×</button>
-            </div>
-            <div style="padding: 20px 0;">
-                <h3 style="margin-bottom: 16px; font-size: 16px;">M-Pesa Paybill Instructions:</h3>
-                <ol style="padding-left: 20px; line-height: 2; color: var(--text-secondary);">
-                    <li>Go to M-Pesa on your phone</li>
-                    <li>Select "Lipa na M-Pesa"</li>
-                    <li>Select "Pay Bill"</li>
-                    <li>Enter Business Number: <strong style="color: var(--primary);">247247</strong></li>
-                    <li>Enter Account Number: <strong style="color: var(--primary);">${state.rider?.rider_name || 'Your Name'}</strong></li>
-                    <li>Enter Amount: <strong style="color: var(--primary);">KES ${cashBalance}</strong></li>
-                    <li>Enter your M-Pesa PIN</li>
-                    <li>Confirm the transaction</li>
-                </ol>
-                <div style="background: rgba(255, 159, 10, 0.1); border: 1px solid var(--warning); 
-                            border-radius: 8px; padding: 12px; margin-top: 16px;">
-                    <p style="font-size: 13px; line-height: 1.5;">
-                        ⚠️ <strong>Important:</strong> Use your exact name as registered with Tuma as the account number
-                    </p>
-                </div>
-            </div>
-            <button class="claim-button" onclick="closeModal(this)">
-                Got it
-            </button>
-        </div>
-    `;
-    document.body.appendChild(modal);
-};
-
-// Enhanced Commission Details Modal  
-window.showCommissionDetails = function() {
-    const debt = window.commissionOffsetManager ? window.commissionOffsetManager.commissionDebt : 0;
-    const modal = document.createElement('div');
-    modal.className = 'modal-overlay';
-    modal.innerHTML = `
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2 class="modal-title">Commission Details</h2>
-                <button class="modal-close" onclick="closeModal(this)">×</button>
-            </div>
-            <div style="padding: 20px 0;">
-                <div style="background: var(--surface-high); border-radius: 12px; padding: 16px; margin-bottom: 16px;">
-                    <h3 style="font-size: 14px; color: var(--text-secondary); margin-bottom: 8px;">Outstanding Commission</h3>
-                    <p style="font-size: 28px; font-weight: 700; color: var(--warning);">
-                        KES ${Math.round(debt)}
-                    </p>
-                </div>
-                
-                <div style="background: rgba(0, 122, 255, 0.1); border: 1px solid var(--primary); 
-                            border-radius: 8px; padding: 12px; margin-bottom: 16px;">
-                    <p style="font-size: 14px; line-height: 1.5;">
-                        <strong>How it works:</strong><br>
-                        When you complete deliveries, we'll automatically deduct any outstanding commission 
-                        from your earnings before adding the balance to your wallet.
-                    </p>
-                </div>
-                
-                <div style="margin-top: 20px;">
-                    <h4 style="font-size: 14px; margin-bottom: 12px;">Example:</h4>
-                    <div style="background: var(--surface-high); border-radius: 8px; padding: 12px; 
-                                font-size: 13px; line-height: 1.8;">
-                        <div>Next delivery earnings: KES 500</div>
-                        <div>Commission owed: KES ${Math.round(debt)}</div>
-                        <div style="border-top: 1px solid var(--border); margin: 8px 0; padding-top: 8px;">
-                            You'll receive: KES ${Math.max(0, 500 - Math.round(debt))}
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <button class="claim-button" onclick="closeModal(this)">
-                Understood
-            </button>
-        </div>
-    `;
-    document.body.appendChild(modal);
-};
-/**
- * Part 7: Additional Global Functions, Custom Styles, and Debug Utilities
- */
-
 // Additional Global Functions
 window.toggleBreakMode = function() {
     const isOnBreak = state.status === 'break';
@@ -2877,7 +2398,6 @@ window.filterRoutes = function(type) {
     if (window.haptic) window.haptic('light');
 };
 
-// Verify Code (Full Implementation)
 window.verifyCode = async function(type) {
     const codeInput = document.getElementById('codeInput');
     if (!codeInput) {
@@ -2889,6 +2409,49 @@ window.verifyCode = async function(type) {
     await verifyStopCode(type, code);
     codeInput.value = '';
 };
+
+// Display Commission Status
+function displayCommissionStatus() {
+    if (!state.commissionTracker) return;
+    
+    const ui = state.commissionTracker.createCommissionUI();
+    
+    const existingContainer = document.getElementById('commissionContainer');
+    if (existingContainer) {
+        existingContainer.remove();
+    }
+    
+    const commissionContainer = document.createElement('div');
+    commissionContainer.id = 'commissionContainer';
+    commissionContainer.innerHTML = ui.statusBar;
+    
+    const heroSection = document.querySelector('.hero-section');
+    if (heroSection && heroSection.parentNode) {
+        heroSection.parentNode.insertBefore(commissionContainer, heroSection.nextSibling);
+    }
+    
+    if (ui.warningMessage) {
+        const warningDiv = document.createElement('div');
+        warningDiv.innerHTML = ui.warningMessage;
+        commissionContainer.appendChild(warningDiv.firstChild);
+    }
+}
+
+function showBlockedOverlay() {
+    if (!state.commissionTracker) return;
+    
+    const ui = state.commissionTracker.createCommissionUI();
+    
+    const existingOverlay = document.getElementById('commissionBlockedOverlay');
+    if (existingOverlay) {
+        existingOverlay.remove();
+    }
+    
+    const overlay = document.createElement('div');
+    overlay.id = 'commissionBlockedOverlay';
+    overlay.innerHTML = ui.blockedMessage;
+    document.body.appendChild(overlay);
+}
 
 // Add Custom Styles
 function addCustomStyles() {
@@ -3351,6 +2914,111 @@ function addCustomStyles() {
                 font-weight: 600;
                 cursor: pointer;
             }
+            
+            /* Dev mode badge */
+            .dev-mode-badge {
+                background: var(--warning);
+                color: black;
+                padding: 2px 6px;
+                border-radius: 4px;
+                font-size: 10px;
+                font-weight: 700;
+                margin-left: 8px;
+            }
+            
+            /* Commission blocked overlay */
+            .commission-blocked-overlay {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0, 0, 0, 0.95);
+                backdrop-filter: blur(20px);
+                z-index: 9999;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 20px;
+            }
+            
+            .blocked-content {
+                background: var(--surface-elevated);
+                border-radius: 24px;
+                padding: 40px;
+                max-width: 400px;
+                width: 100%;
+                text-align: center;
+            }
+            
+            .blocked-icon {
+                font-size: 64px;
+                margin-bottom: 20px;
+            }
+            
+            .blocked-content h2 {
+                font-size: 28px;
+                font-weight: 700;
+                margin-bottom: 16px;
+            }
+            
+            .blocked-content p {
+                font-size: 16px;
+                color: var(--text-secondary);
+                margin-bottom: 20px;
+            }
+            
+            .blocked-amount {
+                font-size: 20px;
+                font-weight: 700;
+                color: var(--warning);
+                margin-bottom: 24px;
+            }
+            
+            .pay-now-button {
+                width: 100%;
+                padding: 16px;
+                background: var(--primary);
+                color: white;
+                border: none;
+                border-radius: 12px;
+                font-size: 18px;
+                font-weight: 700;
+                cursor: pointer;
+                transition: opacity 0.2s;
+            }
+            
+            .pay-now-button:hover {
+                opacity: 0.9;
+            }
+            
+            .blocked-help {
+                margin-top: 20px;
+                font-size: 14px;
+                color: var(--text-secondary);
+            }
+            
+            /* Skeleton loading styles */
+            .skeleton {
+                background: linear-gradient(90deg, var(--surface-elevated) 25%, var(--surface-high) 50%, var(--surface-elevated) 75%);
+                background-size: 200% 100%;
+                animation: loading 1.5s infinite;
+                border-radius: 8px;
+            }
+            
+            @keyframes loading {
+                0% {
+                    background-position: 200% 0;
+                }
+                100% {
+                    background-position: -200% 0;
+                }
+            }
+            
+            .skeleton-card {
+                height: 120px;
+                margin-bottom: 12px;
+            }
         `;
         document.head.appendChild(style);
     }
@@ -3387,185 +3055,25 @@ window.tumaDebug = {
         console.log('Active bonuses:', state.activeBonuses);
         displayIncentiveProgress();
     },
-    testBonus: (deliveries, amount) => {
-        state.activeBonuses.push({
-            id: 'test-bonus',
-            type: 'delivery_target',
-            title: 'Test Bonus',
-            target_deliveries: deliveries,
-            bonus_amount: amount,
-            is_active: true,
-            expires_at: new Date(Date.now() + 86400000).toISOString()
-        });
-        displayIncentiveProgress();
+    checkRider: () => {
+        console.log('Current rider:', state.rider);
+        console.log('Rider ID:', state.rider?.id);
+        console.log('Rider Name:', state.rider?.rider_name);
+        console.log('Is Bobby G:', state.rider?.id === DEV_CONFIG.testRider.id);
     },
-    testClustering: async function() {
-        const parcels = await supabaseAPI.query('parcels', {
-            filter: 'status=eq.submitted&rider_id=is.null',
-            limit: 20
-        });
-        
-        console.log('Test parcels:', parcels);
-        
-        if (routeClusterer) {
-            const routes = routeClusterer.createOptimizedRoutes(parcels);
-            
-            console.log('Generated routes:', routes);
-            
-            routes.forEach(route => {
-                console.log(`\nRoute: ${route.name}`);
-                console.log(`Quality Score: ${route.qualityScore}`);
-                console.log(`Pickup Areas: ${route.metadata.pickupAreas.join(', ')}`);
-                console.log(`Delivery Corridors: ${route.metadata.deliveryCorridors.join(', ')}`);
-                console.log(`Distance: ${route.distance}km`);
-                console.log(`Earnings: KES ${route.total_earnings}`);
-                console.log(`Has Return Trip: ${route.metadata.hasReturnTrip}`);
-            });
+    forceLoadBobbyG: async () => {
+        console.log('Force loading Bobby G...');
+        const success = await loadRiderByPhone(DEV_CONFIG.testRider.phone);
+        if (success) {
+            console.log('Bobby G loaded successfully:', state.rider);
+            await loadEarnings();
+            await loadStats();
+            await loadAvailableRoutes();
+            updateProfileDisplay();
+            updateWalletDisplay();
+        } else {
+            console.log('Failed to load Bobby G');
         }
-    },
-    checkParcelStatus: async () => {
-        const allParcels = await supabaseAPI.query('parcels', {
-            limit: 100
-        });
-        
-        const summary = {
-            total: allParcels.length,
-            byStatus: {},
-            byType: {},
-            withRider: 0,
-            withoutRider: 0
-        };
-        
-        allParcels.forEach(p => {
-            summary.byStatus[p.status] = (summary.byStatus[p.status] || 0) + 1;
-            summary.byType[p.customer_choice || 'unknown'] = (summary.byType[p.customer_choice || 'unknown'] || 0) + 1;
-            if (p.rider_id) summary.withRider++;
-            else summary.withoutRider++;
-        });
-        
-        console.log('Parcel Summary:', summary);
-        console.log('Available for clustering:', allParcels.filter(p => 
-            p.status === 'submitted' && !p.rider_id
-        ));
-        
-        return summary;
-    },
-    resetParcels: async () => {
-        const parcels = await supabaseAPI.query('parcels', {
-            filter: 'status=eq.delivered',
-            limit: 10
-        });
-        
-        for (const parcel of parcels) {
-            await supabaseAPI.update('parcels', 
-                `id=eq.${parcel.id}`,
-                { 
-                    status: 'submitted',
-                    rider_id: null,
-                    assigned_at: null,
-                    pickup_timestamp: null,
-                    delivery_timestamp: null
-                }
-            );
-        }
-        
-        console.log(`Reset ${parcels.length} parcels to submitted status`);
-        window.location.reload();
-    },
-    clearStaleRoute: () => {
-        localStorage.removeItem('tuma_active_route');
-        localStorage.removeItem('tuma_route_completion');
-        state.claimedRoute = null;
-        console.log('Cleared stored route and completion data');
-        window.location.reload();
-    },
-    syncRouteCompletion: async () => {
-        await checkRouteCompletionStatus();
-        
-        if (state.claimedRoute && state.claimedRoute.stops) {
-            const allComplete = state.claimedRoute.stops.every(s => s.completed);
-            if (allComplete) {
-                console.log('Current route is complete - clearing');
-                
-                let totalEarnings = 0;
-                if (state.claimedRoute.total_earnings) {
-                    totalEarnings = state.claimedRoute.total_earnings * BUSINESS_CONFIG.commission.rider;
-                } else if (state.claimedRoute.parcels) {
-                    totalEarnings = state.claimedRoute.parcels.reduce((sum, p) => 
-                        sum + ((p.price || 500) * BUSINESS_CONFIG.commission.rider), 0
-                    );
-                }
-                
-                const completionData = {
-                    completed: true,
-                    earnings: Math.round(totalEarnings),
-                    deliveries: state.claimedRoute.stops.filter(s => s.type === 'delivery').length,
-                    timestamp: new Date().toISOString()
-                };
-                
-                localStorage.setItem('tuma_route_completion', JSON.stringify(completionData));
-                localStorage.removeItem('tuma_active_route');
-                state.claimedRoute = null;
-                
-                await checkRouteCompletionStatus();
-                await loadAvailableRoutes();
-            }
-        }
-    },
-    resetCommission: async () => {
-        if (!DEV_CONFIG.isDevelopment) {
-            console.error('This function is only available in development mode');
-            return;
-        }
-        
-        if (state.commissionTracker) {
-            state.commissionTracker.state.unpaidCommission = 0;
-            state.commissionTracker.state.isBlocked = false;
-            state.commissionTracker.state.pendingDeliveries = [];
-            
-            displayCommissionStatus();
-            
-            const blockedOverlay = document.getElementById('commissionBlockedOverlay');
-            if (blockedOverlay) {
-                blockedOverlay.remove();
-            }
-            
-            console.log('Commission reset to 0');
-            showNotification('DEV: Commission reset', 'success');
-        }
-    },
-    setCommission: (amount) => {
-        if (!DEV_CONFIG.isDevelopment) {
-            console.error('This function is only available in development mode');
-            return;
-        }
-        
-        if (state.commissionTracker) {
-            state.commissionTracker.state.unpaidCommission = amount;
-            state.commissionTracker.state.isBlocked = amount >= BUSINESS_CONFIG.commission.maxUnpaid;
-            
-            displayCommissionStatus();
-            
-            console.log(`Commission set to KES ${amount}`);
-            showNotification(`DEV: Commission set to KES ${amount}`, 'info');
-        }
-    },
-    analyzeRoutes: () => {
-        if (!state.availableRoutes || state.availableRoutes.length === 0) {
-            console.log('No routes available');
-            return;
-        }
-        
-        console.log('Available Routes Analysis:');
-        state.availableRoutes.forEach((route, index) => {
-            console.log(`\n${index + 1}. ${route.name}`);
-            console.log(`   Type: ${route.type}`);
-            console.log(`   Parcels: ${route.pickups}`);
-            console.log(`   Distance: ${route.distance}km`);
-            console.log(`   Earnings: KES ${Math.round(route.total_earnings * 0.7)}`);
-            console.log(`   Quality: ${route.qualityScore}`);
-            console.log(`   Areas: ${route.metadata?.pickupAreas?.join(', ') || 'N/A'}`);
-        });
     },
     getDevConfig: () => {
         console.log('Development Configuration:', DEV_CONFIG);
@@ -3574,25 +3082,60 @@ window.tumaDebug = {
     }
 };
 
-// Override window.haptic if not already defined
-if (!window.haptic) {
-    window.haptic = function(type = 'light') {
-        if (window.navigator && window.navigator.vibrate) {
-            switch(type) {
-                case 'light': window.navigator.vibrate(10); break;
-                case 'medium': window.navigator.vibrate(30); break;
-                case 'heavy': window.navigator.vibrate(50); break;
-                case 'success': window.navigator.vibrate([10, 50, 10]); break;
-                default: window.navigator.vibrate(10);
-            }
-        }
-    };
-}
-
 // Make showNotification globally available
 window.showNotification = showNotification;
 
-// Final initialization message
-console.log('✅ Complete enhanced rider.js loaded successfully!');
+// DOM Ready
+document.addEventListener('DOMContentLoaded', async () => {
+    console.log('✅ Enhanced rider.js loaded successfully!');
+    console.log('🔧 Development mode:', DEV_CONFIG.isDevelopment);
+    
+    if (DEV_CONFIG.isDevelopment) {
+        console.log('📱 Loading Bobby G test account...');
+    }
+    
+    const tg = window.Telegram?.WebApp;
+    const telegramUser = tg?.initDataUnsafe?.user;
+    
+    let riderId;
+    let riderName;
+    
+    if (telegramUser?.id) {
+        riderId = telegramUser.id;
+        riderName = telegramUser.first_name || 'Rider';
+        if (DEV_CONFIG.verboseLogging) {
+            console.log('Using Telegram user:', riderId);
+        }
+    } else if (DEV_CONFIG.isDevelopment && DEV_CONFIG.testRider) {
+        riderId = DEV_CONFIG.testRider.id;
+        riderName = DEV_CONFIG.testRider.name;
+        if (DEV_CONFIG.verboseLogging) {
+            console.log('Development mode: Will load Bobby G from database');
+        }
+    } else {
+        riderId = `temp-${Date.now()}`;
+        riderName = 'Guest Rider';
+        if (DEV_CONFIG.verboseLogging) {
+            console.log('Generated temporary rider:', riderId);
+        }
+    }
+    
+    window.currentRiderId = riderId;
+    
+    await initialize();
+    
+    // Log final rider state
+    if (DEV_CONFIG.isDevelopment && DEV_CONFIG.verboseLogging) {
+        console.log('Final rider state:', {
+            id: state.rider?.id,
+            name: state.rider?.rider_name,
+            phone: state.rider?.phone,
+            isBobbyG: state.rider?.id === DEV_CONFIG.testRider.id
+        });
+    }
+});
+
+console.log('✅ rider.js loaded successfully with bottom navigation support!');
 console.log('Debug commands available: window.tumaDebug');
+console.log('To check Bobby G status: window.tumaDebug.checkRider()');
 console.log(`Commission bypass: ${DEV_CONFIG.isDevelopment && DEV_CONFIG.bypassCommissionBlock ? 'ACTIVE' : 'INACTIVE'}`);
