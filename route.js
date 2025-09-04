@@ -3601,9 +3601,8 @@ window.completeEnhancedVerification = async function(stopId) {
     
     // For testing in dev mode, accept codes with 6+ characters
     // In production, strictly match the correct code
-    const isValidCode = DEV_CONFIG.isDevelopment ? 
-        (code.length >= 6 && (code === correctCode.toUpperCase().replace(/[^A-Z0-9]/g, '') || correctCode === '')) : 
-        (code === correctCode.toUpperCase().replace(/[^A-Z0-9]/g, ''));
+    // Strict validation - must match the correct code exactly
+    const isValidCode = code === correctCode.toUpperCase().replace(/[^A-Z0-9]/g, '');
     
     if (!isValidCode) {
         // Show more helpful error message
