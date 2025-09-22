@@ -1205,11 +1205,7 @@
                         </div>
                     </div>
                     <div class="header-actions">
-                        <button class="logout-btn" onclick="logout()" aria-label="Logout">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
-                                <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/>
-                            </svg>
-                        </button>
+                        <!-- Logout button removed - no sign out needed -->
                     </div>
                 </div>
             </div>
@@ -1328,7 +1324,7 @@
                                     <input type="text" class="input-field" id="vendorName" placeholder="Your name" required>
                                 </div>
                                 <div class="input-container">
-                                    <input type="tel" class="input-field" id="phoneNumber" placeholder="Your phone (07XXXXXXXX)" pattern="0[0-9]{9}" required>
+                                    <input type="tel" class="input-field" id="phoneNumber" placeholder="Your phone (07XXXXXXXX)" pattern="0[0-9]{9}" maxlength="10" required>
                                 </div>
                             </div>
                         </div>
@@ -1341,7 +1337,7 @@
                                     <input type="text" class="input-field" id="recipientName" placeholder="Recipient's name" required>
                                 </div>
                                 <div class="input-container">
-                                    <input type="tel" class="input-field" id="recipientPhone" placeholder="Recipient's phone (07XXXXXXXX)" pattern="0[0-9]{9}" required>
+                                    <input type="tel" class="input-field" id="recipientPhone" placeholder="Recipient's phone (07XXXXXXXX)" pattern="0[0-9]{9}" maxlength="10" required>
                                 </div>
                             </div>
                         </div>
