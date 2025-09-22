@@ -589,6 +589,13 @@ const vendorDashboard = {
                     role: userData.role
                 };
                 
+                // Set authentication state
+                dashboardState.set({
+                    isAuthenticated: true,
+                    currentVendor: vendor,
+                    vendorId: userData.id
+                });
+                
                 this.displayVendorInfo(vendor);
                 await this.loadDashboardData();
             } else {
