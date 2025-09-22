@@ -664,7 +664,22 @@ const vendorDashboard = {
             vendorDisplayPhone.textContent = vendor.phone || '-';
         }
         
-        if (!dashboardState.get('isAuthenticated')) {
+        // Handle "Your Information" section based on authentication status
+        const vendorInfoSection = document.getElementById('vendorInfoSection');
+        const isAuthenticated = dashboardState.get('isAuthenticated');
+        
+        if (isAuthenticated) {
+            // Hide "Your Information" section for authenticated users
+            if (vendorInfoSection) {
+                vendorInfoSection.style.display = 'none';
+                console.log('✅ Hidden Your Information section - user is authenticated');
+            }
+        } else {
+            // Show and pre-fill for non-authenticated users
+            if (vendorInfoSection) {
+                vendorInfoSection.style.display = 'block';
+            }
+            
             const vendorNameInput = document.getElementById('vendorName');
             const phoneInput = document.getElementById('phoneNumber');
             
@@ -2485,6 +2500,38 @@ async function initializeDashboard() {
             });
         }
         
+        // Setup phone number formatting
+        const phoneInputs = ['phoneNumber', 'recipientPhone'];
+        phoneInputs.forEach(inputId => {
+            const input = document.getElementById(inputId);
+            if (input) {
+                input.addEventListener('input', (e) => {
+                    // Remove non-digits
+                    let value = e.target.value.replace(/\D/g, '');
+                    
+                    // Limit to 10 digits
+                    if (value.length > 10) {
+                        value = value.substring(0, 10);
+                    }
+                    
+                    // Ensure starts with 0 if length is 10
+                    if (value.length === 10 && !value.startsWith('0')) {
+                        value = '0' + value.substring(1);
+                    }
+                    
+                    e.target.value = value;
+                });
+                
+                input.addEventListener('blur', (e) => {
+                    // Validate on blur
+                    if (e.target.value && !utils.validatePhone(e.target.value)) {
+                        utils.showNotification('Please enter a valid phone number (10 digits starting with 0)', 'error');
+                        e.target.focus();
+                    }
+                });
+            }
+        });
+        
         // Setup location inputs
         const pickupInput = document.getElementById('pickupLocation');
         const deliveryInput = document.getElementById('deliveryLocation');
@@ -2500,6 +2547,7 @@ async function initializeDashboard() {
                         
                         if (dashboardState.get('deliveryCoords')) {
                             await locationService.calculateDistance();
+                            await showRoutePreview(); // Show map preview
                         }
                     } catch (error) {
                         utils.showNotification('Could not find pickup address', 'error');
@@ -2519,6 +2567,7 @@ async function initializeDashboard() {
                         
                         if (dashboardState.get('pickupCoords')) {
                             await locationService.calculateDistance();
+                            await showRoutePreview(); // Show map preview
                         }
                     } catch (error) {
                         utils.showNotification('Could not find delivery address', 'error');
@@ -2618,6 +2667,115 @@ async function initializeDashboard() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Route Preview Map
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function showRoutePreview() {
+    const pickupCoords = dashboardState.get('pickupCoords');
+    const deliveryCoords = dashboardState.get('deliveryCoords');
+    
+    if (!pickupCoords || !deliveryCoords) return;
+    
+    const previewContainer = document.getElementById('routePreviewContainer');
+    const previewPlaceholder = document.getElementById('previewPlaceholder');
+    const previewMapDiv = document.getElementById('previewMap');
+    
+    if (!previewContainer || !previewMapDiv) return;
+    
+    try {
+        // Hide placeholder and show map
+        if (previewPlaceholder) previewPlaceholder.style.display = 'none';
+        previewMapDiv.style.display = 'block';
+        previewMapDiv.style.height = '200px';
+        
+        // Initialize map if not already done
+        if (!window.previewMap) {
+            window.previewMap = L.map('previewMap', {
+                zoomControl: false,
+                attributionControl: false,
+                dragging: false,
+                touchZoom: false,
+                doubleClickZoom: false,
+                scrollWheelZoom: false,
+                boxZoom: false,
+                keyboard: false
+            });
+            
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(window.previewMap);
+        }
+        
+        // Clear existing markers and routes
+        if (window.previewMarkers) {
+            window.previewMarkers.forEach(marker => marker.remove());
+        }
+        if (window.previewRoute) {
+            window.previewRoute.remove();
+        }
+        
+        window.previewMarkers = [];
+        
+        // Create pickup marker (green)
+        const pickupIcon = L.divIcon({
+            html: '<div style="background: #34C759; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">P</div>',
+            className: 'custom-div-icon',
+            iconSize: [24, 24],
+            iconAnchor: [12, 24]
+        });
+        
+        const pickupMarker = L.marker([pickupCoords.lat, pickupCoords.lng], { icon: pickupIcon })
+            .addTo(window.previewMap)
+            .bindPopup('<strong>Pickup Location</strong><br>' + (pickupCoords.display_name || 'Pickup Point'));
+        
+        // Create delivery marker (red)
+        const deliveryIcon = L.divIcon({
+            html: '<div style="background: #FF3B30; color: white; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">D</div>',
+            className: 'custom-div-icon',
+            iconSize: [24, 24],
+            iconAnchor: [12, 24]
+        });
+        
+        const deliveryMarker = L.marker([deliveryCoords.lat, deliveryCoords.lng], { icon: deliveryIcon })
+            .addTo(window.previewMap)
+            .bindPopup('<strong>Delivery Location</strong><br>' + (deliveryCoords.display_name || 'Delivery Point'));
+        
+        window.previewMarkers = [pickupMarker, deliveryMarker];
+        
+        // Draw route line
+        const routeCoords = [
+            [pickupCoords.lat, pickupCoords.lng],
+            [deliveryCoords.lat, deliveryCoords.lng]
+        ];
+        
+        window.previewRoute = L.polyline(routeCoords, {
+            color: '#007AFF',
+            weight: 3,
+            opacity: 0.8,
+            dashArray: '5, 10'
+        }).addTo(window.previewMap);
+        
+        // Fit bounds to show both markers
+        const group = new L.featureGroup([pickupMarker, deliveryMarker]);
+        window.previewMap.fitBounds(group.getBounds(), { padding: [20, 20] });
+        
+        // Refresh map size
+        setTimeout(() => {
+            window.previewMap.invalidateSize();
+        }, 100);
+        
+        console.log('✅ Route preview updated');
+        
+    } catch (error) {
+        console.error('Route preview error:', error);
+        // Show placeholder on error
+        if (previewPlaceholder) {
+            previewPlaceholder.style.display = 'flex';
+            previewPlaceholder.innerHTML = '<span>⚠️ Could not load route preview</span>';
+        }
+        previewMapDiv.style.display = 'none';
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Google Maps Integration
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -2641,7 +2799,7 @@ function initializeGooglePlaces() {
     
     if (pickupInput) {
         const pickupAutocomplete = new google.maps.places.Autocomplete(pickupInput, options);
-        pickupAutocomplete.addListener('place_changed', () => {
+        pickupAutocomplete.addListener('place_changed', async () => {
             const place = pickupAutocomplete.getPlace();
             if (place.geometry) {
                 pickupInput.dataset.lat = place.geometry.location.lat();
@@ -2653,7 +2811,8 @@ function initializeGooglePlaces() {
                 });
                 
                 if (dashboardState.get('deliveryCoords')) {
-                    locationService.calculateDistance();
+                    await locationService.calculateDistance();
+                    await showRoutePreview(); // Show map preview
                 }
             }
         });
@@ -2661,7 +2820,7 @@ function initializeGooglePlaces() {
     
     if (deliveryInput) {
         const deliveryAutocomplete = new google.maps.places.Autocomplete(deliveryInput, options);
-        deliveryAutocomplete.addListener('place_changed', () => {
+        deliveryAutocomplete.addListener('place_changed', async () => {
             const place = deliveryAutocomplete.getPlace();
             if (place.geometry) {
                 deliveryInput.dataset.lat = place.geometry.location.lat();
@@ -2674,7 +2833,8 @@ function initializeGooglePlaces() {
                 });
                 
                 if (dashboardState.get('pickupCoords')) {
-                    locationService.calculateDistance();
+                    await locationService.calculateDistance();
+                    await showRoutePreview(); // Show map preview
                 }
             }
         });
