@@ -574,13 +574,33 @@ const vendorDashboard = {
         console.log('🚀 Initializing vendor dashboard...');
         
         try {
-            const vendor = await authService.checkSession();
-            if (vendor) {
-                console.log('✅ Vendor authenticated:', vendor.vendor_name || vendor.name);
+            // Check for 2ma_user session first
+            const user2ma = localStorage.getItem('2ma_user');
+            if (user2ma) {
+                const userData = JSON.parse(user2ma);
+                console.log('✅ Found 2ma_user session:', userData);
+                
+                const vendor = {
+                    id: userData.id,
+                    vendor_name: userData.full_name,
+                    name: userData.full_name,
+                    phone: userData.phone,
+                    email: userData.email,
+                    role: userData.role
+                };
+                
                 this.displayVendorInfo(vendor);
                 await this.loadDashboardData();
             } else {
-                await this.handleURLParameters();
+                // Fallback to old session system
+                const vendor = await authService.checkSession();
+                if (vendor) {
+                    console.log('✅ Vendor authenticated:', vendor.vendor_name || vendor.name);
+                    this.displayVendorInfo(vendor);
+                    await this.loadDashboardData();
+                } else {
+                    await this.handleURLParameters();
+                }
             }
             
             console.log('✅ Dashboard initialized');
