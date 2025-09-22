@@ -23,6 +23,36 @@ document.addEventListener('DOMContentLoaded', function() {
  * Check optional vendor authentication
  */
 async function checkOptionalVendorAuth() {
+    // Check for 2ma_user session first
+    const user2ma = localStorage.getItem('2ma_user');
+    if (user2ma) {
+        try {
+            const userData = JSON.parse(user2ma);
+            console.log('Found 2ma_user session:', userData);
+            
+            // Set global user data
+            window.currentVendor = {
+                id: userData.id,
+                name: userData.full_name,
+                phone: userData.phone,
+                email: userData.email,
+                role: userData.role,
+                isAuthenticated: true
+            };
+            
+            // Pre-fill form fields
+            prefillVendorForm(window.currentVendor);
+            
+            // Update header with user info (don't show banner)
+            updateVendorHeader(window.currentVendor);
+            
+            return;
+        } catch (error) {
+            console.error('Error parsing 2ma_user session:', error);
+        }
+    }
+    
+    // Fallback to old session system
     const session = localStorage.getItem('tuma_vendor_session');
     
     if (session) {
@@ -108,79 +138,42 @@ function prefillVendorForm(vendor) {
 }
 
 /**
- * Show authenticated UI elements
+ * Update vendor header with user information
  */
-function showAuthenticatedUI() {
-    // Add authenticated banner
-    const banner = document.createElement('div');
-    banner.id = 'authBanner';
-    banner.style.cssText = `
-        background: linear-gradient(135deg, rgba(0, 102, 255, 0.1), rgba(52, 199, 89, 0.1));
-        border: 1px solid var(--primary);
-        padding: 12px 20px;
-        margin: 0 20px 20px;
-        border-radius: 12px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        animation: slideDown 0.3s ease;
-    `;
+function updateVendorHeader(vendor) {
+    console.log('Updating vendor header with:', vendor);
     
-    banner.innerHTML = `
-        <div style="display: flex; align-items: center; gap: 12px;">
-            <div style="width: 36px; height: 36px; background: var(--primary); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold;">
-                ${window.currentVendor.name.charAt(0).toUpperCase()}
-            </div>
-            <div>
-                <div style="font-weight: 600;">Welcome back, ${window.currentVendor.name}!</div>
-                <div style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">
-                    Track all your deliveries in one place
-                </div>
-            </div>
-        </div>
-        <div style="display: flex; gap: 8px;">
-            <button onclick="window.location.href='vendor-dashboard.html'" style="
-                background: var(--primary);
-                color: white;
-                border: none;
-                padding: 8px 16px;
-                border-radius: 8px;
-                font-size: 14px;
-                font-weight: 600;
-                cursor: pointer;
-            ">
-                Dashboard
-            </button>
-            <button onclick="signOut()" style="
-                background: transparent;
-                color: var(--danger);
-                border: 1px solid var(--danger);
-                padding: 8px 16px;
-                border-radius: 8px;
-                font-size: 14px;
-                font-weight: 600;
-                cursor: pointer;
-            ">
-                Sign Out
-            </button>
-        </div>
-    `;
+    // Update header elements if they exist
+    const vendorDisplayName = document.getElementById('vendorDisplayName');
+    const vendorDisplayPhone = document.getElementById('vendorDisplayPhone');
+    const vendorAvatar = document.getElementById('vendorAvatar');
     
-    // Insert after header
-    const formContainer = document.querySelector('.form-container');
-    if (formContainer && !document.getElementById('authBanner')) {
-        formContainer.insertBefore(banner, formContainer.firstChild);
+    if (vendorDisplayName) {
+        vendorDisplayName.textContent = vendor.name || 'User';
     }
     
-    // Add animation
-    const style = document.createElement('style');
-    style.textContent = `
-        @keyframes slideDown {
-            from { transform: translateY(-20px); opacity: 0; }
-            to { transform: translateY(0); opacity: 1; }
-        }
-    `;
-    document.head.appendChild(style);
+    if (vendorDisplayPhone) {
+        vendorDisplayPhone.textContent = vendor.phone || '';
+    }
+    
+    if (vendorAvatar) {
+        vendorAvatar.textContent = (vendor.name || 'U').charAt(0).toUpperCase();
+    }
+    
+    // Remove any existing auth banner
+    const existingBanner = document.getElementById('authBanner');
+    if (existingBanner) {
+        existingBanner.remove();
+    }
+}
+
+/**
+ * Show authenticated UI elements (legacy function - now just updates header)
+ */
+function showAuthenticatedUI() {
+    if (window.currentVendor) {
+        updateVendorHeader(window.currentVendor);
+    }
 }
 
 /**
@@ -211,7 +204,7 @@ function showSignInPrompt() {
                 Please sign in or create an account to book deliveries
             </div>
         </div>
-        <a href="./auth.html?type=vendor" style="
+        <a href="./index.html?type=vendor" style="
             background: var(--primary);
             color: white;
             padding: 10px 20px;
@@ -239,7 +232,7 @@ function showSignInPrompt() {
         submitBtn.style.opacity = '0.6';
         submitBtn.onclick = function(e) {
             e.preventDefault();
-            window.location.href = './auth.html?type=vendor';
+            window.location.href = './index.html?type=vendor';
         };
     }
 }
