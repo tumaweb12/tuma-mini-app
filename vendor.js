@@ -598,6 +598,9 @@ const vendorDashboard = {
                 
                 this.displayVendorInfo(vendor);
                 await this.loadDashboardData();
+                
+                // Also ensure auth-check.js doesn't override our header
+                window.currentVendor = vendor;
             } else {
                 // Fallback to old session system
                 const vendor = await authService.checkSession();
@@ -605,6 +608,9 @@ const vendorDashboard = {
                     console.log('✅ Vendor authenticated:', vendor.vendor_name || vendor.name);
                     this.displayVendorInfo(vendor);
                     await this.loadDashboardData();
+                    
+                    // Also ensure auth-check.js doesn't override our header
+                    window.currentVendor = vendor;
                 } else {
                     await this.handleURLParameters();
                 }
@@ -674,6 +680,9 @@ const vendorDashboard = {
                 vendorInfoSection.style.display = 'none';
                 console.log('✅ Hidden Your Information section - user is authenticated');
             }
+            
+            // Add authentication status indicator
+            this.showAuthenticationStatus(vendor);
         } else {
             // Show and pre-fill for non-authenticated users
             if (vendorInfoSection) {
@@ -685,6 +694,48 @@ const vendorDashboard = {
             
             if (vendorNameInput) vendorNameInput.value = vendor.vendor_name || vendor.name || '';
             if (phoneInput) phoneInput.value = vendor.phone || '';
+            
+            // Remove authentication status if not authenticated
+            this.hideAuthenticationStatus();
+        }
+    },
+    
+    showAuthenticationStatus(vendor) {
+        // Add a small indicator showing the user is logged in
+        let authIndicator = document.getElementById('authIndicator');
+        if (!authIndicator) {
+            authIndicator = document.createElement('div');
+            authIndicator.id = 'authIndicator';
+            authIndicator.style.cssText = `
+                position: fixed;
+                top: 10px;
+                right: 10px;
+                background: linear-gradient(135deg, #34C759, #30A14E);
+                color: white;
+                padding: 6px 12px;
+                border-radius: 20px;
+                font-size: 12px;
+                font-weight: 600;
+                z-index: 1000;
+                box-shadow: 0 2px 8px rgba(52, 199, 89, 0.3);
+                display: flex;
+                align-items: center;
+                gap: 6px;
+            `;
+            document.body.appendChild(authIndicator);
+        }
+        
+        authIndicator.innerHTML = `
+            <div style="width: 8px; height: 8px; background: white; border-radius: 50%; opacity: 0.9;"></div>
+            Logged in as ${vendor.name || vendor.vendor_name || 'User'}
+        `;
+        authIndicator.style.display = 'flex';
+    },
+    
+    hideAuthenticationStatus() {
+        const authIndicator = document.getElementById('authIndicator');
+        if (authIndicator) {
+            authIndicator.style.display = 'none';
         }
     },
     
@@ -1768,8 +1819,16 @@ const locationService = {
         if (calculatedDistance) calculatedDistance.textContent = `${distanceData.distance.toFixed(1)} km`;
         if (estimatedDuration) estimatedDuration.textContent = `~${distanceData.duration} min`;
         
+        // Price and button text will be handled by checkFormValidity()
+        
         this.updatePricing(distanceData.distance);
         this.checkFormValidity();
+        
+        console.log('✅ Distance and price updated:', {
+            distance: distanceData.distance,
+            duration: distanceData.duration,
+            price: this.calculatePrice(distanceData.distance)
+        });
     },
     
     updatePricing(distance) {
@@ -1800,14 +1859,30 @@ const locationService = {
         const hasPickup = dashboardState.get('pickupCoords');
         const hasDelivery = dashboardState.get('deliveryCoords');
         const hasDistance = dashboardState.get('distance') > 0;
+        const hasService = dashboardState.get('selectedService');
         
-        if (hasPickup && hasDelivery && hasDistance) {
+        if (hasPickup && hasDelivery && hasDistance && hasService) {
             submitBtn.disabled = false;
             buttonText.textContent = 'Book Delivery';
+            submitBtn.style.background = 'var(--primary)';
+        } else if (hasPickup && hasDelivery && hasDistance) {
+            submitBtn.disabled = false;
+            const price = this.calculatePrice(dashboardState.get('distance'));
+            buttonText.textContent = utils.formatCurrency(price);
+            submitBtn.style.background = 'var(--success)';
         } else {
             submitBtn.disabled = true;
             buttonText.textContent = 'Enter locations to see price';
+            submitBtn.style.background = 'var(--text-tertiary)';
         }
+        
+        console.log('✅ Form validity checked:', {
+            hasPickup,
+            hasDelivery,
+            hasDistance,
+            hasService,
+            buttonText: buttonText.textContent
+        });
     },
     
     validateServiceArea(coords) {
@@ -2189,6 +2264,9 @@ window.selectService = function(service) {
         if (distance > 0) {
             locationService.updatePricing(distance);
         }
+        
+        // Check if we should update button text to "Book Delivery"
+        locationService.checkFormValidity();
     }
 };
 
@@ -2658,6 +2736,12 @@ async function initializeDashboard() {
             initializeGooglePlaces();
         }
         
+        // Ensure default service is selected and form validity is checked
+        if (!dashboardState.get('selectedService')) {
+            dashboardState.set('selectedService', 'smart');
+        }
+        locationService.checkFormValidity();
+        
         console.log('✅ Vendor Dashboard fully initialized');
         
     } catch (error) {
@@ -2681,6 +2765,13 @@ async function showRoutePreview() {
     const previewMapDiv = document.getElementById('previewMap');
     
     if (!previewContainer || !previewMapDiv) return;
+    
+    // Check if Leaflet is loaded
+    if (typeof L === 'undefined') {
+        console.warn('Leaflet not loaded yet, waiting...');
+        setTimeout(() => showRoutePreview(), 500);
+        return;
+    }
     
     try {
         // Hide placeholder and show map
