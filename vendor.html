@@ -7,16 +7,10 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="telegram-web-app" content="true">
-    <title>Vendor Dashboard - 2ma Delivery</title>
+    <title>Vendor Dashboard - Tuma Delivery</title>
     
     <!-- Load Supabase SDK first -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
-    
-    <!-- Config -->
-    <script src="./config.js"></script>
-    
-    <!-- Authentication Guard -->
-    <script type="module" src="./auth-guard.js"></script>
     
     <!-- Telegram Web App runtime -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
@@ -28,9 +22,6 @@
     <!-- Leaflet Control Geocoder (Search Plugin) -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
     <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js" defer></script>
-    
-    <!-- Heroicons -->
-    <script src="https://unpkg.com/heroicons@2.0.18/24/outline/index.js" type="module"></script>
     
     <style>
         * {
@@ -1208,7 +1199,11 @@
                         </div>
                     </div>
                     <div class="header-actions">
-                        <!-- Logout button removed - no sign out needed -->
+                        <button class="logout-btn" onclick="logout()" aria-label="Logout">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
+                                <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/>
+                            </svg>
+                        </button>
                     </div>
                 </div>
             </div>
