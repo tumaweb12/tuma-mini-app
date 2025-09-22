@@ -676,6 +676,7 @@
         // Check phone for login
         async function checkPhoneForLogin() {
             const phone = document.getElementById('phoneLoginInput').value.trim();
+            console.log('Checking phone:', phone);
             
             if (!phone || phone.length !== 9 || !/^[0-9]{9}$/.test(phone)) {
                 showMessage('error', 'Please enter a valid 9-digit phone number');
@@ -685,22 +686,29 @@
             setLoading('checkPhoneBtn', true);
 
             try {
+                const fullPhone = '+254' + phone;
+                console.log('Looking for phone:', fullPhone);
+                
                 // Check if user exists with this phone number
                 const { data, error } = await supabaseClient
                     .from('profiles')
                     .select('*')
-                    .eq('phone', '+254' + phone)
+                    .eq('phone', fullPhone)
                     .single();
+
+                console.log('Phone lookup result:', { data, error });
 
                 if (error && error.code !== 'PGRST116') {
                     throw error;
                 }
 
                 if (data) {
+                    console.log('User found, showing PIN entry');
                     // User exists, show PIN entry
                     showStep('step2c');
                     setupPINInputs();
                 } else {
+                    console.log('User not found, showing signup');
                     // User doesn't exist, show signup
                     showMessage('info', 'Phone number not found. Please sign up first.');
                     setTimeout(() => {
@@ -742,6 +750,7 @@
         async function loginWithPIN() {
             const pinInputs = document.querySelectorAll('.login-pin');
             const pin = Array.from(pinInputs).map(input => input.value).join('');
+            console.log('Attempting PIN login with:', pin);
             
             if (pin.length !== 4) {
                 showMessage('error', 'Please enter a complete 4-digit PIN');
@@ -749,6 +758,8 @@
             }
 
             const phone = document.getElementById('phoneLoginInput').value.trim();
+            const fullPhone = '+254' + phone;
+            console.log('PIN login for phone:', fullPhone);
             setLoading('pinLoginBtn', true);
 
             try {
@@ -756,23 +767,31 @@
                 const { data: profile, error: profileError } = await supabaseClient
                     .from('profiles')
                     .select('*')
-                    .eq('phone', '+254' + phone)
+                    .eq('phone', fullPhone)
                     .single();
+
+                console.log('Profile lookup for PIN:', { profile, profileError });
 
                 if (profileError) throw profileError;
 
                 // For now, we'll use a simple PIN verification
                 // In a real app, you'd hash the PIN and compare with stored hash
                 const storedPIN = profile.pin || '1234'; // Default PIN for testing
+                console.log('Comparing PIN:', pin, 'vs stored:', storedPIN);
                 
                 if (pin === storedPIN) {
+                    console.log('PIN match! Creating session...');
                     // PIN is correct, create session manually since we don't store passwords
-                    localStorage.setItem('2ma_user', JSON.stringify({
+                    const userData = {
                         id: profile.id,
                         email: profile.email,
                         role: profile.role,
-                        phone: profile.phone
-                    }));
+                        phone: profile.phone,
+                        full_name: profile.full_name
+                    };
+                    
+                    localStorage.setItem('2ma_user', JSON.stringify(userData));
+                    console.log('Session created:', userData);
 
                     showMessage('success', 'Login successful! Redirecting...');
                     setTimeout(() => {
@@ -780,6 +799,7 @@
                     }, 1000);
 
                 } else {
+                    console.log('PIN mismatch!');
                     showMessage('error', 'Invalid PIN. Please try again.');
                     // Clear PIN inputs
                     pinInputs.forEach(input => input.value = '');
