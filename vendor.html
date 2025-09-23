@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="telegram-web-app" content="true">
-    <title>Vendor Dashboard - 2ma delivery</title>
+    <title>Vendor Dashboard - Tuma Delivery</title>
     
     <!-- Load Supabase SDK first -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
@@ -1211,43 +1211,20 @@
             <!-- Tab Navigation -->
             <div class="tab-navigation">
                 <button class="tab-item active" onclick="switchTab('new-booking')">
-                    <span class="tab-icon">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-                            <path d="m2 17 10 5 10-5"/>
-                            <path d="m2 12 10 5 10-5"/>
-                        </svg>
-                    </span>
+                    <span class="tab-icon">📦</span>
                     <span class="tab-label">New Booking</span>
                 </button>
                 <button class="tab-item" onclick="switchTab('active')">
-                    <span class="tab-icon">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M8 3L4 7v10a2 2 0 002 2h8a2 2 0 002-2V7l-4-4z"/>
-                            <path d="M9 8h6"/>
-                            <path d="M9 12h6"/>
-                            <path d="M9 16h3"/>
-                        </svg>
-                    </span>
+                    <span class="tab-icon">🚀</span>
                     <span class="tab-label">Active</span>
                     <span class="tab-badge" id="activeBadge" style="display: none;">0</span>
                 </button>
                 <button class="tab-item" onclick="switchTab('history')">
-                    <span class="tab-icon">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M3 3v5h5"/>
-                            <path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/>
-                        </svg>
-                    </span>
+                    <span class="tab-icon">📜</span>
                     <span class="tab-label">History</span>
                 </button>
                 <button class="tab-item" onclick="switchTab('track')">
-                    <span class="tab-icon">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
-                            <circle cx="12" cy="10" r="3"/>
-                        </svg>
-                    </span>
+                    <span class="tab-icon">📍</span>
                     <span class="tab-label">Track</span>
                 </button>
             </div>
@@ -1319,30 +1296,15 @@
                                     <div class="progress-fill" id="progressFill" style="width: 25%;"></div>
                                 </div>
                                 <div class="step active" data-step="1">
-                                    <div class="step-icon">
-                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
-                                            <circle cx="12" cy="10" r="3"/>
-                                        </svg>
-                                    </div>
+                                    <div class="step-icon">📍</div>
                                     <div class="step-label">Locations</div>
                                 </div>
                                 <div class="step" data-step="2">
-                                    <div class="step-icon">
-                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                            <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-                                            <path d="m2 17 10 5 10-5"/>
-                                            <path d="m2 12 10 5 10-5"/>
-                                        </svg>
-                                    </div>
+                                    <div class="step-icon">📦</div>
                                     <div class="step-label">Package</div>
                                 </div>
                                 <div class="step" data-step="3">
-                                    <div class="step-icon">
-                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
-                                        </svg>
-                                    </div>
+                                    <div class="step-icon">🚀</div>
                                     <div class="step-label">Service</div>
                                 </div>
                                 <div class="step" data-step="4">
@@ -1360,7 +1322,7 @@
                                     <input type="text" class="input-field" id="vendorName" placeholder="Your name" required>
                                 </div>
                                 <div class="input-container">
-                                    <input type="tel" class="input-field" id="phoneNumber" placeholder="Your phone (07XXXXXXXX)" pattern="0[0-9]{9}" maxlength="10" required>
+                                    <input type="tel" class="input-field" id="phoneNumber" placeholder="Your phone (07XXXXXXXX)" pattern="0[0-9]{9}" required>
                                 </div>
                             </div>
                         </div>
@@ -1373,7 +1335,7 @@
                                     <input type="text" class="input-field" id="recipientName" placeholder="Recipient's name" required>
                                 </div>
                                 <div class="input-container">
-                                    <input type="tel" class="input-field" id="recipientPhone" placeholder="Recipient's phone (07XXXXXXXX)" pattern="0[0-9]{9}" maxlength="10" required>
+                                    <input type="tel" class="input-field" id="recipientPhone" placeholder="Recipient's phone (07XXXXXXXX)" pattern="0[0-9]{9}" required>
                                 </div>
                             </div>
                         </div>
@@ -1450,11 +1412,7 @@
                             <!-- Route Preview Map -->
                             <div class="route-preview-container" id="routePreviewContainer">
                                 <div class="route-preview-placeholder" id="previewPlaceholder">
-                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline; vertical-align: text-bottom; margin-right: 8px;">
-                                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
-                                        <circle cx="12" cy="10" r="3"/>
-                                    </svg>
-                                    <span>Preview your route here</span>
+                                    <span>📍 Preview your route here</span>
                                 </div>
                                 <div id="previewMap" style="display: none;"></div>
                             </div>
@@ -1513,13 +1471,7 @@
                                     <div class="size-desc">Documents, phone</div>
                                 </div>
                                 <div class="size-option" data-size="medium" onclick="selectSize('medium')">
-                                    <div class="size-emoji">
-                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                            <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-                                            <path d="m2 17 10 5 10-5"/>
-                                            <path d="m2 12 10 5 10-5"/>
-                                        </svg>
-                                    </div>
+                                    <div class="size-emoji">📦</div>
                                     <div class="size-name">Medium</div>
                                     <div class="size-desc">Shoebox size</div>
                                 </div>
@@ -1617,12 +1569,7 @@
                             <div class="service-grid">
                                 <div class="service-card express" data-service="express" onclick="selectService('express')">
                                     <div class="service-header">
-                                        <span class="service-name">
-                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline; vertical-align: text-bottom; margin-right: 6px;">
-                                                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
-                                            </svg>
-                                            Express
-                                        </span>
+                                        <span class="service-name">🚀 Express</span>
                                         <span class="service-price" id="expressPrice">+40%</span>
                                     </div>
                                     <p class="service-desc">Next available rider • 0-30 min pickup • Priority handling</p>
@@ -1634,15 +1581,7 @@
                                 
                                 <div class="service-card smart selected" data-service="smart" onclick="selectService('smart')">
                                     <div class="service-header">
-                                        <span class="service-name">
-                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline; vertical-align: text-bottom; margin-right: 6px;">
-                                                <path d="M9 12l2 2 4-4"/>
-                                                <path d="M21 12c-1 0-3-1-3-3s2-3 3-3 3 1 3 3-2 3-3 3"/>
-                                                <path d="M3 12c1 0 3-1 3-3s-2-3-3-3-3 1-3 3 2 3 3 3"/>
-                                                <path d="M3 12c0 5.5 4.5 10 10 10s10-4.5 10-10"/>
-                                            </svg>
-                                            Smart
-                                        </span>
+                                        <span class="service-name">🎯 Smart</span>
                                         <span class="service-price" id="smartPrice">Best Value</span>
                                     </div>
                                     <p class="service-desc">Clustered delivery • 30-60 min pickup • Recommended</p>
@@ -1654,13 +1593,7 @@
                                 
                                 <div class="service-card eco" data-service="eco" onclick="selectService('eco')">
                                     <div class="service-header">
-                                        <span class="service-name">
-                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline; vertical-align: text-bottom; margin-right: 6px;">
-                                                <path d="M12 2a10 10 0 0 0-9.95 9c0 5.5 4.5 10 10 10s10-4.5 10-10A10 10 0 0 0 12 2z"/>
-                                                <path d="m8 12 2 2 4-4"/>
-                                            </svg>
-                                            Eco
-                                        </span>
+                                        <span class="service-name">🌱 Eco</span>
                                         <span class="service-price" id="ecoPrice">-20%</span>
                                     </div>
                                     <p class="service-desc">Maximum clustering • 1-2 hour pickup • Lowest price</p>
@@ -1687,7 +1620,7 @@
                         <!-- Submit Section -->
                         <div class="submit-section" style="position: sticky; bottom: 0; background: linear-gradient(to top, var(--surface) 50%, transparent); padding: 20px 0; padding-bottom: calc(20px + var(--safe-area-bottom)); margin-top: 32px;">
                             <button type="submit" class="submit-button" id="submitBtn" disabled style="width: 100%; background: var(--primary); color: white; border: none; border-radius: 14px; padding: 18px; font-size: 17px; font-weight: 600; cursor: pointer; transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94); position: relative; overflow: hidden;">
-                                <span id="buttonText" data-price-placeholder="true">Enter locations to see price</span>
+                                <span id="buttonText">Enter locations to see price</span>
                             </button>
                         </div>
                     </form>
@@ -1717,13 +1650,7 @@
                         <div id="activeDeliveriesList">
                             <!-- Active deliveries will be loaded here -->
                             <div class="empty-state" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 20px; text-align: center;">
-                                <div class="empty-icon" style="margin-bottom: 16px; opacity: 0.5;">
-                                    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                                        <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-                                        <path d="m2 17 10 5 10-5"/>
-                                        <path d="m2 12 10 5 10-5"/>
-                                    </svg>
-                                </div>
+                                <div class="empty-icon" style="font-size: 64px; margin-bottom: 16px; opacity: 0.5;">📦</div>
                                 <div class="empty-title" style="font-size: 20px; font-weight: 600; margin-bottom: 8px;">No Active Deliveries</div>
                                 <div class="empty-message" style="font-size: 14px; color: var(--text-secondary);">Your active deliveries will appear here</div>
                             </div>
@@ -1762,12 +1689,7 @@
                         <div id="historyList">
                             <!-- History items will be loaded here -->
                             <div class="empty-state" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 20px; text-align: center;">
-                                <div class="empty-icon" style="margin-bottom: 16px; opacity: 0.5;">
-                                    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                                        <path d="M3 3v5h5"/>
-                                        <path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/>
-                                    </svg>
-                                </div>
+                                <div class="empty-icon" style="font-size: 64px; margin-bottom: 16px; opacity: 0.5;">📜</div>
                                 <div class="empty-title" style="font-size: 20px; font-weight: 600; margin-bottom: 8px;">No Delivery History</div>
                                 <div class="empty-message" style="font-size: 14px; color: var(--text-secondary);">Your completed deliveries will appear here</div>
                             </div>
@@ -1792,12 +1714,7 @@
                             <div id="recentTracksList">
                                 <!-- Recent tracks will be loaded here -->
                                 <div class="empty-state" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px; text-align: center;">
-                                    <div class="empty-icon" style="margin-bottom: 12px; opacity: 0.5;">
-                                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                                            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
-                                            <circle cx="12" cy="10" r="3"/>
-                                        </svg>
-                                    </div>
+                                    <div class="empty-icon" style="font-size: 48px; margin-bottom: 12px; opacity: 0.5;">📍</div>
                                     <div class="empty-title" style="font-size: 16px; font-weight: 600; margin-bottom: 6px;">No Recent Tracks</div>
                                     <div class="empty-message" style="font-size: 12px; color: var(--text-secondary);">Your tracked parcels will appear here</div>
                                 </div>
